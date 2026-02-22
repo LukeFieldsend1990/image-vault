@@ -12,8 +12,9 @@
 4. [Architecture](#4-architecture)
 5. [Security Model](#5-security-model)
 6. [Licensing Model](#6-licensing-model)
-7. [Cross-Functional Requirements](#7-cross-functional-requirements)
-8. [Product Backlog / TODO](#8-product-backlog--todo)
+7. [Multi-Tenancy & Branding](#7-multi-tenancy--branding)
+8. [Cross-Functional Requirements](#8-cross-functional-requirements)
+9. [Product Backlog / TODO](#9-product-backlog--todo)
 
 ---
 
@@ -143,6 +144,24 @@ The platform operates with zero-knowledge of file contents. Each scan is encrypt
 - For licensed access, a CEK is re-encrypted with the licensee's public key and stored in D1
 - This is an **end-to-end encrypted key exchange** — the platform sees only encrypted key material
 
+### 4.4 CI/CD — Cloudflare Pages Native
+
+Deployment is handled entirely through **Cloudflare Pages Git integration** — no GitHub Actions required.
+
+```
+GitHub repo (main branch)
+  │
+  ├─ Push to main → Cloudflare Pages Production deployment (auto)
+  └─ Push to any other branch → Cloudflare Pages Preview deployment (auto)
+       └─ PR preview URL generated per branch
+```
+
+- **Production:** `https://image-vault.pages.dev` (or custom domain)
+- **Preview:** `https://<branch>.<project>.pages.dev` per PR/branch
+- Wrangler secrets managed via Cloudflare dashboard (never in repo)
+- D1 migrations run via `wrangler d1 migrations apply` as part of release process
+- No GitHub Actions needed — Cloudflare Pages builds on every push
+
 ---
 
 ## 5. Security Model
@@ -155,7 +174,7 @@ The platform operates with zero-knowledge of file contents. Each scan is encrypt
 - **Link sharing:** Presigned URLs are bound to the requesting licensee's IP (where feasible) and expire.
 - **Scan exfiltration:** Watermarking metadata can be embedded into download packages for forensic traceability.
 
-### 5.2 Compliance Considerations (TBD — see §7)
+### 5.2 Compliance Considerations (TBD — see §8)
 - GDPR — biometric data is special category personal data
 - CCPA — California residents
 - UK GDPR
@@ -198,37 +217,105 @@ The platform operates with zero-knowledge of file contents. Each scan is encrypt
 
 ---
 
-## 7. Cross-Functional Requirements
+## 7. Multi-Tenancy & Branding
 
-### 7.1 Legal & Compliance
+### 7.1 Strategy — Hardcoded Multi-Tenancy
+
+The platform uses a **single backend** (one D1, one R2, one Cloudflare Pages deployment) with **per-agency hardcoded UI themes**. There are 5–6 target agencies; generic theming is not required. Each agency gets its own branded experience on the same codebase.
+
+Tenant is identified by:
+1. **Subdomain** (e.g., `unitedagents.imagevault.com`, `caa.imagevault.com`) — preferred
+2. Or **custom domain** per agency
+
+Theme config is a static TypeScript object per tenant — no DB involvement.
+
+### 7.2 Target Agencies (Tenants)
+
+| # | Agency | Status | Notes |
+|---|---|---|---|
+| 1 | **United Agents** | 🎯 V1 demo target | Primary pitch target |
+| 2 | CAA | Planned | |
+| 3 | WME | Planned | |
+| 4 | UTA | Planned | |
+| 5 | Troika | Planned | |
+| 6 | Curtis Brown | Planned | |
+
+### 7.3 United Agents Theme (V1)
+
+Reference: https://www.unitedagents.co.uk/
+
+| Token | Value | Usage |
+|---|---|---|
+| `--color-primary` | `#000000` | Navigation, headings, primary buttons |
+| `--color-background` | `#FFFFFF` | Page background |
+| `--color-surface` | `#F5F5F5` | Cards, panels |
+| `--color-text` | `#333333` | Body text |
+| `--color-accent` | `#000000` | Links, active states (monochrome — no accent colour) |
+| `--font-sans` | System sans-serif (clean, contemporary) | Body copy, UI labels |
+| `--font-display` | Same family, heavier weight | Headings |
+
+**Visual style:**
+- High contrast black/white, minimal colour
+- Generous whitespace, grid-based
+- Professional minimalism — no decorative elements
+- Typography-led — text hierarchy does the work
+- Clean navigation, no visual noise
+
+### 7.4 Theme Architecture
+
+```
+/themes/
+  index.ts          ← maps subdomain/domain → theme config
+  types.ts          ← ThemeConfig interface
+  united-agents.ts  ← United Agents tokens + assets
+  caa.ts            ← CAA (stub)
+  wme.ts            ← WME (stub)
+  uta.ts            ← UTA (stub)
+  troika.ts         ← Troika (stub)
+  curtis-brown.ts   ← Curtis Brown (stub)
+```
+
+Theme is resolved at the edge (middleware) and injected as CSS variables + passed as a prop to the layout. No client-side flicker.
+
+### 7.5 Tenant-Specific Pages
+- Login page branded per agency (logo, colours, tagline)
+- Download page branded per agency (most visible to licensees — production companies)
+- Dashboard branded per agency
+- Email notifications use agency branding (Resend templates per tenant)
+
+---
+
+## 8. Cross-Functional Requirements
+
+### 8.1 Legal & Compliance
 - [ ] Engage data protection counsel re: biometric data (GDPR Article 9, BIPA)
 - [ ] Draft Terms of Service and Privacy Policy (biometric data clauses)
 - [ ] Data Processing Agreement (DPA) template for licensees
-- [ ] Establish data residency policy — confirm Cloudflare R2 bucket region (EU vs US)
+- [ ] Establish data residency policy — confirm Cloudflare R2 bucket region (EU vs US) — currently WEUR
 - [ ] Consent capture flow for talent at onboarding
 - [ ] Right to erasure workflow (GDPR Article 17) — purge all scan data + keys
 
-### 7.2 Security & Pen Testing
+### 8.2 Security & Pen Testing
 - [ ] Threat model review before launch
 - [ ] Third-party penetration test of auth and download flows
 - [ ] OWASP Top 10 audit of API routes
 - [ ] Key management design review
 
-### 7.3 Infrastructure & DevOps
-- [ ] Wrangler CI/CD pipeline (GitHub Actions → Cloudflare Pages deploy on merge to main)
-- [ ] Staging environment (Cloudflare Pages preview branches)
-- [ ] Secrets management via Wrangler secrets (never committed to repo)
-- [ ] R2 bucket versioning / soft delete policy
+### 8.3 Infrastructure & DevOps
+- [x] Cloudflare Pages Git integration — production deploys on merge to main, preview deploys per branch
+- [ ] Connect GitHub repo to Cloudflare Pages project in dashboard
+- [ ] Secrets set via Cloudflare Pages dashboard environment variables
+- [ ] R2 bucket soft delete / lifecycle policy
 - [ ] D1 database migration strategy (Drizzle ORM)
 - [ ] Cloudflare Logpush → long-term audit log retention (R2 or external SIEM)
 - [ ] Uptime monitoring and alerting
 
-### 7.4 Scalability
+### 8.4 Scalability
 - [ ] R2 multipart upload limits: max 10,000 parts × 5 GB = 50 TB max object — sufficient
 - [ ] D1 row limits per table — monitor for audit log table growth, archive strategy
 - [ ] KV TTL management for expired download tokens and sessions
 
-### 7.5 Business & Operations
+### 8.5 Business & Operations
 - [ ] Talent onboarding flow / white-glove setup for HNW clients
 - [ ] Pricing model (per-seat? per-GB? per-licence?)
 - [ ] Stripe integration for billing
@@ -237,16 +324,16 @@ The platform operates with zero-knowledge of file contents. Each scan is encrypt
 
 ---
 
-## 8. Product Backlog / TODO
+## 9. Product Backlog / TODO
 
-### 🔴 Phase 0 — Foundation (current)
+### 🔴 Phase 0 — Foundation
 - [x] Initialise Next.js + Cloudflare Pages project
 - [x] Configure `wrangler.toml` with R2, D1, KV bindings
-- [ ] Create R2 bucket (`image-vault-scans`)
-- [ ] Create D1 database and initial schema migration
-- [ ] Create KV namespace (sessions)
-- [ ] Set up GitHub Actions CI/CD pipeline
-- [ ] Configure Cloudflare Pages project linked to repo
+- [x] Create R2 buckets (`image-vault-scans`, `image-vault-scans-dev`)
+- [x] Create D1 database (`image-vault-db`, ID: `71665618-0498-48bd-a243-962eb4810769`)
+- [x] Create KV namespace (`SESSIONS_KV`, ID: `3d37f156b49348cdad79e28e8812b7e3`)
+- [ ] Connect GitHub repo to Cloudflare Pages in dashboard (one-time manual step)
+- [ ] Initial D1 schema migration
 
 ### 🟡 Phase 1 — Auth
 - [ ] Database schema: users, sessions, devices, 2fa_methods
@@ -254,6 +341,13 @@ The platform operates with zero-knowledge of file contents. Each scan is encrypt
 - [ ] Login with TOTP 2FA
 - [ ] JWT + refresh token session management (HttpOnly cookies)
 - [ ] Role-based access control middleware
+
+### 🟡 Phase 1.5 — Theme Engine
+- [ ] `ThemeConfig` interface and theme resolver middleware
+- [ ] United Agents theme (tokens, logo, typography)
+- [ ] CSS variable injection at edge (no FOUC)
+- [ ] Branded login page
+- [ ] Stub theme files for remaining 5 agencies
 
 ### 🟡 Phase 2 — Vault & Upload
 - [ ] Database schema: talents, scans, scan_files, upload_sessions
@@ -266,6 +360,7 @@ The platform operates with zero-knowledge of file contents. Each scan is encrypt
 ### 🟡 Phase 3 — Download
 - [ ] Chunked download + decryption in browser
 - [ ] Download progress UI
+- [ ] Branded download page per agency
 
 ### 🟠 Phase 4 — Licensing & Dual Custody
 - [ ] Database schema: licences, download_events
@@ -276,7 +371,7 @@ The platform operates with zero-knowledge of file contents. Each scan is encrypt
 - [ ] Licence revocation + URL invalidation
 
 ### 🟠 Phase 5 — Notifications & Admin
-- [ ] Email notifications via Resend
+- [ ] Email notifications via Resend (per-tenant branded templates)
 - [ ] In-app notification centre
 - [ ] Admin panel
 
@@ -286,3 +381,4 @@ The platform operates with zero-knowledge of file contents. Each scan is encrypt
 - [ ] Billing (Stripe)
 - [ ] Observability (Logpush, error tracking)
 - [ ] Load / performance testing with large files
+- [ ] Custom domains per agency tenant

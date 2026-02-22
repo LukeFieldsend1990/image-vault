@@ -17,7 +17,7 @@ preview_bucket_name = "image-vault-scans-dev"
 [[d1_databases]]
 binding = "DB"
 database_name = "image-vault-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "71665618-0498-48bd-a243-962eb4810769"
 migrations_dir = "drizzle/migrations"
 
 # -------------------------------------------------------------------
@@ -25,8 +25,8 @@ migrations_dir = "drizzle/migrations"
 # -------------------------------------------------------------------
 [[kv_namespaces]]
 binding = "SESSIONS_KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
+id = "3d37f156b49348cdad79e28e8812b7e3"
+preview_id = "3570e35d13f245c294ab8b0ef2d6a680"
 
 # -------------------------------------------------------------------
 # Environment Variables (non-secret)
