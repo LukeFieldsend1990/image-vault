@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(git add . && git commit -m \"$\\(cat <<'EOF'\nInitial scaffold: Next.js 16 + Cloudflare Pages stack\n\n- Next.js 16 App Router with TypeScript and Tailwind\n- Cloudflare Pages deployment via @cloudflare/next-on-pages\n- wrangler.toml configured with R2, D1, and KV bindings\n- Build/deploy scripts wired in package.json\n- Full product specification in SPEC.md\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" 2>&1)"
+    ]
+  }
+}

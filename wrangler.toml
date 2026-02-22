@@ -1,0 +1,46 @@
+name = "image-vault"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
+
+# -------------------------------------------------------------------
+# R2 Buckets
+# -------------------------------------------------------------------
+[[r2_buckets]]
+binding = "SCANS_BUCKET"
+bucket_name = "image-vault-scans"
+preview_bucket_name = "image-vault-scans-dev"
+
+# -------------------------------------------------------------------
+# D1 Database
+# -------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "image-vault-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "drizzle/migrations"
+
+# -------------------------------------------------------------------
+# KV Namespaces (sessions, download tokens)
+# -------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "SESSIONS_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
+
+# -------------------------------------------------------------------
+# Environment Variables (non-secret)
+# -------------------------------------------------------------------
+[vars]
+ENVIRONMENT = "production"
+APP_URL = "https://image-vault.pages.dev"
+
+# -------------------------------------------------------------------
+# Secrets (set via: wrangler secret put SECRET_NAME)
+# -------------------------------------------------------------------
+# ENCRYPTION_MASTER_KEY   - Server-side key wrapping key
+# JWT_SECRET              - JWT signing secret
+# RESEND_API_KEY          - Email notifications
+# TWILIO_ACCOUNT_SID      - SMS 2FA
+# TWILIO_AUTH_TOKEN       - SMS 2FA
+# TWILIO_FROM_NUMBER      - SMS 2FA

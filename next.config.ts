@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Required for Cloudflare Pages / next-on-pages
+  // All route handlers must use edge runtime
 };
 
 export default nextConfig;
