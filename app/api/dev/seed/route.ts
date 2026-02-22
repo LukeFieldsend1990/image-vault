@@ -17,7 +17,7 @@ const PERSONAS = [
   { id: "dev-licensee-001", email: "licensee@dev.test", role: "licensee" as const },
 ];
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   if (process.env.ENVIRONMENT !== "development") {
     return NextResponse.json({ error: "Only available in development" }, { status: 403 });
   }
