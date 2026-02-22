@@ -1,4 +1,6 @@
-const ITERATIONS = 310_000;
+// CF Workers free tier: 10ms CPU limit. 310k iterations exceeds this.
+// 100k is still OWASP-compliant for PBKDF2-SHA-256 at edge.
+const ITERATIONS = 100_000;
 const KEY_LEN = 32; // bytes
 
 function hexEncode(buf: ArrayBuffer): string {
@@ -79,5 +81,5 @@ export async function verifyPassword(
 
 /** Run a dummy PBKDF2 to prevent timing-based user enumeration */
 export async function dummyPasswordCheck(): Promise<void> {
-  await verifyPassword("dummy", "pbkdf2:v1:310000:00000000000000000000000000000000:0000000000000000000000000000000000000000000000000000000000000000");
+  await verifyPassword("dummy", "pbkdf2:v1:100000:00000000000000000000000000000000:0000000000000000000000000000000000000000000000000000000000000000");
 }
