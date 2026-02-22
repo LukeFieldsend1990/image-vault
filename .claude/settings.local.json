@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(npx create-next-app@latest:*)",
-      "Bash(git add . && git commit -m \"$\\(cat <<'EOF'\nInitial scaffold: Next.js 16 + Cloudflare Pages stack\n\n- Next.js 16 App Router with TypeScript and Tailwind\n- Cloudflare Pages deployment via @cloudflare/next-on-pages\n- wrangler.toml configured with R2, D1, and KV bindings\n- Build/deploy scripts wired in package.json\n- Full product specification in SPEC.md\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" 2>&1)"
+      "Bash(git add . && git commit -m \"$\\(cat <<'EOF'\nInitial scaffold: Next.js 16 + Cloudflare Pages stack\n\n- Next.js 16 App Router with TypeScript and Tailwind\n- Cloudflare Pages deployment via @cloudflare/next-on-pages\n- wrangler.toml configured with R2, D1, and KV bindings\n- Build/deploy scripts wired in package.json\n- Full product specification in SPEC.md\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" 2>&1)",
+      "Bash(git push:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(git add wrangler.toml SPEC.md && git commit -m \"$\\(cat <<'EOF'\nProvision Cloudflare resources and update spec\n\n- Wire real D1, KV, and R2 IDs into wrangler.toml\n- Update SPEC.md: CI/CD via Cloudflare Pages native \\(no GitHub Actions\\)\n- Add §7 Multi-Tenancy & Branding: hardcoded per-agency themes,\n  United Agents as V1 demo target with brand tokens\n- Tick off completed Phase 0 infra tasks\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push 2>&1)",
+      "Bash(npm run:*)",
+      "Bash(tail:*)"
     ]
   }
 }
