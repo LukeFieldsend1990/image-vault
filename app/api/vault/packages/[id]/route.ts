@@ -5,7 +5,45 @@ import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
+
+// GET /api/vault/packages/:id/files — list files in a package
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+
+  const { id } = await params;
+  const db = getDb();
+
+  const pkg = await db
+    .select({ id: scanPackages.id, talentId: scanPackages.talentId })
+    .from(scanPackages)
+    .where(and(eq(scanPackages.id, id), eq(scanPackages.talentId, session.sub)))
+    .get();
+
+  if (!pkg) {
+    return NextResponse.json({ error: "Package not found" }, { status: 404 });
+  }
+
+  const files = await db
+    .select({
+      id: scanFiles.id,
+      filename: scanFiles.filename,
+      sizeBytes: scanFiles.sizeBytes,
+      contentType: scanFiles.contentType,
+      uploadStatus: scanFiles.uploadStatus,
+      createdAt: scanFiles.createdAt,
+    })
+    .from(scanFiles)
+    .where(eq(scanFiles.packageId, id))
+    .orderBy(asc(scanFiles.createdAt))
+    .all();
+
+  return NextResponse.json({ files });
+}
 
 export async function DELETE(
   req: NextRequest,
