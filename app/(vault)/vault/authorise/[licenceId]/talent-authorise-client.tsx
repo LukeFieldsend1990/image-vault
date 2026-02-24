@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 interface StatusData {
   step: string | null;
@@ -10,7 +9,6 @@ interface StatusData {
 }
 
 export default function TalentAuthoriseClient({ licenceId }: { licenceId: string }) {
-  const router = useRouter();
   const [status, setStatus] = useState<StatusData | null>(null);
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -39,6 +37,7 @@ export default function TalentAuthoriseClient({ licenceId }: { licenceId: string
       setDone(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed");
+      setCode(""); // clear so they must re-enter a fresh code
     } finally {
       setSubmitting(false);
     }
@@ -134,13 +133,17 @@ export default function TalentAuthoriseClient({ licenceId }: { licenceId: string
           inputMode="numeric"
           maxLength={6}
           value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          onChange={(e) => { setCode(e.target.value.replace(/\D/g, "")); setError(null); }}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           placeholder="000 000"
           className="w-full rounded border px-3 py-2.5 text-center text-xl font-mono tracking-[0.3em] outline-none focus:ring-1"
-          style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+          style={{ borderColor: error ? "var(--color-danger)" : "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
         />
-        {error && <p className="mt-2 text-xs" style={{ color: "var(--color-danger)" }}>{error}</p>}
+        {error && (
+          <div className="mt-2 rounded px-3 py-2 text-xs font-medium" style={{ background: "rgba(192,57,43,0.08)", color: "var(--color-danger)" }}>
+            {error} — please wait for a new code and try again.
+          </div>
+        )}
         <button
           onClick={submit}
           disabled={submitting || code.length < 6}

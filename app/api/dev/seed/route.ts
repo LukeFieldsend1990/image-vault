@@ -1,6 +1,6 @@
 export const runtime = "edge";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { users, totpCredentials } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
@@ -17,7 +17,7 @@ const PERSONAS = [
   { id: "dev-licensee-001", email: "licensee@dev.test", role: "licensee" as const },
 ];
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   if (process.env.ENVIRONMENT !== "development") {
     return NextResponse.json({ error: "Only available in development" }, { status: 403 });
   }

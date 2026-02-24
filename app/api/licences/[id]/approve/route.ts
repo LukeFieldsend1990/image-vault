@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { licences } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 // POST /api/licences/[id]/approve — talent/rep approves a pending licence request
 export async function POST(

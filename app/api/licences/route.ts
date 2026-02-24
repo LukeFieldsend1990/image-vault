@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { licences, scanPackages, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, desc, or, and } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 // GET /api/licences — list licences scoped to the caller's role
 export async function GET(req: NextRequest) {

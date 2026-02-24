@@ -11,14 +11,6 @@ interface DownloadToken {
   token: string;
 }
 
-const STEP_LABELS: Record<Step, string> = {
-  idle: "Initiating…",
-  awaiting_licensee: "Step 1 — Verify your identity",
-  awaiting_talent: "Step 2 — Awaiting talent approval",
-  complete: "Ready to download",
-  expired: "Session expired",
-  error: "Error",
-};
 
 export default function DualCustodyDownloadClient({ licenceId }: { licenceId: string }) {
   const [step, setStep] = useState<Step>("idle");
@@ -73,6 +65,7 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
       setCode("");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed");
+      setCode(""); // clear so they must re-enter a fresh code
     } finally {
       setSubmitting(false);
     }
@@ -138,13 +131,17 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
             inputMode="numeric"
             maxLength={6}
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            onChange={(e) => { setCode(e.target.value.replace(/\D/g, "")); setError(null); }}
             onKeyDown={(e) => e.key === "Enter" && submitCode()}
             placeholder="000 000"
             className="w-full rounded border px-3 py-2.5 text-center text-xl font-mono tracking-[0.3em] outline-none focus:ring-1"
-            style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+            style={{ borderColor: error ? "var(--color-danger)" : "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
           />
-          {error && <p className="mt-2 text-xs" style={{ color: "var(--color-danger)" }}>{error}</p>}
+          {error && (
+            <div className="mt-2 rounded px-3 py-2 text-xs font-medium" style={{ background: "rgba(192,57,43,0.08)", color: "var(--color-danger)" }}>
+              {error} — please wait for a new code and try again.
+            </div>
+          )}
           <button
             onClick={submitCode}
             disabled={submitting || code.length < 6}

@@ -5,7 +5,7 @@ import { getDb, getKv } from "@/lib/db";
 import { licences, scanFiles, totpCredentials, downloadEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { verifyTotpCode } from "@/lib/auth/totp";
-import { eq, and, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { DualCustodySession } from "../initiate/route";
 
 const DOWNLOAD_TOKEN_TTL = 48 * 60 * 60; // 48 hours in seconds
@@ -76,7 +76,7 @@ export async function POST(
   }
 
   // Resolve which files to grant access to
-  let fileQuery = db
+  const fileQuery = db
     .select({ id: scanFiles.id, filename: scanFiles.filename, sizeBytes: scanFiles.sizeBytes })
     .from(scanFiles)
     .where(eq(scanFiles.packageId, dcSession.packageId));
