@@ -333,47 +333,161 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [x] Create D1 database (`image-vault-db`, ID: `71665618-0498-48bd-a243-962eb4810769`)
 - [x] Create KV namespace (`SESSIONS_KV`, ID: `3d37f156b49348cdad79e28e8812b7e3`)
 - [ ] Connect GitHub repo to Cloudflare Pages in dashboard (one-time manual step)
-- [ ] Initial D1 schema migration
+- [x] Initial D1 schema migration (0001_vault.sql written; `--remote` apply pending)
 
-### 🟡 Phase 1 — Auth
-- [ ] Database schema: users, sessions, devices, 2fa_methods
-- [ ] Sign up / email verification flow
-- [ ] Login with TOTP 2FA
-- [ ] JWT + refresh token session management (HttpOnly cookies)
-- [ ] Role-based access control middleware
+### ✅ Phase 1 — Auth
+- [x] Database schema: users, sessions, devices, 2fa_methods
+- [x] Sign up flow (email + password + role selection)
+- [ ] Email verification on sign-up (not yet implemented)
+- [x] Login with TOTP 2FA
+- [x] JWT + refresh token session management (HttpOnly cookies)
+- [x] Role-based access control middleware
 
 ### 🟡 Phase 1.5 — Theme Engine
 - [ ] `ThemeConfig` interface and theme resolver middleware
 - [ ] United Agents theme (tokens, logo, typography)
 - [ ] CSS variable injection at edge (no FOUC)
 - [ ] Branded login page
-- [ ] Stub theme files for remaining 5 agencies
+- [ ] Stub theme files for remaining 5 agencies (CAA, WME, UTA, Troika, Curtis Brown)
 
-### 🟡 Phase 2 — Vault & Upload
-- [ ] Database schema: talents, scans, scan_files, upload_sessions
-- [ ] Talent vault dashboard
-- [ ] Multipart upload orchestration API (presign chunks, complete upload)
-- [ ] Client-side AES-256-GCM chunk encryption
-- [ ] Upload progress UI
-- [ ] Resumable upload state in KV
+### ✅ Phase 2 — Vault & Upload
+- [x] Database schema: scan_packages, scan_files, upload_sessions
+- [x] Talent vault dashboard
+- [x] Multipart upload orchestration API (presign chunks, complete upload)
+- [ ] Client-side AES-256-GCM chunk encryption (deferred — zero-knowledge layer)
+- [x] Upload progress UI
+- [ ] Resumable upload state in KV (deferred)
 
-### 🟡 Phase 3 — Download
-- [ ] Chunked download + decryption in browser
-- [ ] Download progress UI
-- [ ] Branded download page per agency
+### ✅ Phase 3 — Download
+- [x] R2 → browser streaming download per file
+- [x] Expandable package cards with per-file download buttons
+- [ ] Chunked download with in-browser AES-256-GCM decryption (deferred — tied to encryption)
+- [ ] Download speed / progress meter
+- [ ] Branded download page per agency (deferred to Phase 5)
 
-### 🟠 Phase 4 — Licensing & Dual Custody
-- [ ] Database schema: licences, download_events
-- [ ] Licence request flow (licensee)
-- [ ] Licence review flow (talent/rep)
-- [ ] Dual-custody 2FA orchestration
-- [ ] Presigned download URL generation
-- [ ] Licence revocation + URL invalidation
+### ✅ Phase 4 — Licensing & Dual Custody
+- [x] Database schema: licences, download_events (0002_licensing.sql applied --remote)
+- [x] Licence request flow (licensee) — /licences/request/[packageId], POST /api/licences
+- [x] Licence review / approval / denial flow (talent / rep) — /vault/requests, approve + deny APIs
+- [x] Dual-custody 2FA orchestration — initiate → licensee-2fa → talent-2fa via KV state machine
+- [x] Download token generation (KV tokens → /api/download/[token] streams R2, 48h TTL)
+- [x] Licence revocation + KV session invalidation
+- [x] All role UI flows: directory, talent profile, licensee dashboard, talent requests + licences, authorise pages
+- [x] Role-aware nav (talent vs licensee), layout reads role from JWT cookie
+
+#### Phase 4 — UI Flows
+
+**4A — Talent Directory (Licensee)**
+- `/directory` — searchable/filterable grid of talent available for licensing
+  - Cards: name, agency, scan count, last scan date (no file previews)
+  - Filter by: agency, scan type, date range
+- `/talent/[id]` — talent profile page (licensee view)
+  - Metadata only: bio, scan package list (dates, sizes, types)
+  - CTA: "Request Licence" per package
+
+**4B — Licence Request Form (Licensee)**
+- `/licences/request/[packageId]` — single-page form
+  - Fields: project name, production company, intended use, date range, file scope (all files / subset)
+  - Declaration checkbox (data handling terms)
+  - Submit → creates `PENDING` licence record → notifies talent/rep
+- `/licences` — licensee's licence dashboard
+  - Tabs: Pending / Approved / Denied / Expired / Revoked
+  - Per-licence: status badge, package name, date range, requested date
+  - Approved licences show "Download" CTA
+
+**4C — Licence Review (Talent / Rep)**
+- `/vault/requests` — incoming licence requests list
+  - Per-request: licensee name, project, intended use, date range, requested package
+  - Actions: Review / Ignore
+- `/vault/requests/[licenceId]` — request detail page
+  - Full request context
+  - Approve button → transitions to `APPROVED_PENDING_DOWNLOAD`
+  - Deny button + optional reason field → transitions to `DENIED`, notifies licensee
+- `/vault/licences` — active licences panel
+  - List of approved licences with licensee, package, expiry, download count
+  - Revoke button per licence → invalidates presigned URLs, transitions to `REVOKED`
+
+**4D — Dual-Custody Download Flow (Licensee)**
+- `/licences/[licenceId]/download` — download initiation page
+  - Shows: package summary, licence terms, expiry
+  - "Start Download" → triggers dual-custody orchestration
+  - Step 1 shown: "Verify your identity — enter the code from your authenticator"
+  - TOTP form → on success, system sends 2FA challenge to talent/rep
+  - Waiting state: "Awaiting approval from [Agency Name] — this may take a few minutes"
+  - On talent 2FA complete → presigned URL issued, download begins
+  - Download progress bar (bytes / total, estimated time)
+
+**4E — Dual-Custody 2FA Challenge (Talent / Rep)**
+- Push notification / email → deep link to `/vault/authorise/[token]`
+  - Shows: licensee name, project, package name, requested at timestamp
+  - "Authorise Download" → TOTP challenge
+  - On success → system issues presigned URL to licensee
+  - "Deny" option → cancels the pending download session
+
+**4F — Rep / Agency Delegation UI**
+- `/settings/delegation` (talent view)
+  - List of reps with access, granted date
+  - Invite rep by email / revoke
+- `/roster` (rep view)
+  - Grid of talent they represent
+  - Per-talent: vault status, pending requests count, last activity
+  - "Act as [Talent Name]" → scoped session (banner shown throughout UI)
+
+#### Phase 4 — API Routes
+- `POST /api/licences/request` — create licence request
+- `GET /api/licences` — list licences (scoped by role)
+- `POST /api/licences/[id]/approve` — talent/rep approves
+- `POST /api/licences/[id]/deny` — talent/rep denies
+- `POST /api/licences/[id]/revoke` — talent/rep revokes
+- `POST /api/licences/[id]/download/initiate` — licensee starts dual-custody flow
+- `POST /api/licences/[id]/download/licensee-2fa` — licensee TOTP verification
+- `POST /api/licences/[id]/download/talent-2fa` — talent/rep TOTP verification → issues URL
+- `GET /api/licences/[id]/download/status` — poll for presigned URL readiness
+
+#### Phase 4 — DB Schema Additions
+```sql
+CREATE TABLE licences (
+  id TEXT PRIMARY KEY,
+  talent_id TEXT NOT NULL,
+  package_id TEXT NOT NULL,
+  licensee_id TEXT NOT NULL,
+  project_name TEXT NOT NULL,
+  intended_use TEXT NOT NULL,
+  valid_from INTEGER NOT NULL,
+  valid_to INTEGER NOT NULL,
+  file_scope TEXT NOT NULL DEFAULT 'all',
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  approved_by TEXT,
+  approved_at INTEGER,
+  denied_at INTEGER,
+  denied_reason TEXT,
+  revoked_at INTEGER,
+  dual_custody_token TEXT,
+  dual_custody_expires_at INTEGER,
+  dual_custody_completed_at INTEGER,
+  download_count INTEGER NOT NULL DEFAULT 0,
+  last_download_at INTEGER,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE download_events (
+  id TEXT PRIMARY KEY,
+  licence_id TEXT NOT NULL,
+  licensee_id TEXT NOT NULL,
+  file_id TEXT NOT NULL,
+  ip TEXT,
+  user_agent TEXT,
+  bytes_transferred INTEGER,
+  started_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  presigned_url_expires_at INTEGER
+);
+```
 
 ### 🟠 Phase 5 — Notifications & Admin
 - [ ] Email notifications via Resend (per-tenant branded templates)
 - [ ] In-app notification centre
-- [ ] Admin panel
+- [ ] Admin panel — user management, audit log, storage dashboard
 
 ### 🟢 Phase 6 — Production Hardening
 - [ ] Pen test
