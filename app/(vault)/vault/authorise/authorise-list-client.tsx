@@ -21,14 +21,14 @@ export default function AuthoriseListClient() {
     // Fetch all approved licences and check KV status for each
     // For simplicity, we fetch approved licences and let the talent navigate to each
     fetch("/api/licences?status=APPROVED")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ licences?: Array<{ id: string; projectName: string; productionCompany: string; packageId: string }> }>)
       .then(async (d) => {
         const licences = d.licences ?? [];
         // Poll status for each approved licence to find those awaiting talent
         const results = await Promise.all(
           licences.map(async (l: { id: string; projectName: string; productionCompany: string; packageId: string }) => {
             const r = await fetch(`/api/licences/${l.id}/download/status`);
-            const s = await r.json();
+            const s = await r.json() as { step?: string | null };
             if (s.step === "awaiting_talent") {
               return {
                 licenceId: l.id,

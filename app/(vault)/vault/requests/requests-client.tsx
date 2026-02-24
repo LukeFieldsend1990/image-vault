@@ -29,7 +29,7 @@ export default function RequestsClient() {
 
   async function load() {
     const r = await fetch("/api/licences?status=PENDING");
-    const d = await r.json();
+    const d = await r.json() as { licences?: Licence[] };
     setRequests(d.licences ?? []);
     setLoading(false);
   }

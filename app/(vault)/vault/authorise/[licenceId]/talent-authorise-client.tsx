@@ -17,7 +17,7 @@ export default function TalentAuthoriseClient({ licenceId }: { licenceId: string
 
   useEffect(() => {
     fetch(`/api/licences/${licenceId}/download/status`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<StatusData>)
       .then((d) => setStatus(d))
       .catch(() => setStatus({ step: null }));
   }, [licenceId]);
@@ -32,7 +32,7 @@ export default function TalentAuthoriseClient({ licenceId }: { licenceId: string
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: code.replace(/\s/g, "") }),
       });
-      const d = await res.json();
+      const d = await res.json() as { error?: string };
       if (!res.ok) throw new Error(d.error ?? "Invalid code");
       setDone(true);
     } catch (err: unknown) {

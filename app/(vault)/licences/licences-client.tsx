@@ -54,7 +54,7 @@ export default function LicencesClient() {
     setLoading(true);
     const url = tab === "ALL" ? "/api/licences" : `/api/licences?status=${tab}`;
     fetch(url)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ licences?: Licence[] }>)
       .then((d) => setLicences(d.licences ?? []))
       .catch(() => setError("Failed to load licences"))
       .finally(() => setLoading(false));

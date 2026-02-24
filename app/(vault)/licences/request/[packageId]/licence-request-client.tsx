@@ -51,7 +51,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
           fileScope: "all",
         }),
       });
-      const data = await res.json();
+      const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Request failed");
       router.push("/licences");
     } catch (err: unknown) {

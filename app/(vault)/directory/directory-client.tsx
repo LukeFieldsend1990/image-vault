@@ -16,7 +16,7 @@ export default function DirectoryClient() {
 
   useEffect(() => {
     fetch("/api/talent")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ talent?: TalentRow[] }>)
       .then((d) => setTalent(d.talent ?? []))
       .catch(() => setError("Failed to load directory"))
       .finally(() => setLoading(false));

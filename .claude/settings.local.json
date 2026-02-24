@@ -7,7 +7,12 @@
       "Bash(npx wrangler:*)",
       "Bash(git add wrangler.toml SPEC.md && git commit -m \"$\\(cat <<'EOF'\nProvision Cloudflare resources and update spec\n\n- Wire real D1, KV, and R2 IDs into wrangler.toml\n- Update SPEC.md: CI/CD via Cloudflare Pages native \\(no GitHub Actions\\)\n- Add §7 Multi-Tenancy & Branding: hardcoded per-agency themes,\n  United Agents as V1 demo target with brand tokens\n- Tick off completed Phase 0 infra tasks\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push 2>&1)",
       "Bash(npm run:*)",
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "Bash(ls:*)",
+      "Bash(head:*)",
+      "Bash(npx tsc:*)",
+      "Bash(lsof:*)",
+      "Bash(grep:*)"
     ]
   }
 }

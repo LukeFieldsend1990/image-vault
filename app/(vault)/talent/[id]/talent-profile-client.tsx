@@ -39,7 +39,7 @@ export default function TalentProfileClient({ talentId }: { talentId: string }) 
     fetch(`/api/talent/${talentId}/packages`)
       .then((r) => {
         if (!r.ok) throw new Error("Not found");
-        return r.json();
+        return r.json() as Promise<{ talent: TalentProfile; packages?: Package[] }>;
       })
       .then((d) => {
         setTalent(d.talent);

@@ -23,7 +23,7 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
   // Initiate the dual-custody session on mount
   useEffect(() => {
     fetch(`/api/licences/${licenceId}/download/initiate`, { method: "POST" })
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ step?: Step }>)
       .then((d) => setStep(d.step ?? "error"))
       .catch(() => setStep("error"));
   }, [licenceId]);
@@ -33,7 +33,7 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
     if (step === "awaiting_talent") {
       pollRef.current = setInterval(async () => {
         const r = await fetch(`/api/licences/${licenceId}/download/status`);
-        const d = await r.json();
+        const d = await r.json() as { step?: string | null; downloadTokens?: DownloadToken[] };
         if (d.step === "complete") {
           setTokens(d.downloadTokens ?? []);
           setStep("complete");
@@ -59,7 +59,7 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: code.replace(/\s/g, "") }),
       });
-      const d = await res.json();
+      const d = await res.json() as { error?: string; step?: Step };
       if (!res.ok) throw new Error(d.error ?? "Invalid code");
       setStep(d.step ?? "error");
       setCode("");
