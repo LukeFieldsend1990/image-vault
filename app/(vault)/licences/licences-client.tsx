@@ -50,6 +50,7 @@ export default function LicencesClient() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     const url = tab === "ALL" ? "/api/licences" : `/api/licences?status=${tab}`;
     fetch(url)

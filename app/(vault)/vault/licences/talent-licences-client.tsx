@@ -43,7 +43,8 @@ export default function TalentLicencesClient() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, []);
 
   async function revoke(id: string) {
     if (!confirm("Revoke this licence? Any pending downloads will be cancelled.")) return;
