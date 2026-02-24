@@ -4,11 +4,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq, desc, sql } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
+
+  // Reps can pass ?for=talentId to view a managed talent's packages
+  const forTalentId = req.nextUrl.searchParams.get("for");
+  let ownerId = session.sub;
+
+  if (forTalentId) {
+    if (session.role !== "rep" && session.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (session.role === "rep" && !(await hasRepAccess(session.sub, forTalentId))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    ownerId = forTalentId;
+  }
 
   const db = getDb();
 
@@ -28,7 +43,7 @@ export async function GET(req: NextRequest) {
     })
     .from(scanPackages)
     .leftJoin(scanFiles, eq(scanFiles.packageId, scanPackages.id))
-    .where(eq(scanPackages.talentId, session.sub))
+    .where(eq(scanPackages.talentId, ownerId))
     .groupBy(scanPackages.id)
     .orderBy(desc(scanPackages.createdAt))
     .all();
@@ -46,6 +61,7 @@ export async function POST(req: NextRequest) {
     captureDate?: number;
     studioName?: string;
     technicianNotes?: string;
+    forTalentId?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -57,13 +73,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
+  // Reps can create packages on behalf of managed talent
+  let ownerId = session.sub;
+  if (body.forTalentId) {
+    if (session.role !== "rep" && session.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (session.role === "rep" && !(await hasRepAccess(session.sub, body.forTalentId))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    ownerId = body.forTalentId;
+  }
+
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
   const packageId = crypto.randomUUID();
 
   await db.insert(scanPackages).values({
     id: packageId,
-    talentId: session.sub,
+    talentId: ownerId,
     name: body.name.trim(),
     description: body.description ?? null,
     captureDate: body.captureDate ?? null,

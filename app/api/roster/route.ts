@@ -1,0 +1,37 @@
+export const runtime = "edge";
+
+import { NextRequest, NextResponse } from "next/server";
+import { getDb } from "@/lib/db";
+import { talentReps, users, scanPackages } from "@/lib/db/schema";
+import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { eq, and, count } from "drizzle-orm";
+
+/** GET /api/roster — returns the list of talent the authed rep manages */
+export async function GET(req: NextRequest) {
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+  if (session.role !== "rep" && session.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      talentId: talentReps.talentId,
+      email: users.email,
+      linkedSince: talentReps.createdAt,
+      packageCount: count(scanPackages.id),
+    })
+    .from(talentReps)
+    .innerJoin(users, eq(users.id, talentReps.talentId))
+    .leftJoin(
+      scanPackages,
+      and(eq(scanPackages.talentId, talentReps.talentId), eq(scanPackages.status, "ready"))
+    )
+    .where(eq(talentReps.repId, session.sub))
+    .groupBy(talentReps.talentId, users.email, talentReps.createdAt)
+    .all();
+
+  return NextResponse.json({ roster: rows });
+}

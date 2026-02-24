@@ -1,27 +1,28 @@
 import { cookies } from "next/headers";
 import { NavLinks } from "./nav";
+import UserWidget from "./user-widget";
 
 type Role = "talent" | "rep" | "licensee" | "admin";
 
-function getRoleFromCookie(): Role {
+async function getRoleFromCookie(): Promise<Role> {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
     if (!session) return "talent";
-    const payload = JSON.parse(atob(session.split(".")[1]));
-    return (payload.role as Role) ?? "talent";
+    const payload = JSON.parse(atob(session.split(".")[1])) as { role?: Role };
+    return payload.role ?? "talent";
   } catch {
     return "talent";
   }
 }
 
-function getEmailFromCookie(): { email: string; initials: string } {
+async function getEmailFromCookie(): Promise<{ email: string; initials: string }> {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
     if (!session) return { email: "", initials: "??" };
-    const payload = JSON.parse(atob(session.split(".")[1]));
-    const email = (payload.email as string) ?? "";
+    const payload = JSON.parse(atob(session.split(".")[1])) as { email?: string };
+    const email = payload.email ?? "";
     const initials = email
       .split("@")[0]
       .split(/[._-]/)
@@ -34,13 +35,13 @@ function getEmailFromCookie(): { email: string; initials: string } {
   }
 }
 
-export default function VaultLayout({
+export default async function VaultLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const role = getRoleFromCookie();
-  const { email, initials } = getEmailFromCookie();
+  const role = await getRoleFromCookie();
+  const { email, initials } = await getEmailFromCookie();
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -66,23 +67,7 @@ export default function VaultLayout({
           <NavLinks role={role} />
         </div>
 
-        {/* User */}
-        <div className="mx-3 flex items-center gap-3 rounded px-3 py-3 cursor-pointer hover:bg-white/5 transition">
-          <div
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
-            style={{ background: "var(--color-accent)", color: "#ffffff" }}
-          >
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-medium capitalize" style={{ color: "var(--color-sidebar-fg)" }}>
-              {role}
-            </p>
-            <p className="truncate text-[11px]" style={{ color: "var(--color-sidebar-muted)" }}>
-              {email || "—"}
-            </p>
-          </div>
-        </div>
+        <UserWidget email={email} initials={initials} role={role} />
       </aside>
 
       {/* ── Main ── */}

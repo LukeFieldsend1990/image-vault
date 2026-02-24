@@ -5,6 +5,7 @@ import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq, and, asc } from "drizzle-orm";
 
 // GET /api/vault/packages/:id/files — list files in a package
@@ -21,11 +22,21 @@ export async function GET(
   const pkg = await db
     .select({ id: scanPackages.id, talentId: scanPackages.talentId })
     .from(scanPackages)
-    .where(and(eq(scanPackages.id, id), eq(scanPackages.talentId, session.sub)))
+    .where(eq(scanPackages.id, id))
     .get();
 
   if (!pkg) {
     return NextResponse.json({ error: "Package not found" }, { status: 404 });
+  }
+
+  // Allow talent owner or a delegated rep
+  if (pkg.talentId !== session.sub) {
+    const allowed =
+      (session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId))) ||
+      session.role === "admin";
+    if (!allowed) {
+      return NextResponse.json({ error: "Package not found" }, { status: 404 });
+    }
   }
 
   const files = await db
@@ -56,15 +67,24 @@ export async function DELETE(
 
   const db = getDb();
 
-  // Verify package belongs to authed user
+  // Verify package belongs to authed user (or a delegated rep)
   const pkg = await db
     .select({ id: scanPackages.id, talentId: scanPackages.talentId })
     .from(scanPackages)
-    .where(and(eq(scanPackages.id, id), eq(scanPackages.talentId, session.sub)))
+    .where(eq(scanPackages.id, id))
     .get();
 
   if (!pkg) {
     return NextResponse.json({ error: "Package not found" }, { status: 404 });
+  }
+
+  if (pkg.talentId !== session.sub) {
+    const allowed =
+      (session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId))) ||
+      session.role === "admin";
+    if (!allowed) {
+      return NextResponse.json({ error: "Package not found" }, { status: 404 });
+    }
   }
 
   // Abort any open R2 multipart uploads before deleting DB records

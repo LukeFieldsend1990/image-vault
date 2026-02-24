@@ -83,6 +83,14 @@ export const licences = sqliteTable("licences", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const talentReps = sqliteTable("talent_reps", {
+  id: text("id").primaryKey(), // UUID
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  repId: text("rep_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  invitedBy: text("invited_by").notNull().references(() => users.id),
+  createdAt: integer("created_at").notNull(), // unix timestamp
+});
+
 export const downloadEvents = sqliteTable("download_events", {
   id: text("id").primaryKey(), // UUID
   licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),

@@ -6,6 +6,7 @@ import { encryptChunk } from "@/lib/crypto/encrypt";
 interface Props {
   onClose: () => void;
   onComplete: () => void;
+  forTalentId?: string; // rep uploading on behalf of talent
 }
 
 type Step = "metadata" | "files";
@@ -27,7 +28,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-export default function UploadModal({ onClose, onComplete }: Props) {
+export default function UploadModal({ onClose, onComplete, forTalentId }: Props) {
   const [step, setStep] = useState<Step>("metadata");
 
   // Metadata fields
@@ -67,6 +68,7 @@ export default function UploadModal({ onClose, onComplete }: Props) {
           captureDate: captureDate
             ? Math.floor(new Date(captureDate).getTime() / 1000)
             : undefined,
+          forTalentId: forTalentId ?? undefined,
         }),
       });
       if (!res.ok) {
