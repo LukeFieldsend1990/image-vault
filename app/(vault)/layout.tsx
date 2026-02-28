@@ -94,7 +94,7 @@ export default async function VaultLayout({
             <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
           </div>
 
-          <NavLinks role={role} />
+          <NavLinks role={role} email={email} />
         </div>
 
         <UserWidget

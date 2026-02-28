@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding"];
+const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin"];
 const AUTH_PAGES = ["/login", "/signup", "/setup-2fa"];
+const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
@@ -29,6 +30,17 @@ async function getAuthStatus(req: NextRequest): Promise<AuthStatus> {
   }
 }
 
+function getEmailFromToken(req: NextRequest): string | null {
+  try {
+    const token = req.cookies.get("session")?.value;
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split(".")[1])) as { email?: string };
+    return payload.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -37,6 +49,25 @@ export async function middleware(req: NextRequest) {
 
   if (isProtected || isAuthPage) {
     const status = await getAuthStatus(req);
+
+    // Admin whitelist — must be authenticated AND email must be in ADMIN_EMAILS
+    if (pathname.startsWith("/admin")) {
+      if (status !== "ok") {
+        const loginUrl = req.nextUrl.clone();
+        loginUrl.pathname = "/login";
+        loginUrl.search = "";
+        loginUrl.searchParams.set("next", pathname);
+        return NextResponse.redirect(loginUrl);
+      }
+      const email = getEmailFromToken(req);
+      if (!email || !ADMIN_EMAILS.includes(email)) {
+        const dashUrl = req.nextUrl.clone();
+        dashUrl.pathname = "/dashboard";
+        dashUrl.search = "";
+        return NextResponse.redirect(dashUrl);
+      }
+      return NextResponse.next();
+    }
 
     if (isProtected && status === "none") {
       const loginUrl = req.nextUrl.clone();
@@ -79,6 +110,7 @@ export const config = {
     "/vault/monitor/:path*",
     "/roster/:path*",
     "/onboarding",
+    "/admin/:path*",
     "/login",
     "/signup",
     "/setup-2fa",
