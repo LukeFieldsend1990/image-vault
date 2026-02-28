@@ -140,7 +140,7 @@ export default function UploadModal({ onClose, onComplete, forTalentId }: Props)
           prev.map((f, idx) => (idx === i ? { ...f, status: "uploading" } : f))
         );
 
-        // Chunk and upload
+        // Chunk and upload directly to R2 via presigned URLs
         const totalChunks = Math.ceil(fp.file.size / CHUNK_SIZE);
         let uploadedBytes = 0;
 
@@ -151,17 +151,36 @@ export default function UploadModal({ onClose, onComplete, forTalentId }: Props)
           const raw = await slice.arrayBuffer();
           const encrypted = await encryptChunk(raw);
 
-          const partRes = await fetch(
-            `/api/vault/upload/part?fileId=${fileId}&partNumber=${part + 1}`,
-            {
-              method: "PUT",
-              body: encrypted,
-              headers: { "Content-Type": "application/octet-stream" },
-            }
+          // Step 1: Get presigned URL for this part
+          const presignRes = await fetch(
+            `/api/vault/upload/presign?fileId=${fileId}&partNumber=${part + 1}`,
           );
+          if (!presignRes.ok) {
+            throw new Error(`Failed to get presigned URL for part ${part + 1}`);
+          }
+          const { url: presignedUrl } = await presignRes.json() as { url: string };
 
-          if (!partRes.ok) {
-            throw new Error(`Part ${part + 1} failed`);
+          // Step 2: Upload chunk directly to R2 (bypasses Worker)
+          const r2Res = await fetch(presignedUrl, {
+            method: "PUT",
+            body: encrypted,
+            headers: { "Content-Type": "application/octet-stream" },
+          });
+          if (!r2Res.ok) {
+            throw new Error(`Part ${part + 1} upload to R2 failed (${r2Res.status})`);
+          }
+
+          // Step 3: Record the ETag so the Worker can complete the multipart upload
+          const etag = r2Res.headers.get("ETag") ?? r2Res.headers.get("etag");
+          if (!etag) {
+            throw new Error(`No ETag received for part ${part + 1}`);
+          }
+          const recordRes = await fetch(
+            `/api/vault/upload/part?fileId=${fileId}&partNumber=${part + 1}&etag=${encodeURIComponent(etag)}`,
+            { method: "PATCH" },
+          );
+          if (!recordRes.ok) {
+            throw new Error(`Failed to record part ${part + 1}`);
           }
 
           uploadedBytes += end - start;
@@ -327,8 +346,8 @@ export default function UploadModal({ onClose, onComplete, forTalentId }: Props)
                 <button
                   type="submit"
                   disabled={metaLoading}
-                  className="bg-[--color-ink] px-5 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50"
-                  style={{ borderRadius: "var(--radius)" }}
+                  className="px-5 py-2 text-xs font-medium text-white transition disabled:opacity-50"
+                  style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
                 >
                   {metaLoading ? "Creating…" : "Continue"}
                 </button>
@@ -431,8 +450,8 @@ export default function UploadModal({ onClose, onComplete, forTalentId }: Props)
                   type="button"
                   onClick={handleUpload}
                   disabled={files.length === 0 || uploading}
-                  className="bg-[--color-ink] px-5 py-2 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50"
-                  style={{ borderRadius: "var(--radius)" }}
+                  className="px-5 py-2 text-xs font-medium text-white transition disabled:opacity-50"
+                  style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
                 >
                   {uploading ? "Uploading…" : "Upload"}
                 </button>

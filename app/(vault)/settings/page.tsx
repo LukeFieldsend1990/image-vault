@@ -2,16 +2,29 @@ export const runtime = "edge";
 
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { getDb } from "@/lib/db";
+import { talentProfiles } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 type Role = "talent" | "rep" | "licensee" | "admin";
 
-async function getSessionData(): Promise<{ email: string; role: Role } | null> {
+interface KnownForEntry {
+  title: string;
+  year?: number;
+  type: "movie" | "tv";
+}
+
+async function getSessionData(): Promise<{ userId: string; email: string; role: Role } | null> {
   try {
     const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
     if (!session) return null;
-    const payload = JSON.parse(atob(session.split(".")[1])) as { email?: string; role?: Role };
-    return { email: payload.email ?? "", role: payload.role ?? "talent" };
+    const payload = JSON.parse(atob(session.split(".")[1])) as {
+      sub?: string;
+      email?: string;
+      role?: Role;
+    };
+    return { userId: payload.sub ?? "", email: payload.email ?? "", role: payload.role ?? "talent" };
   } catch {
     return null;
   }
@@ -26,6 +39,37 @@ const ROLE_LABELS: Record<Role, string> = {
 
 export default async function SettingsPage() {
   const user = await getSessionData();
+
+  // Fetch talent identity for talent users
+  let identity: {
+    fullName: string;
+    profileImageUrl: string | null;
+    tmdbId: number | null;
+    knownFor: KnownForEntry[];
+    popularity: number | null;
+  } | null = null;
+
+  if (user?.role === "talent" && user.userId) {
+    try {
+      const db = getDb();
+      const row = await db
+        .select()
+        .from(talentProfiles)
+        .where(eq(talentProfiles.userId, user.userId))
+        .get();
+      if (row) {
+        identity = {
+          fullName: row.fullName,
+          profileImageUrl: row.profileImageUrl ?? null,
+          tmdbId: row.tmdbId ?? null,
+          knownFor: JSON.parse(row.knownFor ?? "[]") as KnownForEntry[],
+          popularity: row.popularity ?? null,
+        };
+      }
+    } catch {
+      // non-fatal
+    }
+  }
 
   return (
     <div className="p-8 max-w-lg">
@@ -67,6 +111,123 @@ export default async function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Industry Identity (talent only) ── */}
+      {user?.role === "talent" && (
+        <div className="rounded border mb-6 overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+          <div className="px-5 py-3.5 border-b flex items-center justify-between"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+              Industry Identity
+            </h2>
+            {identity?.tmdbId && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded"
+                style={{ background: "rgba(1,180,228,0.1)", color: "#01b4e4" }}
+              >
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                TMDB Verified
+              </span>
+            )}
+          </div>
+
+          <div className="p-5" style={{ background: "var(--color-bg)" }}>
+            {identity ? (
+              <div className="flex gap-5">
+                {/* Photo */}
+                <div className="shrink-0">
+                  {identity.profileImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={identity.profileImageUrl}
+                      alt={identity.fullName}
+                      className="rounded object-cover shadow-sm"
+                      style={{ width: 72, height: 108 }}
+                    />
+                  ) : (
+                    <div
+                      className="flex items-center justify-center rounded font-semibold text-white text-lg"
+                      style={{ width: 72, height: 108, background: "var(--color-ink)" }}
+                    >
+                      {identity.fullName.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-semibold tracking-tight mb-1" style={{ color: "var(--color-ink)" }}>
+                    {identity.fullName}
+                  </p>
+
+                  {identity.knownFor.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: "var(--color-muted)" }}>
+                        Known for
+                      </p>
+                      {identity.knownFor.slice(0, 4).map((k, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text)" }}>
+                          <span
+                            className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm font-medium shrink-0"
+                            style={{ background: "var(--color-border)", color: "var(--color-muted)" }}
+                          >
+                            {k.type === "movie" ? "Film" : "TV"}
+                          </span>
+                          <span className="truncate">{k.title}</span>
+                          {k.year && <span className="shrink-0" style={{ color: "var(--color-muted)" }}>{k.year}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {identity.popularity != null && identity.popularity > 0 && (
+                    <p className="mt-3 text-[10px]" style={{ color: "var(--color-muted)" }}>
+                      Industry profile score: {identity.popularity.toFixed(1)}
+                    </p>
+                  )}
+
+                  {identity.tmdbId && (
+                    <p className="mt-2 text-[10px]" style={{ color: "var(--color-muted)" }}>
+                      TMDB ID #{identity.tmdbId}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-4">
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: "var(--color-border)" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Identity not verified</p>
+                  <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--color-muted)" }}>
+                    Link your industry profile to enable the Likeness Monitor and talent directory listing.
+                  </p>
+                  <Link
+                    href="/onboarding"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium"
+                    style={{ color: "var(--color-accent)" }}
+                  >
+                    Verify my identity
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Delegation (talent only) */}
       {user?.role === "talent" && (

@@ -1,31 +1,25 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
+import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { scanFiles, uploadSessions, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq } from "drizzle-orm";
 
-/**
- * PATCH /api/vault/upload/part?fileId=&partNumber=&etag=
- * Records a completed part ETag after the client has uploaded directly to R2
- * via a presigned URL from GET /api/vault/upload/presign.
- */
-export async function PATCH(req: NextRequest) {
+const PRESIGN_TTL = 900; // 15 minutes per part
+
+export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
   const { searchParams } = new URL(req.url);
   const fileId = searchParams.get("fileId");
   const partNumberStr = searchParams.get("partNumber");
-  const etag = searchParams.get("etag");
 
-  if (!fileId || !partNumberStr || !etag) {
-    return NextResponse.json(
-      { error: "fileId, partNumber, and etag are required" },
-      { status: 400 },
-    );
+  if (!fileId || !partNumberStr) {
+    return NextResponse.json({ error: "fileId and partNumber are required" }, { status: 400 });
   }
 
   const partNumber = parseInt(partNumberStr, 10);
@@ -45,7 +39,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Upload session not found" }, { status: 404 });
   }
 
-  // Verify ownership
+  // Verify ownership — talent or delegated rep
   const file = await db
     .select({ packageId: scanFiles.packageId })
     .from(scanFiles)
@@ -74,27 +68,27 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const parts: Array<{ partNumber: number; etag: string }> = JSON.parse(
-    uploadSession.completedParts,
+  const accountId = process.env.CF_ACCOUNT_ID!;
+  const bucketName = process.env.R2_BUCKET_NAME ?? "image-vault-scans";
+
+  const r2 = new AwsClient({
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    region: "auto",
+    service: "s3",
+  });
+
+  const endpoint = `https://${accountId}.r2.cloudflarestorage.com`;
+  const partUrl = new URL(`${endpoint}/${bucketName}/${uploadSession.r2Key}`);
+  partUrl.searchParams.set("partNumber", String(partNumber));
+  partUrl.searchParams.set("uploadId", uploadSession.r2UploadId);
+  // X-Amz-Expires must be set on the URL before signing when using query-string auth
+  partUrl.searchParams.set("X-Amz-Expires", String(PRESIGN_TTL));
+
+  const signedReq = await r2.sign(
+    new Request(partUrl.toString(), { method: "PUT" }),
+    { aws: { signQuery: true } },
   );
 
-  // Upsert — replace if same part number (idempotent retry support)
-  const idx = parts.findIndex((p) => p.partNumber === partNumber);
-  if (idx >= 0) {
-    parts[idx] = { partNumber, etag };
-  } else {
-    parts.push({ partNumber, etag });
-  }
-
-  await db
-    .update(uploadSessions)
-    .set({ completedParts: JSON.stringify(parts) })
-    .where(eq(uploadSessions.id, uploadSession.id));
-
-  await db
-    .update(scanFiles)
-    .set({ uploadStatus: "uploading" })
-    .where(eq(scanFiles.id, fileId));
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ url: signedReq.url, expiresIn: PRESIGN_TTL });
 }

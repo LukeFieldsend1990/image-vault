@@ -34,6 +34,8 @@ preview_id = "3570e35d13f245c294ab8b0ef2d6a680"
 [vars]
 ENVIRONMENT = "production"
 APP_URL = "https://image-vault.pages.dev"
+CF_ACCOUNT_ID = "2db6ad770fad71b79fa3249b202c6c37"          # Cloudflare account ID (from dash.cloudflare.com → top-right)
+R2_BUCKET_NAME = "image-vault-scans"   # override with "image-vault-scans-dev" for preview
 
 # -------------------------------------------------------------------
 # Secrets (set via: wrangler secret put SECRET_NAME)
@@ -44,3 +46,6 @@ APP_URL = "https://image-vault.pages.dev"
 # TWILIO_ACCOUNT_SID      - SMS 2FA
 # TWILIO_AUTH_TOKEN       - SMS 2FA
 # TWILIO_FROM_NUMBER      - SMS 2FA
+# R2_ACCESS_KEY_ID        - R2 API token access key (for presigned upload URLs)
+# R2_SECRET_ACCESS_KEY    - R2 API token secret access key (for presigned upload URLs)
+# TMDB_API_KEY            - The Movie Database API key (free at themoviedb.org) for talent onboarding

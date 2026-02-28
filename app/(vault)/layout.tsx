@@ -1,37 +1,67 @@
+export const runtime = "edge";
+
 import { cookies } from "next/headers";
 import { NavLinks } from "./nav";
 import UserWidget from "./user-widget";
+import { getDb } from "@/lib/db";
+import { talentProfiles } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 type Role = "talent" | "rep" | "licensee" | "admin";
 
-async function getRoleFromCookie(): Promise<Role> {
+interface SessionData {
+  sub: string;
+  email: string;
+  role: Role;
+  initials: string;
+}
+
+async function getSessionData(): Promise<SessionData> {
   try {
     const cookieStore = await cookies();
     const session = cookieStore.get("session")?.value;
-    if (!session) return "talent";
-    const payload = JSON.parse(atob(session.split(".")[1])) as { role?: Role };
-    return payload.role ?? "talent";
+    if (!session) return { sub: "", email: "", role: "talent", initials: "??" };
+    const payload = JSON.parse(atob(session.split(".")[1])) as {
+      sub?: string;
+      email?: string;
+      role?: Role;
+    };
+    const email = payload.email ?? "";
+    const initials =
+      email
+        .split("@")[0]
+        .split(/[._-]/)
+        .slice(0, 2)
+        .map((p: string) => p[0]?.toUpperCase() ?? "")
+        .join("") || "??";
+    return { sub: payload.sub ?? "", email, role: payload.role ?? "talent", initials };
   } catch {
-    return "talent";
+    return { sub: "", email: "", role: "talent", initials: "??" };
   }
 }
 
-async function getEmailFromCookie(): Promise<{ email: string; initials: string }> {
+export interface TalentIdentity {
+  fullName: string;
+  profileImageUrl: string | null;
+  tmdbId: number | null;
+}
+
+async function getTalentIdentity(userId: string): Promise<TalentIdentity | null> {
+  if (!userId) return null;
   try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
-    if (!session) return { email: "", initials: "??" };
-    const payload = JSON.parse(atob(session.split(".")[1])) as { email?: string };
-    const email = payload.email ?? "";
-    const initials = email
-      .split("@")[0]
-      .split(/[._-]/)
-      .slice(0, 2)
-      .map((p: string) => p[0]?.toUpperCase() ?? "")
-      .join("") || "??";
-    return { email, initials };
+    const db = getDb();
+    const row = await db
+      .select({
+        fullName: talentProfiles.fullName,
+        profileImageUrl: talentProfiles.profileImageUrl,
+        tmdbId: talentProfiles.tmdbId,
+      })
+      .from(talentProfiles)
+      .where(eq(talentProfiles.userId, userId))
+      .get();
+    return row ?? null;
   } catch {
-    return { email: "", initials: "??" };
+    return null;
   }
 }
 
@@ -40,8 +70,8 @@ export default async function VaultLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const role = await getRoleFromCookie();
-  const { email, initials } = await getEmailFromCookie();
+  const { sub, email, role, initials } = await getSessionData();
+  const identity = role === "talent" ? await getTalentIdentity(sub) : null;
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -67,7 +97,12 @@ export default async function VaultLayout({
           <NavLinks role={role} />
         </div>
 
-        <UserWidget email={email} initials={initials} role={role} />
+        <UserWidget
+          email={email}
+          initials={initials}
+          role={role}
+          identity={identity}
+        />
       </aside>
 
       {/* ── Main ── */}

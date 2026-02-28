@@ -56,7 +56,7 @@ function Setup2faInner() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/onboarding");
     } catch {
       setSubmitError("Network error. Please try again.");
     } finally {

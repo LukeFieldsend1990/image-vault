@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import UploadModal from "../upload-modal";
 
 interface ScanPackage {
@@ -147,7 +148,7 @@ function PackageCard({
           </div>
         </div>
 
-        {/* Right side: file count + size + delete */}
+        {/* Right side: file count + size + actions */}
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-right">
             <p className="text-xs font-medium text-[--color-ink]">
@@ -159,6 +160,18 @@ function PackageCard({
               </p>
             )}
           </div>
+          {/* Chain of custody */}
+          <Link
+            href={`/vault/packages/${pkg.id}/chain-of-custody`}
+            className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+            style={{ color: "var(--color-ink)" }}
+            title="Chain of custody"
+            aria-label="View chain of custody"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </Link>
           <button
             onClick={() => onDelete(pkg.id)}
             disabled={deleting}

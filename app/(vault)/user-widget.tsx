@@ -3,14 +3,16 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import type { TalentIdentity } from "./layout";
 
 interface Props {
   email: string;
   initials: string;
   role: string;
+  identity?: TalentIdentity | null;
 }
 
-export default function UserWidget({ email, initials, role }: Props) {
+export default function UserWidget({ email, initials, role, identity }: Props) {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -36,6 +38,10 @@ export default function UserWidget({ email, initials, role }: Props) {
     }
   }
 
+  // Resolved display name and photo
+  const displayName = identity?.fullName ?? null;
+  const photoUrl = identity?.profileImageUrl ?? null;
+
   return (
     <div ref={ref} className="relative mx-3">
       {/* Dropdown — renders above the avatar */}
@@ -44,11 +50,18 @@ export default function UserWidget({ email, initials, role }: Props) {
           className="absolute bottom-full mb-2 left-0 right-0 rounded border shadow-lg z-50 overflow-hidden"
           style={{ background: "var(--color-sidebar)", borderColor: "rgba(255,255,255,0.1)" }}
         >
-          {/* User info header */}
+          {/* Identity header */}
           <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-            <p className="text-xs font-medium" style={{ color: "var(--color-sidebar-fg)" }}>{email || "—"}</p>
+            {displayName ? (
+              <>
+                <p className="text-xs font-semibold" style={{ color: "var(--color-sidebar-fg)" }}>{displayName}</p>
+                <p className="text-[10px] mt-0.5 truncate" style={{ color: "var(--color-sidebar-muted)" }}>{email}</p>
+              </>
+            ) : (
+              <p className="text-xs font-medium" style={{ color: "var(--color-sidebar-fg)" }}>{email || "—"}</p>
+            )}
             <p
-              className="mt-0.5 text-[10px] capitalize font-medium px-1.5 py-0.5 rounded inline-block"
+              className="mt-1 text-[10px] capitalize font-medium px-1.5 py-0.5 rounded inline-block"
               style={{ background: "rgba(192,57,43,0.2)", color: "var(--color-accent)" }}
             >
               {role}
@@ -124,25 +137,38 @@ export default function UserWidget({ email, initials, role }: Props) {
         </div>
       )}
 
-      {/* Trigger — the sidebar user row */}
+      {/* ── Trigger ── */}
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-3 rounded px-3 py-3 transition hover:bg-white/5"
       >
-        <div
-          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
-          style={{ background: "var(--color-accent)", color: "#ffffff" }}
-        >
-          {initials}
-        </div>
+        {/* Avatar — TMDB photo if available, else initials */}
+        {photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photoUrl}
+            alt={displayName ?? ""}
+            className="h-7 w-7 shrink-0 rounded-full object-cover object-top"
+            style={{ border: "1.5px solid rgba(255,255,255,0.15)" }}
+          />
+        ) : (
+          <div
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
+            style={{ background: "var(--color-accent)", color: "#ffffff" }}
+          >
+            {initials}
+          </div>
+        )}
+
         <div className="min-w-0 text-left">
-          <p className="truncate text-xs font-medium capitalize" style={{ color: "var(--color-sidebar-fg)" }}>
-            {role}
+          <p className="truncate text-xs font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
+            {displayName ?? role}
           </p>
           <p className="truncate text-[11px]" style={{ color: "var(--color-sidebar-muted)" }}>
             {email || "—"}
           </p>
         </div>
+
         <svg
           width="12" height="12"
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"

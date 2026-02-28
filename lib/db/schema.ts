@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(), // UUID
@@ -91,10 +91,20 @@ export const talentReps = sqliteTable("talent_reps", {
   createdAt: integer("created_at").notNull(), // unix timestamp
 });
 
+export const talentProfiles = sqliteTable("talent_profiles", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  fullName: text("full_name").notNull(),
+  tmdbId: integer("tmdb_id"),
+  profileImageUrl: text("profile_image_url"),
+  knownFor: text("known_for").notNull().default("[]"), // JSON: [{title, year, type}]
+  popularity: real("popularity"),
+  onboardedAt: integer("onboarded_at").notNull(), // unix timestamp
+});
+
 export const downloadEvents = sqliteTable("download_events", {
   id: text("id").primaryKey(), // UUID
-  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
-  licenseeId: text("licensee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }), // null for talent's own downloads
+  licenseeId: text("licensee_id").notNull().references(() => users.id, { onDelete: "cascade" }), // the user who downloaded
   fileId: text("file_id").notNull().references(() => scanFiles.id, { onDelete: "cascade" }),
   ip: text("ip"),
   userAgent: text("user_agent"),

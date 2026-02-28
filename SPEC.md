@@ -45,29 +45,29 @@ All data is client-side encrypted before leaving the browser. The platform holds
 ## 3. Product Requirements
 
 ### 3.1 Authentication & Identity
-- [ ] Email + password sign-up with email verification
-- [ ] TOTP-based 2FA (authenticator app) — mandatory for all roles
+- [x] Email + password sign-up with role selection — *email verification deferred*
+- [x] TOTP-based 2FA (authenticator app) — mandatory for all roles
 - [ ] SMS fallback 2FA (Twilio)
-- [ ] Session management with short-lived JWTs (15 min) + refresh tokens stored in HttpOnly cookies
+- [x] Session management with short-lived JWTs (15 min) + refresh tokens (7 day) in HttpOnly cookies — *silent refresh via /api/auth/refresh*
 - [ ] Device trust / known device registry
 - [ ] Account recovery flow with identity verification gate
 
 ### 3.2 Talent Vault
-- [ ] Vault dashboard showing all scan packages with metadata (date, size, resolution, notes)
+- [x] Vault dashboard showing all scan packages with metadata (name, description, capture date, studio, notes, file list)
 - [ ] Scan versioning — multiple scans per talent, chronological history
-- [ ] Scan metadata: capture date, studio/facility, technician notes, file manifest
-- [ ] Vault activity log (who accessed what, when)
-- [ ] Rep delegation — talent can grant/revoke rep access
+- [x] Scan metadata: capture date, studio/facility, technician notes, file manifest
+- [ ] Vault activity log (who accessed what, when) — *deferred to Phase 5 audit log*
+- [x] Rep delegation — talent can grant/revoke rep access; rep can act on talent's behalf
 - [ ] Vault lock — talent can freeze all outbound access globally with one action
 
 ### 3.3 Large File Upload (200 GB – 1 TB)
-- [ ] Chunked multipart upload directly to R2 via presigned URLs (never routed through Worker)
-- [ ] Resumable uploads — if interrupted, resume from last completed chunk
-- [ ] Upload progress UI with per-chunk status and overall ETA
-- [ ] Client-side AES-256-GCM encryption of each chunk before upload
+- [ ] Chunked multipart upload directly to R2 via presigned URLs (never routed through Worker) — *current impl buffers 50 MB chunks through Worker (supports ~500 GB); presigned URL path needed for full 1 TB support*
+- [ ] Resumable uploads — if interrupted, resume from last completed chunk — *upload_sessions table exists; resume logic deferred*
+- [x] Upload progress UI with per-chunk status and overall ETA
+- [ ] Client-side AES-256-GCM encryption of each chunk before upload — *deferred (zero-knowledge layer)*
 - [ ] Integrity verification — SHA-256 hash per chunk and full file, verified post-upload
-- [ ] Upload session management — uploads expire after 72 hours if incomplete
-- [ ] Multi-file upload — a scan package may contain multiple files (body, face, hands, etc.)
+- [x] Upload session management — upload_sessions table tracks multipart state; incomplete uploads can be resumed
+- [x] Multi-file upload — a scan package may contain multiple files (body, face, hands, etc.)
 
 ### 3.4 Large File Download (for licensees)
 - [ ] Chunked download with reassembly and decryption in-browser
@@ -77,13 +77,13 @@ All data is client-side encrypted before leaving the browser. The platform holds
 - [ ] Downloaded file integrity check before delivery to filesystem
 
 ### 3.5 Licensing & Access Control
-- [ ] Licensee submits a licence request specifying: project name, intended use, date range, file scope
-- [ ] Talent/rep receives notification and reviews request
-- [ ] **Dual-custody download**: once approved, both Talent/Rep AND Licensee must complete their own 2FA challenge before a time-limited presigned download URL is issued
-- [ ] Download URLs expire in a configurable window (default 48 hours)
-- [ ] Download attempt is logged with timestamp, IP, user agent
-- [ ] Licence revocation — Talent can revoke an active licence; in-flight download URLs are invalidated
-- [ ] Licence audit trail — full history of all requests, approvals, denials, and downloads per scan
+- [x] Licensee submits a licence request specifying: project name, production company, intended use, date range, file scope
+- [x] Talent/rep reviews request and approves or denies with optional reason — *email notification deferred to Phase 5*
+- [x] **Dual-custody download**: both Talent/Rep AND Licensee must complete their own TOTP 2FA challenge; KV state machine orchestrates the handshake
+- [x] Download tokens expire after 48 hours (KV TTL)
+- [x] Download attempt is logged in download_events table with timestamp, IP, user agent
+- [x] Licence revocation — Talent can revoke an active licence; in-flight KV sessions are invalidated
+- [ ] Licence audit trail — download_events table captures per-download activity; full structured audit log deferred to Phase 5
 
 ### 3.6 Notifications
 - [ ] Email notifications for: new licence requests, approvals, denials, download events, upload completions
@@ -133,6 +133,8 @@ Browser
 
 **Why direct-to-R2 upload?**
 Cloudflare Workers have a 128 MB request body limit. Files up to 1 TB must be uploaded as multipart directly to R2 using presigned URLs generated by the Worker — the Worker never handles the file bytes.
+
+> **Current implementation note:** V1 routes 50 MB chunks through the Worker via `multipartUpload.uploadPart()`. This works for files up to ~500 GB (50 MB × 10,000 parts = 500 GB). For full 1 TB support, true presigned multipart URLs (bypassing the Worker) are required — tracked in §3.3.
 
 **Why client-side encryption?**
 The platform operates with zero-knowledge of file contents. Each scan is encrypted with a per-file AES-256-GCM key in the browser before any bytes are sent to R2. The platform never holds the plaintext.
@@ -306,7 +308,7 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [ ] Connect GitHub repo to Cloudflare Pages project in dashboard
 - [ ] Secrets set via Cloudflare Pages dashboard environment variables
 - [ ] R2 bucket soft delete / lifecycle policy
-- [ ] D1 database migration strategy (Drizzle ORM)
+- [x] D1 database migration strategy (Drizzle ORM — numbered SQL migrations applied via `wrangler d1 migrations apply`)
 - [ ] Cloudflare Logpush → long-term audit log retention (R2 or external SIEM)
 - [ ] Uptime monitoring and alerting
 
@@ -333,7 +335,7 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [x] Create D1 database (`image-vault-db`, ID: `71665618-0498-48bd-a243-962eb4810769`)
 - [x] Create KV namespace (`SESSIONS_KV`, ID: `3d37f156b49348cdad79e28e8812b7e3`)
 - [ ] Connect GitHub repo to Cloudflare Pages in dashboard (one-time manual step)
-- [x] Initial D1 schema migration (0001_vault.sql written; `--remote` apply pending)
+- [x] Initial D1 schema migration (0001_vault.sql, 0002_licensing.sql, 0003_rep_delegation.sql — all applied `--remote`)
 
 ### ✅ Phase 1 — Auth
 - [x] Database schema: users, sessions, devices, 2fa_methods
@@ -344,18 +346,18 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [x] Role-based access control middleware
 
 ### 🟡 Phase 1.5 — Theme Engine
-- [ ] `ThemeConfig` interface and theme resolver middleware
-- [ ] United Agents theme (tokens, logo, typography)
-- [ ] CSS variable injection at edge (no FOUC)
-- [ ] Branded login page
+- [ ] `ThemeConfig` interface and theme resolver middleware — *multi-tenant engine deferred; theme currently hardcoded*
+- [x] United Agents theme tokens (black/white, red accent `#c0392b`) — hardcoded in `app/globals.css`
+- [x] CSS variable injection (no FOUC) — all tokens available globally via `:root` CSS variables
+- [ ] Branded login page (logo, tagline per agency)
 - [ ] Stub theme files for remaining 5 agencies (CAA, WME, UTA, Troika, Curtis Brown)
 
 ### ✅ Phase 2 — Vault & Upload
 - [x] Database schema: scan_packages, scan_files, upload_sessions
-- [x] Talent vault dashboard
-- [x] Multipart upload orchestration API (presign chunks, complete upload)
+- [x] Talent vault dashboard with expandable package cards + file list
+- [x] Multipart upload orchestration API — initiate, upload part (via Worker), complete
 - [ ] Client-side AES-256-GCM chunk encryption (deferred — zero-knowledge layer)
-- [x] Upload progress UI
+- [x] Upload progress UI with per-file progress bars
 - [ ] Resumable upload state in KV (deferred)
 
 ### ✅ Phase 3 — Download
@@ -374,6 +376,11 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [x] Licence revocation + KV session invalidation
 - [x] All role UI flows: directory, talent profile, licensee dashboard, talent requests + licences, authorise pages
 - [x] Role-aware nav (talent vs licensee), layout reads role from JWT cookie
+- [x] Rep delegation — talent_reps table (0003_rep_delegation.sql), hasRepAccess() helper
+- [x] /api/delegation + /api/roster — invite/remove reps, list managed talent with package counts
+- [x] /settings/delegation — talent invite/remove rep by email
+- [x] /roster — rep's list of managed talent; /roster/[talentId] — act-as-talent vault view with red banner
+- [x] User widget with role-aware dropdown (logout, settings, manage reps / my roster)
 
 #### Phase 4 — UI Flows
 

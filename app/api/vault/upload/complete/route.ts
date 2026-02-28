@@ -1,7 +1,7 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
@@ -39,13 +39,51 @@ export async function POST(req: NextRequest) {
     uploadSession.completedParts
   );
 
-  const { env } = getRequestContext();
-  const multipartUpload = env.SCANS_BUCKET.resumeMultipartUpload(
-    uploadSession.r2Key,
-    uploadSession.r2UploadId
+  // Sort parts ascending — S3 requires this
+  parts.sort((a, b) => a.partNumber - b.partNumber);
+
+  // Complete multipart upload via S3 API (matches the presigned part uploads)
+  const accountId = process.env.CF_ACCOUNT_ID!;
+  const bucketName = process.env.R2_BUCKET_NAME ?? "image-vault-scans";
+
+  const r2 = new AwsClient({
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    region: "auto",
+    service: "s3",
+  });
+
+  const xmlBody = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    "<CompleteMultipartUpload>",
+    ...parts.map(
+      (p) =>
+        `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${
+          // Ensure ETag is quoted as S3 requires
+          p.etag.startsWith('"') ? p.etag : `"${p.etag}"`
+        }</ETag></Part>`
+    ),
+    "</CompleteMultipartUpload>",
+  ].join("");
+
+  const completeUrl = `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${uploadSession.r2Key}?uploadId=${encodeURIComponent(uploadSession.r2UploadId)}`;
+
+  const completeReq = await r2.sign(
+    new Request(completeUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/xml" },
+      body: xmlBody,
+    })
   );
 
-  await multipartUpload.complete(parts);
+  const completeRes = await fetch(completeReq);
+  if (!completeRes.ok) {
+    const text = await completeRes.text();
+    return NextResponse.json(
+      { error: `Failed to complete multipart upload: ${text}` },
+      { status: 502 }
+    );
+  }
 
   // Update scan_file status
   await db
@@ -69,7 +107,6 @@ export async function POST(req: NextRequest) {
     const { packageId } = file;
     const now = Math.floor(Date.now() / 1000);
 
-    // Sum sizes of all completed files
     const sizeResult = await db
       .select({ total: sql<number>`sum(size_bytes)` })
       .from(scanFiles)
@@ -81,7 +118,6 @@ export async function POST(req: NextRequest) {
       )
       .get();
 
-    // Check whether any files are still not complete
     const pendingResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(scanFiles)

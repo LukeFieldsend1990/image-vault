@@ -1,10 +1,11 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq } from "drizzle-orm";
 
 const CHUNK_SIZE = 52_428_800; // 50 MB
@@ -35,14 +36,17 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
-  // Verify package belongs to authed user
   const pkg = await db
     .select({ id: scanPackages.id, talentId: scanPackages.talentId })
     .from(scanPackages)
     .where(eq(scanPackages.id, packageId))
     .get();
 
-  if (!pkg || pkg.talentId !== session.sub) {
+  const isOwner = pkg?.talentId === session.sub;
+  const isRep =
+    !!pkg && session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId));
+
+  if (!pkg || (!isOwner && !isRep)) {
     return NextResponse.json({ error: "Package not found" }, { status: 404 });
   }
 
@@ -50,7 +54,43 @@ export async function POST(req: NextRequest) {
   const r2Key = `scans/${session.sub}/${packageId}/${fileId}/${filename}`;
   const now = Math.floor(Date.now() / 1000);
 
-  // Create scan_file record
+  // Initiate multipart upload via S3 API so the uploadId is compatible
+  // with the presigned part URLs (both use the same S3 namespace)
+  const accountId = process.env.CF_ACCOUNT_ID!;
+  const bucketName = process.env.R2_BUCKET_NAME ?? "image-vault-scans";
+
+  const r2 = new AwsClient({
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    region: "auto",
+    service: "s3",
+  });
+
+  const initiateUrl = `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${r2Key}?uploads`;
+  const initiateReq = await r2.sign(
+    new Request(initiateUrl, {
+      method: "POST",
+      headers: contentType ? { "Content-Type": contentType } : {},
+    })
+  );
+
+  const initiateRes = await fetch(initiateReq);
+  if (!initiateRes.ok) {
+    const text = await initiateRes.text();
+    return NextResponse.json(
+      { error: `Failed to initiate multipart upload: ${text}` },
+      { status: 502 }
+    );
+  }
+
+  const xml = await initiateRes.text();
+  const uploadIdMatch = xml.match(/<UploadId>([^<]+)<\/UploadId>/);
+  if (!uploadIdMatch) {
+    return NextResponse.json({ error: "Failed to parse upload ID from R2" }, { status: 502 });
+  }
+  const uploadId = uploadIdMatch[1];
+
+  // Create DB records
   await db.insert(scanFiles).values({
     id: fileId,
     packageId,
@@ -62,21 +102,14 @@ export async function POST(req: NextRequest) {
     createdAt: now,
   });
 
-  // Initiate R2 multipart upload
-  const { env } = getRequestContext();
-  const multipartUpload = await env.SCANS_BUCKET.createMultipartUpload(r2Key, {
-    httpMetadata: contentType ? { contentType } : undefined,
-  });
-
   const uploadSessionId = crypto.randomUUID();
-
   await db.insert(uploadSessions).values({
     id: uploadSessionId,
     scanFileId: fileId,
-    r2UploadId: multipartUpload.uploadId,
+    r2UploadId: uploadId,
     r2Key,
     completedParts: "[]",
-    expiresAt: now + 86_400, // 24 h
+    expiresAt: now + 86_400,
     createdAt: now,
   });
 
