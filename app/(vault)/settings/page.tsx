@@ -5,6 +5,8 @@ import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { talentProfiles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import InviteLicensee from "./invite-licensee";
+import VaultLockToggle from "./vault-lock-toggle";
 
 type Role = "talent" | "rep" | "licensee" | "admin";
 
@@ -247,6 +249,19 @@ export default async function SettingsPage() {
         </div>
       )}
 
+      {/* Invite Licensee (talent only) */}
+      {user?.role === "talent" && (
+        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-muted)" }}>
+            Invite a Licensee
+          </h2>
+          <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
+            Send an invitation to a production company so they can access your vault.
+          </p>
+          <InviteLicensee />
+        </div>
+      )}
+
       {/* Roster link (rep only) */}
       {user?.role === "rep" && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
@@ -261,6 +276,16 @@ export default async function SettingsPage() {
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </Link>
+        </div>
+      )}
+
+      {/* Vault lock (talent only) */}
+      {user?.role === "talent" && (
+        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
+            Vault Lock
+          </h2>
+          <VaultLockToggle />
         </div>
       )}
 

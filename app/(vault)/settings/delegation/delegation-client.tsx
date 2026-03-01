@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 
 interface Rep {
@@ -10,6 +10,14 @@ interface Rep {
   createdAt: number;
 }
 
+interface PendingInvite {
+  id: string;
+  email: string;
+  createdAt: number;
+  expiresAt: number;
+  status: "pending" | "used" | "expired";
+}
+
 export default function DelegationClient() {
   const [reps, setReps] = useState<Rep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +25,14 @@ export default function DelegationClient() {
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // Invite new rep state
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(true);
 
   async function load() {
     try {
@@ -30,7 +46,23 @@ export default function DelegationClient() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  const loadInvites = useCallback(async () => {
+    setInvitesLoading(true);
+    try {
+      const r = await fetch("/api/invites?role=rep");
+      const d = await r.json() as { invites?: PendingInvite[] };
+      setPendingInvites((d.invites ?? []).filter((i) => i.status === "pending"));
+    } catch {
+      // ignore
+    } finally {
+      setInvitesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    void loadInvites();
+  }, [loadInvites]);
 
   async function addRep(e: React.FormEvent) {
     e.preventDefault();
@@ -64,6 +96,39 @@ export default function DelegationClient() {
     }
   }
 
+  async function sendRepInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviteError(null);
+    setInviteSuccess(null);
+    setInviting(true);
+    try {
+      const res = await fetch("/api/invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim(), role: "rep" }),
+      });
+      const d = await res.json() as { error?: string };
+      if (!res.ok) {
+        setInviteError(d.error ?? "Failed to send invite");
+        return;
+      }
+      setInviteSuccess(`Invite sent to ${inviteEmail.trim()}`);
+      setInviteEmail("");
+      await loadInvites();
+    } catch {
+      setInviteError("Network error. Please try again.");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function revokeInvite(id: string) {
+    if (!confirm("Cancel this invite?")) return;
+    await fetch(`/api/invites/${id}`, { method: "DELETE" });
+    await loadInvites();
+  }
+
   return (
     <div className="p-8 max-w-lg">
       <Link
@@ -84,13 +149,78 @@ export default function DelegationClient() {
         Grant your agency or manager access to upload and manage your vault on your behalf.
       </p>
 
-      {/* Add rep */}
+      {/* Invite new rep */}
+      <div
+        className="rounded border p-5 mb-6"
+        style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+      >
+        <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-muted)" }}>
+          Invite New Representative
+        </h2>
+        <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
+          Send an invite link to someone who doesn&apos;t have an account yet. They&apos;ll be automatically linked to your vault on signup.
+        </p>
+        <form onSubmit={sendRepInvite} className="flex gap-2">
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); setInviteSuccess(null); }}
+            placeholder="rep@agency.com"
+            className="flex-1 rounded border px-3 py-2 text-xs outline-none focus:ring-1"
+            style={{
+              borderColor: inviteError ? "var(--color-danger)" : "var(--color-border)",
+              background: "var(--color-bg)",
+              color: "var(--color-ink)",
+            }}
+          />
+          <button
+            type="submit"
+            disabled={inviting || !inviteEmail.trim()}
+            className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+            style={{ background: "var(--color-accent)" }}
+          >
+            {inviting ? "Sending…" : "Send invite"}
+          </button>
+        </form>
+        {inviteError && <p className="mt-2 text-xs" style={{ color: "var(--color-danger)" }}>{inviteError}</p>}
+        {inviteSuccess && <p className="mt-2 text-xs" style={{ color: "#166534" }}>{inviteSuccess}</p>}
+
+        {/* Pending invites */}
+        {!invitesLoading && pendingInvites.length > 0 && (
+          <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--color-border)" }}>
+            <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+              Pending invites
+            </p>
+            <ul className="space-y-2">
+              {pendingInvites.map((inv) => (
+                <li key={inv.id} className="flex items-center justify-between text-xs">
+                  <div>
+                    <span style={{ color: "var(--color-ink)" }}>{inv.email}</span>
+                    <span className="ml-2" style={{ color: "var(--color-muted)" }}>
+                      expires {new Date(inv.expiresAt * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => revokeInvite(inv.id)}
+                    className="text-xs transition hover:opacity-70"
+                    style={{ color: "var(--color-danger)" }}
+                  >
+                    Cancel
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Add existing rep by email */}
       <div
         className="rounded border p-5 mb-6"
         style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
       >
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
-          Add Representative
+          Link Existing Representative
         </h2>
         <form onSubmit={addRep} className="flex gap-2">
           <input

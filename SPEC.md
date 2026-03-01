@@ -58,11 +58,11 @@ All data is client-side encrypted before leaving the browser. The platform holds
 - [x] Scan metadata: capture date, studio/facility, technician notes, file manifest
 - [ ] Vault activity log (who accessed what, when) — *deferred to Phase 5 audit log*
 - [x] Rep delegation — talent can grant/revoke rep access; rep can act on talent's behalf
-- [ ] Vault lock — talent can freeze all outbound access globally with one action
+- [x] Vault lock — talent can freeze all outbound access globally with one action (`vault_locked` DB field, `/api/settings/vault-lock`, enforced at licence creation + download initiation)
 
 ### 3.3 Large File Upload (200 GB – 1 TB)
 - [ ] Chunked multipart upload directly to R2 via presigned URLs (never routed through Worker) — *current impl buffers 50 MB chunks through Worker (supports ~500 GB); presigned URL path needed for full 1 TB support*
-- [ ] Resumable uploads — if interrupted, resume from last completed chunk — *upload_sessions table exists; resume logic deferred*
+- [x] Resumable uploads — status API (`GET /api/vault/upload/status`), resume modal (skips completed parts by filename+size match), "Resume" button on in-progress packages in dashboard
 - [x] Upload progress UI with per-chunk status and overall ETA
 - [ ] Client-side AES-256-GCM encryption of each chunk before upload — *deferred (zero-knowledge layer)*
 - [ ] Integrity verification — SHA-256 hash per chunk and full file, verified post-upload
@@ -86,14 +86,14 @@ All data is client-side encrypted before leaving the browser. The platform holds
 - [ ] Licence audit trail — download_events table captures per-download activity; full structured audit log deferred to Phase 5
 
 ### 3.6 Notifications
-- [ ] Email notifications for: new licence requests, approvals, denials, download events, upload completions
+- [x] Email notifications via Resend — all transactional emails implemented: new licence request, licence approved, licence denied, licence revoked, upload complete, dual-custody download authorisation request, dual-custody download complete, user invite (`lib/email/templates.ts` + `lib/email/send.ts`)
 - [ ] In-app notification centre
 - [ ] Configurable notification preferences per user
 
 ### 3.7 Admin Panel
-- [ ] User management (invite, suspend, delete)
-- [ ] Platform-wide audit log
-- [ ] Storage usage dashboard
+- [x] User management — invite (via `/admin/invites`), suspend/unsuspend (`PATCH /api/admin/users/[id]`, revokes refresh tokens immediately), delete (`DELETE /api/admin/users/[id]`); suspended users blocked at login + refresh
+- [x] Platform-wide audit log — `/admin/audit` shows last 500 download events with licensee, file, project, IP, timestamp
+- [x] Storage usage dashboard — `/admin/storage` shows per-talent storage aggregated from completed scan files with proportional bar chart
 - [ ] Billing summary (Cloudflare R2 costs, per-talent)
 - [ ] Feature flags
 
@@ -158,7 +158,7 @@ GitHub repo (main branch)
        └─ PR preview URL generated per branch
 ```
 
-- **Production:** `https://image-vault.pages.dev` (or custom domain)
+- **Production:** `https://changling.io`
 - **Preview:** `https://<branch>.<project>.pages.dev` per PR/branch
 - Wrangler secrets managed via Cloudflare dashboard (never in repo)
 - D1 migrations run via `wrangler d1 migrations apply` as part of release process
@@ -226,7 +226,7 @@ GitHub repo (main branch)
 The platform uses a **single backend** (one D1, one R2, one Cloudflare Pages deployment) with **per-agency hardcoded UI themes**. There are 5–6 target agencies; generic theming is not required. Each agency gets its own branded experience on the same codebase.
 
 Tenant is identified by:
-1. **Subdomain** (e.g., `unitedagents.imagevault.com`, `caa.imagevault.com`) — preferred
+1. **Subdomain** (e.g., `unitedagents.changling.io`, `caa.changling.io`) — preferred
 2. Or **custom domain** per agency
 
 Theme config is a static TypeScript object per tenant — no DB involvement.
@@ -306,10 +306,14 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 ### 8.3 Infrastructure & DevOps
 - [x] Cloudflare Pages Git integration — production deploys on merge to main, preview deploys per branch
 - [ ] Connect GitHub repo to Cloudflare Pages project in dashboard
-- [ ] Secrets set via Cloudflare Pages dashboard environment variables
+- [ ] Secrets set via Cloudflare Pages dashboard environment variables (RESEND_API_KEY, RESEND_FROM_EMAIL, JWT_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, TMDB_API_KEY)
 - [ ] R2 bucket soft delete / lifecycle policy
 - [x] D1 database migration strategy (Drizzle ORM — numbered SQL migrations applied via `wrangler d1 migrations apply`)
-- [ ] Cloudflare Logpush → long-term audit log retention (R2 or external SIEM)
+- [x] Cloudflare Workers observability — `[observability] enabled = true` in wrangler.toml; 200K events/day, 3-day retention; `wrangler tail` for real-time streaming
+- [ ] Cloudflare Logpush → long-term audit log retention (R2 or external SIEM) — requires paid plan
+- [ ] Bot Fight Mode enabled in Cloudflare dashboard (Security → Bots)
+- [ ] Rate limiting rules on `/api/auth/login`, `/api/auth/verify-totp`, `/api/auth/signup` (5 rules free)
+- [ ] Cloudflare Turnstile on login + signup forms (free, GDPR-safe CAPTCHA)
 - [ ] Uptime monitoring and alerting
 
 ### 8.4 Scalability
@@ -336,14 +340,19 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [x] Create KV namespace (`SESSIONS_KV`, ID: `3d37f156b49348cdad79e28e8812b7e3`)
 - [ ] Connect GitHub repo to Cloudflare Pages in dashboard (one-time manual step)
 - [x] Initial D1 schema migration (0001_vault.sql, 0002_licensing.sql, 0003_rep_delegation.sql — all applied `--remote`)
+- [x] 0004_talent_profiles.sql — talent_profiles table (TMDB onboarding)
+- [x] 0005_upload_sessions.sql — upload_sessions table (resumable uploads)
+- [x] 0006_invites.sql — invites table (invite-gated signup)
+- [x] 0007_users_status.sql — vault_locked + suspended_at columns on users
 
 ### ✅ Phase 1 — Auth
 - [x] Database schema: users, sessions, devices, 2fa_methods
-- [x] Sign up flow (email + password + role selection)
+- [x] Sign up flow (email + password + role selection) — talent/rep require invite token; licensee can self-register; invite pre-fills and locks email + role
 - [ ] Email verification on sign-up (not yet implemented)
-- [x] Login with TOTP 2FA
+- [x] Login with TOTP 2FA; suspended accounts blocked at login + refresh
 - [x] JWT + refresh token session management (HttpOnly cookies)
 - [x] Role-based access control middleware
+- [x] Invite-gated signup — admin can invite any role; talent can invite reps (auto-links talentReps) and licensees; `/admin/invites` management UI; invite email sent via Resend
 
 ### 🟡 Phase 1.5 — Theme Engine
 - [ ] `ThemeConfig` interface and theme resolver middleware — *multi-tenant engine deferred; theme currently hardcoded*
@@ -355,10 +364,10 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 ### ✅ Phase 2 — Vault & Upload
 - [x] Database schema: scan_packages, scan_files, upload_sessions
 - [x] Talent vault dashboard with expandable package cards + file list
-- [x] Multipart upload orchestration API — initiate, upload part (via Worker), complete
+- [x] Multipart upload orchestration API — initiate, upload part (via Worker), complete; upload-complete triggers email to talent
 - [ ] Client-side AES-256-GCM chunk encryption (deferred — zero-knowledge layer)
 - [x] Upload progress UI with per-file progress bars
-- [ ] Resumable upload state in KV (deferred)
+- [x] Resumable uploads — GET /api/vault/upload/status; resume modal skips completed parts; dashboard "Resume" button on in-progress packages
 
 ### ✅ Phase 3 — Download
 - [x] R2 → browser streaming download per file
@@ -492,9 +501,12 @@ CREATE TABLE download_events (
 ```
 
 ### 🟠 Phase 5 — Notifications & Admin
-- [ ] Email notifications via Resend (per-tenant branded templates)
+- [x] Email notifications via Resend — all transactional templates built and wired (`lib/email/templates.ts`): upload complete, download authorisation request, download complete, licence requested/approved/denied/revoked, invite
+- [x] Cloudflare observability enabled — `[observability] enabled = true` in `wrangler.toml`; view logs at Pages → Functions → Logs; tail locally with `wrangler tail`
 - [ ] In-app notification centre
-- [ ] Admin panel — user management, audit log, storage dashboard
+- [x] Admin panel — user management (invite/suspend/delete), audit log (`/admin/audit`), storage dashboard (`/admin/storage`)
+- [ ] Admin billing summary (R2 costs per talent)
+- [ ] Feature flags
 
 ### 🟢 Phase 6 — Production Hardening
 - [ ] Pen test

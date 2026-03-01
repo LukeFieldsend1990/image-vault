@@ -2,10 +2,12 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, scanFiles, totpCredentials, downloadEvents } from "@/lib/db/schema";
+import { licences, scanFiles, totpCredentials, downloadEvents, users, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { verifyTotpCode } from "@/lib/auth/totp";
 import { eq } from "drizzle-orm";
+import { sendEmail } from "@/lib/email/send";
+import { downloadCompleteEmail } from "@/lib/email/templates";
 import type { DualCustodySession } from "../initiate/route";
 
 const DOWNLOAD_TOKEN_TTL = 48 * 60 * 60; // 48 hours in seconds
@@ -141,6 +143,39 @@ export async function POST(
       startedAt: now,
     });
   }
+
+  // Notify both parties (fire-and-forget)
+  void (async () => {
+    const [licenceRow, licenseeUser, talentUser, pkg] = await Promise.all([
+      db.select({ projectName: licences.projectName, packageId: licences.packageId, talentId: licences.talentId })
+        .from(licences).where(eq(licences.id, id)).get(),
+      db.select({ email: users.email }).from(users).where(eq(users.id, dcSession.licenseeId)).get(),
+      db.select({ email: users.email }).from(users).where(eq(users.id, dcSession.talentId)).get(),
+      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, dcSession.packageId)).get(),
+    ]);
+    if (!licenceRow || !licenseeUser?.email) return;
+    const packageName = pkg?.name ?? dcSession.packageId;
+    const params = {
+      projectName: licenceRow.projectName,
+      packageName,
+      licenseeEmail: licenseeUser.email,
+      fileCount: scopedFiles.length,
+      ip,
+      downloadedAt: now,
+    };
+    await Promise.all([
+      sendEmail({
+        to: licenseeUser.email,
+        ...downloadCompleteEmail({ ...params, recipientEmail: licenseeUser.email, isLicensee: true }),
+      }),
+      talentUser?.email
+        ? sendEmail({
+            to: talentUser.email,
+            ...downloadCompleteEmail({ ...params, recipientEmail: talentUser.email, isLicensee: false }),
+          })
+        : Promise.resolve(),
+    ]);
+  })();
 
   return NextResponse.json({ step: "complete", downloadTokens });
 }

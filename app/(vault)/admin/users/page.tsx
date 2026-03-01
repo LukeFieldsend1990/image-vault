@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import { users, talentProfiles, scanPackages, talentReps } from "@/lib/db/schema";
 import { sql, eq } from "drizzle-orm";
+import UserActions from "./user-actions";
 
 type Role = "talent" | "rep" | "licensee" | "admin";
 
@@ -27,7 +28,7 @@ function ts(d: Date | number): string {
 }
 
 export default async function AdminUsersPage() {
-  await requireAdmin();
+  const { userId: currentUserId } = await requireAdmin();
   const db = getDb();
 
   // All users with package count and talent profile
@@ -37,6 +38,7 @@ export default async function AdminUsersPage() {
       email: users.email,
       role: users.role,
       createdAt: users.createdAt,
+      suspendedAt: users.suspendedAt,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -79,7 +81,7 @@ export default async function AdminUsersPage() {
         <div
           className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
           style={{
-            gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
+            gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.6fr",
             color: "var(--color-muted)",
             background: "var(--color-surface)",
             borderBottom: "1px solid var(--color-border)",
@@ -90,6 +92,7 @@ export default async function AdminUsersPage() {
           <span>Identity</span>
           <span>Packages</span>
           <span>Joined</span>
+          <span>Actions</span>
         </div>
 
         {allUsers.length === 0 && (
@@ -107,8 +110,9 @@ export default async function AdminUsersPage() {
               key={u.id}
               className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm"
               style={{
-                gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
+                gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.6fr",
                 borderColor: "var(--color-border)",
+                opacity: u.suspendedAt ? 0.6 : 1,
               }}
             >
               {/* Email + avatar */}
@@ -153,9 +157,26 @@ export default async function AdminUsersPage() {
               </span>
 
               {/* Joined date */}
-              <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                {ts(u.createdAt)}
-              </span>
+              <div>
+                <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                  {ts(u.createdAt)}
+                </span>
+                {u.suspendedAt && (
+                  <span
+                    className="ml-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                    style={{ background: "rgba(107,114,128,0.12)", color: "#6b7280" }}
+                  >
+                    Suspended
+                  </span>
+                )}
+              </div>
+
+              {/* Actions */}
+              <UserActions
+                userId={u.id}
+                isSuspended={!!u.suspendedAt}
+                isCurrentUser={u.id === currentUserId}
+              />
             </div>
           );
         })}

@@ -2,9 +2,11 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences } from "@/lib/db/schema";
+import { licences, users, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq } from "drizzle-orm";
+import { sendEmail } from "@/lib/email/send";
+import { licenceRevokedEmail } from "@/lib/email/templates";
 
 // POST /api/licences/[id]/revoke — talent/rep revokes an approved licence
 export async function POST(
@@ -24,7 +26,14 @@ export async function POST(
   const now = Math.floor(Date.now() / 1000);
 
   const [licence] = await db
-    .select({ id: licences.id, talentId: licences.talentId, status: licences.status })
+    .select({
+      id: licences.id,
+      talentId: licences.talentId,
+      licenseeId: licences.licenseeId,
+      status: licences.status,
+      projectName: licences.projectName,
+      packageId: licences.packageId,
+    })
     .from(licences)
     .where(eq(licences.id, id))
     .limit(1)
@@ -47,6 +56,21 @@ export async function POST(
     .update(licences)
     .set({ status: "REVOKED", revokedAt: now })
     .where(eq(licences.id, id));
+
+  // Notify licensee (fire-and-forget)
+  void (async () => {
+    const [licenseeUser, pkg] = await Promise.all([
+      db.select({ email: users.email }).from(users).where(eq(users.id, licence.licenseeId)).get(),
+      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licence.packageId)).get(),
+    ]);
+    if (!licenseeUser?.email) return;
+    const { subject, html } = licenceRevokedEmail({
+      licenseeEmail: licenseeUser.email,
+      projectName: licence.projectName,
+      packageName: pkg?.name ?? licence.packageId,
+    });
+    await sendEmail({ to: licenseeUser.email, subject, html });
+  })();
 
   return NextResponse.json({ ok: true });
 }

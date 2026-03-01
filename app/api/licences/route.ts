@@ -5,6 +5,8 @@ import { getDb } from "@/lib/db";
 import { licences, scanPackages, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, desc, and } from "drizzle-orm";
+import { sendEmail } from "@/lib/email/send";
+import { licenceRequestedEmail } from "@/lib/email/templates";
 
 // GET /api/licences — list licences scoped to the caller's role
 export async function GET(req: NextRequest) {
@@ -104,6 +106,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Package not found or not available" }, { status: 404 });
   }
 
+  // Reject if talent has vault locked
+  const [talentUser] = await db
+    .select({ vaultLocked: users.vaultLocked })
+    .from(users)
+    .where(eq(users.id, pkg.talentId))
+    .limit(1)
+    .all();
+
+  if (talentUser?.vaultLocked) {
+    return NextResponse.json({ error: "This vault is currently locked and not accepting licence requests" }, { status: 423 });
+  }
+
   const now = Math.floor(Date.now() / 1000);
   const licenceId = crypto.randomUUID();
 
@@ -122,6 +136,29 @@ export async function POST(req: NextRequest) {
     downloadCount: 0,
     createdAt: now,
   });
+
+  // Notify talent of new request (fire-and-forget)
+  void (async () => {
+    const [pkg2, talentUser, licenseeUser] = await Promise.all([
+      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, packageId)).get(),
+      db.select({ email: users.email }).from(users).where(eq(users.id, pkg.talentId)).get(),
+      db.select({ email: users.email }).from(users).where(eq(users.id, session.sub)).get(),
+    ]);
+    if (!talentUser?.email) return;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const { subject, html } = licenceRequestedEmail({
+      talentEmail: talentUser.email,
+      licenseeEmail: licenseeUser?.email ?? "Unknown",
+      projectName: projectName.trim(),
+      productionCompany: productionCompany.trim(),
+      intendedUse: intendedUse.trim(),
+      packageName: pkg2?.name ?? packageId,
+      validFrom,
+      validTo,
+      reviewUrl: `${baseUrl}/vault/authorise`,
+    });
+    await sendEmail({ to: talentUser.email, subject, html });
+  })();
 
   return NextResponse.json({ licenceId }, { status: 201 });
 }

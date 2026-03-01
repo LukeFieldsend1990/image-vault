@@ -44,10 +44,12 @@ function formatDate(ts: number): string {
 function PackageCard({
   pkg,
   onDelete,
+  onResume,
   deleting,
 }: {
   pkg: ScanPackage;
   onDelete: (id: string) => void;
+  onResume: (id: string) => void;
   deleting: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -121,12 +123,25 @@ function PackageCard({
           <div className="flex items-center gap-2 mb-0.5">
             <p className="text-sm font-medium text-[--color-ink] truncate">{pkg.name}</p>
             {pkg.status === "uploading" ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-amber-100 text-amber-700">
-                <svg className="animate-spin" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                </svg>
-                Uploading
-              </span>
+              <>
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-amber-100 text-amber-700">
+                  <svg className="animate-spin" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  </svg>
+                  Uploading
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onResume(pkg.id); }}
+                  className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-sm transition hover:opacity-70"
+                  style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}
+                  title="Resume upload"
+                >
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                  Resume
+                </button>
+              </>
             ) : pkg.status === "ready" ? (
               <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-green-100 text-green-700">
                 Ready
@@ -277,6 +292,7 @@ export default function DashboardClient() {
   const [packages, setPackages] = useState<ScanPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [resumePackageId, setResumePackageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchPackages = useCallback(async () => {
@@ -297,7 +313,13 @@ export default function DashboardClient() {
 
   function handleUploadComplete() {
     setModalOpen(false);
+    setResumePackageId(null);
     void fetchPackages();
+  }
+
+  function handleResume(packageId: string) {
+    setResumePackageId(packageId);
+    setModalOpen(true);
   }
 
   async function handleDelete(packageId: string) {
@@ -386,6 +408,7 @@ export default function DashboardClient() {
                 key={pkg.id}
                 pkg={pkg}
                 onDelete={handleDelete}
+                onResume={handleResume}
                 deleting={deletingId === pkg.id}
               />
             ))}
@@ -418,8 +441,9 @@ export default function DashboardClient() {
       {/* ── Upload modal ── */}
       {modalOpen && (
         <UploadModal
-          onClose={() => setModalOpen(false)}
+          onClose={() => { setModalOpen(false); setResumePackageId(null); }}
           onComplete={handleUploadComplete}
+          resumePackageId={resumePackageId ?? undefined}
         />
       )}
     </div>

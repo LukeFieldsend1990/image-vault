@@ -39,6 +39,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
 
+  if (user.suspendedAt !== null && user.suspendedAt !== undefined) {
+    return NextResponse.json({ error: "This account has been suspended. Please contact support." }, { status: 403 });
+  }
+
   // Check for verified TOTP
   const totp = await db
     .select()

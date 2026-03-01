@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences } from "@/lib/db/schema";
+import { licences, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq } from "drizzle-orm";
 
@@ -60,6 +60,18 @@ export async function POST(
   const now = Math.floor(Date.now() / 1000);
   if (licence.validTo < now) {
     return NextResponse.json({ error: "Licence has expired" }, { status: 409 });
+  }
+
+  // Block if talent has vault locked
+  const [talentUser] = await db
+    .select({ vaultLocked: users.vaultLocked })
+    .from(users)
+    .where(eq(users.id, licence.talentId))
+    .limit(1)
+    .all();
+
+  if (talentUser?.vaultLocked) {
+    return NextResponse.json({ error: "This vault is currently locked" }, { status: 423 });
   }
 
   // Check if there's already an active session

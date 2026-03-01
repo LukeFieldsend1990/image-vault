@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const ROLES = [
   { value: "talent", label: "Talent", description: "Actor, performer or model storing their own scans" },
@@ -9,10 +9,39 @@ const ROLES = [
   { value: "licensee", label: "Licensee", description: "Production company licensing scans" },
 ] as const;
 
-export default function SignupPage() {
+type Role = "talent" | "rep" | "licensee";
+const INVITE_REQUIRED: Role[] = ["talent", "rep"];
+
+interface InviteInfo {
+  valid: boolean;
+  email?: string;
+  role?: Role;
+  reason?: string;
+}
+
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get("invite");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(!!inviteToken);
+  const [selectedRole, setSelectedRole] = useState<Role | "">("");
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    setInviteLoading(true);
+    fetch(`/api/invites/${inviteToken}`)
+      .then((r) => r.json() as Promise<InviteInfo>)
+      .then((data) => {
+        setInviteInfo(data);
+        if (data.valid && data.role) setSelectedRole(data.role);
+      })
+      .catch(() => setInviteInfo({ valid: false, reason: "Could not verify invite" }))
+      .finally(() => setInviteLoading(false));
+  }, [inviteToken]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,7 +50,18 @@ export default function SignupPage() {
     const email = fd.get("email") as string;
     const password = fd.get("password") as string;
     const confirm = fd.get("confirm") as string;
-    const role = fd.get("role") as string;
+    const role = (fd.get("role") as Role) || selectedRole;
+
+    if (!role) {
+      setError("Please select an account type");
+      return;
+    }
+
+    // Block talent/rep without invite
+    if (INVITE_REQUIRED.includes(role) && !inviteToken) {
+      setError("This role requires an invitation. Please use the invite link sent to your email.");
+      return;
+    }
 
     if (password !== confirm) {
       setError("Passwords do not match");
@@ -38,7 +78,7 @@ export default function SignupPage() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password, role, inviteToken: inviteToken ?? undefined }),
       });
 
       if (res.redirected) {
@@ -60,6 +100,9 @@ export default function SignupPage() {
     }
   }
 
+  const emailLocked = inviteInfo?.valid && !!inviteInfo.email;
+  const roleLocked = inviteInfo?.valid && !!inviteInfo.role;
+
   return (
     <div className="flex min-h-screen">
       {/* ── Left panel ── */}
@@ -80,9 +123,40 @@ export default function SignupPage() {
           <h1 className="mb-1 text-3xl font-semibold tracking-tight text-[--color-ink]">
             Create account
           </h1>
-          <p className="mb-10 text-sm text-[--color-muted]">
+          <p className="mb-6 text-sm text-[--color-muted]">
             You&apos;ll set up two-factor authentication on the next step.
           </p>
+
+          {/* Invite banners */}
+          {inviteLoading && (
+            <div
+              className="mb-6 rounded border px-4 py-3 text-xs"
+              style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+            >
+              Verifying invite link…
+            </div>
+          )}
+
+          {!inviteLoading && inviteToken && inviteInfo?.valid && (
+            <div
+              className="mb-6 rounded border px-4 py-3 text-xs"
+              style={{ borderColor: "#166534", background: "rgba(22,101,52,0.06)", color: "#166534" }}
+            >
+              You&apos;ve been invited as{" "}
+              <strong>{ROLES.find((r) => r.value === inviteInfo.role)?.label ?? inviteInfo.role}</strong>.
+              Your email and role have been pre-filled.
+            </div>
+          )}
+
+          {!inviteLoading && inviteToken && inviteInfo && !inviteInfo.valid && (
+            <div
+              className="mb-6 rounded border px-4 py-3 text-xs"
+              style={{ borderColor: "#991b1b", background: "rgba(153,27,27,0.06)", color: "#991b1b" }}
+            >
+              {inviteInfo.reason ?? "This invite link is invalid or has expired."}
+              {" "}You may still register as a Licensee below.
+            </div>
+          )}
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             {/* Role selector */}
@@ -91,25 +165,34 @@ export default function SignupPage() {
                 Account type
               </label>
               <div className="space-y-2">
-                {ROLES.map((r) => (
-                  <label
-                    key={r.value}
-                    className="flex items-start gap-3 cursor-pointer p-3 border border-[--color-border] transition hover:border-[--color-accent]"
-                    style={{ borderRadius: "var(--radius)" }}
-                  >
-                    <input
-                      type="radio"
-                      name="role"
-                      value={r.value}
-                      required
-                      className="mt-0.5 accent-[--color-ink]"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-[--color-ink]">{r.label}</p>
-                      <p className="text-xs text-[--color-muted]">{r.description}</p>
-                    </div>
-                  </label>
-                ))}
+                {ROLES.map((r) => {
+                  const needsInvite = INVITE_REQUIRED.includes(r.value) && !inviteToken;
+                  const isDisabled = roleLocked ? r.value !== inviteInfo?.role : needsInvite;
+                  return (
+                    <label
+                      key={r.value}
+                      className={`flex items-start gap-3 p-3 border border-[--color-border] transition ${isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-[--color-accent]"}`}
+                      style={{ borderRadius: "var(--radius)" }}
+                    >
+                      <input
+                        type="radio"
+                        name="role"
+                        value={r.value}
+                        required
+                        disabled={isDisabled}
+                        checked={roleLocked ? r.value === inviteInfo?.role : selectedRole === r.value}
+                        onChange={() => { if (!isDisabled) setSelectedRole(r.value); }}
+                        className="mt-0.5 accent-[--color-ink]"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-[--color-ink]">{r.label}</p>
+                        <p className="text-xs text-[--color-muted]">
+                          {needsInvite ? "Invitation required" : r.description}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
@@ -127,8 +210,10 @@ export default function SignupPage() {
                 type="email"
                 autoComplete="email"
                 required
+                readOnly={emailLocked}
+                defaultValue={inviteInfo?.email ?? ""}
                 placeholder="you@unitedagents.co.uk"
-                className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent]"
+                className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent] read-only:opacity-60 read-only:cursor-not-allowed"
                 style={{ borderRadius: "var(--radius)" }}
               />
             </div>
@@ -236,5 +321,13 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
   );
 }

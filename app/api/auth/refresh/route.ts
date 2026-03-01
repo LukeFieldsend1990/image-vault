@@ -43,13 +43,20 @@ export async function GET(req: NextRequest) {
   }
 
   const user = await db
-    .select({ id: users.id, email: users.email, role: users.role })
+    .select({ id: users.id, email: users.email, role: users.role, suspendedAt: users.suspendedAt })
     .from(users)
     .where(eq(users.id, token.userId))
     .get();
 
   if (!user) {
     const res = NextResponse.redirect(makeRedirect("/login"));
+    clearAuthCookies(res);
+    return res;
+  }
+
+  if (user.suspendedAt !== null && user.suspendedAt !== undefined) {
+    await db.delete(refreshTokens).where(eq(refreshTokens.id, token.id));
+    const res = NextResponse.redirect(makeRedirect("/login?error=suspended"));
     clearAuthCookies(res);
     return res;
   }
