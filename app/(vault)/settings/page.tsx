@@ -8,6 +8,20 @@ import { eq } from "drizzle-orm";
 import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
 
+const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
+
+const ADMIN_SECTIONS = [
+  { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
+  { href: "/admin/users", label: "Users", description: "Browse, suspend or remove accounts" },
+  { href: "/admin/packages", label: "Packages", description: "All scan packages across the platform" },
+  { href: "/admin/licences", label: "Licences", description: "Licence requests and approvals" },
+  { href: "/admin/downloads", label: "Downloads", description: "Audit dual-custody download events" },
+  { href: "/admin/bookings", label: "Bookings", description: "Create popup events and manage slots" },
+  { href: "/admin/invites", label: "Invites", description: "Manage platform invitations" },
+  { href: "/admin/audit", label: "Audit Log", description: "Last 500 download events" },
+  { href: "/admin/storage", label: "Storage", description: "Per-talent storage usage" },
+];
+
 type Role = "talent" | "rep" | "licensee" | "admin";
 
 interface KnownForEntry {
@@ -39,8 +53,15 @@ const ROLE_LABELS: Record<Role, string> = {
   admin: "Platform Admin",
 };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
   const user = await getSessionData();
+  const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email));
+  const activeTab = tab === "admin" && isAdmin ? "admin" : "account";
 
   // Fetch talent identity for talent users
   let identity: {
@@ -74,9 +95,70 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="p-8 max-w-lg">
-      <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--color-ink)" }}>Account</h1>
-      <p className="text-sm mb-8" style={{ color: "var(--color-muted)" }}>Your account details and preferences.</p>
+    <div className="p-8 max-w-2xl">
+      <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--color-ink)" }}>Settings</h1>
+      <p className="text-sm mb-6" style={{ color: "var(--color-muted)" }}>Manage your account and platform preferences.</p>
+
+      {/* Tab bar */}
+      <div className="flex gap-0 mb-8 border-b" style={{ borderColor: "var(--color-border)" }}>
+        <Link
+          href="/settings"
+          className="px-4 py-2 text-sm font-medium transition border-b-2 -mb-px"
+          style={{
+            borderColor: activeTab === "account" ? "var(--color-accent)" : "transparent",
+            color: activeTab === "account" ? "var(--color-ink)" : "var(--color-muted)",
+          }}
+        >
+          Account
+        </Link>
+        {isAdmin && (
+          <Link
+            href="/settings?tab=admin"
+            className="px-4 py-2 text-sm font-medium transition border-b-2 -mb-px"
+            style={{
+              borderColor: activeTab === "admin" ? "var(--color-accent)" : "transparent",
+              color: activeTab === "admin" ? "var(--color-ink)" : "var(--color-muted)",
+            }}
+          >
+            Admin
+          </Link>
+        )}
+      </div>
+
+      {/* ── Admin tab ── */}
+      {activeTab === "admin" && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-4" style={{ color: "var(--color-accent)" }}>
+            Platform Administration
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {ADMIN_SECTIONS.map((s) => (
+              <Link
+                key={s.href}
+                href={s.href}
+                className="rounded border px-4 py-3.5 flex items-start justify-between gap-3 hover:opacity-80 transition group"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              >
+                <div>
+                  <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{s.label}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{s.description}</p>
+                </div>
+                <svg
+                  className="mt-0.5 shrink-0 opacity-40 group-hover:opacity-70 transition"
+                  width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ color: "var(--color-ink)" }}
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Account tab ── */}
+      {activeTab === "account" && (<>
 
       {/* Profile card */}
       <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
@@ -316,6 +398,7 @@ export default async function SettingsPage() {
           </button>
         </form>
       </div>
+      </>)}
     </div>
   );
 }
