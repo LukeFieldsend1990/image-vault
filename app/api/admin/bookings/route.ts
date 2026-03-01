@@ -43,7 +43,14 @@ export async function GET(req: NextRequest) {
     .orderBy(desc(scanEvents.date))
     .all();
 
-  if (events.length === 0) return NextResponse.json({ events: [], locations: [] });
+  // Always fetch locations so the create form can populate even when no events exist
+  const locations = await db
+    .select({ id: scanLocations.id, name: scanLocations.name, city: scanLocations.city })
+    .from(scanLocations)
+    .where(eq(scanLocations.active, true))
+    .all();
+
+  if (events.length === 0) return NextResponse.json({ events: [], locations });
 
   const eventIds = events.map((e) => e.id);
 
@@ -74,13 +81,6 @@ export async function GET(req: NextRequest) {
     arr.push(slot);
     slotsByEvent.set(slot.eventId, arr);
   }
-
-  // Also return locations for the create form
-  const locations = await db
-    .select({ id: scanLocations.id, name: scanLocations.name, city: scanLocations.city })
-    .from(scanLocations)
-    .where(eq(scanLocations.active, true))
-    .all();
 
   const result = events.map((ev) => {
     const evSlots = slotsByEvent.get(ev.id) ?? [];
