@@ -250,6 +250,70 @@ export function inviteEmail(p: InviteEmailParams): { subject: string; html: stri
   };
 }
 
+export interface ScanBookingConfirmedParams {
+  talentEmail: string;
+  talentName: string;
+  locationName: string;
+  city: string;
+  address: string;
+  startTime: number; // unix
+  durationMins: number;
+  bookingUrl: string;
+}
+
+export function scanBookingConfirmedEmail(p: ScanBookingConfirmedParams): { subject: string; html: string } {
+  const dt = new Date(p.startTime * 1000);
+  const dateStr = dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const timeStr = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const endTime = new Date((p.startTime + p.durationMins * 60) * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+  return {
+    subject: `Scan session confirmed — ${p.locationName}, ${dt.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`,
+    html: layout(`
+      <p>Your scan session at ${p.locationName} is confirmed. We look forward to seeing you.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Location</span><span class="kv-val">${p.locationName}, ${p.city}</span></div>
+        <div class="kv-row"><span class="kv-key">Address</span><span class="kv-val">${p.address}</span></div>
+        <div class="kv-row"><span class="kv-key">Date</span><span class="kv-val">${dateStr}</span></div>
+        <div class="kv-row"><span class="kv-key">Time</span><span class="kv-val">${timeStr} – ${endTime}</span></div>
+        <div class="kv-row"><span class="kv-key">Duration</span><span class="kv-val">${p.durationMins} minutes</span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-approved">Confirmed</span></span></div>
+      </div>
+      <p>Please arrive <strong>10 minutes before</strong> your slot. Wear close-fitting, neutral-coloured clothing and avoid jewellery for best results.</p>
+      <p>Your scan package will be uploaded to your vault within 24 hours of the session.</p>
+      <a class="btn" href="${p.bookingUrl}">View my bookings</a>
+    `),
+  };
+}
+
+export interface ScanBookingCancelledParams {
+  talentEmail: string;
+  locationName: string;
+  city: string;
+  startTime: number;
+  durationMins: number;
+}
+
+export function scanBookingCancelledEmail(p: ScanBookingCancelledParams): { subject: string; html: string } {
+  const dt = new Date(p.startTime * 1000);
+  const dateStr = dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const timeStr = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+  return {
+    subject: `Scan session cancelled — ${p.locationName}, ${dt.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`,
+    html: layout(`
+      <p>Your scan session has been cancelled. The slot has been released.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Location</span><span class="kv-val">${p.locationName}, ${p.city}</span></div>
+        <div class="kv-row"><span class="kv-key">Date</span><span class="kv-val">${dateStr}</span></div>
+        <div class="kv-row"><span class="kv-key">Time</span><span class="kv-val">${timeStr}</span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-revoked">Cancelled</span></span></div>
+      </div>
+      <p class="muted">To book a new session, visit your bookings page.</p>
+    `),
+  };
+}
+
 export interface DownloadCompleteParams {
   recipientEmail: string;
   isLicensee: boolean;

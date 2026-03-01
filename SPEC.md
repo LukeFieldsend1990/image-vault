@@ -90,6 +90,14 @@ All data is client-side encrypted before leaving the browser. The platform holds
 - [ ] In-app notification centre
 - [ ] Configurable notification preferences per user
 
+### 3.8 Scan Bookings
+- [ ] Talent can book a scan session at a Changling mobile popup location (Claridge's London, Chateau Marmont LA, The Plaza NYC)
+- [ ] Calendar UI showing upcoming popup events with available time slots
+- [ ] Booking confirmation and cancellation (>48h before slot) with email notifications
+- [ ] 24h reminder email to talent before their session
+- [ ] Admin can create and manage popup events and slots (`/admin/bookings`)
+- [ ] Post-scan: admin uploads completed package directly to talent's vault; talent is notified
+
 ### 3.7 Admin Panel
 - [x] User management — invite (via `/admin/invites`), suspend/unsuspend (`PATCH /api/admin/users/[id]`, revokes refresh tokens immediately), delete (`DELETE /api/admin/users/[id]`); suspended users blocked at login + refresh
 - [x] Platform-wide audit log — `/admin/audit` shows last 500 download events with licensee, file, project, IP, timestamp
@@ -507,6 +515,95 @@ CREATE TABLE download_events (
 - [x] Admin panel — user management (invite/suspend/delete), audit log (`/admin/audit`), storage dashboard (`/admin/storage`)
 - [ ] Admin billing summary (R2 costs per talent)
 - [ ] Feature flags
+
+### 🔵 Phase 5.5 — Scan Bookings
+
+Talent can book a scan session at one of Changling's mobile popup locations. The scanning rig is transported to partner hotels; our technicians upload the resulting package directly to the talent's vault on their behalf.
+
+#### Popup Locations (V1)
+
+| # | City | Hotel | Why |
+|---|---|---|---|
+| 1 | **London** | **Claridge's**, Brook Street, Mayfair | The spiritual home of British celebrity — so embedded in film and TV it barely needs an introduction. Agatha Christie set scenes here; it appears in *Paddington*, *Skyfall*, countless period dramas. Every serious actor in London knows a room here. |
+| 2 | **Los Angeles** | **Chateau Marmont**, Sunset Boulevard | The undisputed capital of Hollywood mythology. Jim Morrison, Led Zeppelin, the Belushi incident, Lindsay Lohan's residency. Featured or referenced in *Mulholland Drive*, *Almost Famous*, *The Player*. If you're a serious actor in LA, you've been here. |
+| 3 | **New York** | **The Plaza**, Fifth Avenue & Central Park South | Home Alone 2 cemented it for a generation. Eloise lived here. The Beatles stayed here. *North by Northwest*, *Almost Famous*, *Bride Wars*, *Scent of a Woman*. The most iconic hotel address in New York. |
+
+#### Feature Requirements
+
+**3.8 Scan Bookings**
+- [ ] Talent can view upcoming popup events across all locations from a dedicated `/bookings` page
+- [ ] Fancy calendar UI — month view with event dots; click a date to expand available slots
+- [ ] Each popup event has a configurable number of time slots (e.g. 9:00, 10:30, 12:00, 14:00, 15:30, 17:00)
+- [ ] Talent selects a slot and submits a booking — slot is marked reserved
+- [ ] Confirmation email sent to talent with date, time, location, hotel address, and what to expect
+- [ ] Talent can cancel a booking (up to 48 hours before); slot is released back to available
+- [ ] Admin can create, edit, and cancel popup events (`/admin/bookings`)
+- [ ] Admin can view all bookings per event, mark slot as completed, add notes
+- [ ] On completion, admin uploads the resulting scan package directly to the talent's vault
+- [ ] Post-scan confirmation email to talent: "Your scan has been uploaded to your vault"
+
+#### DB Schema
+
+```sql
+CREATE TABLE scan_locations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,           -- e.g. "Claridge's"
+  city TEXT NOT NULL,           -- e.g. "London"
+  address TEXT NOT NULL,
+  hotel_image_url TEXT,         -- for UI display
+  active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE scan_events (
+  id TEXT PRIMARY KEY,
+  location_id TEXT NOT NULL REFERENCES scan_locations(id),
+  date INTEGER NOT NULL,        -- unix timestamp (midnight of event day)
+  slot_duration_mins INTEGER NOT NULL DEFAULT 90,
+  notes TEXT,                   -- internal admin notes
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','full','cancelled')),
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE scan_slots (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES scan_events(id) ON DELETE CASCADE,
+  start_time INTEGER NOT NULL,  -- unix timestamp
+  status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available','reserved','completed','cancelled')),
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE scan_bookings (
+  id TEXT PRIMARY KEY,
+  talent_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  slot_id TEXT NOT NULL UNIQUE REFERENCES scan_slots(id),
+  status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('confirmed','cancelled','completed')),
+  notes TEXT,                   -- talent notes / special requirements
+  cancelled_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+```
+
+#### API Routes
+- `GET /api/bookings/events` — list upcoming events with slot availability (public to authenticated talent)
+- `POST /api/bookings` — talent creates a booking for a slot
+- `DELETE /api/bookings/[id]` — talent cancels a booking (>48h before slot)
+- `GET /api/bookings/mine` — talent's own upcoming + past bookings
+- `GET /api/admin/bookings` — admin: all bookings across all events
+- `POST /api/admin/bookings/events` — admin: create a popup event with slots
+- `PATCH /api/admin/bookings/slots/[id]` — admin: mark slot completed, add notes
+
+#### UI Pages
+- `/bookings` — talent-facing calendar + location cards + booking flow
+- `/bookings/confirmation/[id]` — post-booking confirmation page
+- `/admin/bookings` — admin event management + booking list per event
+
+#### Email Templates
+- `scanBookingConfirmedEmail` — talent booking confirmation (date, time, hotel, address, what to bring)
+- `scanBookingCancelledEmail` — cancellation confirmation to talent
+- `scanBookingReminderEmail` — 24h reminder to talent (triggered by scheduled Worker or cron)
+- `scanUploadedEmail` — post-scan notification: "Your scan is ready in your vault"
+
+---
 
 ### 🟢 Phase 6 — Production Hardening
 - [ ] Pen test

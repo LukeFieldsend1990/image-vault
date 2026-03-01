@@ -115,6 +115,44 @@ export const invites = sqliteTable("invites", {
   createdAt: integer("created_at").notNull(), // unix timestamp
 });
 
+export const scanLocations = sqliteTable("scan_locations", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  city: text("city").notNull(),
+  address: text("address").notNull(),
+  hotelImageUrl: text("hotel_image_url"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const scanEvents = sqliteTable("scan_events", {
+  id: text("id").primaryKey(),
+  locationId: text("location_id").notNull().references(() => scanLocations.id),
+  date: integer("date").notNull(),             // unix timestamp (midnight UTC of event day)
+  slotDurationMins: integer("slot_duration_mins").notNull().default(90),
+  notes: text("notes"),
+  status: text("status", { enum: ["open", "full", "cancelled"] }).notNull().default("open"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const scanSlots = sqliteTable("scan_slots", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id").notNull().references(() => scanEvents.id, { onDelete: "cascade" }),
+  startTime: integer("start_time").notNull(), // unix timestamp
+  status: text("status", { enum: ["available", "reserved", "completed", "cancelled"] }).notNull().default("available"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const scanBookings = sqliteTable("scan_bookings", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  slotId: text("slot_id").notNull().unique().references(() => scanSlots.id),
+  status: text("status", { enum: ["confirmed", "cancelled", "completed"] }).notNull().default("confirmed"),
+  notes: text("notes"),
+  cancelledAt: integer("cancelled_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const downloadEvents = sqliteTable("download_events", {
   id: text("id").primaryKey(), // UUID
   licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }), // null for talent's own downloads
