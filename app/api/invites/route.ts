@@ -9,6 +9,11 @@ import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
+const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
+
+function isAdmin(email: string | undefined): boolean {
+  return !!email && ADMIN_EMAILS.includes(email);
+}
 
 // GET /api/invites — admin: list all invites; talent: list own invites
 export async function GET(req: NextRequest) {
@@ -22,7 +27,7 @@ export async function GET(req: NextRequest) {
   const roleFilter = searchParams.get("role"); // optional: filter by role
 
   let rows;
-  if (session.role === "admin") {
+  if (isAdmin(session.email)) {
     rows = await db.select().from(invites).orderBy(invites.createdAt).all();
   } else if (session.role === "talent") {
     const query = db
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "admin" && session.role !== "talent") {
+  if (!isAdmin(session.email) && session.role !== "talent") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -87,8 +92,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
-  // Talent can only invite rep or licensee
-  if (session.role === "talent" && role === "talent") {
+  // Talent can only invite rep or licensee; admins can invite any role
+  if (!isAdmin(session.email) && session.role === "talent" && role === "talent") {
     return NextResponse.json({ error: "Talent accounts can only invite reps or licensees" }, { status: 403 });
   }
 
