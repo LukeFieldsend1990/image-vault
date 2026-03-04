@@ -3,7 +3,7 @@ export const runtime = "edge";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import { users, talentProfiles, scanPackages, talentReps } from "@/lib/db/schema";
-import { sql, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import UserActions from "./user-actions";
 
 type Role = "talent" | "rep" | "licensee" | "admin";

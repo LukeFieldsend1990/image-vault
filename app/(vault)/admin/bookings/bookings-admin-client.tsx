@@ -52,13 +52,6 @@ function formatDateLong(unix: number): string {
   });
 }
 
-function toLocalDateStr(unix: number): string {
-  const d = new Date(unix * 1000);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; color: string; label: string }> = {

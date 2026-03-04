@@ -28,7 +28,7 @@ function ts(unix: number): string {
   });
 }
 
-export default function InviteManager({ adminEmail }: { adminEmail: string }) {
+export default function InviteManager({ adminEmail: _adminEmail }: { adminEmail: string }) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [tableLoading, setTableLoading] = useState(true);
 

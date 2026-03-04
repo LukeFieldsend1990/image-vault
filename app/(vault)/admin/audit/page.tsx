@@ -2,8 +2,8 @@ export const runtime = "edge";
 
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { downloadEvents, users, scanFiles, licences } from "@/lib/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { downloadEvents } from "@/lib/db/schema";
+import { desc, sql } from "drizzle-orm";
 
 function ts(unix: number): string {
   return new Date(unix * 1000).toLocaleString("en-GB", {
