@@ -154,6 +154,10 @@ export async function GET(
 
   const bundleName = (new URL(req.url).searchParams.get("name") ?? `${pkg.name}.zip`).replace(/[^\w. -]/g, "_");
   const now = Math.floor(Date.now() / 1000);
+  // Extract before async closure — TypeScript type narrowing doesn't cross function boundaries
+  const userId = session.sub;
+  const userIp = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
+  const userAgent = req.headers.get("user-agent") ?? null;
 
   const accountId = process.env.CF_ACCOUNT_ID!;
   const bucketName = process.env.R2_BUCKET_NAME ?? "image-vault-scans";
@@ -209,13 +213,13 @@ export async function GET(
         db.insert(downloadEvents).values({
           id: crypto.randomUUID(),
           licenceId: null,
-          licenseeId: session.sub,
+          licenseeId: userId,
           fileId: f.id,
           startedAt: now,
           completedAt: now,
           bytesTransferred: f.sizeBytes,
-          ip: req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null,
-          userAgent: req.headers.get("user-agent") ?? null,
+          ip: userIp,
+          userAgent: userAgent,
         })
       )
     );
