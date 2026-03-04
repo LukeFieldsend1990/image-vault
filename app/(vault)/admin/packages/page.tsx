@@ -15,6 +15,14 @@ function fmt(n: number | null): string {
   return n + " B";
 }
 
+function fmtDuration(secs: number): string {
+  if (secs < 60) return `${secs}s`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 function ts(unix: number): string {
   return new Date(unix * 1000).toLocaleDateString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",
@@ -57,6 +65,8 @@ export default async function AdminPackagesPage() {
       filename: scanFiles.filename,
       sizeBytes: scanFiles.sizeBytes,
       uploadStatus: scanFiles.uploadStatus,
+      createdAt: scanFiles.createdAt,
+      completedAt: scanFiles.completedAt,
     })
     .from(scanFiles)
     .orderBy(scanFiles.filename)
@@ -183,6 +193,9 @@ export default async function AdminPackagesPage() {
                     const isComplete = f.uploadStatus === "complete";
                     const isUploading = f.uploadStatus === "uploading";
                     const fileColor = isComplete ? "#166534" : isUploading ? "#d97706" : "#6b7280";
+                    const duration = f.completedAt && f.createdAt
+                      ? fmtDuration(f.completedAt - f.createdAt)
+                      : null;
                     return (
                       <div key={f.id} className="flex items-center gap-3 py-1">
                         <span
@@ -197,6 +210,11 @@ export default async function AdminPackagesPage() {
                         <span className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>
                           {fmt(f.sizeBytes)}
                         </span>
+                        {duration && (
+                          <span className="text-[10px] shrink-0" style={{ color: "var(--color-muted)" }}>
+                            {duration}
+                          </span>
+                        )}
                       </div>
                     );
                   })}

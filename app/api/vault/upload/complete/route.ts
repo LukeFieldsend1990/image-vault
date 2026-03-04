@@ -96,10 +96,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Update scan_file status
+  // Update scan_file status + record completion time
+  const completedAt = Math.floor(Date.now() / 1000);
   await db
     .update(scanFiles)
-    .set({ uploadStatus: "complete" })
+    .set({ uploadStatus: "complete", completedAt })
     .where(eq(scanFiles.id, fileId));
 
   // Remove upload session

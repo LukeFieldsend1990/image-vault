@@ -48,7 +48,8 @@ export const scanFiles = sqliteTable("scan_files", {
   r2Key: text("r2_key").notNull(),
   contentType: text("content_type"),
   uploadStatus: text("upload_status", { enum: ["pending", "uploading", "complete", "error"] }).notNull().default("pending"),
-  createdAt: integer("created_at").notNull(), // unix timestamp
+  createdAt: integer("created_at").notNull(),   // unix timestamp
+  completedAt: integer("completed_at"),         // unix timestamp, set when upload completes
 });
 
 export const uploadSessions = sqliteTable("upload_sessions", {
