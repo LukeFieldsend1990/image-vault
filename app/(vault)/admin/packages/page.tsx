@@ -3,8 +3,10 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { scanPackages, users, scanFiles, talentProfiles } from "@/lib/db/schema";
-import { sql, eq } from "drizzle-orm";
+import { scanPackages, users, scanFiles, talentProfiles, downloadEvents } from "@/lib/db/schema";
+import { sql, eq, isNull } from "drizzle-orm";
+
+const DL_STALE_SECS = 2 * 60 * 60; // 2 hours — matches admin downloads page
 
 function fmt(n: number | null): string {
   if (n == null) return "—";
@@ -77,6 +79,25 @@ export default async function AdminPackagesPage() {
     const arr = filesByPackage.get(f.packageId) ?? [];
     arr.push(f);
     filesByPackage.set(f.packageId, arr);
+  }
+
+  // Pending downloads per file (completedAt null = not yet streamed)
+  // eslint-disable-next-line react-hooks/purity -- server component, Date.now() is intentional
+  const now = Math.floor(Date.now() / 1000);
+  const pendingDls = allFiles.length > 0
+    ? await db
+        .select({ fileId: downloadEvents.fileId, startedAt: downloadEvents.startedAt })
+        .from(downloadEvents)
+        .where(isNull(downloadEvents.completedAt))
+        .all()
+    : [];
+
+  // Map fileId → count of pending (non-stale) download events
+  const pendingDlMap = new Map<string, number>();
+  for (const dl of pendingDls) {
+    if (now - dl.startedAt <= DL_STALE_SECS) {
+      pendingDlMap.set(dl.fileId, (pendingDlMap.get(dl.fileId) ?? 0) + 1);
+    }
   }
 
   // Talent names
@@ -196,6 +217,7 @@ export default async function AdminPackagesPage() {
                     const duration = f.completedAt && f.createdAt
                       ? fmtDuration(f.completedAt - f.createdAt)
                       : null;
+                    const pendingCount = pendingDlMap.get(f.id) ?? 0;
                     return (
                       <div key={f.id} className="flex items-center gap-3 py-1">
                         <span
@@ -207,6 +229,14 @@ export default async function AdminPackagesPage() {
                         <span className="text-xs font-mono truncate flex-1" style={{ color: "var(--color-ink)" }}>
                           {f.filename}
                         </span>
+                        {pendingCount > 0 && (
+                          <span
+                            className="shrink-0 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
+                            style={{ background: "#d9770618", color: "#d97706" }}
+                          >
+                            {pendingCount} download{pendingCount > 1 ? "s" : ""} pending
+                          </span>
+                        )}
                         <span className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>
                           {fmt(f.sizeBytes)}
                         </span>
