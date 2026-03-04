@@ -16,37 +16,28 @@ export default async function AdminStoragePage() {
   await requireAdmin();
   const db = getDb();
 
-  // Per-talent storage: sum of completed scan file bytes
+  // All talent users with storage aggregated from completed files only
   const rows = await db
     .select({
-      talentId: scanPackages.talentId,
-      totalBytes: sql<number>`sum(${scanFiles.sizeBytes})`,
+      talentId: users.id,
+      email: users.email,
+      totalBytes: sql<number>`coalesce(sum(case when ${scanFiles.uploadStatus} = 'complete' then ${scanFiles.sizeBytes} else 0 end), 0)`,
       packageCount: sql<number>`count(distinct ${scanPackages.id})`,
-      fileCount: sql<number>`count(${scanFiles.id})`,
+      fileCount: sql<number>`count(case when ${scanFiles.uploadStatus} = 'complete' then ${scanFiles.id} end)`,
     })
-    .from(scanPackages)
+    .from(users)
+    .leftJoin(scanPackages, eq(scanPackages.talentId, users.id))
     .leftJoin(scanFiles, eq(scanFiles.packageId, scanPackages.id))
-    .where(eq(scanFiles.uploadStatus, "complete"))
-    .groupBy(scanPackages.talentId)
-    .orderBy(sql`sum(${scanFiles.sizeBytes}) desc`)
+    .where(eq(users.role, "talent"))
+    .groupBy(users.id)
+    .orderBy(sql`coalesce(sum(case when ${scanFiles.uploadStatus} = 'complete' then ${scanFiles.sizeBytes} else 0 end), 0) desc`)
     .all();
 
-  // Fetch all relevant talent users and profiles in bulk
-  const talentIds = rows.map((r) => r.talentId);
-  const allUsers = talentIds.length
-    ? await db
-        .select({ id: users.id, email: users.email })
-        .from(users)
-        .all()
-    : [];
-  const allProfiles = talentIds.length
-    ? await db
-        .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName })
-        .from(talentProfiles)
-        .all()
-    : [];
+  const allProfiles = await db
+    .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName })
+    .from(talentProfiles)
+    .all();
 
-  const userMap = new Map(allUsers.map((u) => [u.id, u.email]));
   const profileMap = new Map(allProfiles.map((p) => [p.userId, p.fullName]));
 
   const totalBytes = rows.reduce((acc, r) => acc + (r.totalBytes ?? 0), 0);
@@ -97,11 +88,11 @@ export default async function AdminStoragePage() {
               {/* Talent identity */}
               <div className="min-w-0">
                 <p className="truncate text-sm" style={{ color: "var(--color-text)" }}>
-                  {profileMap.get(r.talentId) ?? userMap.get(r.talentId) ?? r.talentId}
+                  {profileMap.get(r.talentId) ?? r.email}
                 </p>
                 {profileMap.has(r.talentId) && (
                   <p className="truncate text-xs" style={{ color: "var(--color-muted)" }}>
-                    {userMap.get(r.talentId)}
+                    {r.email}
                   </p>
                 )}
               </div>

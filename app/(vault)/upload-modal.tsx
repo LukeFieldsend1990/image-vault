@@ -195,8 +195,31 @@ export default function UploadModal({
 
   const [dropWarning, setDropWarning] = useState<string | null>(null);
 
+  // Recursively read all files from a dropped directory entry
+  async function readDirFiles(entry: FileSystemDirectoryEntry): Promise<File[]> {
+    const results: File[] = [];
+    const reader = entry.createReader();
+    const readBatch = (): Promise<FileSystemEntry[]> =>
+      new Promise((res, rej) => reader.readEntries(res, rej));
+    let batch: FileSystemEntry[];
+    do {
+      batch = await readBatch();
+      for (const child of batch) {
+        if (child.isFile) {
+          const file = await new Promise<File>((res, rej) =>
+            (child as FileSystemFileEntry).file(res, rej)
+          );
+          results.push(file);
+        } else if (child.isDirectory) {
+          results.push(...await readDirFiles(child as FileSystemDirectoryEntry));
+        }
+      }
+    } while (batch.length > 0);
+    return results;
+  }
+
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragOver(false);
       setDropWarning(null);
@@ -204,27 +227,35 @@ export default function UploadModal({
       const items = Array.from(e.dataTransfer.items);
       const accepted: File[] = [];
       let dirCount = 0;
+      let expandedFileCount = 0;
 
       for (const item of items) {
         if (item.kind !== "file") continue;
         const entry = item.webkitGetAsEntry?.();
-        if (entry && !entry.isFile) {
+        if (entry && entry.isDirectory) {
           dirCount++;
-          continue; // skip directories
+          try {
+            const dirFiles = await readDirFiles(entry as FileSystemDirectoryEntry);
+            accepted.push(...dirFiles);
+            expandedFileCount += dirFiles.length;
+          } catch {
+            setDropWarning("Could not read folder contents. Try dropping files individually or as a .zip.");
+          }
+        } else {
+          const file = item.getAsFile();
+          if (file) accepted.push(file);
         }
-        const file = item.getAsFile();
-        if (file) accepted.push(file);
       }
 
-      if (dirCount > 0) {
+      if (dirCount > 0 && expandedFileCount > 0) {
         setDropWarning(
-          `${dirCount} folder${dirCount > 1 ? "s" : ""} skipped — drag individual files or a .zip instead.`
+          `${dirCount} folder${dirCount > 1 ? "s" : ""} expanded — ${expandedFileCount} file${expandedFileCount !== 1 ? "s" : ""} added.`
         );
       }
 
       addFiles(accepted);
     },
-    [addFiles]
+    [addFiles] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ── Upload loop ──────────────────────────────────────────────────────
