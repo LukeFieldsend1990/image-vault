@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 
 const ISSUER = "image-vault";
 const AUDIENCE = "image-vault-app";
-const SESSION_TTL = "15m";
+const SESSION_TTL = "30m";
 
 export interface SessionPayload {
   sub: string;      // userId

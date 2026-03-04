@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const SESSION_MAX_AGE = 900;       // 15 minutes
+const SESSION_MAX_AGE = 1800;      // 30 minutes
 const REFRESH_MAX_AGE = 604_800;   // 7 days
 
 export function generateToken(): string {

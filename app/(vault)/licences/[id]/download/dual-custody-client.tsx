@@ -180,6 +180,24 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
           >
             Both verifications complete — download links are valid for 48 hours.
           </div>
+
+          {/* Bundle download */}
+          {tokens.length > 1 && (
+            <a
+              href={`/api/download/bundle?tokens=${tokens.map((t) => t.token).join(",")}&name=bundle.zip`}
+              download="bundle.zip"
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+              style={{ background: "var(--color-accent)" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Download all {tokens.length} files as .zip
+            </a>
+          )}
+
           <div className="space-y-2">
             {tokens.map((t) => (
               <a
