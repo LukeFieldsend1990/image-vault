@@ -221,7 +221,7 @@ export default async function AdminPackagesPage() {
                       </span>
                     )}
                   </summary>
-                  <div className="px-5 pb-3 flex flex-col gap-1">
+                  <div className="px-5 pb-3 flex flex-col gap-1 overflow-y-auto" style={{ maxHeight: "240px" }}>
                   {files.map((f) => {
                     const isComplete = f.uploadStatus === "complete";
                     const isUploading = f.uploadStatus === "uploading";
