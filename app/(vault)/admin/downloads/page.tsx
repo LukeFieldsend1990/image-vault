@@ -44,7 +44,7 @@ export default async function AdminDownloadsPage() {
   await requireAdmin();
   const db = getDb();
 
-  // eslint-disable-next-line react-compiler/react-compiler -- server component, Date.now() is intentional
+  // eslint-disable-next-line react-hooks/purity -- server component, Date.now() is intentional
   const now = Math.floor(Date.now() / 1000);
 
   const events = await db
