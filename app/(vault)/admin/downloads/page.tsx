@@ -74,7 +74,7 @@ export default async function AdminDownloadsPage() {
       : Promise.resolve([] as { id: string; email: string }[]),
     fileIds.length > 0
       ? db.select({ id: scanFiles.id, filename: scanFiles.filename, sizeBytes: scanFiles.sizeBytes }).from(scanFiles).where(inArray(scanFiles.id, fileIds)).all()
-      : Promise.resolve([] as { id: string; filename: string }[]),
+      : Promise.resolve([] as { id: string; filename: string; sizeBytes: number | null }[]),
     licenceIds.length > 0
       ? db.select({ id: licences.id, projectName: licences.projectName, productionCompany: licences.productionCompany })
           .from(licences).where(inArray(licences.id, licenceIds)).all()
