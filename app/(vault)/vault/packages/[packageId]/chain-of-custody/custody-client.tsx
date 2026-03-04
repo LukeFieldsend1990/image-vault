@@ -242,10 +242,14 @@ export default function CustodyClient({ packageId }: { packageId: string }) {
   useEffect(() => {
     fetch(`/api/vault/packages/${packageId}/activity`)
       .then((r) => {
-        if (!r.ok) throw new Error("Failed to load activity");
+        if (r.status === 401) {
+          window.location.href = `/api/auth/refresh?next=/vault/packages/${packageId}/chain-of-custody`;
+          return null;
+        }
+        if (!r.ok) throw new Error(`Failed to load activity (${r.status})`);
         return r.json() as Promise<ActivityResponse>;
       })
-      .then(setData)
+      .then((d) => { if (d) setData(d); })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Error"))
       .finally(() => setLoading(false));
   }, [packageId]);
