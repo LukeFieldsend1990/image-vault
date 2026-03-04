@@ -1,7 +1,6 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { users, refreshTokens } from "@/lib/db/schema";
 import { signSessionJwt } from "@/lib/auth/jwt";
@@ -77,13 +76,7 @@ export async function GET(req: NextRequest) {
     createdAt: now,
   });
 
-  let secret: string;
-  try {
-    const { env } = getRequestContext();
-    secret = (env as unknown as Record<string, string>).JWT_SECRET;
-  } catch {
-    secret = process.env.JWT_SECRET!;
-  }
+  const secret = process.env.JWT_SECRET!;
   const sessionJwt = await signSessionJwt(
     { sub: user.id, email: user.email, role: user.role },
     secret,
