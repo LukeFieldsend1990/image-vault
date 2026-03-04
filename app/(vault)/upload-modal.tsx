@@ -26,6 +26,14 @@ interface FileProgress {
 
 const CHUNK_SIZE = 52_428_800; // 50 MB
 
+// Retry a fetch once after a silent JWT refresh on 401 (long uploads outlast 15-min JWT)
+async function fetchWithRefresh(input: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status !== 401) return res;
+  try { await fetch("/api/auth/refresh?next=/dashboard", { redirect: "follow" }); } catch { /* ignore */ }
+  return fetch(input, init);
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -331,7 +339,7 @@ export default function UploadModal({
           const encrypted = await encryptChunk(raw);
 
           // Get presigned URL for this part
-          const presignRes = await fetch(
+          const presignRes = await fetchWithRefresh(
             `/api/vault/upload/presign?fileId=${fileId}&partNumber=${part + 1}`
           );
           if (!presignRes.ok) {
@@ -358,7 +366,7 @@ export default function UploadModal({
           }
 
           // Record ETag in DB
-          const recordRes = await fetch(
+          const recordRes = await fetchWithRefresh(
             `/api/vault/upload/part?fileId=${fileId}&partNumber=${part + 1}&etag=${encodeURIComponent(etag)}`,
             { method: "PATCH" }
           );
@@ -375,7 +383,7 @@ export default function UploadModal({
         }
 
         // Complete the multipart upload
-        const completeRes = await fetch("/api/vault/upload/complete", {
+        const completeRes = await fetchWithRefresh("/api/vault/upload/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileId }),
