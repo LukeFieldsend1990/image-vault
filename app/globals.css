@@ -46,6 +46,10 @@ body {
   line-height: 1.5;
 }
 
+/* Collapsible details chevron */
+details .details-chevron { transition: transform 0.15s ease; }
+details[open] .details-chevron { transform: rotate(180deg); }
+
 /* Primary accent button */
 .btn-accent {
   background: var(--color-accent);

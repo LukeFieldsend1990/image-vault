@@ -204,12 +204,24 @@ export default async function AdminPackagesPage() {
                 </span>
               </div>
 
-              {/* File list */}
+              {/* File list — collapsible */}
               {files.length > 0 && (
-                <div
-                  className="px-5 pb-3 flex flex-col gap-1"
-                  style={{ borderTop: "1px solid var(--color-border)" }}
-                >
+                <details style={{ borderTop: "1px solid var(--color-border)" }}>
+                  <summary
+                    className="px-5 py-2 text-[10px] font-medium uppercase tracking-widest cursor-pointer select-none list-none flex items-center gap-1.5"
+                    style={{ color: "var(--color-muted)" }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="details-chevron">
+                      <path d="M2 3 L5 7 L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {files.length} file{files.length !== 1 ? "s" : ""}
+                    {files.filter(f => (pendingDlMap.get(f.id) ?? 0) > 0).length > 0 && (
+                      <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide" style={{ background: "#d9770618", color: "#d97706" }}>
+                        {files.reduce((n, f) => n + (pendingDlMap.get(f.id) ?? 0), 0)} download{files.reduce((n, f) => n + (pendingDlMap.get(f.id) ?? 0), 0) !== 1 ? "s" : ""} pending
+                      </span>
+                    )}
+                  </summary>
+                  <div className="px-5 pb-3 flex flex-col gap-1">
                   {files.map((f) => {
                     const isComplete = f.uploadStatus === "complete";
                     const isUploading = f.uploadStatus === "uploading";
@@ -248,7 +260,8 @@ export default async function AdminPackagesPage() {
                       </div>
                     );
                   })}
-                </div>
+                  </div>
+                </details>
               )}
             </div>
           );
