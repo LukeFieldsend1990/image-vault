@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import InviteManager from "./invite-form";
 
 export default async function AdminInvitesPage() {
-  const admin = await requireAdmin();
+  await requireAdmin();
 
   return (
     <div className="p-8 max-w-5xl">
@@ -16,7 +16,7 @@ export default async function AdminInvitesPage() {
         </p>
       </div>
 
-      <InviteManager adminEmail={admin.email} />
+      <InviteManager />
     </div>
   );
 }
