@@ -6,6 +6,15 @@ import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, uploadSessions, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, sql, and } from "drizzle-orm";
+import { getRequestContext } from "@cloudflare/next-on-pages";
+
+function cfEnv(key: string): string | undefined {
+  try {
+    return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
+  } catch {
+    return process.env[key];
+  }
+}
 import { sendEmail } from "@/lib/email/send";
 import { uploadCompleteEmail } from "@/lib/email/templates";
 
@@ -45,12 +54,12 @@ export async function POST(req: NextRequest) {
   parts.sort((a, b) => a.partNumber - b.partNumber);
 
   // Complete multipart upload via S3 API (matches the presigned part uploads)
-  const accountId = process.env.CF_ACCOUNT_ID!;
-  const bucketName = process.env.R2_BUCKET_NAME ?? "image-vault-scans";
+  const accountId = cfEnv("CF_ACCOUNT_ID")!;
+  const bucketName = cfEnv("R2_BUCKET_NAME") ?? "image-vault-scans";
 
   const r2 = new AwsClient({
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    accessKeyId: cfEnv("R2_ACCESS_KEY_ID")!,
+    secretAccessKey: cfEnv("R2_SECRET_ACCESS_KEY")!,
     region: "auto",
     service: "s3",
   });

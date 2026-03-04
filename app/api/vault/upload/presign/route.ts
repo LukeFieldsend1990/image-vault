@@ -7,6 +7,15 @@ import { scanFiles, uploadSessions, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq } from "drizzle-orm";
+import { getRequestContext } from "@cloudflare/next-on-pages";
+
+function cfEnv(key: string): string | undefined {
+  try {
+    return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
+  } catch {
+    return process.env[key];
+  }
+}
 
 const PRESIGN_TTL = 900; // 15 minutes per part
 
@@ -68,12 +77,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const accountId = process.env.CF_ACCOUNT_ID!;
-  const bucketName = process.env.R2_BUCKET_NAME ?? "image-vault-scans";
+  const accountId = cfEnv("CF_ACCOUNT_ID")!;
+  const bucketName = cfEnv("R2_BUCKET_NAME") ?? "image-vault-scans";
 
   const r2 = new AwsClient({
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    accessKeyId: cfEnv("R2_ACCESS_KEY_ID")!,
+    secretAccessKey: cfEnv("R2_SECRET_ACCESS_KEY")!,
     region: "auto",
     service: "s3",
   });

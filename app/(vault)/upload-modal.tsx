@@ -151,7 +151,7 @@ export default function UploadModal({
 
   // ── File selection ───────────────────────────────────────────────────
   const addFiles = useCallback(
-    (incoming: FileList | null) => {
+    (incoming: FileList | File[] | null) => {
       if (!incoming) return;
 
       if (isResumeMode) {
@@ -193,11 +193,36 @@ export default function UploadModal({
     [isResumeMode]
   );
 
+  const [dropWarning, setDropWarning] = useState<string | null>(null);
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragOver(false);
-      addFiles(e.dataTransfer.files);
+      setDropWarning(null);
+
+      const items = Array.from(e.dataTransfer.items);
+      const accepted: File[] = [];
+      let dirCount = 0;
+
+      for (const item of items) {
+        if (item.kind !== "file") continue;
+        const entry = item.webkitGetAsEntry?.();
+        if (entry && !entry.isFile) {
+          dirCount++;
+          continue; // skip directories
+        }
+        const file = item.getAsFile();
+        if (file) accepted.push(file);
+      }
+
+      if (dirCount > 0) {
+        setDropWarning(
+          `${dirCount} folder${dirCount > 1 ? "s" : ""} skipped — drag individual files or a .zip instead.`
+        );
+      }
+
+      addFiles(accepted);
     },
     [addFiles]
   );
@@ -238,7 +263,10 @@ export default function UploadModal({
               contentType: fp.file.type || "application/octet-stream",
             }),
           });
-          if (!initiateRes.ok) throw new Error("Failed to initiate upload");
+          if (!initiateRes.ok) {
+            const errJson = await initiateRes.json().catch(() => ({})) as { error?: string };
+            throw new Error(errJson.error ?? `Failed to initiate upload (${initiateRes.status})`);
+          }
           const initiated = await initiateRes.json() as { fileId: string };
           fileId = initiated.fileId;
           startFromPart = 0;
@@ -490,6 +518,20 @@ export default function UploadModal({
                     {needsFileCount} file{needsFileCount !== 1 ? "s" : ""}
                   </strong>{" "}
                   from your device to resume. Completed chunks will be skipped.
+                </div>
+              )}
+
+              {/* Directory drop warning */}
+              {dropWarning && (
+                <div
+                  className="rounded border px-3 py-2 text-xs flex items-start gap-2"
+                  style={{ borderColor: "rgba(217,119,6,0.3)", background: "rgba(217,119,6,0.06)", color: "#d97706" }}
+                >
+                  <svg width="13" height="13" className="mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  {dropWarning}
                 </div>
               )}
 
