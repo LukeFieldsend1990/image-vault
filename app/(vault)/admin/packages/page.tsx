@@ -49,13 +49,25 @@ export default async function AdminPackagesPage() {
     .orderBy(sql`${scanPackages.createdAt} desc`)
     .all();
 
-  // File counts per package
-  const fileCounts = await db
-    .select({ packageId: scanFiles.packageId, n: sql<number>`count(*)` })
+  // Files per package (for inline listing)
+  const allFiles = await db
+    .select({
+      id: scanFiles.id,
+      packageId: scanFiles.packageId,
+      filename: scanFiles.filename,
+      sizeBytes: scanFiles.sizeBytes,
+      uploadStatus: scanFiles.uploadStatus,
+    })
     .from(scanFiles)
-    .groupBy(scanFiles.packageId)
+    .orderBy(scanFiles.filename)
     .all();
-  const fileCountMap = new Map(fileCounts.map((f) => [f.packageId, f.n]));
+
+  const filesByPackage = new Map<string, typeof allFiles>();
+  for (const f of allFiles) {
+    const arr = filesByPackage.get(f.packageId) ?? [];
+    arr.push(f);
+    filesByPackage.set(f.packageId, arr);
+  }
 
   // Talent names
   const profiles = await db
@@ -100,67 +112,99 @@ export default async function AdminPackagesPage() {
           <p className="px-5 py-6 text-sm" style={{ color: "var(--color-muted)" }}>No packages yet.</p>
         )}
 
-        {pkgs.map((p) => (
-          <div
-            key={p.id}
-            className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm"
-            style={{
-              gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr",
-              borderColor: "var(--color-border)",
-            }}
-          >
-            {/* Package name + chain of custody link */}
-            <div className="min-w-0">
-              <p className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{p.name}</p>
-              {p.studioName && (
-                <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>{p.studioName}</p>
-              )}
-              <Link
-                href={`/vault/packages/${p.id}/chain-of-custody`}
-                className="text-[10px] mt-0.5 inline-block"
-                style={{ color: "var(--color-accent)" }}
+        {pkgs.map((p) => {
+          const files = filesByPackage.get(p.id) ?? [];
+          return (
+            <div key={p.id} className="border-b last:border-0" style={{ borderColor: "var(--color-border)" }}>
+              {/* Main row */}
+              <div
+                className="grid items-center px-5 py-3.5 text-sm"
+                style={{ gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr" }}
               >
-                Chain of custody →
-              </Link>
-            </div>
+                {/* Package name + chain of custody link */}
+                <div className="min-w-0">
+                  <p className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{p.name}</p>
+                  {p.studioName && (
+                    <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>{p.studioName}</p>
+                  )}
+                  <Link
+                    href={`/vault/packages/${p.id}/chain-of-custody`}
+                    className="text-[10px] mt-0.5 inline-block"
+                    style={{ color: "var(--color-accent)" }}
+                  >
+                    Chain of custody →
+                  </Link>
+                </div>
 
-            {/* Talent */}
-            <div className="min-w-0">
-              <p className="text-xs truncate" style={{ color: "var(--color-text)" }}>
-                {profileMap.get(p.talentId) ?? p.talentEmail}
-              </p>
-              {profileMap.has(p.talentId) && (
-                <p className="text-[10px] truncate" style={{ color: "var(--color-muted)" }}>{p.talentEmail}</p>
+                {/* Talent */}
+                <div className="min-w-0">
+                  <p className="text-xs truncate" style={{ color: "var(--color-text)" }}>
+                    {profileMap.get(p.talentId) ?? p.talentEmail}
+                  </p>
+                  {profileMap.has(p.talentId) && (
+                    <p className="text-[10px] truncate" style={{ color: "var(--color-muted)" }}>{p.talentEmail}</p>
+                  )}
+                </div>
+
+                {/* File count */}
+                <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                  {files.length} file{files.length !== 1 ? "s" : ""}
+                </span>
+
+                {/* Size */}
+                <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                  {fmt(p.totalSizeBytes)}
+                </span>
+
+                {/* Status */}
+                <span
+                  className="inline-flex items-center text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded w-fit"
+                  style={{
+                    background: `${STATUS_COLOR[p.status ?? "uploading"]}18`,
+                    color: STATUS_COLOR[p.status ?? "uploading"],
+                  }}
+                >
+                  {p.status}
+                </span>
+
+                {/* Created */}
+                <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                  {ts(p.createdAt)}
+                </span>
+              </div>
+
+              {/* File list */}
+              {files.length > 0 && (
+                <div
+                  className="px-5 pb-3 flex flex-col gap-1"
+                  style={{ borderTop: "1px solid var(--color-border)" }}
+                >
+                  {files.map((f) => {
+                    const isComplete = f.uploadStatus === "complete";
+                    const isUploading = f.uploadStatus === "uploading";
+                    const fileColor = isComplete ? "#166534" : isUploading ? "#d97706" : "#6b7280";
+                    return (
+                      <div key={f.id} className="flex items-center gap-3 py-1">
+                        <span
+                          className="shrink-0 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
+                          style={{ background: `${fileColor}18`, color: fileColor }}
+                        >
+                          {f.uploadStatus}
+                        </span>
+                        <span className="text-xs font-mono truncate flex-1" style={{ color: "var(--color-ink)" }}>
+                          {f.filename}
+                        </span>
+                        <span className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>
+                          {fmt(f.sizeBytes)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
-
-            {/* File count */}
-            <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-              {fileCountMap.get(p.id) ?? 0}
-            </span>
-
-            {/* Size */}
-            <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-              {fmt(p.totalSizeBytes)}
-            </span>
-
-            {/* Status */}
-            <span
-              className="inline-flex items-center text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded w-fit"
-              style={{
-                background: `${STATUS_COLOR[p.status ?? "uploading"]}18`,
-                color: STATUS_COLOR[p.status ?? "uploading"],
-              }}
-            >
-              {p.status}
-            </span>
-
-            {/* Created */}
-            <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-              {ts(p.createdAt)}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
