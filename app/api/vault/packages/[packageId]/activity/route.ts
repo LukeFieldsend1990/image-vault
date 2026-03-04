@@ -77,11 +77,12 @@ export async function GET(
     return NextResponse.json({ error: "Package not found" }, { status: 404 });
   }
 
+  const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
   const isOwner = pkg.talentId === session.sub;
-  const isRep =
-    session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId));
+  const isRep = session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId));
+  const isAdmin = ADMIN_EMAILS.includes(session.email);
 
-  if (!isOwner && !isRep) {
+  if (!isOwner && !isRep && !isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

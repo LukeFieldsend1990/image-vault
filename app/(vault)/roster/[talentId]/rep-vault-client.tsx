@@ -45,6 +45,7 @@ function PackageCard({
   const [files, setFiles] = useState<ScanFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [bundleDownloading, setBundleDownloading] = useState(false);
 
   async function toggleExpand() {
     if (!expanded && files.length === 0) {
@@ -60,6 +61,24 @@ function PackageCard({
       }
     }
     setExpanded((v) => !v);
+  }
+
+  async function handleBundleDownload() {
+    setBundleDownloading(true);
+    try {
+      const name = encodeURIComponent(`${pkg.name}.zip`);
+      const res = await fetch(`/api/vault/packages/${pkg.id}/bundle?name=${name}`);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${pkg.name}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBundleDownloading(false);
+    }
   }
 
   async function handleDownload(file: ScanFile) {
@@ -162,6 +181,28 @@ function PackageCard({
             <p className="px-14 py-3 text-xs" style={{ color: "var(--color-muted)" }}>No files in this package.</p>
           ) : (
             <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
+              {files.filter((f) => f.uploadStatus === "complete").length > 1 && (
+                <div className="px-14 py-2.5 flex justify-end" style={{ background: "var(--color-surface)" }}>
+                  <button
+                    onClick={() => void handleBundleDownload()}
+                    disabled={bundleDownloading}
+                    className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-sm text-white transition disabled:opacity-50"
+                    style={{ background: "var(--color-accent)" }}
+                  >
+                    {bundleDownloading ? (
+                      <>
+                        <svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>
+                        Building zip…
+                      </>
+                    ) : (
+                      <>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                        Download all as .zip
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
               {files.map((file) => (
                 <div key={file.id} className="px-14 py-3 flex items-center justify-between gap-4">
                   <div className="min-w-0">
