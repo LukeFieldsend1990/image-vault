@@ -129,7 +129,7 @@ export default function UploadModal({
     setMetaError("");
     setMetaLoading(true);
     try {
-      const res = await fetch("/api/vault/packages", {
+      const res = await fetchWithRefresh("/api/vault/packages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -292,7 +292,7 @@ export default function UploadModal({
           startFromPart = fp.startFromPart;
         } else {
           // New file — initiate a fresh multipart upload
-          const initiateRes = await fetch("/api/vault/upload/initiate", {
+          const initiateRes = await fetchWithRefresh("/api/vault/upload/initiate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
