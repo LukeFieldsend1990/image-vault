@@ -492,7 +492,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
               <div>
                 <p className="text-xs font-semibold" style={{ color: "#b45309" }}>AI use is inherent to this licence type</p>
                 <p className="mt-0.5 text-xs" style={{ color: "#92400e" }}>
-                  "{selectedType?.label}" licences require biometric data processing by AI systems. The talent will be explicitly informed of this when reviewing your request.
+                  &ldquo;{selectedType?.label}&rdquo; licences require biometric data processing by AI systems. The talent will be explicitly informed of this when reviewing your request.
                 </p>
               </div>
             </div>
@@ -535,7 +535,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
           >
             <p className="font-semibold mb-1">Important — AI Processing Notice</p>
             <p>
-              By enabling AI processing, you acknowledge that the biometric scan data may be used to train, fine-tune, or evaluate machine learning models. The talent retains the right to revoke this permission at any time. This request will be flagged for the talent's specific attention and may require additional contractual terms.
+              By enabling AI processing, you acknowledge that the biometric scan data may be used to train, fine-tune, or evaluate machine learning models. The talent retains the right to revoke this permission at any time. This request will be flagged for the talent&apos;s specific attention and may require additional contractual terms.
             </p>
           </div>
         )}
@@ -601,7 +601,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
         >
           By submitting this request I confirm that the stated use is accurate, that my organisation will handle all biometric scan data in compliance with applicable data protection legislation (including but not limited to UK GDPR and the Data Protection Act 2018), and that access is subject to talent approval and a mandatory dual-custody verification step before any files can be downloaded.{" "}
           {effectiveAi && "I further acknowledge that AI processing of biometric data carries additional legal obligations and that specific consent must be obtained from the data subject. "}
-          All terms are subject to the platform's standard licence agreement.
+          All terms are subject to the platform&apos;s standard licence agreement.
         </div>
 
         <label className="flex cursor-pointer items-start gap-3 mb-5">
