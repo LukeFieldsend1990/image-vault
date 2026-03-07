@@ -194,7 +194,60 @@ GitHub repo (main branch)
 
 ## 6. Licensing Model
 
-### 6.1 Dual-Custody Download Flow
+### 6.0 Strategic Context
+
+Likeness scans are not a one-time product — they are **a recurring digital identity asset**. The platform's licensing layer is the mechanism by which talent and their representatives monetise that asset repeatedly across different use cases, territories, and terms.
+
+The industry has fundamentally shifted post-SAG-AFTRA 2023. Productions now need contractual, audited, consent-based access to digital likenesses — not informal agreements or one-off scans. A platform that:
+
+1. **Stores** the canonical scan (the authoritative source of truth)
+2. **Contracts** usage per production in a machine-readable, auditable way
+3. **Enforces** dual-custody custody custody (talent must actively participate in every download)
+4. **Tracks** all downstream usage events with a tamper-evident log
+
+...is positioned as critical IP infrastructure for the industry, not just file storage.
+
+---
+
+### 6.1 Licence Types
+
+Every licence request must specify a usage type. These are not free-form text — they are a controlled enumeration that drives contract templates, fee guidance, and technical constraints.
+
+| Type | Value | Description | Typical Fee Range |
+|---|---|---|---|
+| **Film / TV Digital Double** | `film_double` | Photorealistic recreation in a theatrical or streaming production | £50k – £300k |
+| **Video Game / Real-Time Character** | `game_character` | Integration into a game engine (Unreal / Unity) for playable or NPC use | £100k – £500k |
+| **Commercial / Advertising** | `commercial` | Brand campaigns, product ads — digital or print | £25k – £100k |
+| **AI Avatar / Synthetic Performance** | `ai_avatar` | Controlled AI-driven performance (Synthesia, HeyGen, custom); voice clone may be included | £2k – £50k per campaign |
+| **Training Dataset** | `training_data` | Input for ML model training (generative, reconstruction, avatar systems) — requires explicit AI consent flag | £100k – £1M+ |
+| **Likeness Monitoring / Reference** | `monitoring_reference` | Internal reference for deepfake detection / watermark verification; no creative use | £5k – £20k/yr |
+
+> **AI training is off by default.** The `permitAITraining` flag on a licence is `false` unless explicitly enabled by the talent during approval — regardless of usage type. A licensee cannot request AI training rights; the talent must grant them.
+
+---
+
+### 6.2 Licence Fields — Extended
+
+In addition to the current schema, the commercial layer adds:
+
+| Field | Type | Description |
+|---|---|---|
+| `licenceType` | enum | One of the six usage types above |
+| `territory` | TEXT | `worldwide` \| `europe` \| `uk` \| `usa` \| `asia_pacific` \| custom |
+| `exclusivity` | boolean | Whether this is an exclusive licence for the territory + type |
+| `permitAITraining` | boolean | Talent opt-in only; default false; shown prominently in talent review UI |
+| `agreedFee` | INTEGER | Agreed fee in pence (GBP); set by talent/rep during approval |
+| `platformFeePercent` | INTEGER | Platform commission rate at time of licence; default 15 |
+| `platformFee` | INTEGER | Calculated: agreedFee × platformFeePercent / 100 |
+| `talentFee` | INTEGER | agreedFee − platformFee |
+| `downloadLimit` | INTEGER | Max number of download events (null = unlimited within validity period) |
+| `contractStatus` | enum | `draft` \| `pending_signature` \| `executed` \| `void` |
+| `contractUrl` | TEXT | Signed contract PDF URL (DocuSign / HelloSign or platform-generated) |
+| `talentNotes` | TEXT | Internal notes from talent/rep on approval conditions |
+
+---
+
+### 6.3 Dual-Custody Download Flow (current — Phase 4)
 
 ```
 1. Licensee submits licence request (project, use case, date range)
@@ -216,14 +269,132 @@ GitHub repo (main branch)
 9. Download event logged: timestamp, IP, user agent, bytes transferred
 ```
 
-### 6.2 Licence Record Fields
-- `id`, `talent_id`, `scan_id`, `licensee_id`
-- `project_name`, `intended_use`, `valid_from`, `valid_to`
+### 6.4 Enhanced Licence Request Wizard (Phase 4 Extended — Demo Priority)
+
+The licence request form is the **commercial heart of the platform**. The current form is functional but generic. For the demo and commercial pitch, this becomes a structured wizard.
+
+**Step 1 — Usage type**
+- Visual tile picker: Film Double / Game Character / Commercial / AI Avatar / Training Dataset / Monitoring
+- Each tile shows: description, typical fee range, what the licensee gets
+- Selection drives all subsequent steps
+
+**Step 2 — Project details**
+- Project name, production company, brief description
+- Territory selector (worldwide / region / country)
+- Exclusivity toggle with explanation of implications
+- Duration: specific dates OR production-lifecycle option
+
+**Step 3 — AI terms**
+- Displayed regardless of usage type
+- Explicit declaration: "This licence does NOT grant rights to use likeness data for AI model training unless separately approved by the talent"
+- Checkbox: "I confirm I will not use this data for AI training"
+- If `training_data` type is selected: "AI training rights must be separately negotiated with the talent's representative"
+
+**Step 4 — Commercial terms**
+- Talent-set indicative fee displayed (if configured): "Indicative fee for this usage type: £X – £Y"
+- Proposed fee field: licensee can enter their proposed fee
+- Note: "Final fee will be agreed with the talent's representative before licence execution"
+
+**Step 5 — Declaration**
+- Summary of request
+- Terms acknowledgement
+- Submit
+
+---
+
+### 6.5 Talent Approval Flow — Extended (Demo Priority)
+
+When a talent or rep reviews an incoming request, they see:
+
+- **Request summary**: project, usage type, territory, exclusivity, proposed fee, AI training flag
+- **Earnings projection**: "At this fee, you would earn £X (after 15% platform commission)"
+- **Suggested fee** for this usage type (platform guidance)
+- **AI flag warning**: if `permitAITraining` was requested, a prominent red warning
+- **Counter-offer**: ability to set a different agreed fee before approving
+- **Conditional approval**: notes field ("approved subject to credit in end titles")
+- **Contract preview**: on approval, the platform auto-generates a draft contract for review before the licence goes live
+
+---
+
+### 6.6 Auto-Generated Licence Contract
+
+On licence approval, the platform generates a structured HTML/PDF contract from the licence record.
+
+**Contract sections:**
+1. **Parties** — talent name + agency, licensee production company
+2. **Licensed material** — package name, scan date, file manifest
+3. **Usage grant** — usage type, territory, exclusivity, duration
+4. **Restrictions** — explicit prohibition on AI training (unless `permitAITraining = true`), watermarking obligations, no sub-licensing
+5. **Fees & payment** — agreed fee, platform commission, payment terms
+6. **Audit rights** — talent's right to request download event log at any time
+7. **Revocation** — platform right to terminate access immediately; talent's right to revoke
+8. **Governing law** — English law / GDPR compliance
+
+The contract is stamped with:
+- Licence ID (UUID)
+- Approved timestamp
+- Chain of custody link
+
+**Signing:** Phase 1 = talent marks as "reviewed and accepted" in-platform. Phase 2 = DocuSign / HelloSign integration for binding e-signature.
+
+---
+
+### 6.7 Monetisation Model
+
+**Platform revenue streams:**
+
+| Stream | Model | Rate |
+|---|---|---|
+| **Agency subscription** | Annual fee per agency tenant | £50k – £150k/yr |
+| **Licence commission** | % of agreed fee per executed licence | 15% (configurable per tenant) |
+| **Storage** | Per-TB per month above free tier | Cost-plus (Cloudflare R2 at $0.015/GB) |
+| **AI Monitoring** | Annual subscription per talent for likeness monitoring service | £2k – £5k/yr per talent |
+| **Premium chain of custody** | Legal-grade timestamped audit export | Included in agency tier |
+
+**For the demo (United Agents):**
+- Show a credible "platform economics" slide: 50 talent × 3 licences/year × £100k avg fee × 15% = **£2.25M ARR from commission alone** at one agency
+- Agency subscription is the floor; commission is the upside
+
+---
+
+### 6.8 Licence Record Fields (current)
+
+```
+1. Licensee submits licence request (project, use case, date range)
+        ↓
+2. Talent/Rep receives notification → reviews → approves or denies
+        ↓ (approved)
+3. Licence record created in D1 with status: APPROVED_PENDING_DOWNLOAD
+        ↓
+4. Licensee initiates download session
+        ↓
+5. System issues 2FA challenge to LICENSEE — must complete within 5 min
+        ↓
+6. On licensee 2FA success → system issues 2FA challenge to TALENT/REP
+        ↓
+7. On talent 2FA success → presigned R2 URL generated (48h TTL, scoped)
+        ↓
+8. Licensee receives download link — download begins
+        ↓
+9. Download event logged: timestamp, IP, user agent, bytes transferred
+```
+
+### 6.9 Licence Record Fields (current + extended)
+- `id`, `talent_id`, `package_id`, `licensee_id`
+- `project_name`, `production_company`, `intended_use`, `valid_from`, `valid_to`
+- `licence_type` *(new)* — film_double | game_character | commercial | ai_avatar | training_data | monitoring_reference
+- `territory` *(new)* — worldwide | europe | uk | usa | asia_pacific | custom
+- `exclusivity` *(new)* — boolean
+- `permit_ai_training` *(new)* — boolean, default false
+- `agreed_fee` *(new)* — integer pence
+- `platform_fee_percent` *(new)* — integer, default 15
+- `download_limit` *(new)* — integer or null
+- `contract_status` *(new)* — draft | pending_signature | executed | void
+- `contract_url` *(new)* — TEXT
 - `status`: PENDING | APPROVED | DENIED | REVOKED | EXPIRED
 - `approved_by`, `approved_at`
 - `dual_custody_completed_at`
 - `download_count`, `last_download_at`
-- `encrypted_cek` — CEK re-encrypted for licensee's key
 
 ---
 
