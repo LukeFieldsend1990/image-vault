@@ -34,6 +34,7 @@ export async function POST(
       packageId: licences.packageId,
       validFrom: licences.validFrom,
       validTo: licences.validTo,
+      proposedFee: licences.proposedFee,
     })
     .from(licences)
     .where(eq(licences.id, id))
@@ -50,9 +51,13 @@ export async function POST(
     return NextResponse.json({ error: "Licence is not in PENDING state" }, { status: 409 });
   }
 
+  // Compute agreed/platform fees from proposedFee (15% platform commission)
+  const agreedFee = licence.proposedFee ?? null;
+  const platformFee = agreedFee !== null ? Math.round(agreedFee * 0.15) : null;
+
   await db
     .update(licences)
-    .set({ status: "APPROVED", approvedBy: session.sub, approvedAt: now })
+    .set({ status: "APPROVED", approvedBy: session.sub, approvedAt: now, agreedFee, platformFee })
     .where(eq(licences.id, id));
 
   // Notify licensee (fire-and-forget)

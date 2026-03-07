@@ -81,6 +81,15 @@ export const licences = sqliteTable("licences", {
   deniedAt: integer("denied_at"),
   deniedReason: text("denied_reason"),
   revokedAt: integer("revoked_at"),
+  licenceType: text("licence_type", {
+    enum: ["film_double", "game_character", "commercial", "ai_avatar", "training_data", "monitoring_reference"],
+  }),
+  territory: text("territory"),
+  exclusivity: text("exclusivity", { enum: ["non_exclusive", "sole", "exclusive"] }).default("non_exclusive"),
+  permitAiTraining: integer("permit_ai_training", { mode: "boolean" }).notNull().default(false),
+  proposedFee: integer("proposed_fee"),  // pence
+  agreedFee: integer("agreed_fee"),      // pence (set on approval)
+  platformFee: integer("platform_fee"),  // pence (15% of agreed_fee)
   downloadCount: integer("download_count").notNull().default(0),
   lastDownloadAt: integer("last_download_at"),
   createdAt: integer("created_at").notNull(),

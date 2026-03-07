@@ -80,6 +80,11 @@ export async function POST(req: NextRequest) {
     validFrom?: number;
     validTo?: number;
     fileScope?: string;
+    licenceType?: string;
+    territory?: string;
+    exclusivity?: string;
+    permitAiTraining?: boolean;
+    proposedFee?: number;
   };
   try {
     body = JSON.parse(await req.text());
@@ -133,6 +138,11 @@ export async function POST(req: NextRequest) {
     validTo,
     fileScope: body.fileScope ?? "all",
     status: "PENDING",
+    licenceType: (body.licenceType as "film_double" | "game_character" | "commercial" | "ai_avatar" | "training_data" | "monitoring_reference" | undefined) ?? null,
+    territory: body.territory ?? null,
+    exclusivity: (body.exclusivity as "non_exclusive" | "sole" | "exclusive" | undefined) ?? "non_exclusive",
+    permitAiTraining: body.permitAiTraining ?? false,
+    proposedFee: body.proposedFee ?? null,
     downloadCount: 0,
     createdAt: now,
   });
