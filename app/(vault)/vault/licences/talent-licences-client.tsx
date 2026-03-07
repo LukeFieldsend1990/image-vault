@@ -173,6 +173,15 @@ export default function TalentLicencesClient() {
                       </svg>
                     </button>
 
+                    <a
+                      href={`/api/licences/${l.id}/contract`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded border px-2.5 py-1.5 text-xs transition"
+                      style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}
+                    >
+                      Contract
+                    </a>
                     {l.status === "APPROVED" && (
                       <button
                         onClick={() => revoke(l.id)}

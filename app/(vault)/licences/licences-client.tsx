@@ -216,6 +216,17 @@ export default function LicencesClient() {
                     </button>
 
                     {l.status === "APPROVED" && (
+                      <a
+                        href={`/api/licences/${l.id}/contract`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded border px-3 py-1.5 text-xs font-medium transition"
+                        style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}
+                      >
+                        Contract
+                      </a>
+                    )}
+                    {l.status === "APPROVED" && (
                       <Link
                         href={`/licences/${l.id}/download`}
                         className="rounded px-4 py-2 text-xs font-medium text-white transition"
