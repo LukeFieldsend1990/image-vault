@@ -39,6 +39,13 @@ export async function GET(req: NextRequest) {
       createdAt: licences.createdAt,
       licenseeId: licences.licenseeId,
       talentId: licences.talentId,
+      licenceType: licences.licenceType,
+      territory: licences.territory,
+      exclusivity: licences.exclusivity,
+      permitAiTraining: licences.permitAiTraining,
+      proposedFee: licences.proposedFee,
+      agreedFee: licences.agreedFee,
+      platformFee: licences.platformFee,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
