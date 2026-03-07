@@ -31,6 +31,8 @@ export default function DelegationClient() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [repInviteLink, setRepInviteLink] = useState<string | null>(null);
+  const [repLinkCopied, setRepLinkCopied] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [invitesLoading, setInvitesLoading] = useState(true);
 
@@ -101,6 +103,7 @@ export default function DelegationClient() {
     if (!inviteEmail.trim()) return;
     setInviteError(null);
     setInviteSuccess(null);
+    setRepInviteLink(null);
     setInviting(true);
     try {
       const res = await fetch("/api/invites", {
@@ -108,12 +111,13 @@ export default function DelegationClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: inviteEmail.trim(), role: "rep" }),
       });
-      const d = await res.json() as { error?: string };
+      const d = await res.json() as { error?: string; inviteId?: string };
       if (!res.ok) {
         setInviteError(d.error ?? "Failed to send invite");
         return;
       }
       setInviteSuccess(`Invite sent to ${inviteEmail.trim()}`);
+      setRepInviteLink(`${window.location.origin}/signup?invite=${d.inviteId}`);
       setInviteEmail("");
       await loadInvites();
     } catch {
@@ -121,6 +125,14 @@ export default function DelegationClient() {
     } finally {
       setInviting(false);
     }
+  }
+
+  function copyRepLink() {
+    if (!repInviteLink) return;
+    void navigator.clipboard.writeText(repInviteLink).then(() => {
+      setRepLinkCopied(true);
+      setTimeout(() => setRepLinkCopied(false), 2000);
+    });
   }
 
   async function revokeInvite(id: string) {
@@ -164,7 +176,7 @@ export default function DelegationClient() {
           <input
             type="email"
             value={inviteEmail}
-            onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); setInviteSuccess(null); }}
+            onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); setInviteSuccess(null); setRepInviteLink(null); }}
             placeholder="rep@agency.com"
             className="flex-1 rounded border px-3 py-2 text-xs outline-none focus:ring-1"
             style={{
@@ -184,6 +196,36 @@ export default function DelegationClient() {
         </form>
         {inviteError && <p className="mt-2 text-xs" style={{ color: "var(--color-danger)" }}>{inviteError}</p>}
         {inviteSuccess && <p className="mt-2 text-xs" style={{ color: "#166534" }}>{inviteSuccess}</p>}
+
+        {repInviteLink && (
+          <div
+            className="mt-3 rounded border p-3 space-y-2"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+          >
+            <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>Share this link directly:</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={repInviteLink}
+                className="min-w-0 flex-1 rounded border px-2.5 py-1.5 text-xs font-mono outline-none"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-muted)" }}
+                onFocus={(e) => e.target.select()}
+              />
+              <button
+                type="button"
+                onClick={copyRepLink}
+                className="flex-shrink-0 rounded px-3 py-1.5 text-xs font-medium transition"
+                style={{ background: repLinkCopied ? "#166534" : "var(--color-accent)", color: "#fff" }}
+              >
+                {repLinkCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <p className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+              Valid for 7 days · pre-fills sign-up with email and role
+            </p>
+          </div>
+        )}
 
         {/* Pending invites */}
         {!invitesLoading && pendingInvites.length > 0 && (

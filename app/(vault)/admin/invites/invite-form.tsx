@@ -39,6 +39,8 @@ export default function InviteManager() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const loadInvites = useCallback(async () => {
     setTableLoading(true);
@@ -59,6 +61,7 @@ export default function InviteManager() {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
+    setInviteLink(null);
     setSubmitting(true);
     try {
       const res = await fetch("/api/invites", {
@@ -72,6 +75,7 @@ export default function InviteManager() {
         return;
       }
       setFormSuccess(`Invite sent to ${email.trim()}`);
+      setInviteLink(`${window.location.origin}/signup?invite=${d.inviteId}`);
       setEmail("");
       setMessage("");
       await loadInvites();
@@ -80,6 +84,14 @@ export default function InviteManager() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function copyLink() {
+    if (!inviteLink) return;
+    void navigator.clipboard.writeText(inviteLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   async function revokeInvite(id: string) {
@@ -159,6 +171,38 @@ export default function InviteManager() {
             {submitting ? "Sending…" : "Send invite"}
           </button>
         </form>
+
+        {inviteLink && (
+          <div
+            className="mt-4 rounded border p-3 space-y-2"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+          >
+            <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+              Share this link directly:
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={inviteLink}
+                className="min-w-0 flex-1 rounded border px-2.5 py-1.5 text-xs font-mono outline-none"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-muted)" }}
+                onFocus={(e) => e.target.select()}
+              />
+              <button
+                type="button"
+                onClick={copyLink}
+                className="flex-shrink-0 rounded px-3 py-1.5 text-xs font-medium transition"
+                style={{ background: copied ? "#166534" : "var(--color-accent)", color: "#fff" }}
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <p className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+              Valid for 7 days · pre-fills sign-up with email and role
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Invite table */}
