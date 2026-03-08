@@ -82,7 +82,7 @@ function CandidateCard({
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export default function OnboardingClient() {
+export default function OnboardingClient({ isUpdate = false }: { isUpdate?: boolean }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("search");
   const [query, setQuery] = useState("");
@@ -145,7 +145,7 @@ export default function OnboardingClient() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Confirm failed");
-      router.push("/dashboard");
+      router.push(isUpdate ? "/settings" : "/dashboard");
     } catch {
       setConfirming(false);
     }
@@ -157,7 +157,7 @@ export default function OnboardingClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ skip: true }),
     });
-    router.push("/dashboard");
+    router.push(isUpdate ? "/settings" : "/dashboard");
   }
 
   // ── Layout ───────────────────────────────────────────────────────────────────
@@ -180,11 +180,12 @@ export default function OnboardingClient() {
         {step === "search" && (
           <div className="w-full max-w-sm">
             <h1 className="mb-1 text-3xl font-semibold tracking-tight text-[--color-ink]">
-              Who are you?
+              {isUpdate ? "Update your identity" : "Who are you?"}
             </h1>
             <p className="mb-8 text-sm" style={{ color: "var(--color-muted)" }}>
-              Search for your name and we&apos;ll pull your profile from The Movie Database. This
-              links your vault to your verified industry identity.
+              {isUpdate
+                ? "Search for your name to link your vault to your verified TMDB industry profile."
+                : "Search for your name and we\u2019ll pull your profile from The Movie Database. This links your vault to your verified industry identity."}
             </p>
 
             <form onSubmit={handleSearch} className="flex gap-2 mb-6">

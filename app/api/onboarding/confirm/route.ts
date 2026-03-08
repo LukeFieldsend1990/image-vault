@@ -41,6 +41,17 @@ export async function POST(req: NextRequest) {
     .get();
 
   if (existing) {
+    // Update is allowed — if not a skip and fullName is provided, overwrite the profile
+    if (!body.skip && body.fullName?.trim()) {
+      await db.update(talentProfiles).set({
+        fullName: body.fullName.trim(),
+        tmdbId: body.tmdbId ?? null,
+        profileImageUrl: body.profileImageUrl ?? null,
+        knownFor: JSON.stringify(body.knownFor ?? []),
+        popularity: body.popularity ?? null,
+      }).where(eq(talentProfiles.userId, session.sub));
+      return NextResponse.json({ ok: true });
+    }
     return NextResponse.json({ ok: true, alreadyOnboarded: true });
   }
 

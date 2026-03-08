@@ -22,7 +22,12 @@ async function getSessionInfo(): Promise<{ userId: string; role: string } | null
   }
 }
 
-export default async function OnboardingPage() {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ update?: string }>;
+}) {
+  const { update } = await searchParams;
   const session = await getSessionInfo();
 
   if (!session?.userId) redirect("/login");
@@ -30,7 +35,7 @@ export default async function OnboardingPage() {
   // Only talent sees onboarding — reps and licensees go straight to dashboard
   if (session.role !== "talent") redirect("/dashboard");
 
-  // Already onboarded — skip
+  // Already onboarded — skip unless ?update=1 is set (e.g. from settings page)
   const db = getDb();
   const existing = await db
     .select({ userId: talentProfiles.userId })
@@ -38,7 +43,7 @@ export default async function OnboardingPage() {
     .where(eq(talentProfiles.userId, session.userId))
     .get();
 
-  if (existing) redirect("/dashboard");
+  if (existing && !update) redirect("/dashboard");
 
-  return <OnboardingClient />;
+  return <OnboardingClient isUpdate={!!existing} />;
 }

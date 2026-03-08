@@ -54,17 +54,20 @@ export default function TalentAuthoriseClient({ licenceId }: { licenceId: string
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/licences/${licenceId}/download/status`)
-        .then((r) => r.json() as Promise<StatusData>),
-      fetch(`/api/licences/${licenceId}`)
-        .then((r) => r.json() as Promise<{ licence?: LicenceData; error?: string }>),
-    ])
-      .then(([statusData, licenceData]) => {
-        setStatus(statusData);
-        if (licenceData.licence) setLicence(licenceData.licence);
-      })
-      .catch(() => setStatus({ step: null }));
+    // Status fetch is critical — drives the entire flow; failure shows error state
+    const statusFetch = fetch(`/api/licences/${licenceId}/download/status`)
+      .then((r) => r.json() as Promise<StatusData>)
+      .catch((): StatusData => ({ step: null }));
+
+    // Licence fetch is optional — enriches the UI only; failure is non-fatal
+    const licenceFetch = fetch(`/api/licences/${licenceId}`)
+      .then((r) => r.ok ? r.json() as Promise<{ licence?: LicenceData }> : Promise.resolve({} as { licence?: LicenceData }))
+      .catch((): { licence?: LicenceData } => ({}));
+
+    Promise.all([statusFetch, licenceFetch]).then(([statusData, licenceData]) => {
+      setStatus(statusData);
+      if (licenceData.licence) setLicence(licenceData.licence);
+    });
   }, [licenceId]);
 
   async function submit() {

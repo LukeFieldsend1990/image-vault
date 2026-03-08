@@ -277,6 +277,19 @@ export default async function SettingsPage({
                       TMDB ID #{identity.tmdbId}
                     </p>
                   )}
+
+                  {!identity.tmdbId && (
+                    <Link
+                      href="/onboarding?update=1"
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium"
+                      style={{ color: "var(--color-accent)" }}
+                    >
+                      Link TMDB profile
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </Link>
+                  )}
                 </div>
               </div>
             ) : (
