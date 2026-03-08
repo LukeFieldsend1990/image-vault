@@ -32,15 +32,15 @@ function formatDate(ts: number | null): string {
 
 // ── Category colour accents ──────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
-  raw:       "#2563eb",
-  exr:       "#7c3aed",
-  jpeg:      "#059669",
-  meta:      "#9ca3af",
-  mesh:      "#d97706",
-  video:     "#dc2626",
+  raw:         "#2563eb",
+  exr:         "#7c3aed",
+  jpeg:        "#059669",
+  meta:        "#9ca3af",
+  mesh:        "#d97706",
+  video:       "#dc2626",
   "360viewer": "#0891b2",
-  docs:      "#6b7280",
-  other:     "#9ca3af",
+  docs:        "#6b7280",
+  other:       "#9ca3af",
 };
 
 // ── Package preview panel ────────────────────────────────────────────────────
@@ -150,10 +150,7 @@ function PackagePreview({ packageId }: { packageId: string }) {
               <div key={s.category}>
                 <div className="flex items-center justify-between mb-0.5">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="shrink-0 inline-block h-2 w-2 rounded-full"
-                      style={{ background: color }}
-                    />
+                    <span className="shrink-0 inline-block h-2 w-2 rounded-full" style={{ background: color }} />
                     <span className="text-xs font-medium truncate" style={{ color: "var(--color-ink)" }}>
                       {s.label}
                     </span>

@@ -112,6 +112,12 @@ export async function GET(
   const totalFiles = files.length;
   const totalSizeBytes = files.reduce((sum, f) => sum + f.sizeBytes, 0);
 
+  // ?stats=1 — return only the breakdown, no presigned URLs (fast, for always-visible cards)
+  const statsOnly = new URL(req.url).searchParams.get("stats") === "1";
+  if (statsOnly) {
+    return NextResponse.json({ images: [], mp4Url: null, stats, totalFiles, totalSizeBytes } satisfies PreviewResponse);
+  }
+
   // ── Presign JPEG previews ──────────────────────────────────────────────────
   const jpegFiles = files
     .filter(f => /\.(jpeg|jpg)$/i.test(f.filename))
