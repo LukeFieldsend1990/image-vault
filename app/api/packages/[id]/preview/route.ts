@@ -9,6 +9,8 @@ import { hasRepAccess } from "@/lib/auth/repAccess";
 import { and, eq } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 
+const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
+
 function cfEnv(key: string): string | undefined {
   try {
     return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
@@ -83,7 +85,8 @@ export async function GET(
   // Owner, rep, or any authenticated licensee/admin can view preview of a ready package
   const isOwner = pkg.talentId === session.sub;
   const isRep = session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId));
-  const isBrowser = session.role === "licensee" || session.role === "admin";
+  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
+  const isBrowser = session.role === "licensee" || isAdmin;
   if (!isOwner && !isRep && !isBrowser) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
