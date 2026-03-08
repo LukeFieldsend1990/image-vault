@@ -2,6 +2,7 @@ export const runtime = "edge";
 
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
+import AdminPackagePreviewToggle from "./preview-panel";
 import { getDb } from "@/lib/db";
 import { scanPackages, users, scanFiles, talentProfiles, downloadEvents } from "@/lib/db/schema";
 import { sql, eq, isNull } from "drizzle-orm";
@@ -263,6 +264,9 @@ export default async function AdminPackagesPage() {
                   </div>
                 </details>
               )}
+
+              {/* Preview scan — only for ready packages */}
+              {p.status === "ready" && <AdminPackagePreviewToggle packageId={p.id} />}
             </div>
           );
         })}
