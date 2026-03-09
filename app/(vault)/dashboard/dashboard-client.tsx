@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import UploadModal from "../upload-modal";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
+import StartPipelineModal from "../vault/pipeline/start-pipeline-modal";
 
 interface ScanPackage {
   id: string;
@@ -164,6 +165,7 @@ function PackageCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
   const [files, setFiles] = useState<ScanFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -305,6 +307,21 @@ function PackageCard({
               </p>
             )}
           </div>
+          {/* Pipeline — only for ready packages */}
+          {pkg.status === "ready" && (
+            <button
+              onClick={() => setPipelineOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-[10px] font-medium uppercase tracking-wide transition hover:opacity-80"
+              style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}
+              title="Start digital double pipeline"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+              </svg>
+              Pipeline
+            </button>
+          )}
           {/* Preview — only for ready packages */}
           {pkg.status === "ready" && (
             <button
@@ -355,6 +372,15 @@ function PackageCard({
           </button>
         </div>
       </div>
+
+      {/* ── Pipeline modal ── */}
+      {pipelineOpen && (
+        <StartPipelineModal
+          packageId={pkg.id}
+          packageName={pkg.name}
+          onClose={() => setPipelineOpen(false)}
+        />
+      )}
 
       {/* ── Preview panel ── */}
       {previewOpen && <PackagePreviewPanel packageId={pkg.id} />}
