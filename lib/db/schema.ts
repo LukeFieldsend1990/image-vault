@@ -163,6 +163,19 @@ export const scanBookings = sqliteTable("scan_bookings", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const talentLicencePermissions = sqliteTable("talent_licence_permissions", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  licenceType: text("licence_type", {
+    enum: ["commercial", "film_double", "game_character", "ai_avatar", "training_data", "monitoring_reference"],
+  }).notNull(),
+  permission: text("permission", {
+    enum: ["allowed", "approval_required", "blocked"],
+  }).notNull().default("approval_required"),
+  updatedBy: text("updated_by").references(() => users.id),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const downloadEvents = sqliteTable("download_events", {
   id: text("id").primaryKey(), // UUID
   licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }), // null for talent's own downloads
