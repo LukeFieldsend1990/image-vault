@@ -14,12 +14,28 @@ interface TalentRow {
   tmdbId: number | null;
 }
 
+interface Stats {
+  totalScans: number;
+  activeLicences: number;
+  revenueThisQuarterPence: number;
+  pendingRequests: number;
+  totalRevenuePence: number;
+}
+
 function fmt(n: number | null): string {
   if (!n) return "—";
   if (n >= 1e12) return (n / 1e12).toFixed(1) + " TB";
   if (n >= 1e9) return (n / 1e9).toFixed(1) + " GB";
   if (n >= 1e6) return (n / 1e6).toFixed(1) + " MB";
   return (n / 1e3).toFixed(0) + " KB";
+}
+
+function fmtMoney(pence: number): string {
+  if (pence === 0) return "£0";
+  const pounds = pence / 100;
+  if (pounds >= 1_000_000) return `£${(pounds / 1_000_000).toFixed(1)}M`;
+  if (pounds >= 1_000) return `£${(pounds / 1_000).toFixed(1)}K`;
+  return `£${pounds.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 function TalentAvatar({ name, imageUrl, email }: { name: string | null; imageUrl: string | null; email: string }) {
@@ -35,7 +51,6 @@ function TalentAvatar({ name, imageUrl, email }: { name: string | null; imageUrl
         alt={name ?? email}
         className="h-12 w-12 rounded-full object-cover shrink-0"
         onError={(e) => {
-          // Fallback to initials on image error
           const parent = e.currentTarget.parentElement as HTMLElement;
           e.currentTarget.style.display = "none";
           parent.querySelector("[data-fallback]")?.removeAttribute("style");
@@ -54,9 +69,54 @@ function TalentAvatar({ name, imageUrl, email }: { name: string | null; imageUrl
   );
 }
 
+// ── Stats card ─────────────────────────────────────────────────────────────────
+
+interface StatCardProps {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: boolean;
+  loading?: boolean;
+}
+
+function StatCard({ label, value, sub, accent, loading }: StatCardProps) {
+  return (
+    <div
+      className="rounded border px-5 py-4"
+      style={{
+        borderColor: accent ? "var(--color-accent)" : "var(--color-border)",
+        background: accent ? "rgba(var(--color-accent-rgb, 192,57,43), 0.04)" : "var(--color-surface)",
+      }}
+    >
+      <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-muted)" }}>
+        {label}
+      </p>
+      {loading ? (
+        <div className="h-6 w-16 rounded animate-pulse" style={{ background: "var(--color-border)" }} />
+      ) : (
+        <>
+          <p
+            className="text-xl font-semibold leading-none"
+            style={{ color: accent ? "var(--color-accent)" : "var(--color-ink)" }}
+          >
+            {value}
+          </p>
+          {sub && (
+            <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
+              {sub}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function RosterClient() {
   const [roster, setRoster] = useState<TalentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/roster")
@@ -64,6 +124,12 @@ export default function RosterClient() {
       .then((d) => setRoster(d.roster ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    fetch("/api/roster/stats")
+      .then((r) => r.json() as Promise<Stats>)
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
   }, []);
 
   const totalPackages = roster.reduce((s, t) => s + t.packageCount, 0);
@@ -84,6 +150,37 @@ export default function RosterClient() {
         )}
       </div>
 
+      {/* Stats dashboard */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <StatCard
+          label="Active Licences"
+          value={stats ? String(stats.activeLicences) : "—"}
+          loading={statsLoading}
+        />
+        <StatCard
+          label="Revenue This Quarter"
+          value={stats ? fmtMoney(stats.revenueThisQuarterPence) : "—"}
+          sub={stats ? `${fmtMoney(stats.totalRevenuePence)} lifetime` : undefined}
+          accent
+          loading={statsLoading}
+        />
+        <StatCard
+          label="Pending Requests"
+          value={stats ? String(stats.pendingRequests) : "—"}
+          sub={stats?.pendingRequests ? "awaiting approval" : "all clear"}
+          loading={statsLoading}
+        />
+        <StatCard
+          label="Ready Scans"
+          value={stats ? String(stats.totalScans) : "—"}
+          loading={statsLoading}
+        />
+      </div>
+
+      {/* Divider */}
+      <div className="border-b mb-6" style={{ borderColor: "var(--color-border)" }} />
+
+      {/* Talent list */}
       {loading ? (
         <div className="space-y-2">
           {[...Array(2)].map((_, i) => (
@@ -125,7 +222,6 @@ export default function RosterClient() {
                 {/* Avatar */}
                 <div className="relative shrink-0">
                   <TalentAvatar name={t.fullName} imageUrl={t.profileImageUrl} email={t.email} />
-                  {/* Initials fallback (hidden by default when image present) */}
                   {t.profileImageUrl && (
                     <div
                       data-fallback

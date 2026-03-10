@@ -5,6 +5,8 @@ import Link from "next/link";
 import UploadModal from "../../upload-modal";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 
+// ── Types ──────────────────────────────────────────────────────────────────────
+
 interface ScanPackage {
   id: string;
   name: string;
@@ -32,6 +34,38 @@ interface TalentInfo {
   profileImageUrl: string | null;
 }
 
+interface Permission {
+  licenceType: string;
+  permission: "allowed" | "approval_required" | "blocked";
+}
+
+interface LicenceRow {
+  id: string;
+  projectName: string;
+  productionCompany: string;
+  licenceType: string | null;
+  territory: string | null;
+  status: string;
+  agreedFee: number | null;
+  platformFee: number | null;
+  proposedFee: number | null;
+  validFrom: number;
+  validTo: number;
+  approvedAt: number | null;
+  downloadCount: number;
+  licenseeEmail: string;
+}
+
+interface RevenueSummary {
+  grossPence: number;
+  talentPence: number;
+  agencyPence: number;
+  platformPence: number;
+  licenceCount: number;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -39,7 +73,29 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-// ── Category colours (for preview panel) ─────────────────────────────────────
+function fmtMoney(pence: number): string {
+  if (pence === 0) return "£0";
+  const pounds = pence / 100;
+  if (pounds >= 1_000_000) return `£${(pounds / 1_000_000).toFixed(1)}M`;
+  if (pounds >= 1_000) return `£${(pounds / 1_000).toFixed(1)}K`;
+  return `£${pounds.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function licenceTypeLabel(t: string | null): string {
+  if (!t) return "—";
+  const map: Record<string, string> = {
+    commercial: "Commercial Ads",
+    film_double: "Digital Stunt Double",
+    game_character: "Video Game Character",
+    ai_avatar: "AI Avatar",
+    training_data: "Training Datasets",
+    monitoring_reference: "Deepfake Protection",
+  };
+  return map[t] ?? t;
+}
+
+// ── Preview panel ──────────────────────────────────────────────────────────────
+
 const CATEGORY_COLORS: Record<string, string> = {
   raw: "#2563eb", exr: "#7c3aed", jpeg: "#059669", meta: "#9ca3af",
   mesh: "#d97706", video: "#dc2626", "360viewer": "#0891b2", docs: "#6b7280", other: "#9ca3af",
@@ -129,22 +185,15 @@ function PackagePreviewPanel({ packageId }: { packageId: string }) {
   );
 }
 
-// ── Status helpers ────────────────────────────────────────────────────────────
+// ── Package card ───────────────────────────────────────────────────────────────
+
 const STATUS_COLOR: Record<string, string> = {
   uploading: "#d97706",
   ready: "#166534",
   error: "#991b1b",
 };
 
-function PackageCard({
-  pkg,
-  onDelete,
-  deleting,
-}: {
-  pkg: ScanPackage;
-  onDelete: (id: string) => void;
-  deleting: boolean;
-}) {
+function PackageCard({ pkg, onDelete, deleting }: { pkg: ScanPackage; onDelete: (id: string) => void; deleting: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [files, setFiles] = useState<ScanFile[]>([]);
@@ -206,40 +255,28 @@ function PackageCard({
   const statusColor = STATUS_COLOR[pkg.status];
 
   return (
-    <div
-      className="border rounded-sm overflow-hidden"
-      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
-    >
-      {/* Main row */}
+    <div className="border rounded-sm overflow-hidden" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
       <div className="px-5 py-4 flex items-center gap-4">
         <button
           onClick={toggleExpand}
           className="shrink-0 p-1 rounded transition opacity-40 hover:opacity-100"
           style={{ color: "var(--color-ink)" }}
         >
-          <svg
-            width="12" height="12" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}
-          >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
-
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <p className="text-sm font-medium truncate" style={{ color: "var(--color-ink)" }}>{pkg.name}</p>
-            <span
-              className="shrink-0 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
-              style={{ background: `${statusColor}18`, color: statusColor }}
-            >
+            <span className="shrink-0 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
+              style={{ background: `${statusColor}18`, color: statusColor }}>
               {pkg.status}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {pkg.studioName && (
-              <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{pkg.studioName}</span>
-            )}
+            {pkg.studioName && <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{pkg.studioName}</span>}
             {pkg.captureDate && (
               <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>
                 {pkg.studioName && "· "}
@@ -248,54 +285,35 @@ function PackageCard({
             )}
           </div>
         </div>
-
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-right mr-2">
             <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
               {pkg.fileCount} file{pkg.fileCount !== 1 ? "s" : ""}
             </p>
             {pkg.totalSizeBytes != null && pkg.totalSizeBytes > 0 && (
-              <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-                {formatBytes(pkg.totalSizeBytes)}
-              </p>
+              <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>{formatBytes(pkg.totalSizeBytes)}</p>
             )}
           </div>
-
-          {/* Preview toggle */}
           {pkg.status === "ready" && (
-            <button
-              onClick={() => setPreviewOpen((v) => !v)}
+            <button onClick={() => setPreviewOpen((v) => !v)}
               className="p-1.5 rounded transition opacity-40 hover:opacity-100"
-              style={{ color: "var(--color-ink)" }}
-              title="Preview scan"
-            >
+              style={{ color: "var(--color-ink)" }} title="Preview scan">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                 <circle cx="12" cy="12" r="3" />
               </svg>
             </button>
           )}
-
-          {/* Chain of custody */}
-          <Link
-            href={`/vault/packages/${pkg.id}/chain-of-custody`}
+          <Link href={`/vault/packages/${pkg.id}/chain-of-custody`}
             className="p-1.5 rounded transition opacity-40 hover:opacity-100"
-            style={{ color: "var(--color-ink)" }}
-            title="Chain of custody"
-          >
+            style={{ color: "var(--color-ink)" }} title="Chain of custody">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
           </Link>
-
-          {/* Delete */}
-          <button
-            onClick={() => onDelete(pkg.id)}
-            disabled={deleting}
+          <button onClick={() => onDelete(pkg.id)} disabled={deleting}
             className="p-1.5 rounded transition opacity-40 hover:opacity-100 disabled:opacity-20"
-            style={{ color: "var(--color-ink)" }}
-            title="Delete package"
-          >
+            style={{ color: "var(--color-ink)" }} title="Delete package">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6" />
               <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
@@ -305,14 +323,12 @@ function PackageCard({
         </div>
       </div>
 
-      {/* Preview panel */}
       {previewOpen && (
         <div className="border-t" style={{ borderColor: "var(--color-border)" }}>
           <PackagePreviewPanel packageId={pkg.id} />
         </div>
       )}
 
-      {/* Expanded file list */}
       {expanded && (
         <div className="border-t" style={{ borderColor: "var(--color-border)" }}>
           {filesLoading ? (
@@ -323,28 +339,19 @@ function PackageCard({
             <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
               {files.filter((f) => f.uploadStatus === "complete").length > 1 && (
                 <div className="px-14 py-2.5 flex justify-end" style={{ background: "var(--color-surface)" }}>
-                  <button
-                    onClick={() => void handleBundleDownload()}
-                    disabled={bundleDownloading}
+                  <button onClick={() => void handleBundleDownload()} disabled={bundleDownloading}
                     className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-sm text-white transition disabled:opacity-50"
-                    style={{ background: "var(--color-accent)" }}
-                  >
+                    style={{ background: "var(--color-accent)" }}>
                     {bundleDownloading ? (
-                      <>
-                        <svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                        </svg>
-                        Building zip…
-                      </>
+                      <><svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                      </svg>Building zip…</>
                     ) : (
-                      <>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                        Download all as .zip
-                      </>
+                      <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>Download all as .zip</>
                     )}
                   </button>
                 </div>
@@ -356,12 +363,9 @@ function PackageCard({
                     <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>{formatBytes(file.sizeBytes)}</p>
                   </div>
                   {file.uploadStatus === "complete" && (
-                    <button
-                      onClick={() => void handleDownload(file)}
-                      disabled={downloadingId === file.id}
+                    <button onClick={() => void handleDownload(file)} disabled={downloadingId === file.id}
                       className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 border rounded-sm transition disabled:opacity-40"
-                      style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}
-                    >
+                      style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}>
                       {downloadingId === file.id ? "Downloading…" : "Download"}
                     </button>
                   )}
@@ -375,7 +379,323 @@ function PackageCard({
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Permissions tab ────────────────────────────────────────────────────────────
+
+const LICENCE_TYPE_META: { type: string; label: string; description: string }[] = [
+  { type: "commercial", label: "Commercial Ads", description: "TV, digital & out-of-home advertising" },
+  { type: "film_double", label: "Digital Stunt Double", description: "De-aging, stunt replacement in film" },
+  { type: "game_character", label: "Video Game Character", description: "In-engine game character or NPC" },
+  { type: "ai_avatar", label: "AI Avatar", description: "Real-time synthetic likeness use" },
+  { type: "training_data", label: "Training Datasets", description: "AI model training data inclusion" },
+  { type: "monitoring_reference", label: "Deepfake Protection", description: "Monitoring / reference use only" },
+];
+
+const PERMISSION_OPTIONS: { value: Permission["permission"]; label: string; color: string }[] = [
+  { value: "allowed", label: "Allowed", color: "#166534" },
+  { value: "approval_required", label: "Approval Required", color: "#92400e" },
+  { value: "blocked", label: "Blocked", color: "#991b1b" },
+];
+
+function PermissionsTab({ talentId }: { talentId: string }) {
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/roster/${talentId}/permissions`)
+      .then((r) => r.json() as Promise<{ permissions: Permission[] }>)
+      .then((d) => setPermissions(d.permissions ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [talentId]);
+
+  async function update(licenceType: string, permission: Permission["permission"]) {
+    setSaving(licenceType);
+    const prev = [...permissions];
+    setPermissions((ps) => ps.map((p) => p.licenceType === licenceType ? { ...p, permission } : p));
+    try {
+      const res = await fetch(`/api/roster/${talentId}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licenceType, permission }),
+      });
+      if (!res.ok) setPermissions(prev);
+    } catch {
+      setPermissions(prev);
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="px-8 py-6 space-y-3">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-16 rounded border animate-pulse" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }} />
+        ))}
+      </div>
+    );
+  }
+
+  const permMap = Object.fromEntries(permissions.map((p) => [p.licenceType, p.permission])) as Record<string, Permission["permission"]>;
+
+  return (
+    <div className="px-8 py-6">
+      <p className="text-xs mb-5" style={{ color: "var(--color-muted)" }}>
+        Control which licence types can be used for this talent. Reps can set defaults on their behalf — talent can always override in their own settings.
+      </p>
+      <div className="space-y-3">
+        {LICENCE_TYPE_META.map((meta) => {
+          const current = permMap[meta.type] ?? "approval_required";
+          const isSaving = saving === meta.type;
+          const currentOption = PERMISSION_OPTIONS.find((o) => o.value === current)!;
+
+          return (
+            <div
+              key={meta.type}
+              className="rounded border px-5 py-4"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{meta.label}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{meta.description}</p>
+                </div>
+
+                {/* Segmented control */}
+                <div
+                  className="flex items-center rounded shrink-0 overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {PERMISSION_OPTIONS.map((opt, idx) => {
+                    const active = current === opt.value;
+                    const isLast = idx === PERMISSION_OPTIONS.length - 1;
+                    return (
+                      <button
+                        key={opt.value}
+                        disabled={isSaving}
+                        onClick={() => void update(meta.type, opt.value)}
+                        className="px-3 py-1.5 text-[11px] font-medium transition"
+                        style={{
+                          background: active ? `${opt.color}18` : "transparent",
+                          color: active ? opt.color : "var(--color-muted)",
+                          borderRight: isLast ? "none" : "1px solid var(--color-border)",
+                          cursor: isSaving ? "wait" : "pointer",
+                          opacity: isSaving && !active ? 0.5 : 1,
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Current state badge */}
+              <div className="mt-2.5 flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: currentOption.color }} />
+                <span className="text-[11px]" style={{ color: currentOption.color }}>
+                  {currentOption.label}
+                  {isSaving && " — saving…"}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Revenue tab ────────────────────────────────────────────────────────────────
+
+const LICENCE_STATUS_COLOR: Record<string, { bg: string; text: string }> = {
+  APPROVED: { bg: "#16653418", text: "#166534" },
+  PENDING: { bg: "#92400e18", text: "#92400e" },
+  DENIED: { bg: "#99161618", text: "#991b1b" },
+  REVOKED: { bg: "#99161618", text: "#991b1b" },
+  EXPIRED: { bg: "#6b728018", text: "#6b7280" },
+};
+
+function RevenueSummaryCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+  return (
+    <div
+      className="rounded border px-5 py-4"
+      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+    >
+      <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--color-muted)" }}>
+        {label}
+      </p>
+      <p className="text-xl font-semibold" style={{ color: color ?? "var(--color-ink)" }}>{value}</p>
+      {sub && <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>{sub}</p>}
+    </div>
+  );
+}
+
+function RevenueTab({ talentId }: { talentId: string }) {
+  const [summary, setSummary] = useState<RevenueSummary | null>(null);
+  const [licenceRows, setLicenceRows] = useState<LicenceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/roster/${talentId}/revenue`)
+      .then((r) => r.json() as Promise<{ summary: RevenueSummary; licences: LicenceRow[] }>)
+      .then((d) => {
+        setSummary(d.summary);
+        setLicenceRows(d.licences);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [talentId]);
+
+  const approved = licenceRows.filter((l) => l.status === "APPROVED");
+  const pending = licenceRows.filter((l) => l.status === "PENDING");
+
+  if (loading) {
+    return (
+      <div className="px-8 py-6 space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-20 rounded border animate-pulse" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-8 py-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <RevenueSummaryCard
+          label="Gross Licence Value"
+          value={fmtMoney(summary?.grossPence ?? 0)}
+          sub={`${summary?.licenceCount ?? 0} approved licence${(summary?.licenceCount ?? 0) !== 1 ? "s" : ""}`}
+          color="var(--color-accent)"
+        />
+        <RevenueSummaryCard
+          label="Talent Share (65%)"
+          value={fmtMoney(summary?.talentPence ?? 0)}
+        />
+        <RevenueSummaryCard
+          label="Agency Commission (20%)"
+          value={fmtMoney(summary?.agencyPence ?? 0)}
+        />
+        <RevenueSummaryCard
+          label="Platform Fee (15%)"
+          value={fmtMoney(summary?.platformPence ?? 0)}
+        />
+      </div>
+
+      {/* Fee split bar */}
+      {(summary?.grossPence ?? 0) > 0 && (
+        <div className="mb-8">
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+            Revenue split
+          </p>
+          <div className="flex h-3 rounded-full overflow-hidden gap-px">
+            <div className="h-full" style={{ width: "65%", background: "var(--color-accent)", opacity: 0.9 }} title="Talent 65%" />
+            <div className="h-full" style={{ width: "20%", background: "var(--color-ink)", opacity: 0.5 }} title="Agency 20%" />
+            <div className="h-full" style={{ width: "15%", background: "var(--color-muted)", opacity: 0.4 }} title="Platform 15%" />
+          </div>
+          <div className="flex items-center gap-4 mt-2">
+            {[
+              { label: "Talent 65%", color: "var(--color-accent)", opacity: 0.9 },
+              { label: "Agency 20%", color: "var(--color-ink)", opacity: 0.5 },
+              { label: "Platform 15%", color: "var(--color-muted)", opacity: 0.4 },
+            ].map((item) => (
+              <div key={item.label} className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm" style={{ background: item.color, opacity: item.opacity }} />
+                <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Licence history */}
+      {licenceRows.length === 0 ? (
+        <div className="rounded border p-8 text-center" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <p className="text-sm" style={{ color: "var(--color-muted)" }}>No licence history yet.</p>
+        </div>
+      ) : (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--color-muted)" }}>
+            Licence history
+          </p>
+          <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+            {/* Table header */}
+            <div
+              className="grid gap-3 px-4 py-2.5 text-[10px] uppercase tracking-widest font-semibold border-b"
+              style={{
+                gridTemplateColumns: "1fr 1fr auto auto auto",
+                borderColor: "var(--color-border)",
+                background: "var(--color-surface)",
+                color: "var(--color-muted)",
+              }}
+            >
+              <span>Project</span>
+              <span>Type</span>
+              <span className="text-right">Fee</span>
+              <span className="text-right">Status</span>
+              <span className="text-right">Downloads</span>
+            </div>
+            {licenceRows.map((licence, i) => {
+              const statusStyle = LICENCE_STATUS_COLOR[licence.status] ?? { bg: "#6b728018", text: "#6b7280" };
+              const fee = licence.agreedFee ?? licence.proposedFee;
+              return (
+                <div
+                  key={licence.id}
+                  className="grid gap-3 px-4 py-3 items-center border-b last:border-b-0"
+                  style={{
+                    gridTemplateColumns: "1fr 1fr auto auto auto",
+                    borderColor: "var(--color-border)",
+                    background: i % 2 === 0 ? "var(--color-bg)" : "var(--color-surface)",
+                  }}
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: "var(--color-ink)" }}>
+                      {licence.projectName}
+                    </p>
+                    <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>
+                      {licence.productionCompany}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs truncate" style={{ color: "var(--color-ink)" }}>
+                      {licenceTypeLabel(licence.licenceType)}
+                    </p>
+                    {licence.territory && (
+                      <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>
+                        {licence.territory}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs font-mono text-right" style={{ color: fee ? "var(--color-ink)" : "var(--color-muted)" }}>
+                    {fee ? fmtMoney(fee) : "—"}
+                  </span>
+                  <span
+                    className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded text-right"
+                    style={{ background: statusStyle.bg, color: statusStyle.text }}
+                  >
+                    {licence.status}
+                  </span>
+                  <span className="text-xs font-mono text-right" style={{ color: "var(--color-muted)" }}>
+                    {licence.downloadCount}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+type Tab = "vault" | "permissions" | "revenue";
 
 export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [packages, setPackages] = useState<ScanPackage[]>([]);
@@ -384,6 +704,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notAllowed, setNotAllowed] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("vault");
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -401,7 +722,6 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
     }
   }, [talentId]);
 
-  // Fetch talent info from enriched roster endpoint
   useEffect(() => {
     fetch("/api/roster")
       .then((r) => r.json() as Promise<{ roster?: Array<{ talentId: string; email: string; fullName: string | null; profileImageUrl: string | null }> }>)
@@ -444,6 +764,12 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
     ? talent.fullName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
     : (talent?.email ?? "?")[0].toUpperCase();
 
+  const TABS: { id: Tab; label: string }[] = [
+    { id: "vault", label: "Vault" },
+    { id: "permissions", label: "Permissions" },
+    { id: "revenue", label: "Revenue" },
+  ];
+
   return (
     <div className="flex flex-col h-full">
       {/* Acting-as banner */}
@@ -463,12 +789,8 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
       </div>
 
       {/* Talent identity header */}
-      <header
-        className="flex items-center justify-between border-b px-8 py-5 gap-4"
-        style={{ borderColor: "var(--color-border)" }}
-      >
+      <header className="flex items-center justify-between border-b px-8 py-5 gap-4" style={{ borderColor: "var(--color-border)" }}>
         <div className="flex items-center gap-4 min-w-0">
-          {/* Avatar */}
           {talent?.profileImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -498,75 +820,102 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
           </div>
         </div>
 
-        <button
-          onClick={() => setModalOpen(true)}
-          className="shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-medium tracking-wide text-white transition"
-          style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          New Scan Package
-        </button>
+        {activeTab === "vault" && (
+          <button
+            onClick={() => setModalOpen(true)}
+            className="shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-medium tracking-wide text-white transition"
+            style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Scan Package
+          </button>
+        )}
       </header>
 
-      {/* Package list */}
-      <div className="flex-1 overflow-y-auto">
-        {loading ? (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-xs" style={{ color: "var(--color-muted)" }}>Loading…</p>
-          </div>
-        ) : packages.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="text-center max-w-xs">
-              <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>No scans yet</p>
-              <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                Upload the first scan package for this talent.
-              </p>
-              <button
-                onClick={() => setModalOpen(true)}
-                className="mt-6 inline-flex items-center gap-2 border border-[--color-border] px-5 py-2.5 text-xs font-medium text-[--color-ink] transition hover:border-[--color-ink]"
-                style={{ borderRadius: "var(--radius)" }}
-              >
-                Upload Scan Package
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="px-8 py-6 flex flex-col gap-3">
-            {packages.map((pkg) => (
-              <PackageCard
-                key={pkg.id}
-                pkg={pkg}
-                onDelete={handleDelete}
-                deleting={deletingId === pkg.id}
+      {/* Tab bar */}
+      <div className="flex border-b px-8" style={{ borderColor: "var(--color-border)" }}>
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className="relative py-3 px-1 mr-6 text-sm font-medium transition"
+            style={{ color: activeTab === tab.id ? "var(--color-ink)" : "var(--color-muted)" }}
+          >
+            {tab.label}
+            {activeTab === tab.id && (
+              <span
+                className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                style={{ background: "var(--color-accent)" }}
               />
-            ))}
-          </div>
-        )}
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Stats bar */}
-      <footer
-        className="border-t px-8 py-4 flex items-center gap-8"
-        style={{ borderColor: "var(--color-border)" }}
-      >
-        {[
-          { label: "Total scans", value: loading ? "—" : String(packages.length) },
-          { label: "Storage used", value: loading ? "—" : totalSize > 0 ? formatBytes(totalSize) : "0 B" },
-          { label: "Ready", value: loading ? "—" : String(packages.filter((p) => p.status === "ready").length) },
-        ].map((stat) => (
-          <div key={stat.label}>
-            <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
-              {stat.label}
-            </p>
-            <p className="text-sm font-semibold mt-0.5" style={{ color: "var(--color-ink)" }}>
-              {stat.value}
-            </p>
-          </div>
-        ))}
-      </footer>
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === "vault" && (
+          <>
+            {loading ? (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-xs" style={{ color: "var(--color-muted)" }}>Loading…</p>
+              </div>
+            ) : packages.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="text-center max-w-xs">
+                  <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>No scans yet</p>
+                  <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                    Upload the first scan package for this talent.
+                  </p>
+                  <button
+                    onClick={() => setModalOpen(true)}
+                    className="mt-6 inline-flex items-center gap-2 border border-[--color-border] px-5 py-2.5 text-xs font-medium text-[--color-ink] transition hover:border-[--color-ink]"
+                    style={{ borderRadius: "var(--radius)" }}
+                  >
+                    Upload Scan Package
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="px-8 py-6 flex flex-col gap-3">
+                {packages.map((pkg) => (
+                  <PackageCard
+                    key={pkg.id}
+                    pkg={pkg}
+                    onDelete={handleDelete}
+                    deleting={deletingId === pkg.id}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === "permissions" && <PermissionsTab talentId={talentId} />}
+        {activeTab === "revenue" && <RevenueTab talentId={talentId} />}
+      </div>
+
+      {/* Stats bar — only on vault tab */}
+      {activeTab === "vault" && (
+        <footer
+          className="border-t px-8 py-4 flex items-center gap-8"
+          style={{ borderColor: "var(--color-border)" }}
+        >
+          {[
+            { label: "Total scans", value: loading ? "—" : String(packages.length) },
+            { label: "Storage used", value: loading ? "—" : totalSize > 0 ? formatBytes(totalSize) : "0 B" },
+            { label: "Ready", value: loading ? "—" : String(packages.filter((p) => p.status === "ready").length) },
+          ].map((stat) => (
+            <div key={stat.label}>
+              <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>{stat.label}</p>
+              <p className="text-sm font-semibold mt-0.5" style={{ color: "var(--color-ink)" }}>{stat.value}</p>
+            </div>
+          ))}
+        </footer>
+      )}
 
       {modalOpen && (
         <UploadModal
