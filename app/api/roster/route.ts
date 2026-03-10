@@ -2,9 +2,9 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { talentReps, users, scanPackages } from "@/lib/db/schema";
+import { talentReps, users, scanPackages, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, sum } from "drizzle-orm";
 
 /** GET /api/roster — returns the list of talent the authed rep manages */
 export async function GET(req: NextRequest) {
@@ -22,6 +22,10 @@ export async function GET(req: NextRequest) {
       email: users.email,
       linkedSince: talentReps.createdAt,
       packageCount: count(scanPackages.id),
+      totalSizeBytes: sum(scanPackages.totalSizeBytes),
+      fullName: talentProfiles.fullName,
+      profileImageUrl: talentProfiles.profileImageUrl,
+      tmdbId: talentProfiles.tmdbId,
     })
     .from(talentReps)
     .innerJoin(users, eq(users.id, talentReps.talentId))
@@ -29,8 +33,16 @@ export async function GET(req: NextRequest) {
       scanPackages,
       and(eq(scanPackages.talentId, talentReps.talentId), eq(scanPackages.status, "ready"))
     )
+    .leftJoin(talentProfiles, eq(talentProfiles.userId, talentReps.talentId))
     .where(eq(talentReps.repId, session.sub))
-    .groupBy(talentReps.talentId, users.email, talentReps.createdAt)
+    .groupBy(
+      talentReps.talentId,
+      users.email,
+      talentReps.createdAt,
+      talentProfiles.fullName,
+      talentProfiles.profileImageUrl,
+      talentProfiles.tmdbId,
+    )
     .all();
 
   return NextResponse.json({ roster: rows });
