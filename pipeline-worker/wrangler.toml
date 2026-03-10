@@ -1,0 +1,54 @@
+name = "image-vault-pipeline-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# -------------------------------------------------------------------
+# Queue consumer
+# -------------------------------------------------------------------
+[[queues.consumers]]
+queue = "pipeline-jobs"
+max_batch_size = 1        # process one job at a time (jobs are heavy)
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "pipeline-jobs-dlq"
+
+# -------------------------------------------------------------------
+# D1 Database (shared with main app)
+# -------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "image-vault-db"
+database_id = "71665618-0498-48bd-a243-962eb4810769"
+
+# -------------------------------------------------------------------
+# R2 Buckets
+# -------------------------------------------------------------------
+[[r2_buckets]]
+binding = "SCANS_BUCKET"
+bucket_name = "image-vault-scans"
+preview_bucket_name = "image-vault-scans-dev"
+
+[[r2_buckets]]
+binding = "PIPELINE_BUCKET"
+bucket_name = "image-vault-pipeline"
+preview_bucket_name = "image-vault-pipeline-dev"
+
+# -------------------------------------------------------------------
+# Workers AI binding
+# -------------------------------------------------------------------
+[ai]
+binding = "AI"
+
+# -------------------------------------------------------------------
+# Environment Variables
+# -------------------------------------------------------------------
+[vars]
+RESEND_FROM_EMAIL = "Changling <noreply@changling.io>"
+APP_URL = "https://changling.io"
+
+# -------------------------------------------------------------------
+# Secrets (set via: wrangler secret put SECRET_NAME --config pipeline-worker/wrangler.toml)
+# -------------------------------------------------------------------
+# RESEND_API_KEY  - Email notifications
+# MESHY_API_KEY   - GLB preview generation (optional; stage skipped if absent)

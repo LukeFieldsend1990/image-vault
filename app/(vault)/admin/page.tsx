@@ -111,6 +111,12 @@ export default async function AdminOverviewPage() {
       sub: "all time",
       href: "/admin/downloads",
     },
+    {
+      label: "Pipeline Jobs",
+      value: "→",
+      sub: "Digital double pipeline",
+      href: "/admin/pipeline",
+    },
   ];
 
   return (

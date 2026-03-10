@@ -10,7 +10,9 @@
     "deploy": "npm run pages:build && wrangler pages deploy",
     "start": "next start",
     "lint": "eslint",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "deploy:worker": "wrangler deploy --config pipeline-worker/wrangler.toml",
+    "worker:dev": "wrangler dev --config pipeline-worker/wrangler.toml"
   },
   "dependencies": {
     "aws4fetch": "^1.0.20",

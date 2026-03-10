@@ -1,0 +1,18 @@
+{
+  "name": "image-vault-pipeline-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --config pipeline-worker/wrangler.toml",
+    "deploy": "wrangler deploy --config pipeline-worker/wrangler.toml",
+    "cf-typegen": "wrangler types --config pipeline-worker/wrangler.toml --output pipeline-worker/worker-env.d.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.109.3"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.2"
+  }
+}

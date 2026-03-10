@@ -12,6 +12,11 @@ binding = "SCANS_BUCKET"
 bucket_name = "image-vault-scans"
 preview_bucket_name = "image-vault-scans-dev"
 
+[[r2_buckets]]
+binding = "PIPELINE_BUCKET"
+bucket_name = "image-vault-pipeline"
+preview_bucket_name = "image-vault-pipeline-dev"
+
 # -------------------------------------------------------------------
 # D1 Database
 # -------------------------------------------------------------------
@@ -41,6 +46,13 @@ CF_ACCOUNT_ID = "2db6ad770fad71b79fa3249b202c6c37"          # Cloudflare account
 R2_BUCKET_NAME = "image-vault-scans"   # override with "image-vault-scans-dev" for preview
 
 # -------------------------------------------------------------------
+# Queues (producers — Pages Functions can send; consumer is pipeline-worker/)
+# -------------------------------------------------------------------
+[[queues.producers]]
+binding = "PIPELINE_QUEUE"
+queue = "pipeline-jobs"
+
+# -------------------------------------------------------------------
 # Secrets (set via: wrangler secret put SECRET_NAME)
 # -------------------------------------------------------------------
 # ENCRYPTION_MASTER_KEY   - Server-side key wrapping key
@@ -52,3 +64,4 @@ R2_BUCKET_NAME = "image-vault-scans"   # override with "image-vault-scans-dev" f
 # R2_ACCESS_KEY_ID        - R2 API token access key (for presigned upload URLs)
 # R2_SECRET_ACCESS_KEY    - R2 API token secret access key (for presigned upload URLs)
 # TMDB_API_KEY            - The Movie Database API key (free at themoviedb.org) for talent onboarding
+# MESHY_API_KEY           - Meshy API key for GLB preview generation (pipeline stage 3)
