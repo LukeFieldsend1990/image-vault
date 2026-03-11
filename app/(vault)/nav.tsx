@@ -185,72 +185,6 @@ const REP_NAV = [
   },
 ];
 
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
-
-const ADMIN_NAV = [
-  {
-    href: "/admin",
-    label: "Overview",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="7" />
-        <rect x="14" y="3" width="7" height="7" />
-        <rect x="3" y="14" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/users",
-    label: "Users",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/talent",
-    label: "Talent Settings",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="4" y1="21" x2="4" y2="14" />
-        <line x1="4" y1="10" x2="4" y2="3" />
-        <line x1="12" y1="21" x2="12" y2="12" />
-        <line x1="12" y1="8" x2="12" y2="3" />
-        <line x1="20" y1="21" x2="20" y2="16" />
-        <line x1="20" y1="12" x2="20" y2="3" />
-        <line x1="1" y1="14" x2="7" y2="14" />
-        <line x1="9" y1="8" x2="15" y2="8" />
-        <line x1="17" y1="16" x2="23" y2="16" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/licences",
-    label: "Licences",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-        <line x1="9" y1="13" x2="15" y2="13" />
-        <line x1="9" y1="17" x2="12" y2="17" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/pipeline",
-    label: "Pipeline",
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-      </svg>
-    ),
-  },
-];
-
 function navItemsForRole(role: Role) {
   if (role === "licensee") return LICENSEE_NAV;
   if (role === "rep") return REP_NAV;
@@ -281,10 +215,9 @@ function NavItem({ item, active }: { item: { href: string; label: string; icon: 
   );
 }
 
-export function NavLinks({ role, email }: { role: Role; email?: string }) {
+export function NavLinks({ role }: { role: Role; email?: string }) {
   const pathname = usePathname();
   const items = navItemsForRole(role);
-  const isAdmin = role === "admin" || (email ? ADMIN_EMAILS.includes(email) : false);
 
   return (
     <nav className="space-y-0.5 px-3">
@@ -292,25 +225,6 @@ export function NavLinks({ role, email }: { role: Role; email?: string }) {
         const active = pathname === item.href || pathname.startsWith(item.href + "/");
         return <NavItem key={item.href} item={item} active={active} />;
       })}
-
-      {isAdmin && (
-        <>
-          <div
-            className="mx-3 my-3 h-px"
-            style={{ background: "var(--color-border)", opacity: 0.4 }}
-          />
-          <p
-            className="px-3 mb-1 text-[9px] uppercase tracking-[0.15em] font-semibold"
-            style={{ color: "var(--color-accent)", opacity: 0.8 }}
-          >
-            Admin
-          </p>
-          {ADMIN_NAV.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
-            return <NavItem key={item.href} item={item} active={active} />;
-          })}
-        </>
-      )}
     </nav>
   );
 }

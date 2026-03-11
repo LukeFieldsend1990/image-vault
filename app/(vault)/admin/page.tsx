@@ -117,6 +117,12 @@ export default async function AdminOverviewPage() {
       sub: "Digital double pipeline",
       href: "/admin/pipeline",
     },
+    {
+      label: "Talent Settings",
+      value: "→",
+      sub: "Pipeline, fee splits & permissions",
+      href: "/admin/talent",
+    },
   ];
 
   return (
