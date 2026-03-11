@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { pipelineJobs, pipelineStages, scanPackages } from "@/lib/db/schema";
+import { pipelineJobs, pipelineStages, scanPackages, talentSettings } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, desc, sql } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
@@ -57,6 +57,16 @@ export async function POST(req: NextRequest) {
   // Auth: talent owns package, or admin
   if (pkg.talentId !== session.sub && !isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Check pipeline access toggle (default = enabled if no row)
+  const settings = await db
+    .select({ pipelineEnabled: talentSettings.pipelineEnabled })
+    .from(talentSettings)
+    .where(eq(talentSettings.talentId, pkg.talentId))
+    .get();
+  if (settings && !settings.pipelineEnabled) {
+    return NextResponse.json({ error: "Pipeline access is disabled for this talent" }, { status: 403 });
   }
 
   const skus = body.skus ?? ["preview", "realtime", "vfx"];

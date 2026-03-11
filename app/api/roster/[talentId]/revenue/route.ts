@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { talentReps, licences, users } from "@/lib/db/schema";
+import { talentReps, licences, users, talentSettings } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and, sum, count } from "drizzle-orm";
 
@@ -42,6 +42,21 @@ export async function GET(
 
   const db = getDb();
 
+  // Fetch talent fee split settings
+  const settingsRow = await db
+    .select({
+      talentSharePct: talentSettings.talentSharePct,
+      agencySharePct: talentSettings.agencySharePct,
+      platformSharePct: talentSettings.platformSharePct,
+    })
+    .from(talentSettings)
+    .where(eq(talentSettings.talentId, talentId))
+    .get();
+
+  const talentSharePct = settingsRow?.talentSharePct ?? 65;
+  const agencySharePct = settingsRow?.agencySharePct ?? 20;
+  const platformSharePct = settingsRow?.platformSharePct ?? 15;
+
   // Aggregate totals for APPROVED licences
   const [totals, licenceRows] = await Promise.all([
     db
@@ -80,10 +95,10 @@ export async function GET(
   ]);
 
   const grossPence = Number(totals?.gross ?? 0);
-  const platformPence = Number(totals?.platformTotal ?? 0);
-  // Agency commission is 20% of gross (not stored, derived)
-  const agencyPence = Math.round(grossPence * 0.2);
-  const talentPence = grossPence - platformPence - agencyPence;
+  // Derive splits from configurable percentages (platform fee stored in DB but override with settings)
+  const agencyPence = Math.round(grossPence * (agencySharePct / 100));
+  const platformPence = Math.round(grossPence * (platformSharePct / 100));
+  const talentPence = grossPence - agencyPence - platformPence;
 
   return NextResponse.json({
     summary: {
@@ -92,6 +107,9 @@ export async function GET(
       agencyPence,
       platformPence,
       licenceCount: totals?.licenceCount ?? 0,
+      talentSharePct,
+      agencySharePct,
+      platformSharePct,
     },
     licences: licenceRows,
   });

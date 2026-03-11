@@ -176,6 +176,16 @@ export const talentLicencePermissions = sqliteTable("talent_licence_permissions"
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const talentSettings = sqliteTable("talent_settings", {
+  talentId: text("talent_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  pipelineEnabled: integer("pipeline_enabled", { mode: "boolean" }).notNull().default(true),
+  talentSharePct: integer("talent_share_pct").notNull().default(65),
+  agencySharePct: integer("agency_share_pct").notNull().default(20),
+  platformSharePct: integer("platform_share_pct").notNull().default(15),
+  updatedBy: text("updated_by").references(() => users.id),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const pipelineJobs = sqliteTable("pipeline_jobs", {
   id: text("id").primaryKey(),
   packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),

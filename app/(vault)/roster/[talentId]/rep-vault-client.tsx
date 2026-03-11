@@ -62,6 +62,9 @@ interface RevenueSummary {
   agencyPence: number;
   platformPence: number;
   licenceCount: number;
+  talentSharePct?: number;
+  agencySharePct?: number;
+  platformSharePct?: number;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -566,52 +569,60 @@ function RevenueTab({ talentId }: { talentId: string }) {
   return (
     <div className="px-8 py-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <RevenueSummaryCard
-          label="Gross Licence Value"
-          value={fmtMoney(summary?.grossPence ?? 0)}
-          sub={`${summary?.licenceCount ?? 0} approved licence${(summary?.licenceCount ?? 0) !== 1 ? "s" : ""}`}
-          color="var(--color-accent)"
-        />
-        <RevenueSummaryCard
-          label="Talent Share (65%)"
-          value={fmtMoney(summary?.talentPence ?? 0)}
-        />
-        <RevenueSummaryCard
-          label="Agency Commission (20%)"
-          value={fmtMoney(summary?.agencyPence ?? 0)}
-        />
-        <RevenueSummaryCard
-          label="Platform Fee (15%)"
-          value={fmtMoney(summary?.platformPence ?? 0)}
-        />
-      </div>
+      {(() => {
+        const t = summary?.talentSharePct ?? 65;
+        const a = summary?.agencySharePct ?? 20;
+        const p = summary?.platformSharePct ?? 15;
+        return (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+              <RevenueSummaryCard
+                label="Gross Licence Value"
+                value={fmtMoney(summary?.grossPence ?? 0)}
+                sub={`${summary?.licenceCount ?? 0} approved licence${(summary?.licenceCount ?? 0) !== 1 ? "s" : ""}`}
+                color="var(--color-accent)"
+              />
+              <RevenueSummaryCard
+                label={`Talent Share (${t}%)`}
+                value={fmtMoney(summary?.talentPence ?? 0)}
+              />
+              <RevenueSummaryCard
+                label={`Agency Commission (${a}%)`}
+                value={fmtMoney(summary?.agencyPence ?? 0)}
+              />
+              <RevenueSummaryCard
+                label={`Platform Fee (${p}%)`}
+                value={fmtMoney(summary?.platformPence ?? 0)}
+              />
+            </div>
 
-      {/* Fee split bar */}
-      {(summary?.grossPence ?? 0) > 0 && (
-        <div className="mb-8">
-          <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
-            Revenue split
-          </p>
-          <div className="flex h-3 rounded-full overflow-hidden gap-px">
-            <div className="h-full" style={{ width: "65%", background: "var(--color-accent)", opacity: 0.9 }} title="Talent 65%" />
-            <div className="h-full" style={{ width: "20%", background: "var(--color-ink)", opacity: 0.5 }} title="Agency 20%" />
-            <div className="h-full" style={{ width: "15%", background: "var(--color-muted)", opacity: 0.4 }} title="Platform 15%" />
-          </div>
-          <div className="flex items-center gap-4 mt-2">
-            {[
-              { label: "Talent 65%", color: "var(--color-accent)", opacity: 0.9 },
-              { label: "Agency 20%", color: "var(--color-ink)", opacity: 0.5 },
-              { label: "Platform 15%", color: "var(--color-muted)", opacity: 0.4 },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-sm" style={{ background: item.color, opacity: item.opacity }} />
-                <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{item.label}</span>
+            {(summary?.grossPence ?? 0) > 0 && (
+              <div className="mb-8">
+                <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+                  Revenue split
+                </p>
+                <div className="flex h-3 rounded-full overflow-hidden gap-px">
+                  <div className="h-full" style={{ width: `${t}%`, background: "var(--color-accent)", opacity: 0.9 }} title={`Talent ${t}%`} />
+                  <div className="h-full" style={{ width: `${a}%`, background: "var(--color-ink)", opacity: 0.5 }} title={`Agency ${a}%`} />
+                  <div className="h-full" style={{ width: `${p}%`, background: "var(--color-muted)", opacity: 0.4 }} title={`Platform ${p}%`} />
+                </div>
+                <div className="flex items-center gap-4 mt-2">
+                  {[
+                    { label: `Talent ${t}%`, color: "var(--color-accent)", opacity: 0.9 },
+                    { label: `Agency ${a}%`, color: "var(--color-ink)", opacity: 0.5 },
+                    { label: `Platform ${p}%`, color: "var(--color-muted)", opacity: 0.4 },
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-sm" style={{ background: item.color, opacity: item.opacity }} />
+                      <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            )}
+          </>
+        );
+      })()}
 
       {/* Licence history */}
       {licenceRows.length === 0 ? (
