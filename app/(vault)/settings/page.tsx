@@ -19,6 +19,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/bookings", label: "Bookings", description: "Create popup events and manage slots" },
   { href: "/admin/invites", label: "Invites", description: "Manage platform invitations" },
   { href: "/admin/pipeline", label: "Pipeline", description: "Digital double pipeline jobs" },
+  { href: "/admin/talent", label: "Talent Settings", description: "Pipeline, fee splits & permissions" },
   { href: "/admin/audit", label: "Audit Log", description: "Last 500 download events" },
   { href: "/admin/storage", label: "Storage", description: "Per-talent storage usage" },
 ];

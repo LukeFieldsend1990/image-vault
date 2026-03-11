@@ -157,11 +157,13 @@ function PackageCard({
   onDelete,
   onResume,
   deleting,
+  pipelineEnabled,
 }: {
   pkg: ScanPackage;
   onDelete: (id: string) => void;
   onResume: (id: string) => void;
   deleting: boolean;
+  pipelineEnabled: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -307,8 +309,8 @@ function PackageCard({
               </p>
             )}
           </div>
-          {/* Pipeline — only for ready packages */}
-          {pkg.status === "ready" && (
+          {/* Pipeline — only for ready packages when enabled */}
+          {pkg.status === "ready" && pipelineEnabled && (
             <button
               onClick={() => setPipelineOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-[10px] font-medium uppercase tracking-wide transition hover:opacity-80"
@@ -485,7 +487,7 @@ function PackageCard({
 }
 
 // ── Main dashboard ───────────────────────────────────────────────────────────
-export default function DashboardClient() {
+export default function DashboardClient({ pipelineEnabled = true }: { pipelineEnabled?: boolean }) {
   const [packages, setPackages] = useState<ScanPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -607,6 +609,7 @@ export default function DashboardClient() {
                 onDelete={handleDelete}
                 onResume={handleResume}
                 deleting={deletingId === pkg.id}
+                pipelineEnabled={pipelineEnabled}
               />
             ))}
           </div>

@@ -144,19 +144,17 @@ export async function POST(req: NextRequest) {
     createdAt: now,
   });
 
-  // Send invite email (fire-and-forget)
-  void (async () => {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
-    const { subject, html } = inviteEmail({
-      to: normalEmail,
-      inviterEmail: session.email,
-      role: role as "talent" | "rep" | "licensee",
-      message: message?.trim() ?? null,
-      signupUrl: `${baseUrl}/signup?invite=${inviteId}`,
-      expiresAt,
-    });
-    await sendEmail({ to: normalEmail, subject, html });
-  })();
+  // Send invite email
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const { subject, html } = inviteEmail({
+    to: normalEmail,
+    inviterEmail: session.email,
+    role: role as "talent" | "rep" | "licensee",
+    message: message?.trim() ?? null,
+    signupUrl: `${baseUrl}/signup?invite=${inviteId}`,
+    expiresAt,
+  });
+  await sendEmail({ to: normalEmail, subject, html });
 
   return NextResponse.json({ inviteId }, { status: 201 });
 }
