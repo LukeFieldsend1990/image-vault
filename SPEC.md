@@ -783,3 +783,366 @@ CREATE TABLE scan_bookings (
 - [ ] Observability (Logpush, error tracking)
 - [ ] Load / performance testing with large files
 - [ ] Custom domains per agency tenant
+
+---
+
+## 10. April 8 Pitch — Agency Feature Sprint
+
+**Deadline:** April 8, 2026 — pitch to United Agents (and potentially CAA/WME/UTA)
+**Target audience:** Senior talent agents and agency heads
+**Goal:** Demonstrate that this platform makes their talent more valuable and gives the agency complete control
+
+### What agencies need to feel in the demo
+
+1. **Control** — they approve every use, they set the rules, they gate every download
+2. **Revenue** — this creates a new income stream they don't have today
+3. **Protection** — actors' likenesses cannot be misused without active agent involvement
+4. **Simplicity** — this fits how they already work (approvals, deal notes, commission splits)
+
+### Core fear to neutralise
+
+The number one concern will be: *"Does this make our actors replaceable?"*
+
+Counter-narrative throughout the demo:
+> "No digital use happens without your approval. This platform ensures actors are paid every time their digital likeness is used."
+
+---
+
+### P0 — Must-Have for Demo (Week 1–2, March 14–28)
+
+#### P0.1 — Likeness Usage Permission Toggles
+
+Extend `talent_settings` table with per-use-type permission flags. This is the single most powerful visual for the pitch — agents immediately see they control what their actor can and cannot be used for.
+
+**DB migration — `0008_likeness_permissions.sql`:**
+```sql
+ALTER TABLE talent_settings ADD COLUMN permit_commercial INTEGER NOT NULL DEFAULT 1;        -- 0=blocked, 1=approval_required, 2=allowed
+ALTER TABLE talent_settings ADD COLUMN permit_video_game INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE talent_settings ADD COLUMN permit_ai_avatar INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE talent_settings ADD COLUMN permit_training_data INTEGER NOT NULL DEFAULT 0;     -- off by default
+ALTER TABLE talent_settings ADD COLUMN permit_digital_double INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE talent_settings ADD COLUMN permit_deepfake_monitoring INTEGER NOT NULL DEFAULT 2; -- always on by default
+```
+
+Values: `0 = blocked` | `1 = approval required` | `2 = allowed`
+
+**UI — `/admin/talent/[talentId]` (already exists):**
+- Replace the single `pipelineEnabled` toggle with a permission matrix table
+- Each row: usage type, description, three-state toggle (Blocked / Approval Required / Allowed)
+- Colour-coded: red = blocked, amber = approval required, green = allowed
+- This is visible to agents in the rep view of a talent's settings
+
+**API — extend `PATCH /api/admin/talent/[talentId]/settings`:**
+- Accept the six new fields
+- Validate 0/1/2 range
+- Return full updated settings object
+
+**Enforcement — `POST /api/licences/request`:**
+- On licence creation, check the relevant `permit_*` flag against the requested `licenceType`
+- If `0` (blocked): reject with 403 + "This usage type is not permitted for this talent"
+- If `1` (approval required): licence created as `PENDING` (current behaviour)
+- If `2` (allowed): licence created as `PENDING` (agent still reviews, but flag shown in review UI)
+
+---
+
+#### P0.2 — Digital Actor Card
+
+A luxury, shareable profile page for each talent. This is the "hero moment" of the demo — click an actor and see their digital identity. Replace the existing thin `/talent/[id]` directory page.
+
+**URL:** `/talent/[id]` (existing route, full redesign)
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [AGENCY NAME]          [SCAN DATE]          [STATUS BADGE] │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [TMDB PORTRAIT]    ACTOR NAME                             │
+│                     Agency: United Agents                   │
+│                     Scan: Light Stage Capture               │
+│                     Capture: March 2023                     │
+│                                                             │
+│  ── CAPABILITIES ──────────────────────────────────────     │
+│  ✓ Photoreal digital double                                 │
+│  ✓ Real-time mesh (Unreal / Unity)                         │
+│  ✓ 360° reference capture                                   │
+│  ✓ HDR lighting data                                        │
+│  ✓ Facial performance capture                               │
+│                                                             │
+│  ── LICENSING PERMISSIONS ─────────────────────────────     │
+│  Commercial ads       [APPROVAL REQUIRED]                   │
+│  Video game           [ALLOWED]                             │
+│  AI avatar            [APPROVAL REQUIRED]                   │
+│  Training datasets    [BLOCKED]                             │
+│  Digital double       [ALLOWED]                             │
+│                                                             │
+│  ── AVAILABLE LICENCE TYPES ───────────────────────────     │
+│  [Film] [Advertising] [Games] [Digital Avatar]              │
+│                                                             │
+│            [REQUEST A LICENCE]                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Capabilities** are derived from scan package metadata (file types present: EXR = HDR data, mesh files = real-time ready, 360 video = reference capture).
+
+**Permissions** are pulled from `talent_settings` for the actor.
+
+**Licence type buttons** link directly to the enhanced licence request wizard, pre-filling the usage type.
+
+---
+
+#### P0.3 — Agency Roster Dashboard (Enhanced Rep View)
+
+The current `/roster` is a basic list. For the pitch, the rep sees an agency control centre.
+
+**URL:** `/roster` (redesign)
+
+**Top stat bar (4 cards):**
+| Metric | Source |
+|---|---|
+| Actors represented | COUNT of talent linked to this rep |
+| Scans in vault | SUM of scan packages across roster |
+| Active licences | COUNT licences where status=APPROVED, valid_to > now |
+| Revenue this year | SUM agreed_fee where approved_at >= Jan 1 current year |
+
+**Talent grid:**
+- Portrait (TMDB image if available, else initials avatar)
+- Name, scan badge ("Light Stage"), capabilities tags
+- Licence count + pending requests badge
+- Quick-action: "View Profile" | "Requests ([n])" | "Settings"
+
+**Pending requests banner (if any):**
+- Red attention strip at top: "3 licence requests awaiting approval"
+- One-click through to requests queue
+
+**Revenue tab:**
+- Table of all executed licences across the agency's roster
+- Columns: Actor, Project, Usage Type, Fee, Agency Share, Date
+- Totals row at bottom
+
+---
+
+#### ~~P0.4 — Enhanced Licence Request Wizard~~ ✅ Already built
+
+`/licences/request/[packageId]` already has a full 5-step wizard: Usage Type tile picker with fee guidance → Project Details → Commercial Terms (territory, exclusivity, proposed fee with live breakdown) → AI & Data Terms (auto-flagged for `ai_avatar`/`training_data`, red AI notice) → Review & Declaration. No work needed here.
+
+---
+
+### P1 — High Impact for Demo (Week 3, March 28–April 4)
+
+#### P1.1 — Revenue Tracking UI
+
+Every licence shows a live revenue breakdown. Agents immediately see the financial mechanics.
+
+**On the licence detail page (`/vault/requests/[licenceId]` and `/vault/licences`):**
+
+```
+Licence Fee Breakdown
+─────────────────────────────────────────────
+Agreed fee:          £120,000
+  Actor (65%):       £78,000
+  Agency (20%):      £24,000
+  Platform (15%):    £18,000
+─────────────────────────────────────────────
+```
+
+**Per-talent revenue summary on `/roster/[talentId]`:**
+- Lifetime earnings (sum of agreed_fee on executed licences)
+- This year's earnings
+- Earnings by licence type (bar chart)
+- Territory breakdown
+
+**Platform uses existing `talentSharePct` / `agencySharePct` / `platformSharePct` from `talent_settings`.**
+
+No new DB changes needed — calculated from existing fields.
+
+---
+
+#### P1.2 — Licence Pricing Guidance
+
+When a talent or rep reviews an incoming request, show them the platform's suggested fee range for that usage type. This removes the "I don't know what to charge" paralysis.
+
+**Suggested ranges (hardcoded, not DB-driven):**
+| Licence Type | Suggested Range |
+|---|---|
+| Film / TV Digital Double | £50,000 – £300,000 |
+| Video Game Character | £100,000 – £500,000 |
+| Commercial / Advertising | £25,000 – £100,000 |
+| AI Avatar | £2,000 – £50,000 per campaign |
+| Training Dataset | £100,000 – £1,000,000+ |
+| Monitoring Reference | £5,000 – £20,000 / yr |
+
+**Where shown:**
+1. On the talent's licence review page — next to the "Approve" flow
+2. On `talent_settings` — talent/rep can set their own indicative pricing per type
+3. On the licensee's request form — shown as guidance ("Typical range: £X–£Y")
+
+---
+
+#### P1.3 — Negotiation Notes on Licences
+
+Agents work in notes. Every licence request should have a CRM-style notes thread.
+
+**DB migration — `0009_licence_notes.sql`:**
+```sql
+CREATE TABLE licence_notes (
+  id TEXT PRIMARY KEY,
+  licence_id TEXT NOT NULL REFERENCES licences(id) ON DELETE CASCADE,
+  author_id TEXT NOT NULL REFERENCES users(id),
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+```
+
+**API:**
+- `GET /api/licences/[id]/notes` — list notes for a licence
+- `POST /api/licences/[id]/notes` — add a note
+
+**UI — on the licence review page:**
+- Notes thread below the main approval actions
+- Text input + submit
+- Timestamped entries with author email
+- Used for: counter-offer discussion, approval conditions, internal memos
+
+---
+
+#### P1.4 — Cinematic Preview Mode
+
+The existing preview panel is functional. For the pitch it needs to feel premium.
+
+**Enhancements to the preview panel on the Digital Actor Card / vault package view:**
+- **Full-screen mode** — expand the preview to fill the viewport
+- **360° spin controls** — if a reference video is present, autoplay in a loop; add spin left/right arrow controls
+- **Image zoom** — click to zoom on individual preview images (lightbox)
+- **Mesh badge** — if mesh files present in the package, show "Real-time Mesh Available" badge
+- **HDR badge** — if EXR files present, show "HDR Lighting Data"
+- **"Request Licence" CTA** — floating button visible throughout the preview
+
+---
+
+### P2 — Demo Polish (Week 4, April 4–8)
+
+#### P2.1 — Demo Data Seeding Script
+
+Before the pitch, seed the demo environment with 5–8 fictional actors with realistic data. This avoids awkward "no data" states.
+
+**Seed data spec:**
+
+| Actor | Agency | Scan Type | Permissions | Active Licences |
+|---|---|---|---|---|
+| Almorah Vane | United Agents | Light Stage | Commercial=allowed, Games=approval required, AI=blocked | 2 active (Film, Advertising) |
+| James Calloway | United Agents | Photogrammetry | All=approval required | 1 pending (Video Game) |
+| Sara Mensah | United Agents | Light Stage + 360 | Commercial=approval required, Training=blocked | 0 (available) |
+| Daniel Osei | United Agents | Photogrammetry | All=allowed except Training | 3 active |
+| Ines Kovac | United Agents | Light Stage | AI=approval required, Training=blocked | 1 pending (AI Avatar) |
+
+Each actor should have:
+- A TMDB-linked profile (real actor IDs, known-for credits)
+- 1–2 scan packages with realistic file structures (mesh, EXR, JPEG previews, 360 MP4)
+- Realistic licence history with revenue figures
+- Varied permission settings to demonstrate the control matrix
+
+---
+
+#### P2.2 — Likeness Monitoring Widget (MVP)
+
+Even a partial implementation signals enormous protective value. The monitoring feature is the most emotionally resonant for agents.
+
+**For the pitch: build a static/seeded monitoring UI, not a live detection engine.**
+
+**DB migration — `0010_monitoring_alerts.sql`:**
+```sql
+CREATE TABLE monitoring_alerts (
+  id TEXT PRIMARY KEY,
+  talent_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,         -- e.g. "Instagram", "TikTok", "YouTube"
+  confidence INTEGER NOT NULL,    -- 0-100
+  content_url TEXT,
+  thumbnail_url TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','dismissed','actioned')),
+  detected_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+```
+
+**UI — widget on the agency roster dashboard and talent profile:**
+```
+┌─── Likeness Monitoring ──────────────────────────────────┐
+│  ⚠ Potential misuse detected                             │
+│                                                          │
+│  Platform: Instagram                                     │
+│  Confidence: 82%                                         │
+│  Detected: 2 days ago                                    │
+│  [View Content] [Dismiss] [Report]                       │
+└──────────────────────────────────────────────────────────┘
+```
+
+For the demo: seed 1–2 alerts per talent. Narrative: *"The platform continuously monitors for unauthorised use of an actor's digital likeness."*
+
+Real detection (reverse image search, AI model) is Phase 7 post-pitch.
+
+---
+
+#### P2.3 — Pitch Demo Environment
+
+**URL:** `https://demo.changling.io` (or use the main prod URL with demo accounts)
+
+**Demo accounts to create:**
+| Role | Email | Password | Notes |
+|---|---|---|---|
+| Agency / Rep | `agent@unitedagents.demo` | secure | Sees full roster, all metrics |
+| Talent | `almorah@talent.demo` | secure | Has 2 active licences, pending AI request |
+| Licensee | `studio@silvergate.demo` | secure | Can request licence, sees directory |
+
+**Demo script timing (12 min):**
+| Section | Time | Screen |
+|---|---|---|
+| Problem framing | 1 min | Verbal — no screen |
+| Agency dashboard | 1 min | `/roster` — stats, roster grid |
+| Talent roster | 1 min | `/roster` — filter by capabilities |
+| Digital Actor Card | 2 min | `/talent/[id]` — permissions, capabilities, licence types |
+| Preview viewer | 1 min | Preview panel — 360, mesh badge, zoom |
+| Licence request flow | 2 min | `/licences/request/[packageId]` — wizard steps 1–5 |
+| Agent approval + revenue | 1 min | `/vault/requests/[id]` — fee breakdown, notes |
+| Monitoring | 1 min | Monitoring widget on roster dashboard |
+| Revenue dashboard | 1 min | Revenue tab — lifetime earnings, split |
+| Opportunity close | 1 min | Verbal |
+
+**The wow moment:** On the licensee screen, type into the search: *"Find scans suitable for Unreal Engine game character"* — show filtered results of Unreal-ready scans. Even a metadata filter (has mesh files, has EXR) works here.
+
+---
+
+### Implementation Order (25 days)
+
+| Days | Work |
+|---|---|
+| March 14–17 | P0.1 Likeness permission toggles (DB + API + admin UI) |
+| March 17–21 | P0.2 Digital Actor Card redesign |
+| March 21–24 | P0.3 Agency roster dashboard enhancements |
+| March 24–28 | P0.4 Enhanced licence request wizard |
+| March 28–31 | P1.1 Revenue tracking UI + P1.2 Pricing guidance |
+| March 31–April 3 | P1.3 Negotiation notes + P1.4 Preview enhancements |
+| April 3–6 | P2.1 Demo data seeding + P2.2 Monitoring widget |
+| April 6–8 | Demo rehearsal, edge case fixes, polish |
+
+---
+
+### Pitch Narrative — One Sentence Per Section
+
+- **Problem:** *"Actors' likenesses are being used across AI, games and virtual production — but there's no licensing infrastructure."*
+- **Solution:** *"The digital identity vault for talent — secure storage, licensing and protection."*
+- **Control:** *"No digital use happens without your approval."*
+- **Revenue:** *"Every licence tracked automatically — actors and agencies see revenue instantly."*
+- **Protection:** *"The platform monitors for unauthorised use of an actor's digital likeness."*
+- **Close:** *"Every actor will soon have a digital double. This platform ensures agencies control that future."*
+
+### Key Answers to Agent Questions
+
+| Question | Answer |
+|---|---|
+| Who owns the scans? | The actor. Always. The platform holds zero ownership. |
+| Who controls licensing rights? | The agency and talent. Every use requires explicit approval. |
+| Can scans be copied? | Downloads are dual-custody gated, watermarked, and logged. Every access event is audited. |
+| How do you prevent AI misuse? | Training datasets are blocked by default. Detection monitoring flags unauthorised use. |
+| How do agencies make money? | Commission on every licence — typically 15–20% of agreed fee, tracked automatically. |
+| What happens if an actor leaves the agency? | Delegation is revoked. The talent retains their vault. The agency loses access immediately. |

@@ -215,9 +215,23 @@ function NavItem({ item, active }: { item: { href: string; label: string; icon: 
   );
 }
 
-export function NavLinks({ role }: { role: Role; email?: string }) {
+const PIPELINE_NAV_ITEM = {
+  href: "/vault/pipeline",
+  label: "Pipeline",
+  icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+    </svg>
+  ),
+};
+
+export function NavLinks({ role, pipelineEnabled }: { role: Role; email?: string; pipelineEnabled?: boolean }) {
   const pathname = usePathname();
-  const items = navItemsForRole(role);
+  const base = navItemsForRole(role);
+  const items = role === "talent" && pipelineEnabled
+    ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]
+    : base;
 
   return (
     <nav className="space-y-0.5 px-3">

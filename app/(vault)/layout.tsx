@@ -5,7 +5,7 @@ import { NavLinks } from "./nav";
 import UserWidget from "./user-widget";
 import SidebarShell from "./sidebar-shell";
 import { getDb } from "@/lib/db";
-import { talentProfiles } from "@/lib/db/schema";
+import { talentProfiles, talentSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 type Role = "talent" | "rep" | "licensee" | "admin";
@@ -66,13 +66,31 @@ async function getTalentIdentity(userId: string): Promise<TalentIdentity | null>
   }
 }
 
+async function getPipelineEnabled(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const db = getDb();
+    const row = await db
+      .select({ pipelineEnabled: talentSettings.pipelineEnabled })
+      .from(talentSettings)
+      .where(eq(talentSettings.talentId, userId))
+      .get();
+    return row?.pipelineEnabled ?? true;
+  } catch {
+    return true;
+  }
+}
+
 export default async function VaultLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const identity = role === "talent" ? await getTalentIdentity(sub) : null;
+  const [identity, pipelineEnabled] = await Promise.all([
+    role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
+    role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
+  ]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -92,7 +110,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </div>
 
-            <NavLinks role={role} email={email} />
+            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} />
           </div>
 
           <UserWidget
