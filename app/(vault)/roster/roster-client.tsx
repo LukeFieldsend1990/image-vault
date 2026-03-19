@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 interface TalentRow {
@@ -12,6 +12,7 @@ interface TalentRow {
   fullName: string | null;
   profileImageUrl: string | null;
   tmdbId: number | null;
+  pendingLicences?: number;
 }
 
 interface Stats {
@@ -20,6 +21,26 @@ interface Stats {
   revenueThisQuarterPence: number;
   pendingRequests: number;
   totalRevenuePence: number;
+}
+
+interface RevenueLicence {
+  id: string;
+  talentName: string | null;
+  projectName: string | null;
+  productionCompany: string | null;
+  licenceType: string;
+  territory: string | null;
+  status: string;
+  agreedFee: number | null;
+  approvedAt: number | null;
+}
+
+interface RevenueSummary {
+  grossPence: number;
+  agencyPence: number;
+  platformPence: number;
+  talentPence: number;
+  licenceCount: number;
 }
 
 function fmt(n: number | null): string {
@@ -38,48 +59,29 @@ function fmtMoney(pence: number): string {
   return `£${pounds.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-function TalentAvatar({ name, imageUrl, email }: { name: string | null; imageUrl: string | null; email: string }) {
-  const initials = name
-    ? name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
-    : email[0].toUpperCase();
+const LICENCE_TYPE_LABELS: Record<string, string> = {
+  commercial: "Commercial",
+  film_double: "Film Double",
+  game_character: "Game Character",
+  ai_avatar: "AI Avatar",
+  training_data: "Training Data",
+  monitoring_reference: "Monitoring Ref",
+};
 
-  if (imageUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={imageUrl}
-        alt={name ?? email}
-        className="h-12 w-12 rounded-full object-cover shrink-0"
-        onError={(e) => {
-          const parent = e.currentTarget.parentElement as HTMLElement;
-          e.currentTarget.style.display = "none";
-          parent.querySelector("[data-fallback]")?.removeAttribute("style");
-        }}
-      />
-    );
-  }
+const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  APPROVED: { bg: "#16a34a18", color: "#16a34a", label: "Approved" },
+  PENDING: { bg: "#d9770618", color: "#d97706", label: "Pending" },
+  REJECTED: { bg: "#dc262618", color: "#dc2626", label: "Rejected" },
+  EXPIRED: { bg: "var(--color-border)", color: "var(--color-muted)", label: "Expired" },
+};
 
-  return (
-    <div
-      className="flex h-12 w-12 items-center justify-center rounded-full shrink-0 text-sm font-semibold"
-      style={{ background: "var(--color-ink)", color: "#fff" }}
-    >
-      {initials}
-    </div>
-  );
-}
+// ── Stat card ───────────────────────────────────────────────────────────────────
 
-// ── Stats card ─────────────────────────────────────────────────────────────────
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-  loading?: boolean;
-}
-
-function StatCard({ label, value, sub, accent, loading }: StatCardProps) {
+function StatCard({
+  label, value, sub, accent, loading,
+}: {
+  label: string; value: string; sub?: string; accent?: boolean; loading?: boolean;
+}) {
   return (
     <div
       className="rounded border px-5 py-4"
@@ -101,42 +103,156 @@ function StatCard({ label, value, sub, accent, loading }: StatCardProps) {
           >
             {value}
           </p>
-          {sub && (
-            <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
-              {sub}
-            </p>
-          )}
+          {sub && <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>{sub}</p>}
         </>
       )}
     </div>
   );
 }
 
+// ── Portrait card ───────────────────────────────────────────────────────────────
+
+function TalentCard({ talent }: { talent: TalentRow }) {
+  const [imgError, setImgError] = useState(false);
+  const displayName = talent.fullName ?? talent.email;
+  const initials = talent.fullName
+    ? talent.fullName.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+    : talent.email[0].toUpperCase();
+  const hasPending = (talent.pendingLicences ?? 0) > 0;
+
+  return (
+    <div
+      className="rounded border overflow-hidden flex flex-col"
+      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+    >
+      {/* Portrait */}
+      <div
+        className="relative w-full overflow-hidden"
+        style={{ aspectRatio: "3/4", background: "var(--color-border)" }}
+      >
+        {talent.profileImageUrl && !imgError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={talent.profileImageUrl}
+            alt={displayName}
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center text-3xl font-bold"
+            style={{ background: "var(--color-ink)", color: "#fff" }}
+          >
+            {initials}
+          </div>
+        )}
+
+        {/* Pending badge */}
+        {hasPending && (
+          <div
+            className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background: "var(--color-accent)", color: "#fff" }}
+          >
+            {talent.pendingLicences} pending
+          </div>
+        )}
+
+        {/* TMDB badge */}
+        {talent.tmdbId && (
+          <div
+            className="absolute bottom-2 left-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+            style={{ background: "#01b4e490", color: "#fff" }}
+          >
+            TMDB
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 px-3 pt-3 pb-2">
+        <p className="text-sm font-semibold truncate" style={{ color: "var(--color-ink)" }}>{displayName}</p>
+        {talent.fullName && (
+          <p className="text-xs truncate mt-0.5" style={{ color: "var(--color-muted)" }}>{talent.email}</p>
+        )}
+        <p className="text-[11px] mt-2" style={{ color: "var(--color-muted)" }}>
+          {talent.packageCount} {talent.packageCount === 1 ? "package" : "packages"}
+          {talent.totalSizeBytes ? ` · ${fmt(talent.totalSizeBytes)}` : ""}
+        </p>
+      </div>
+
+      {/* Quick actions */}
+      <div
+        className="border-t grid grid-cols-2 divide-x"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        <Link
+          href={`/talent/${talent.talentId}`}
+          className="py-2.5 text-center text-xs font-medium transition hover:opacity-70"
+          style={{ color: "var(--color-muted)" }}
+        >
+          View Profile
+        </Link>
+        <Link
+          href={`/roster/${talent.talentId}`}
+          className="py-2.5 text-center text-xs font-medium transition hover:opacity-70"
+          style={{ color: "var(--color-accent)" }}
+        >
+          Manage
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ──────────────────────────────────────────────────────────────
+
 export default function RosterClient() {
+  const [activeTab, setActiveTab] = useState<"roster" | "revenue">("roster");
   const [roster, setRoster] = useState<TalentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [revenueLicences, setRevenueLicences] = useState<RevenueLicence[]>([]);
+  const [revenueSummary, setRevenueSummary] = useState<RevenueSummary | null>(null);
+  const [revenueLoaded, setRevenueLoaded] = useState(false);
+  const revenueFetchingRef = useRef(false);
 
   useEffect(() => {
-    fetch("/api/roster")
-      .then((r) => r.json() as Promise<{ roster?: TalentRow[] }>)
-      .then((d) => setRoster(d.roster ?? []))
+    Promise.all([
+      fetch("/api/roster").then((r) => r.json() as Promise<{ roster?: TalentRow[] }>),
+      fetch("/api/roster/stats").then((r) => r.json() as Promise<Stats>),
+    ])
+      .then(([rosterData, statsData]) => {
+        setRoster(rosterData.roster ?? []);
+        setStats(statsData);
+      })
       .catch(() => {})
-      .finally(() => setLoading(false));
-
-    fetch("/api/roster/stats")
-      .then((r) => r.json() as Promise<Stats>)
-      .then(setStats)
-      .catch(() => {})
-      .finally(() => setStatsLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setStatsLoading(false);
+      });
   }, []);
 
-  const totalPackages = roster.reduce((s, t) => s + t.packageCount, 0);
-  const totalStorage = roster.reduce((s, t) => s + (t.totalSizeBytes ?? 0), 0);
+  useEffect(() => {
+    if (activeTab !== "revenue" || revenueLoaded || revenueFetchingRef.current) return;
+    revenueFetchingRef.current = true;
+    fetch("/api/roster/revenue")
+      .then((r) => r.json() as Promise<{ summary: RevenueSummary; licences: RevenueLicence[] }>)
+      .then((d) => {
+        setRevenueSummary(d.summary ?? null);
+        setRevenueLicences(d.licences ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setRevenueLoaded(true));
+  }, [activeTab, revenueLoaded]);
+
+  // Derived: show loading spinner while on revenue tab and data not yet loaded
+  const revenueLoading = activeTab === "revenue" && !revenueLoaded;
+
+  const totalPending = roster.reduce((s, t) => s + (t.pendingLicences ?? 0), 0);
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-8 max-w-5xl">
       {/* Header */}
       <div className="mb-6">
         <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>
@@ -145,13 +261,13 @@ export default function RosterClient() {
         <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>My Roster</h1>
         {!loading && roster.length > 0 && (
           <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
-            {roster.length} talent · {totalPackages} ready package{totalPackages !== 1 ? "s" : ""} · {fmt(totalStorage)} total
+            {roster.length} talent
           </p>
         )}
       </div>
 
-      {/* Stats dashboard */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      {/* Stats bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <StatCard
           label="Active Licences"
           value={stats ? String(stats.activeLicences) : "—"}
@@ -177,115 +293,182 @@ export default function RosterClient() {
         />
       </div>
 
-      {/* Divider */}
-      <div className="border-b mb-6" style={{ borderColor: "var(--color-border)" }} />
-
-      {/* Talent list */}
-      {loading ? (
-        <div className="space-y-2">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-20 rounded border animate-pulse" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }} />
-          ))}
-        </div>
-      ) : roster.length === 0 ? (
+      {/* Pending alert strip */}
+      {!loading && totalPending > 0 && (
         <div
-          className="rounded border p-10 text-center"
-          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+          className="mb-5 flex items-center gap-3 rounded border px-4 py-3 text-sm"
+          style={{
+            borderColor: "var(--color-accent)",
+            background: "rgba(var(--color-accent-rgb, 192,57,43), 0.04)",
+          }}
         >
           <div
-            className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
-            style={{ background: "var(--color-border)" }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+            style={{ background: "var(--color-accent)", color: "#fff" }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
+            {totalPending}
           </div>
-          <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>No talent linked yet</p>
-          <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
-            Ask your talent to add you as a representative from their Account settings.
+          <p style={{ color: "var(--color-ink)" }}>
+            <span className="font-medium">
+              {totalPending} licence {totalPending === 1 ? "request" : "requests"}
+            </span>{" "}
+            <span style={{ color: "var(--color-muted)" }}>awaiting approval across your roster.</span>
           </p>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {roster.map((t) => {
-            const displayName = t.fullName ?? t.email;
-            const subtitle = t.fullName ? t.email : null;
-            return (
-              <Link
-                key={t.talentId}
-                href={`/roster/${t.talentId}`}
-                className="group flex items-center gap-5 rounded border px-5 py-4 transition hover:shadow-sm"
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b mb-6" style={{ borderColor: "var(--color-border)" }}>
+        {(["roster", "revenue"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className="px-4 py-2 text-sm font-medium capitalize transition"
+            style={{
+              color: activeTab === tab ? "var(--color-ink)" : "var(--color-muted)",
+              borderBottom: activeTab === tab ? "2px solid var(--color-ink)" : "2px solid transparent",
+              marginBottom: -1,
+            }}
+          >
+            {tab === "revenue" ? "Revenue" : "Roster"}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Roster tab ── */}
+      {activeTab === "roster" && (
+        loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="rounded border animate-pulse"
+                style={{ aspectRatio: "3/5", borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              />
+            ))}
+          </div>
+        ) : roster.length === 0 ? (
+          <div
+            className="rounded border p-10 text-center"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+          >
+            <div
+              className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+              style={{ background: "var(--color-border)" }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>No talent linked yet</p>
+            <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+              Ask your talent to add you as a representative from their Account settings.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {roster.map((t) => <TalentCard key={t.talentId} talent={t} />)}
+          </div>
+        )
+      )}
+
+      {/* ── Revenue tab ── */}
+      {activeTab === "revenue" && (
+        revenueLoading ? (
+          <div className="space-y-2">
+            {[...Array(4)].map((_, i) => (
+              <div
+                key={i}
+                className="h-12 rounded border animate-pulse"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              />
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Revenue summary cards */}
+            {revenueSummary && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                <StatCard label="Gross Revenue" value={fmtMoney(revenueSummary.grossPence)} />
+                <StatCard label="Agency Share" value={fmtMoney(revenueSummary.agencyPence)} accent />
+                <StatCard label="Talent Share" value={fmtMoney(revenueSummary.talentPence)} />
+                <StatCard label="Platform Share" value={fmtMoney(revenueSummary.platformPence)} />
+              </div>
+            )}
+
+            {/* Licence table */}
+            {revenueLicences.length === 0 ? (
+              <div
+                className="rounded border p-8 text-center"
                 style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
               >
-                {/* Avatar */}
-                <div className="relative shrink-0">
-                  <TalentAvatar name={t.fullName} imageUrl={t.profileImageUrl} email={t.email} />
-                  {t.profileImageUrl && (
-                    <div
-                      data-fallback
-                      className="absolute inset-0 flex items-center justify-center rounded-full text-sm font-semibold"
-                      style={{ display: "none", background: "var(--color-ink)", color: "#fff" }}
-                    >
-                      {(t.fullName ?? t.email)[0].toUpperCase()}
-                    </div>
-                  )}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-sm font-semibold truncate" style={{ color: "var(--color-ink)" }}>
-                      {displayName}
-                    </p>
-                    {t.tmdbId && (
-                      <span
-                        className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
-                        style={{ background: "#01b4e418", color: "#01b4e4" }}
-                      >
-                        TMDB
-                      </span>
-                    )}
-                  </div>
-                  {subtitle && (
-                    <p className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{subtitle}</p>
-                  )}
-                  <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
-                    Linked {new Date(t.linkedSince * 1000).toLocaleDateString("en-GB", {
-                      day: "numeric", month: "short", year: "numeric",
+                <p className="text-sm" style={{ color: "var(--color-muted)" }}>No licences across your roster yet.</p>
+              </div>
+            ) : (
+              <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
+                      {["Talent", "Project", "Type", "Fee", "Status", "Date"].map((h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest font-semibold"
+                          style={{ color: "var(--color-muted)" }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {revenueLicences.map((l, i) => {
+                      const statusStyle = STATUS_STYLES[l.status] ?? STATUS_STYLES.EXPIRED;
+                      return (
+                        <tr
+                          key={l.id}
+                          style={{
+                            background: i % 2 === 0 ? "var(--color-background)" : "var(--color-surface)",
+                            borderBottom: "1px solid var(--color-border)",
+                          }}
+                        >
+                          <td className="px-4 py-3 font-medium truncate max-w-[120px]" style={{ color: "var(--color-ink)" }}>
+                            {l.talentName ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 truncate max-w-[140px]" style={{ color: "var(--color-ink)" }}>
+                            {l.projectName ?? l.productionCompany ?? "—"}
+                          </td>
+                          <td className="px-4 py-3" style={{ color: "var(--color-muted)" }}>
+                            {LICENCE_TYPE_LABELS[l.licenceType] ?? l.licenceType}
+                          </td>
+                          <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>
+                            {l.agreedFee ? fmtMoney(l.agreedFee) : "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
+                              style={{ background: statusStyle.bg, color: statusStyle.color }}
+                            >
+                              {statusStyle.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs" style={{ color: "var(--color-muted)" }}>
+                            {l.approvedAt
+                              ? new Date(l.approvedAt * 1000).toLocaleDateString("en-GB", {
+                                  day: "numeric", month: "short", year: "numeric",
+                                })
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
                     })}
-                  </p>
-                </div>
-
-                {/* Stats */}
-                <div className="shrink-0 text-right hidden sm:block">
-                  <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-                    {t.packageCount}
-                  </p>
-                  <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-                    {t.packageCount === 1 ? "package" : "packages"}
-                  </p>
-                  {t.totalSizeBytes ? (
-                    <p className="text-[10px] mt-0.5" style={{ color: "var(--color-muted)" }}>
-                      {fmt(t.totalSizeBytes)}
-                    </p>
-                  ) : null}
-                </div>
-
-                {/* Arrow */}
-                <svg
-                  width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  className="shrink-0 opacity-30 group-hover:opacity-70 transition"
-                  style={{ color: "var(--color-ink)" }}
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </Link>
-            );
-          })}
-        </div>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )
       )}
     </div>
   );

@@ -2,9 +2,9 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { talentReps, users, scanPackages, talentProfiles } from "@/lib/db/schema";
+import { talentReps, users, scanPackages, talentProfiles, licences } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, and, count, sum } from "drizzle-orm";
+import { eq, and, count, sum, inArray } from "drizzle-orm";
 
 /** GET /api/roster — returns the list of talent the authed rep manages */
 export async function GET(req: NextRequest) {
@@ -45,5 +45,19 @@ export async function GET(req: NextRequest) {
     )
     .all();
 
-  return NextResponse.json({ roster: rows });
+  // Enrich with per-talent pending licence counts
+  const talentIds = rows.map((r) => r.talentId);
+  let pendingMap: Record<string, number> = {};
+  if (talentIds.length > 0) {
+    const pendingRows = await db
+      .select({ talentId: licences.talentId, pendingCount: count(licences.id) })
+      .from(licences)
+      .where(and(inArray(licences.talentId, talentIds), eq(licences.status, "PENDING")))
+      .groupBy(licences.talentId)
+      .all();
+    pendingMap = Object.fromEntries(pendingRows.map((p) => [p.talentId, p.pendingCount]));
+  }
+
+  const roster = rows.map((r) => ({ ...r, pendingLicences: pendingMap[r.talentId] ?? 0 }));
+  return NextResponse.json({ roster });
 }
