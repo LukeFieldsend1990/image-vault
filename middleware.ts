@@ -69,7 +69,14 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
+    // Don't do auth redirects for Next.js prefetch requests — they race with actual
+    // navigation and can consume the refresh token before the real request arrives.
+    const isPrefetch =
+      req.headers.get("Next-Router-Prefetch") === "1" ||
+      req.headers.get("Purpose") === "prefetch";
+
     if (isProtected && status === "none") {
+      if (isPrefetch) return new NextResponse(null, { status: 401 });
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = "/login";
       loginUrl.search = "";
@@ -78,6 +85,7 @@ export async function middleware(req: NextRequest) {
     }
 
     if (isProtected && status === "refresh") {
+      if (isPrefetch) return new NextResponse(null, { status: 401 });
       const refreshUrl = req.nextUrl.clone();
       refreshUrl.pathname = "/api/auth/refresh";
       refreshUrl.search = "";
