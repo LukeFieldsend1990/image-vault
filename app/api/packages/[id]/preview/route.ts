@@ -55,11 +55,12 @@ export interface FileTypeStat {
 }
 
 export interface PreviewResponse {
-  images: { url: string; filename: string }[];
+  images: { url: string; filename: string; fileKey: string }[];
   mp4Url: string | null;
   stats: FileTypeStat[];
   totalFiles: number;
   totalSizeBytes: number;
+  coverImageKey: string | null;
 }
 
 export async function GET(
@@ -73,7 +74,7 @@ export async function GET(
   const db = getDb();
 
   const pkg = await db
-    .select({ id: scanPackages.id, talentId: scanPackages.talentId, status: scanPackages.status })
+    .select({ id: scanPackages.id, talentId: scanPackages.talentId, status: scanPackages.status, coverImageKey: scanPackages.coverImageKey })
     .from(scanPackages)
     .where(eq(scanPackages.id, id))
     .get();
@@ -118,7 +119,7 @@ export async function GET(
   // ?stats=1 — return only the breakdown, no presigned URLs (fast, for always-visible cards)
   const statsOnly = new URL(req.url).searchParams.get("stats") === "1";
   if (statsOnly) {
-    return NextResponse.json({ images: [], mp4Url: null, stats, totalFiles, totalSizeBytes } satisfies PreviewResponse);
+    return NextResponse.json({ images: [], mp4Url: null, stats, totalFiles, totalSizeBytes, coverImageKey: pkg.coverImageKey ?? null } satisfies PreviewResponse);
   }
 
   // ── Presign JPEG previews ──────────────────────────────────────────────────
@@ -146,9 +147,9 @@ export async function GET(
   }
 
   const [images, mp4Url] = await Promise.all([
-    Promise.all(jpegFiles.map(async (f) => ({ url: await presignGet(f.r2Key), filename: f.filename }))),
+    Promise.all(jpegFiles.map(async (f) => ({ url: await presignGet(f.r2Key), filename: f.filename, fileKey: f.r2Key }))),
     mp4File ? presignGet(mp4File.r2Key) : Promise.resolve(null),
   ]);
 
-  return NextResponse.json({ images, mp4Url, stats, totalFiles, totalSizeBytes } satisfies PreviewResponse);
+  return NextResponse.json({ images, mp4Url, stats, totalFiles, totalSizeBytes, coverImageKey: pkg.coverImageKey ?? null } satisfies PreviewResponse);
 }

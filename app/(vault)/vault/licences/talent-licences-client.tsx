@@ -26,6 +26,8 @@ interface Licence {
   proposedFee: number | null;  // pence
   agreedFee: number | null;    // pence
   platformFee: number | null;  // pence
+  agencySharePct: number | null;
+  talentSharePct: number | null;
 }
 
 const STATUS_COLOURS: Record<LicenceStatus, string> = {
@@ -60,7 +62,7 @@ function fmtGBP(pence: number) {
   return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
 }
 
-export default function TalentLicencesClient() {
+export default function TalentLicencesClient({ role = "talent" }: { role?: string }) {
   const [licences, setLicences] = useState<Licence[]>([]);
   const [loading, setLoading] = useState(true);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -104,7 +106,11 @@ export default function TalentLicencesClient() {
         {licences.map((l) => {
           const expanded = expandedId === l.id;
           const feeRef = l.agreedFee ?? l.proposedFee;
-          const netEarnings = feeRef ? Math.round(feeRef * 0.85) : null;
+          const sharePct = role === "rep"
+            ? (l.agencySharePct ?? 20)
+            : (l.talentSharePct ?? 65);
+          const netEarnings = feeRef ? Math.round(feeRef * sharePct / 100) : null;
+          const platformPct = 100 - (l.agencySharePct ?? 20) - (l.talentSharePct ?? 65);
 
           return (
             <div
@@ -236,14 +242,25 @@ export default function TalentLicencesClient() {
                           <span style={{ color: "var(--color-ink)" }}>{fmtGBP(feeRef)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span style={{ color: "var(--color-muted)" }}>Platform fee (15%)</span>
-                          <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * 0.15))}</span>
+                          <span style={{ color: "var(--color-muted)" }}>Platform fee ({platformPct}%)</span>
+                          <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * platformPct / 100))}</span>
                         </div>
+                        {role === "rep" ? (
+                          <div className="flex justify-between">
+                            <span style={{ color: "var(--color-muted)" }}>Talent share ({l.talentSharePct ?? 65}%)</span>
+                            <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * (l.talentSharePct ?? 65) / 100))}</span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span style={{ color: "var(--color-muted)" }}>Agency commission ({l.agencySharePct ?? 20}%)</span>
+                            <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * (l.agencySharePct ?? 20) / 100))}</span>
+                          </div>
+                        )}
                         <div
                           className="flex justify-between border-t pt-1 font-semibold"
                           style={{ borderColor: "var(--color-border)" }}
                         >
-                          <span style={{ color: "var(--color-ink)" }}>Your earnings</span>
+                          <span style={{ color: "var(--color-ink)" }}>Your earnings ({sharePct}%)</span>
                           <span style={{ color: "var(--color-accent)" }}>{fmtGBP(netEarnings)}</span>
                         </div>
                       </div>

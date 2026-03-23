@@ -36,6 +36,7 @@ export const scanPackages = sqliteTable("scan_packages", {
   technicianNotes: text("technician_notes"),
   totalSizeBytes: integer("total_size_bytes"), // filled on completion
   status: text("status", { enum: ["uploading", "ready", "error"] }).notNull().default("uploading"),
+  coverImageKey: text("cover_image_key"),
   createdAt: integer("created_at").notNull(), // unix timestamp
   updatedAt: integer("updated_at").notNull(), // unix timestamp
 });

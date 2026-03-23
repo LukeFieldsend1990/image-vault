@@ -78,18 +78,13 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
 // ── Stat card ───────────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, sub, accent, loading,
+  label, value, sub, accent, loading, onClick, href,
 }: {
   label: string; value: string; sub?: string; accent?: boolean; loading?: boolean;
+  onClick?: () => void; href?: string;
 }) {
-  return (
-    <div
-      className="rounded border px-5 py-4"
-      style={{
-        borderColor: accent ? "var(--color-accent)" : "var(--color-border)",
-        background: accent ? "rgba(var(--color-accent-rgb, 192,57,43), 0.04)" : "var(--color-surface)",
-      }}
-    >
+  const inner = (
+    <>
       <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-muted)" }}>
         {label}
       </p>
@@ -106,6 +101,31 @@ function StatCard({
           {sub && <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>{sub}</p>}
         </>
       )}
+    </>
+  );
+
+  const sharedStyle = {
+    borderColor: accent ? "var(--color-accent)" : "var(--color-border)",
+    background: accent ? "rgba(var(--color-accent-rgb, 192,57,43), 0.04)" : "var(--color-surface)",
+  };
+
+  if (href) {
+    return (
+      <Link href={href} className="rounded border px-5 py-4 block transition hover:opacity-80 active:opacity-60" style={sharedStyle}>
+        {inner}
+      </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="rounded border px-5 py-4 w-full text-left transition hover:opacity-80 active:opacity-60" style={sharedStyle}>
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <div className="rounded border px-5 py-4" style={sharedStyle}>
+      {inner}
     </div>
   );
 }
@@ -125,60 +145,62 @@ function TalentCard({ talent }: { talent: TalentRow }) {
       className="rounded border overflow-hidden flex flex-col"
       style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
     >
-      {/* Portrait */}
-      <div
-        className="relative w-full overflow-hidden"
-        style={{ aspectRatio: "3/4", background: "var(--color-border)" }}
-      >
-        {talent.profileImageUrl && !imgError ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={talent.profileImageUrl}
-            alt={displayName}
-            className="w-full h-full object-cover"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div
-            className="w-full h-full flex items-center justify-center text-3xl font-bold"
-            style={{ background: "var(--color-ink)", color: "#fff" }}
-          >
-            {initials}
-          </div>
-        )}
+      {/* Portrait + info — tappable, goes to manage page */}
+      <Link href={`/roster/${talent.talentId}`} className="flex flex-col flex-1 min-w-0">
+        <div
+          className="relative w-full overflow-hidden"
+          style={{ aspectRatio: "3/4", background: "var(--color-border)" }}
+        >
+          {talent.profileImageUrl && !imgError ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={talent.profileImageUrl}
+              alt={displayName}
+              className="w-full h-full object-cover"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div
+              className="w-full h-full flex items-center justify-center text-3xl font-bold"
+              style={{ background: "var(--color-ink)", color: "#fff" }}
+            >
+              {initials}
+            </div>
+          )}
 
-        {/* Pending badge */}
-        {hasPending && (
-          <div
-            className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full"
-            style={{ background: "var(--color-accent)", color: "#fff" }}
-          >
-            {talent.pendingLicences} pending
-          </div>
-        )}
+          {/* Pending badge */}
+          {hasPending && (
+            <div
+              className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: "var(--color-accent)", color: "#fff" }}
+            >
+              {talent.pendingLicences} pending
+            </div>
+          )}
 
-        {/* TMDB badge */}
-        {talent.tmdbId && (
-          <div
-            className="absolute bottom-2 left-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
-            style={{ background: "#01b4e490", color: "#fff" }}
-          >
-            TMDB
-          </div>
-        )}
-      </div>
+          {/* TMDB badge */}
+          {talent.tmdbId && (
+            <div
+              className="absolute bottom-2 left-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+              style={{ background: "#01b4e490", color: "#fff" }}
+            >
+              TMDB
+            </div>
+          )}
+        </div>
 
-      {/* Info */}
-      <div className="flex-1 px-3 pt-3 pb-2">
-        <p className="text-sm font-semibold truncate" style={{ color: "var(--color-ink)" }}>{displayName}</p>
-        {talent.fullName && (
-          <p className="text-xs truncate mt-0.5" style={{ color: "var(--color-muted)" }}>{talent.email}</p>
-        )}
-        <p className="text-[11px] mt-2" style={{ color: "var(--color-muted)" }}>
-          {talent.packageCount} {talent.packageCount === 1 ? "package" : "packages"}
-          {talent.totalSizeBytes ? ` · ${fmt(talent.totalSizeBytes)}` : ""}
-        </p>
-      </div>
+        {/* Info */}
+        <div className="flex-1 px-3 pt-3 pb-2">
+          <p className="text-sm font-semibold truncate" style={{ color: "var(--color-ink)" }}>{displayName}</p>
+          {talent.fullName && (
+            <p className="text-xs truncate mt-0.5" style={{ color: "var(--color-muted)" }}>{talent.email}</p>
+          )}
+          <p className="text-[11px] mt-2" style={{ color: "var(--color-muted)" }}>
+            {talent.packageCount} {talent.packageCount === 1 ? "package" : "packages"}
+            {talent.totalSizeBytes ? ` · ${fmt(talent.totalSizeBytes)}` : ""}
+          </p>
+        </div>
+      </Link>
 
       {/* Quick actions */}
       <div
@@ -204,6 +226,8 @@ function TalentCard({ talent }: { talent: TalentRow }) {
   );
 }
 
+const PAGE_SIZE = 6;
+
 // ── Main component ──────────────────────────────────────────────────────────────
 
 export default function RosterClient() {
@@ -216,6 +240,8 @@ export default function RosterClient() {
   const [revenueSummary, setRevenueSummary] = useState<RevenueSummary | null>(null);
   const [revenueLoaded, setRevenueLoaded] = useState(false);
   const revenueFetchingRef = useRef(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -251,6 +277,18 @@ export default function RosterClient() {
 
   const totalPending = roster.reduce((s, t) => s + (t.pendingLicences ?? 0), 0);
 
+  const filteredRoster = search.trim()
+    ? roster.filter((t) => {
+        const q = search.toLowerCase();
+        return (
+          (t.fullName ?? "").toLowerCase().includes(q) ||
+          t.email.toLowerCase().includes(q)
+        );
+      })
+    : roster;
+  const totalPages = Math.ceil(filteredRoster.length / PAGE_SIZE);
+  const pagedRoster = filteredRoster.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   return (
     <div className="p-8 max-w-5xl">
       {/* Header */}
@@ -261,7 +299,9 @@ export default function RosterClient() {
         <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>My Roster</h1>
         {!loading && roster.length > 0 && (
           <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
-            {roster.length} talent
+            {search.trim() && filteredRoster.length !== roster.length
+              ? `${filteredRoster.length} of ${roster.length} talent`
+              : `${roster.length} talent`}
           </p>
         )}
       </div>
@@ -272,6 +312,7 @@ export default function RosterClient() {
           label="Active Licences"
           value={stats ? String(stats.activeLicences) : "—"}
           loading={statsLoading}
+          onClick={() => setActiveTab("revenue")}
         />
         <StatCard
           label="Revenue This Quarter"
@@ -279,17 +320,20 @@ export default function RosterClient() {
           sub={stats ? `${fmtMoney(stats.totalRevenuePence)} lifetime` : undefined}
           accent
           loading={statsLoading}
+          onClick={() => setActiveTab("revenue")}
         />
         <StatCard
           label="Pending Requests"
           value={stats ? String(stats.pendingRequests) : "—"}
           sub={stats?.pendingRequests ? "awaiting approval" : "all clear"}
           loading={statsLoading}
+          href="/vault/requests"
         />
         <StatCard
           label="Ready Scans"
           value={stats ? String(stats.totalScans) : "—"}
           loading={statsLoading}
+          onClick={() => setActiveTab("roster")}
         />
       </div>
 
@@ -368,9 +412,75 @@ export default function RosterClient() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {roster.map((t) => <TalentCard key={t.talentId} talent={t} />)}
-          </div>
+          <>
+            {/* Search */}
+            <div className="mb-4 relative">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                style={{ color: "var(--color-muted)" }}
+              >
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                placeholder="Search by name or email…"
+                className="w-full rounded border pl-9 pr-4 py-2 text-sm outline-none"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-surface)",
+                  color: "var(--color-ink)",
+                }}
+              />
+            </div>
+
+            {/* Grid */}
+            {filteredRoster.length === 0 ? (
+              <p className="text-sm py-8 text-center" style={{ color: "var(--color-muted)" }}>
+                No talent matching &ldquo;{search}&rdquo;
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {pagedRoster.map((t) => <TalentCard key={t.talentId} talent={t} />)}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-30"
+                  style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-surface)" }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                  Previous
+                </button>
+                <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                  Page {page + 1} of {totalPages}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page === totalPages - 1}
+                  className="flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-30"
+                  style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-surface)" }}
+                >
+                  Next
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </>
         )
       )}
 

@@ -53,6 +53,7 @@ export default async function AdminPackagesPage() {
       studioName: scanPackages.studioName,
       createdAt: scanPackages.createdAt,
       talentId: scanPackages.talentId,
+      coverImageKey: scanPackages.coverImageKey,
       talentEmail: users.email,
     })
     .from(scanPackages)
@@ -154,7 +155,14 @@ export default async function AdminPackagesPage() {
                 style={{ gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr" }}
               >
                 {/* Package name + chain of custody link */}
-                <div className="min-w-0">
+                <div className="min-w-0 flex items-center gap-3">
+                  {p.coverImageKey && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={`/api/vault/packages/${p.id}/cover`} alt="Cover"
+                      className="shrink-0 rounded object-cover"
+                      style={{ width: 44, height: 58, background: "var(--color-border)" }} />
+                  )}
+                  <div className="min-w-0">
                   <p className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{p.name}</p>
                   {p.studioName && (
                     <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>{p.studioName}</p>
@@ -166,6 +174,7 @@ export default async function AdminPackagesPage() {
                   >
                     Chain of custody →
                   </Link>
+                  </div>
                 </div>
 
                 {/* Talent */}

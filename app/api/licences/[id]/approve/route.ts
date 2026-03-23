@@ -2,9 +2,9 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, users, scanPackages } from "@/lib/db/schema";
+import { licences, users, scanPackages, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
 
@@ -44,7 +44,14 @@ export async function POST(
   if (!licence) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (licence.talentId !== session.sub && session.role !== "admin") {
+  if (session.role === "rep") {
+    const link = await db
+      .select({ id: talentReps.id })
+      .from(talentReps)
+      .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, licence.talentId)))
+      .get();
+    if (!link) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  } else if (session.role !== "admin" && licence.talentId !== session.sub) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (licence.status !== "PENDING") {

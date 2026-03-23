@@ -13,11 +13,14 @@ interface Licence {
   status: string;
   createdAt: number;
   licenseeId: string;
+  talentEmail: string | null;
   licenceType: string | null;
   territory: string | null;
   exclusivity: string | null;
   permitAiTraining: boolean;
   proposedFee: number | null; // pence
+  agencySharePct: number | null;
+  talentSharePct: number | null;
 }
 
 const LICENCE_TYPE_LABELS: Record<string, string> = {
@@ -44,7 +47,7 @@ function fmtGBP(pence: number) {
   return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
 }
 
-export default function RequestsClient() {
+export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
   const [requests, setRequests] = useState<Licence[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
@@ -102,7 +105,8 @@ export default function RequestsClient() {
       <div className="space-y-4">
         {requests.map((r) => {
           const expanded = expandedId === r.id;
-          const netEarnings = r.proposedFee ? Math.round(r.proposedFee * 0.85) : null;
+          const sharePct = isRep ? (r.agencySharePct ?? 20) : (r.talentSharePct ?? 65);
+          const netEarnings = r.proposedFee ? Math.round(r.proposedFee * sharePct / 100) : null;
 
           return (
             <div
@@ -128,6 +132,11 @@ export default function RequestsClient() {
 
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
+                    {isRep && r.talentEmail && (
+                      <p className="text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--color-accent)" }}>
+                        {r.talentEmail}
+                      </p>
+                    )}
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-sm" style={{ color: "var(--color-ink)" }}>
                         {r.projectName}
@@ -210,15 +219,33 @@ export default function RequestsClient() {
                           <span style={{ color: "var(--color-muted)" }}>Proposed fee</span>
                           <span style={{ color: "var(--color-ink)" }}>{fmtGBP(r.proposedFee)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span style={{ color: "var(--color-muted)" }}>Platform fee (15%)</span>
-                          <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * 0.15))}</span>
-                        </div>
+                        {(() => {
+                          const platPct = 100 - (r.agencySharePct ?? 20) - (r.talentSharePct ?? 65);
+                          return (
+                            <>
+                              <div className="flex justify-between">
+                                <span style={{ color: "var(--color-muted)" }}>Platform fee ({platPct}%)</span>
+                                <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * platPct / 100))}</span>
+                              </div>
+                              {isRep ? (
+                                <div className="flex justify-between">
+                                  <span style={{ color: "var(--color-muted)" }}>Talent share ({r.talentSharePct ?? 65}%)</span>
+                                  <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * (r.talentSharePct ?? 65) / 100))}</span>
+                                </div>
+                              ) : (
+                                <div className="flex justify-between">
+                                  <span style={{ color: "var(--color-muted)" }}>Agency commission ({r.agencySharePct ?? 20}%)</span>
+                                  <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * (r.agencySharePct ?? 20) / 100))}</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                         <div
                           className="flex justify-between border-t pt-1 font-semibold"
                           style={{ borderColor: "var(--color-border)" }}
                         >
-                          <span style={{ color: "var(--color-ink)" }}>Your earnings</span>
+                          <span style={{ color: "var(--color-ink)" }}>Your earnings ({sharePct}%)</span>
                           <span style={{ color: "var(--color-accent)" }}>{fmtGBP(netEarnings)}</span>
                         </div>
                       </div>

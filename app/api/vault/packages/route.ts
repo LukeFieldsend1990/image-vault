@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
       technicianNotes: scanPackages.technicianNotes,
       totalSizeBytes: scanPackages.totalSizeBytes,
       status: scanPackages.status,
+      coverImageKey: scanPackages.coverImageKey,
       createdAt: scanPackages.createdAt,
       updatedAt: scanPackages.updatedAt,
       fileCount: sql<number>`count(${scanFiles.id})`.as("file_count"),
