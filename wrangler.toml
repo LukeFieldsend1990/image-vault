@@ -65,3 +65,5 @@ queue = "pipeline-jobs"
 # R2_SECRET_ACCESS_KEY    - R2 API token secret access key (for presigned upload URLs)
 # TMDB_API_KEY            - The Movie Database API key (free at themoviedb.org) for talent onboarding
 # MESHY_API_KEY           - Meshy API key for GLB preview generation (pipeline stage 3)
+# BRIDGE_SIGNING_KEY_JWK  - P-256 private key JWK for signing Bridge grant manifests
+#                           Generate with: node scripts/generate-bridge-key.mjs
