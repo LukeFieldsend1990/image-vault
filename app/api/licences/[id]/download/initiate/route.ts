@@ -3,6 +3,7 @@ export const runtime = "edge";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
 import { licences, users } from "@/lib/db/schema";
+// deliveryMode is read below to block standard download for bridge_only licences
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq } from "drizzle-orm";
 
@@ -41,6 +42,7 @@ export async function POST(
       licenseeId: licences.licenseeId,
       status: licences.status,
       validTo: licences.validTo,
+      deliveryMode: licences.deliveryMode,
     })
     .from(licences)
     .where(eq(licences.id, id))
@@ -72,6 +74,14 @@ export async function POST(
 
   if (talentUser?.vaultLocked) {
     return NextResponse.json({ error: "This vault is currently locked" }, { status: 423 });
+  }
+
+  // Block standard download for bridge-only licences
+  if (licence.deliveryMode === "bridge_only") {
+    return NextResponse.json(
+      { error: "This licence requires the CAS Bridge desktop app for file access." },
+      { status: 403 }
+    );
   }
 
   // Check if there's already an active session

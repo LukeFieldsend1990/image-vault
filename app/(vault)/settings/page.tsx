@@ -359,6 +359,28 @@ export default async function SettingsPage({
         </div>
       )}
 
+      {/* CAS Bridge (licensee + rep + talent) */}
+      {(user?.role === "licensee" || user?.role === "rep" || user?.role === "talent") && (
+        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>CAS Bridge</h2>
+          <Link
+            href="/settings/bridge"
+            className="flex items-center justify-between text-sm"
+            style={{ color: "var(--color-ink)" }}
+          >
+            <span>{user?.role === "licensee" ? "Manage API tokens & devices" : "View active bridge sessions"}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </Link>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+            {user?.role === "licensee"
+              ? "Connect the CAS Bridge app to access licensed scan data in Nuke, Houdini, and Maya."
+              : "Monitor when licensees access files via the CAS Bridge desktop app."}
+          </p>
+        </div>
+      )}
+
       {/* Roster link (rep only) */}
       {user?.role === "rep" && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>

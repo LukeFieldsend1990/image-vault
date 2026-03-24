@@ -49,6 +49,7 @@ export const scanFiles = sqliteTable("scan_files", {
   r2Key: text("r2_key").notNull(),
   contentType: text("content_type"),
   uploadStatus: text("upload_status", { enum: ["pending", "uploading", "complete", "error"] }).notNull().default("pending"),
+  sha256: text("sha256"),                       // hex SHA-256, populated at upload completion or on-demand
   createdAt: integer("created_at").notNull(),   // unix timestamp
   completedAt: integer("completed_at"),         // unix timestamp, set when upload completes
 });
@@ -93,6 +94,7 @@ export const licences = sqliteTable("licences", {
   platformFee: integer("platform_fee"),  // pence (15% of agreed_fee)
   downloadCount: integer("download_count").notNull().default(0),
   lastDownloadAt: integer("last_download_at"),
+  deliveryMode: text("delivery_mode", { enum: ["standard", "bridge_only"] }).notNull().default("standard"),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -234,4 +236,54 @@ export const downloadEvents = sqliteTable("download_events", {
   bytesTransferred: integer("bytes_transferred"),
   startedAt: integer("started_at").notNull(),
   completedAt: integer("completed_at"),
+});
+
+// ── Bridge tables ─────────────────────────────────────────────────────────────
+
+export const bridgeTokens = sqliteTable("bridge_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  lastUsedAt: integer("last_used_at"),
+  createdAt: integer("created_at").notNull(),
+  revokedAt: integer("revoked_at"),
+});
+
+export const bridgeDevices = sqliteTable("bridge_devices", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  fingerprint: text("fingerprint").notNull(),
+  displayName: text("display_name").notNull(),
+  lastSeenAt: integer("last_seen_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const bridgeGrants = sqliteTable("bridge_grants", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id),
+  packageId: text("package_id").notNull().references(() => scanPackages.id),
+  userId: text("user_id").notNull().references(() => users.id),
+  tool: text("tool").notNull(),
+  deviceId: text("device_id").notNull(),
+  allowedTools: text("allowed_tools").notNull().default("[]"), // JSON array
+  manifestJson: text("manifest_json").notNull(),
+  signature: text("signature").notNull(),
+  keyId: text("key_id").notNull().default("bridge-signing-key-1"),
+  expiresAt: integer("expires_at").notNull(),    // licences.validTo
+  offlineUntil: integer("offline_until").notNull(), // expiresAt + 48h grace
+  createdAt: integer("created_at").notNull(),
+  revokedAt: integer("revoked_at"),
+});
+
+export const bridgeEvents = sqliteTable("bridge_events", {
+  id: text("id").primaryKey(),
+  grantId: text("grant_id").references(() => bridgeGrants.id),
+  packageId: text("package_id").notNull(),
+  deviceId: text("device_id").notNull(),
+  userId: text("user_id"),
+  eventType: text("event_type").notNull(), // tamper_detected|unexpected_copy|hash_mismatch|lease_expired|cache_purged|open_denied
+  severity: text("severity").notNull().default("warn"), // info|warn|critical
+  detail: text("detail"), // JSON blob
+  createdAt: integer("created_at").notNull(),
 });
