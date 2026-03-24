@@ -1,20 +1,20 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { bridgeTokens } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { createHash, randomBytes } from "crypto";
 
-function sha256Hex(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 function generateToken(): string {
   // 32 bytes → 64 hex chars, prefixed for clarity
-  return "brt_" + randomBytes(32).toString("hex");
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return "brt_" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 function uuid(): string {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   }
 
   const rawToken = generateToken();
-  const tokenHash = sha256Hex(rawToken);
+  const tokenHash = await sha256Hex(rawToken);
   const now = Math.floor(Date.now() / 1000);
 
   const db = getDb();

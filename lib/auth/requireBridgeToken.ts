@@ -3,8 +3,6 @@ import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { bridgeTokens, users } from "@/lib/db/schema";
 import { eq, isNull } from "drizzle-orm";
-import { createHash } from "crypto";
-
 export interface BridgeTokenPayload {
   tokenId: string;
   userId: string;
@@ -12,8 +10,9 @@ export interface BridgeTokenPayload {
   email: string;
 }
 
-function sha256Hex(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**
@@ -33,7 +32,7 @@ export async function requireBridgeToken(
     return NextResponse.json({ error: "Missing bridge token" }, { status: 401 });
   }
 
-  const tokenHash = sha256Hex(rawToken);
+  const tokenHash = await sha256Hex(rawToken);
   const db = getDb();
 
   const row = await db
