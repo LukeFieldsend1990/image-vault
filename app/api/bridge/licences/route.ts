@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { licences, scanPackages, users } from "@/lib/db/schema";
 import { eq, and, gt } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { requireBridgeToken, isBridgeTokenError } from "@/lib/auth/requireBridgeToken";
 
 const TOOLS_BY_LICENCE_TYPE: Record<string, string[]> = {
@@ -30,25 +31,19 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
 
-  const talentUsers = db
-    .select({
-      id: users.id,
-      fullName: users.fullName,
-    })
-    .from(users)
-    .as("talent_users");
+  const talentUsers = alias(users, "talent_users");
 
   const rows = await db
     .select({
-      licenceId:       licences.id,
-      packageId:       licences.packageId,
-      packageName:     scanPackages.name,
-      talentName:      talentUsers.fullName,
-      licenceType:     licences.licenceType,
-      projectName:     licences.projectName,
+      licenceId:         licences.id,
+      packageId:         licences.packageId,
+      packageName:       scanPackages.name,
+      talentName:        talentUsers.fullName,
+      licenceType:       licences.licenceType,
+      projectName:       licences.projectName,
       productionCompany: licences.productionCompany,
-      validTo:         licences.validTo,
-      deliveryMode:    licences.deliveryMode,
+      validTo:           licences.validTo,
+      deliveryMode:      licences.deliveryMode,
     })
     .from(licences)
     .innerJoin(scanPackages, eq(scanPackages.id, licences.packageId))
