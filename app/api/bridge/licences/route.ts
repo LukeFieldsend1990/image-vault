@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users } from "@/lib/db/schema";
+import { licences, scanPackages, talentProfiles } from "@/lib/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { requireBridgeToken, isBridgeTokenError } from "@/lib/auth/requireBridgeToken";
 
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       licenceId:         licences.id,
       packageId:         licences.packageId,
       packageName:       scanPackages.name,
-      talentName:        users.fullName,
+      talentName:        talentProfiles.fullName,
       licenceType:       licences.licenceType,
       projectName:       licences.projectName,
       productionCompany: licences.productionCompany,
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     })
     .from(licences)
     .innerJoin(scanPackages, eq(scanPackages.id, licences.packageId))
-    .innerJoin(users, eq(users.id, licences.talentId))
+    .leftJoin(talentProfiles, eq(talentProfiles.userId, licences.talentId))
     .where(
       and(
         eq(licences.licenseeId, auth.userId),
