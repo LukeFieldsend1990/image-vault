@@ -28,6 +28,7 @@ interface Licence {
   platformFee: number | null;  // pence
   agencySharePct: number | null;
   talentSharePct: number | null;
+  deliveryMode: "standard" | "bridge_only" | null;
 }
 
 const STATUS_COLOURS: Record<LicenceStatus, string> = {
@@ -67,6 +68,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   const [loading, setLoading] = useState(true);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [togglingDeliveryId, setTogglingDeliveryId] = useState<string | null>(null);
 
   async function load() {
     const r = await fetch("/api/licences");
@@ -77,6 +79,18 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, []);
+
+  async function toggleDeliveryMode(l: Licence) {
+    const next = l.deliveryMode === "bridge_only" ? "standard" : "bridge_only";
+    setTogglingDeliveryId(l.id);
+    await fetch(`/api/licences/${l.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deliveryMode: next }),
+    });
+    setLicences((prev) => prev.map((x) => x.id === l.id ? { ...x, deliveryMode: next } : x));
+    setTogglingDeliveryId(null);
+  }
 
   async function revoke(id: string) {
     if (!confirm("Revoke this licence? Any pending downloads will be cancelled.")) return;
@@ -270,6 +284,40 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                       <span style={{ color: "var(--color-muted)" }}>Approved</span>
                       <span className="font-medium" style={{ color: "var(--color-ink)" }}>{formatDate(l.approvedAt)}</span>
                     </div>
+
+                    {/* Delivery mode toggle — only for approved licences */}
+                    {l.status === "APPROVED" && (
+                      <div className="flex items-center justify-between gap-4 px-3 py-3">
+                        <div>
+                          <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>Delivery mode</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: "var(--color-muted)" }}>
+                            {l.deliveryMode === "bridge_only"
+                              ? "CAS Bridge only — licensee must use the desktop bridge app to access files."
+                              : "Standard — licensee can download directly or use the CAS Bridge."}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void toggleDeliveryMode(l)}
+                          disabled={togglingDeliveryId === l.id}
+                          className="relative shrink-0 flex items-center rounded-full transition-colors disabled:opacity-50"
+                          style={{
+                            width: 44, height: 24,
+                            background: l.deliveryMode === "bridge_only" ? "var(--color-accent)" : "var(--color-border)",
+                          }}
+                          title={l.deliveryMode === "bridge_only" ? "Switch to Standard" : "Switch to CAS Bridge only"}
+                        >
+                          <span
+                            className="absolute rounded-full bg-white shadow transition-transform"
+                            style={{
+                              width: 18, height: 18,
+                              left: 3,
+                              transform: l.deliveryMode === "bridge_only" ? "translateX(20px)" : "translateX(0)",
+                            }}
+                          />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -64,3 +64,41 @@ export async function GET(
 
   return NextResponse.json({ licence: row });
 }
+
+// PATCH /api/licences/[id] — update delivery mode (talent or admin only)
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+
+  const { id } = await params;
+  const db = getDb();
+
+  const row = await db
+    .select({ talentId: licences.talentId, status: licences.status })
+    .from(licences)
+    .where(eq(licences.id, id))
+    .get();
+
+  if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const isOwner = row.talentId === session.sub;
+  const isAdmin = ADMIN_EMAILS.includes(session.email);
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: { deliveryMode?: string };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+
+  const { deliveryMode } = body;
+  if (deliveryMode !== "standard" && deliveryMode !== "bridge_only") {
+    return NextResponse.json({ error: "deliveryMode must be 'standard' or 'bridge_only'" }, { status: 400 });
+  }
+
+  await db.update(licences).set({ deliveryMode }).where(eq(licences.id, id));
+
+  return NextResponse.json({ ok: true });
+}

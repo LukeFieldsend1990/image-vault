@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
       platformFee: licences.platformFee,
       agencySharePct: talentSettings.agencySharePct,
       talentSharePct: talentSettings.talentSharePct,
+      deliveryMode: licences.deliveryMode,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
