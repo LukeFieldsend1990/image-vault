@@ -271,11 +271,13 @@ function PackageCard({
   pkg,
   onDelete,
   onResume,
+  onAddFiles,
   deleting,
 }: {
   pkg: ScanPackage;
   onDelete: (id: string) => void;
   onResume: (id: string) => void;
+  onAddFiles: (id: string) => void;
   deleting: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -283,6 +285,7 @@ function PackageCard({
   const [files, setFiles] = useState<ScanFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const [bundleDownloading, setBundleDownloading] = useState(false);
 
   async function toggleExpand() {
@@ -333,6 +336,18 @@ function PackageCard({
       URL.revokeObjectURL(url);
     } finally {
       setDownloadingId(null);
+    }
+  }
+
+  async function handleDeleteFile(fileId: string) {
+    setDeletingFileId(fileId);
+    try {
+      const res = await fetch(`/api/vault/files/${fileId}`, { method: "DELETE" });
+      if (res.ok) {
+        setFiles((prev) => prev.filter((f) => f.id !== fileId));
+      }
+    } finally {
+      setDeletingFileId(null);
     }
   }
 
@@ -447,6 +462,19 @@ function PackageCard({
               </svg>
             </button>
           )}
+          {/* Add files */}
+          <button
+            onClick={() => onAddFiles(pkg.id)}
+            className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+            style={{ color: "var(--color-ink)" }}
+            title="Add files to package"
+            aria-label="Add files to package"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
           {/* Chain of custody */}
           <Link
             href={`/vault/packages/${pkg.id}/chain-of-custody`}
@@ -544,37 +572,61 @@ function PackageCard({
                     </div>
                   </div>
 
-                  {/* Download button — only for complete files */}
-                  {file.uploadStatus === "complete" && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Download button — only for complete files */}
+                    {file.uploadStatus === "complete" && (
+                      <button
+                        onClick={() => void handleDownload(file)}
+                        disabled={downloadingId === file.id}
+                        className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 border rounded-sm transition disabled:opacity-40"
+                        style={{
+                          borderColor: "var(--color-border)",
+                          color: "var(--color-ink)",
+                        }}
+                        title="Download file"
+                      >
+                        {downloadingId === file.id ? (
+                          <>
+                            <svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                            </svg>
+                            Downloading…
+                          </>
+                        ) : (
+                          <>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="8 17 12 21 16 17" />
+                              <line x1="12" y1="12" x2="12" y2="21" />
+                              <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.36" />
+                            </svg>
+                            Download
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {/* Delete file */}
                     <button
-                      onClick={() => void handleDownload(file)}
-                      disabled={downloadingId === file.id}
-                      className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 border rounded-sm transition disabled:opacity-40"
-                      style={{
-                        borderColor: "var(--color-border)",
-                        color: "var(--color-ink)",
-                      }}
-                      title="Download file"
+                      onClick={() => void handleDeleteFile(file.id)}
+                      disabled={deletingFileId === file.id}
+                      className="p-1.5 rounded transition opacity-30 hover:opacity-100 disabled:opacity-20"
+                      style={{ color: "var(--color-ink)" }}
+                      title="Delete file"
+                      aria-label="Delete file"
                     >
-                      {downloadingId === file.id ? (
-                        <>
-                          <svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                          </svg>
-                          Downloading…
-                        </>
+                      {deletingFileId === file.id ? (
+                        <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                        </svg>
                       ) : (
-                        <>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="8 17 12 21 16 17" />
-                            <line x1="12" y1="12" x2="12" y2="21" />
-                            <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.36" />
-                          </svg>
-                          Download
-                        </>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6M14 11v6" />
+                          <path d="M9 6V4h6v2" />
+                        </svg>
                       )}
                     </button>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -591,6 +643,7 @@ export default function DashboardClient() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [resumePackageId, setResumePackageId] = useState<string | null>(null);
+  const [addToPackageId, setAddToPackageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchPackages = useCallback(async () => {
@@ -612,11 +665,19 @@ export default function DashboardClient() {
   function handleUploadComplete() {
     setModalOpen(false);
     setResumePackageId(null);
+    setAddToPackageId(null);
     void fetchPackages();
   }
 
   function handleResume(packageId: string) {
     setResumePackageId(packageId);
+    setAddToPackageId(null);
+    setModalOpen(true);
+  }
+
+  function handleAddFiles(packageId: string) {
+    setAddToPackageId(packageId);
+    setResumePackageId(null);
     setModalOpen(true);
   }
 
@@ -707,6 +768,7 @@ export default function DashboardClient() {
                 pkg={pkg}
                 onDelete={handleDelete}
                 onResume={handleResume}
+                onAddFiles={handleAddFiles}
                 deleting={deletingId === pkg.id}
               />
             ))}
@@ -739,9 +801,10 @@ export default function DashboardClient() {
       {/* ── Upload modal ── */}
       {modalOpen && (
         <UploadModal
-          onClose={() => { setModalOpen(false); setResumePackageId(null); }}
+          onClose={() => { setModalOpen(false); setResumePackageId(null); setAddToPackageId(null); }}
           onComplete={handleUploadComplete}
           resumePackageId={resumePackageId ?? undefined}
+          addToPackageId={addToPackageId ?? undefined}
         />
       )}
     </div>

@@ -8,6 +8,7 @@ interface Props {
   onComplete: () => void;
   forTalentId?: string;      // rep uploading on behalf of talent
   resumePackageId?: string;  // if set, opens in resume mode for this package
+  addToPackageId?: string;   // if set, skip metadata and add new files to existing package
 }
 
 type Step = "metadata" | "files";
@@ -47,9 +48,11 @@ export default function UploadModal({
   onComplete,
   forTalentId,
   resumePackageId,
+  addToPackageId,
 }: Props) {
   const isResumeMode = !!resumePackageId;
-  const [step, setStep] = useState<Step>(isResumeMode ? "files" : "metadata");
+  const isAddMode = !!addToPackageId;
+  const [step, setStep] = useState<Step>(isResumeMode || isAddMode ? "files" : "metadata");
 
   // Metadata fields (new mode only)
   const [name, setName] = useState("");
@@ -61,7 +64,7 @@ export default function UploadModal({
 
   // Package & upload state
   const [packageId, setPackageId] = useState<string | null>(
-    resumePackageId ?? null
+    resumePackageId ?? addToPackageId ?? null
   );
   const [files, setFiles] = useState<FileProgress[]>([]);
   const [resumeLoading, setResumeLoading] = useState(isResumeMode);
@@ -443,7 +446,9 @@ export default function UploadModal({
               ? "New Scan Package"
               : isResumeMode
                 ? "Resume Upload"
-                : "Upload Files"}
+                : isAddMode
+                  ? "Add Files to Package"
+                  : "Upload Files"}
           </h2>
           <button
             onClick={onClose}
