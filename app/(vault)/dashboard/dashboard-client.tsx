@@ -424,7 +424,7 @@ function PackageCard({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-[11px]" style={{ color: "var(--color-muted)" }}>
+          <div className="hidden sm:flex items-center gap-3 text-[11px]" style={{ color: "var(--color-muted)" }}>
             {pkg.studioName && <span>{pkg.studioName}</span>}
             {pkg.captureDate && (
               <>
@@ -436,7 +436,7 @@ function PackageCard({
         </div>
 
         {/* Right side: file count + size + actions */}
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           <div className="text-right">
             <p className="text-xs font-medium text-[--color-ink]">
               {pkg.fileCount} file{pkg.fileCount !== 1 ? "s" : ""}
@@ -447,11 +447,11 @@ function PackageCard({
               </p>
             )}
           </div>
-          {/* Preview — only for ready packages */}
+          {/* Preview — only for ready packages, hidden on mobile */}
           {pkg.status === "ready" && (
             <button
               onClick={() => setPreviewOpen((v) => !v)}
-              className="flex items-center gap-1 p-1.5 rounded transition opacity-40 hover:opacity-100"
+              className="hidden sm:flex items-center gap-1 p-1.5 rounded transition opacity-40 hover:opacity-100"
               style={{ color: "var(--color-ink)" }}
               title="Preview scan"
               aria-label="Preview scan"
@@ -475,10 +475,10 @@ function PackageCard({
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
-          {/* Chain of custody */}
+          {/* Chain of custody — hidden on mobile */}
           <Link
             href={`/vault/packages/${pkg.id}/chain-of-custody`}
-            className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+            className="hidden sm:block p-1.5 rounded transition opacity-40 hover:opacity-100"
             style={{ color: "var(--color-ink)" }}
             title="Chain of custody"
             aria-label="View chain of custody"
