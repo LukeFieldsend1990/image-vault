@@ -6,10 +6,10 @@ import { getDb } from "@/lib/db";
 import { scanFiles, scanPackages, uploadSessions, downloadEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and, sql } from "drizzle-orm";
+import { getRequestContext } from "@cloudflare/next-on-pages";
 
 function cfEnv(key: string): string | undefined {
   try {
-    const { getRequestContext } = require("@cloudflare/next-on-pages");
     return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
   } catch {
     return process.env[key];
