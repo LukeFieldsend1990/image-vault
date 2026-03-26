@@ -142,6 +142,37 @@ export default function BridgeSettingsClient({
           : "Monitor active bridge sessions across your licences."}
       </p>
 
+      {/* Vault URL — shown to licensees so they can paste it into the bridge app */}
+      {canManage && (
+        <div
+          className="rounded border p-4 mb-6"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+            Vault URL
+          </p>
+          <p className="text-xs mb-2" style={{ color: "var(--color-muted)" }}>
+            Paste this into the CAS Bridge desktop app along with your token.
+          </p>
+          <div className="flex items-center gap-2">
+            <code
+              className="flex-1 rounded px-3 py-2 text-xs font-mono select-all"
+              style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-ink)" }}
+            >
+              {process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io"}
+            </code>
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard.writeText(process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io")}
+              className="shrink-0 rounded border px-3 py-2 text-xs transition hover:opacity-70"
+              style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Active grants summary (talent / rep) */}
       {!canManage && totalActiveGrants > 0 && (
         <div
