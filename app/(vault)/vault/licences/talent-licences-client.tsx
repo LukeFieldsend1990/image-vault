@@ -285,37 +285,46 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                       <span className="font-medium" style={{ color: "var(--color-ink)" }}>{formatDate(l.approvedAt)}</span>
                     </div>
 
-                    {/* Delivery mode toggle — only for approved licences */}
+                    {/* Delivery mode — only for approved licences */}
                     {l.status === "APPROVED" && (
-                      <div className="flex items-center justify-between gap-4 px-3 py-3">
-                        <div>
+                      <div className="flex items-start justify-between gap-4 px-3 py-3">
+                        <div className="min-w-0">
                           <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>Delivery mode</p>
                           <p className="text-[11px] mt-0.5" style={{ color: "var(--color-muted)" }}>
                             {l.deliveryMode === "bridge_only"
-                              ? "CAS Bridge only — licensee must use the desktop bridge app to access files."
-                              : "Standard — licensee can download directly or use the CAS Bridge."}
+                              ? "CAS Bridge only — licensee must use the desktop bridge app."
+                              : "Standard — licensee can download directly or via CAS Bridge."}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void toggleDeliveryMode(l)}
-                          disabled={togglingDeliveryId === l.id}
-                          className="relative shrink-0 flex items-center rounded-full transition-colors disabled:opacity-50"
-                          style={{
-                            width: 44, height: 24,
-                            background: l.deliveryMode === "bridge_only" ? "var(--color-accent)" : "var(--color-border)",
-                          }}
-                          title={l.deliveryMode === "bridge_only" ? "Switch to Standard" : "Switch to CAS Bridge only"}
+                        <div
+                          className="flex items-center rounded shrink-0 overflow-hidden"
+                          style={{ border: "1px solid var(--color-border)" }}
                         >
-                          <span
-                            className="absolute rounded-full bg-white shadow transition-transform"
-                            style={{
-                              width: 18, height: 18,
-                              left: 3,
-                              transform: l.deliveryMode === "bridge_only" ? "translateX(20px)" : "translateX(0)",
-                            }}
-                          />
-                        </button>
+                          {([
+                            { value: "standard",    label: "Standard",   color: "#166534" },
+                            { value: "bridge_only", label: "CAS Bridge", color: "#92400e" },
+                          ] as const).map((opt, idx, arr) => {
+                            const active = (l.deliveryMode ?? "standard") === opt.value;
+                            const isSaving = togglingDeliveryId === l.id;
+                            return (
+                              <button
+                                key={opt.value}
+                                disabled={isSaving}
+                                onClick={() => void toggleDeliveryMode(l)}
+                                className="px-3 py-1.5 text-[11px] font-medium transition"
+                                style={{
+                                  background: active ? `${opt.color}18` : "transparent",
+                                  color: active ? opt.color : "var(--color-muted)",
+                                  borderRight: idx < arr.length - 1 ? "1px solid var(--color-border)" : "none",
+                                  cursor: isSaving ? "wait" : "pointer",
+                                  opacity: isSaving && !active ? 0.5 : 1,
+                                }}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
