@@ -697,7 +697,7 @@ export default function DashboardClient() {
     <div className="flex flex-col h-full">
       {/* ── Top bar ── */}
       <header
-        className="flex items-center justify-between border-b px-8 py-5"
+        className="flex items-center justify-between border-b px-8 lg:px-12 py-5"
         style={{ borderColor: "var(--color-border)" }}
       >
         <div>
@@ -761,7 +761,7 @@ export default function DashboardClient() {
             </div>
           </div>
         ) : (
-          <div className="px-8 py-6 flex flex-col gap-3">
+          <div className="px-8 lg:px-12 py-6 flex flex-col gap-3">
             {packages.map((pkg) => (
               <PackageCard
                 key={pkg.id}
@@ -778,7 +778,7 @@ export default function DashboardClient() {
 
       {/* ── Stats bar ── */}
       <footer
-        className="border-t px-8 py-4 flex items-center gap-8"
+        className="border-t px-8 lg:px-12 py-4 flex items-center gap-8"
         style={{ borderColor: "var(--color-border)" }}
       >
         {[
