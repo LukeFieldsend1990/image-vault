@@ -146,7 +146,7 @@ function ConfirmPreauthView({
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
           </svg>
           <p className="text-sm font-medium" style={{ color: "#166534" }}>Pre-authorisation confirmed</p>
-          <p className="mt-1 text-xs" style={{ color: "#166534" }}>Your rep's request has been approved.</p>
+          <p className="mt-1 text-xs" style={{ color: "#166534" }}>Your rep&apos;s request has been approved.</p>
         </div>
         <Link href="/vault/licences" className="mt-4 block text-center text-xs underline" style={{ color: "var(--color-muted)" }}>
           View licences
@@ -268,7 +268,7 @@ function RepRequestView({ licenceId, licence }: { licenceId: string; licence: Li
 
       <h1 className="text-xl font-semibold mb-2" style={{ color: "var(--color-ink)" }}>Request Pre-Authorisation</h1>
       <p className="text-sm mb-6" style={{ color: "var(--color-muted)" }}>
-        As the rep, you can request pre-authorisation on the talent's behalf.
+        As the rep, you can request pre-authorisation on the talent&apos;s behalf.
         The talent will receive an email and must confirm with their 2FA code before it takes effect.
       </p>
 
@@ -279,7 +279,7 @@ function RepRequestView({ licenceId, licence }: { licenceId: string; licence: Li
         style={{ borderColor: "#d97706", background: "rgba(217,119,6,0.06)" }}
       >
         <p className="text-xs" style={{ color: "#92400e" }}>
-          <strong>Note:</strong> This download still requires the talent's physical verification to activate. One-off download authorisation always requires the talent's direct 2FA code — only future downloads can be pre-authorised.
+          <strong>Note:</strong> This download still requires the talent&apos;s physical verification to activate. One-off download authorisation always requires the talent&apos;s direct 2FA code — only future downloads can be pre-authorised.
         </p>
       </div>
 

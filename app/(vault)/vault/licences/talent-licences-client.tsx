@@ -95,7 +95,6 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
     setLoading(false);
   }
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, []);
 
   async function loadRequests() {
