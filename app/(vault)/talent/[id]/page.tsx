@@ -131,12 +131,17 @@ export default async function TalentProfilePage({
 
   const knownFor = profile?.knownFor ? JSON.parse(profile.knownFor) as { title: string; year?: number; type: string }[] : [];
 
+  // Deepfake Protection (monitoring_reference) is internal — hide from licensees
+  const visiblePermissions = session.role === "licensee"
+    ? permissions.filter((p) => p.licenceType !== "monitoring_reference")
+    : permissions;
+
   return (
     <TalentProfileClient
       talentId={id}
       talent={talent}
       profile={profile ? { ...profile, knownFor } : null}
-      permissions={permissions}
+      permissions={visiblePermissions}
       capabilities={capabilities}
       packages={packages}
     />
