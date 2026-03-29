@@ -3,9 +3,9 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import TalentAuthoriseClient from "./talent-authorise-client";
 
-function roleFromCookie(): string {
+async function roleFromCookie(): Promise<string> {
   try {
-    const jar = cookies();
+    const jar = await cookies();
     const raw = jar.get("session")?.value;
     if (!raw) return "talent";
     const parts = raw.split(".");
