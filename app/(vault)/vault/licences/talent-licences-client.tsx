@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type LicenceStatus = "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
-type LicenceTab = "active" | "requests" | "history";
+type LicenceTab = "active" | "requests" | "expired" | "history";
 
 interface Licence {
   id: string;
@@ -155,10 +155,12 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const activeLicences = licences.filter((l) => l.status === "APPROVED");
-  const historyLicences = licences.filter((l) => l.status === "DENIED" || l.status === "REVOKED" || l.status === "EXPIRED");
+  const activeLicences = licences.filter((l) => l.status === "APPROVED" && l.validTo >= now);
+  const expiredLicences = licences.filter((l) => l.status === "EXPIRED" || (l.status === "APPROVED" && l.validTo < now));
+  const historyLicences = licences.filter((l) => l.status === "DENIED" || l.status === "REVOKED");
 
   const visibleLicences = activeTab === "active" ? activeLicences
+    : activeTab === "expired" ? expiredLicences
     : activeTab === "history" ? historyLicences
     : [];
 
@@ -175,6 +177,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
         {([
           { id: "active" as LicenceTab, label: "Active", count: activeLicences.length },
           { id: "requests" as LicenceTab, label: "Download Requests", count: pendingDownloads.length, pulse: pendingDownloads.length > 0 },
+          { id: "expired" as LicenceTab, label: "Expired", count: expiredLicences.length },
           { id: "history" as LicenceTab, label: "Denied / Revoked", count: historyLicences.length },
         ]).map((tab) => (
           <button
@@ -246,7 +249,9 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
           {loading && <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>}
           {!loading && visibleLicences.length === 0 && (
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-              {activeTab === "active" ? "No active licences." : "No denied or revoked licences."}
+              {activeTab === "active" ? "No active licences."
+            : activeTab === "expired" ? "No expired licences."
+            : "No denied or revoked licences."}
             </p>
           )}
 
@@ -258,6 +263,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
               const netEarnings = feeRef ? Math.round(feeRef * sharePct / 100) : null;
               const platformPct = 100 - (l.agencySharePct ?? 20) - (l.talentSharePct ?? 65);
               const preauthActive = l.preauthUntil !== null && l.preauthUntil > now;
+              const isExpired = l.validTo < now || l.status === "EXPIRED";
 
               return (
                 <div key={l.id} className="rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
@@ -320,7 +326,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                           style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}>
                           Contract
                         </a>
-                        {l.status === "APPROVED" && (
+                        {l.status === "APPROVED" && !isExpired && (
                           <button onClick={() => revoke(l.id)} disabled={revokingId === l.id}
                             className="rounded border px-3 py-1.5 text-xs transition disabled:opacity-60"
                             style={{ borderColor: "var(--color-danger)", color: "var(--color-danger)" }}>
@@ -426,7 +432,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                         )}
 
                         {/* ── Pre-auth status ────────────────────────────── */}
-                        {l.status === "APPROVED" && (
+                        {l.status === "APPROVED" && !isExpired && (
                           <div className="flex items-start justify-between gap-4 px-3 py-3">
                             <div className="min-w-0">
                               <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>Download pre-authorisation</p>
