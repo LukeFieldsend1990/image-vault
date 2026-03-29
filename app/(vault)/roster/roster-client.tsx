@@ -52,11 +52,11 @@ function fmt(n: number | null): string {
 }
 
 function fmtMoney(pence: number): string {
-  if (pence === 0) return "£0";
-  const pounds = pence / 100;
-  if (pounds >= 1_000_000) return `£${(pounds / 1_000_000).toFixed(1)}M`;
-  if (pounds >= 1_000) return `£${(pounds / 1_000).toFixed(1)}K`;
-  return `£${pounds.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  if (pence === 0) return "$0";
+  const dollars = pence / 100;
+  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
+  if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(1)}K`;
+  return `$${dollars.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 const LICENCE_TYPE_LABELS: Record<string, string> = {

@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import UploadModal from "../../upload-modal";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
+import MonitorClient from "../../vault/monitor/monitor-client";
+import type { TalentIdentityForMonitor } from "../../vault/monitor/page";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -78,11 +80,11 @@ function formatBytes(bytes: number): string {
 }
 
 function fmtMoney(pence: number): string {
-  if (pence === 0) return "£0";
-  const pounds = pence / 100;
-  if (pounds >= 1_000_000) return `£${(pounds / 1_000_000).toFixed(1)}M`;
-  if (pounds >= 1_000) return `£${(pounds / 1_000).toFixed(1)}K`;
-  return `£${pounds.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  if (pence === 0) return "$0";
+  const dollars = pence / 100;
+  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
+  if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(1)}K`;
+  return `$${dollars.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 function licenceTypeLabel(t: string | null): string {
@@ -862,7 +864,7 @@ function RevenueTab({ talentId }: { talentId: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-type Tab = "vault" | "permissions" | "revenue";
+type Tab = "vault" | "permissions" | "revenue" | "monitor";
 
 export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [packages, setPackages] = useState<ScanPackage[]>([]);
@@ -935,6 +937,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
     { id: "vault", label: "Vault" },
     { id: "permissions", label: "Permissions" },
     { id: "revenue", label: "Revenue" },
+    { id: "monitor", label: "DeepScan" },
   ];
 
   return (
@@ -1063,6 +1066,12 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
 
         {activeTab === "permissions" && <PermissionsTab talentId={talentId} />}
         {activeTab === "revenue" && <RevenueTab talentId={talentId} />}
+        {activeTab === "monitor" && (() => {
+          const monitorIdentity: TalentIdentityForMonitor | null = talent?.fullName
+            ? { fullName: talent.fullName, profileImageUrl: talent.profileImageUrl ?? null, knownFor: [] }
+            : null;
+          return <MonitorClient identity={monitorIdentity} />;
+        })()}
       </div>
 
       {/* Stats bar — only on vault tab */}

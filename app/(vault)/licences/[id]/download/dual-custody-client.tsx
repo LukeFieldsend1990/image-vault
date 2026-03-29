@@ -23,8 +23,15 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
   // Initiate the dual-custody session on mount
   useEffect(() => {
     fetch(`/api/licences/${licenceId}/download/initiate`, { method: "POST" })
-      .then((r) => r.json() as Promise<{ step?: Step }>)
-      .then((d) => setStep(d.step ?? "error"))
+      .then(async (r) => {
+        const d = await r.json() as { step?: Step; error?: string };
+        if (!r.ok) {
+          setError(d.error ?? "Could not initiate download session.");
+          setStep("error");
+        } else {
+          setStep(d.step ?? "error");
+        }
+      })
       .catch(() => setStep("error"));
   }, [licenceId]);
 
@@ -233,9 +240,14 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
       )}
 
       {step === "error" && (
-        <p className="text-sm" style={{ color: "var(--color-danger)" }}>
-          Something went wrong. Please go back and try again.
-        </p>
+        <div className="rounded border p-5" style={{ borderColor: "var(--color-border)", background: "rgba(192,57,43,0.04)" }}>
+          <p className="text-sm font-medium mb-1" style={{ color: "var(--color-danger)" }}>
+            {error ?? "Something went wrong."}
+          </p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            Please go back and try again, or contact support if this persists.
+          </p>
+        </div>
       )}
     </div>
   );

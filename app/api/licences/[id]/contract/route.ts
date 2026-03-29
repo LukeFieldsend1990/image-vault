@@ -32,7 +32,7 @@ function fmtDate(unix: number | null): string {
 
 function fmtGBP(pence: number | null): string {
   if (!pence) return "Not specified";
-  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
+  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 }
 
 function contractRef(licenceId: string, approvedAt: number | null): string {
@@ -658,7 +658,7 @@ export async function GET(
   <div class="section-title"><span class="section-number">7.</span>Fees &amp; Payment</div>
   <div class="clause"><span class="clause-num">7.1</span><span class="clause-body">In consideration of the rights granted under this Agreement, the Licensee shall pay the Agreed Fee of <strong>${fmtGBP(agreedFee)}</strong> (exclusive of VAT) in accordance with this Clause 7.</span></div>
   <div class="clause"><span class="clause-num">7.2</span><span class="clause-body">The Agreed Fee shall be disbursed as follows: <strong>${fmtGBP(talentFee)}</strong> to the Licensor and <strong>${fmtGBP(platformFee)}</strong> (representing 15% of the Agreed Fee) to the Platform Operator as the Platform Service Fee.</span></div>
-  <div class="clause"><span class="clause-num">7.3</span><span class="clause-body">Payment of the Agreed Fee is due within thirty (30) days of the Effective Date unless otherwise agreed in writing by the parties. All payments shall be made in pounds sterling (GBP) unless otherwise agreed.</span></div>
+  <div class="clause"><span class="clause-num">7.3</span><span class="clause-body">Payment of the Agreed Fee is due within thirty (30) days of the Effective Date unless otherwise agreed in writing by the parties. All payments shall be made in US dollars (USD) unless otherwise agreed.</span></div>
   <div class="clause"><span class="clause-num">7.4</span><span class="clause-body">All sums payable under this Agreement are exclusive of Value Added Tax (VAT). Where VAT is applicable, it shall be charged in addition at the prevailing rate and shall be payable by the Licensee upon receipt of a valid VAT invoice.</span></div>
   <div class="clause"><span class="clause-num">7.5</span><span class="clause-body">In the event of late payment, interest shall accrue on the outstanding amount at the rate of 8% per annum above the Bank of England base rate in accordance with the Late Payment of Commercial Debts (Interest) Act 1998.</span></div>
   <div class="clause"><span class="clause-num">7.6</span><span class="clause-body">The Licensee shall not withhold, set off, or deduct any amount from the fees payable under this Agreement except as required by law.</span></div>

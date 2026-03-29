@@ -328,6 +328,9 @@ function RepsTab({ talentId }: { talentId: string }) {
   const [reps, setReps] = useState<Rep[]>([]);
   const [loading, setLoading] = useState(true);
   const [unlinking, setUnlinking] = useState<string | null>(null);
+  const [addEmail, setAddEmail] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/admin/talent/${talentId}/reps`)
@@ -349,6 +352,27 @@ function RepsTab({ talentId }: { talentId: string }) {
     }
   }
 
+  async function addRep() {
+    if (!addEmail.trim()) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      const res = await fetch(`/api/admin/talent/${talentId}/reps`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repEmail: addEmail.trim() }),
+      });
+      const d = await res.json() as { rep?: Rep; error?: string };
+      if (!res.ok) throw new Error(d.error ?? "Failed");
+      if (d.rep) setReps((prev) => [...prev, d.rep!]);
+      setAddEmail("");
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setAdding(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="px-8 py-6 space-y-3">
@@ -364,6 +388,36 @@ function RepsTab({ talentId }: { talentId: string }) {
       <p className="text-xs mb-5" style={{ color: "var(--color-muted)" }}>
         Reps currently managing this talent. Unlinking removes the delegation immediately — the talent remains unaffected.
       </p>
+
+      {/* Add rep */}
+      <div className="mb-6 flex items-start gap-2">
+        <div className="flex-1">
+          <input
+            type="email"
+            placeholder="Rep email address"
+            value={addEmail}
+            onChange={(e) => { setAddEmail(e.target.value); setAddError(null); }}
+            onKeyDown={(e) => e.key === "Enter" && void addRep()}
+            className="w-full rounded border px-3 py-2 text-sm focus:outline-none"
+            style={{
+              borderColor: addError ? "var(--color-danger)" : "var(--color-border)",
+              background: "var(--color-bg)",
+              color: "var(--color-ink)",
+            }}
+          />
+          {addError && (
+            <p className="mt-1 text-xs" style={{ color: "var(--color-danger)" }}>{addError}</p>
+          )}
+        </div>
+        <button
+          onClick={() => void addRep()}
+          disabled={adding || !addEmail.trim()}
+          className="shrink-0 rounded px-4 py-2 text-sm font-medium text-white transition disabled:opacity-40"
+          style={{ background: "var(--color-ink)" }}
+        >
+          {adding ? "Adding…" : "Add Rep"}
+        </button>
+      </div>
 
       {reps.length === 0 ? (
         <div

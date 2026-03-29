@@ -60,8 +60,10 @@ function formatDate(ts: number | null): string {
 }
 
 function fmtGBP(pence: number) {
-  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
+  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
+
+type LicenceTab = "active" | "history";
 
 export default function TalentLicencesClient({ role = "talent" }: { role?: string }) {
   const [licences, setLicences] = useState<Licence[]>([]);
@@ -69,6 +71,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [togglingDeliveryId, setTogglingDeliveryId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<LicenceTab>("active");
 
   async function load() {
     const r = await fetch("/api/licences");
@@ -100,24 +103,61 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
     setRevokingId(null);
   }
 
+  const activeLicences = licences.filter((l) => l.status === "APPROVED");
+  const historyLicences = licences.filter((l) => l.status === "DENIED" || l.status === "REVOKED" || l.status === "EXPIRED");
+  const visibleLicences = activeTab === "active" ? activeLicences : historyLicences;
+
   return (
     <div className="p-8">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
           Granted Licences
         </h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Licences you have approved, denied, or revoked.
-        </p>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex border-b mb-6" style={{ borderColor: "var(--color-border)" }}>
+        {([
+          { id: "active" as LicenceTab, label: "Active", count: activeLicences.length },
+          { id: "history" as LicenceTab, label: "Denied / Revoked", count: historyLicences.length },
+        ]).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className="relative py-2.5 px-1 mr-6 text-sm font-medium transition"
+            style={{ color: activeTab === tab.id ? "var(--color-ink)" : "var(--color-muted)" }}
+          >
+            {tab.label}
+            {tab.count > 0 && (
+              <span
+                className="ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{
+                  background: activeTab === tab.id ? "var(--color-accent)" : "var(--color-border)",
+                  color: activeTab === tab.id ? "#fff" : "var(--color-muted)",
+                }}
+              >
+                {tab.count}
+              </span>
+            )}
+            {activeTab === tab.id && (
+              <span
+                className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                style={{ background: "var(--color-accent)" }}
+              />
+            )}
+          </button>
+        ))}
       </div>
 
       {loading && <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>}
-      {!loading && licences.length === 0 && (
-        <p className="text-sm" style={{ color: "var(--color-muted)" }}>No licences yet.</p>
+      {!loading && visibleLicences.length === 0 && (
+        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+          {activeTab === "active" ? "No active licences." : "No denied or revoked licences."}
+        </p>
       )}
 
       <div className="space-y-3">
-        {licences.map((l) => {
+        {visibleLicences.map((l) => {
           const expanded = expandedId === l.id;
           const feeRef = l.agreedFee ?? l.proposedFee;
           const sharePct = role === "rep"
