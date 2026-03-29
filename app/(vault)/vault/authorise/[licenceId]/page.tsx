@@ -26,7 +26,7 @@ export default async function TalentAuthorisePage({
 }) {
   const { licenceId } = await params;
   const sp = await searchParams;
-  const role = roleFromCookie();
+  const role = await roleFromCookie();
   const confirmPreauth = sp.confirm_preauth === "1";
 
   return (
