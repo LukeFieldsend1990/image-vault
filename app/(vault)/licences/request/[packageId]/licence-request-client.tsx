@@ -452,15 +452,15 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
               >
                 <div className="flex justify-between">
                   <span style={{ color: "var(--color-muted)" }}>Proposed fee</span>
-                  <span style={{ color: "var(--color-ink)" }}>$${parseFloat(proposedFee).toLocaleString("en-US", { minimumFractionDigits: 0 })}</span>
+                  <span style={{ color: "var(--color-ink)" }}>${parseFloat(proposedFee).toLocaleString("en-US", { minimumFractionDigits: 0 })}</span>
                 </div>
                 <div className="mt-1 flex justify-between">
                   <span style={{ color: "var(--color-muted)" }}>Platform fee (15%)</span>
-                  <span style={{ color: "var(--color-muted)" }}>$${(parseFloat(proposedFee) * 0.15).toLocaleString("en-US", { minimumFractionDigits: 0 })}</span>
+                  <span style={{ color: "var(--color-muted)" }}>${(parseFloat(proposedFee) * 0.15).toLocaleString("en-US", { minimumFractionDigits: 0 })}</span>
                 </div>
                 <div className="mt-1 flex justify-between font-medium">
                   <span style={{ color: "var(--color-muted)" }}>Talent receives (est.)</span>
-                  <span style={{ color: "var(--color-accent)" }}>$${(parseFloat(proposedFee) * 0.85).toLocaleString("en-US", { minimumFractionDigits: 0 })}</span>
+                  <span style={{ color: "var(--color-accent)" }}>${(parseFloat(proposedFee) * 0.85).toLocaleString("en-US", { minimumFractionDigits: 0 })}</span>
                 </div>
               </div>
             )}
