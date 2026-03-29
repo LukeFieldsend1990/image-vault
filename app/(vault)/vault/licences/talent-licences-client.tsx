@@ -155,8 +155,9 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const activeLicences = licences.filter((l) => l.status === "APPROVED" && l.validTo >= now);
-  const expiredLicences = licences.filter((l) => l.status === "EXPIRED" || (l.status === "APPROVED" && l.validTo < now));
+  // validTo is stored as midnight of the expiry date — licence is valid through end of that day
+  const activeLicences = licences.filter((l) => l.status === "APPROVED" && l.validTo + 86400 > now);
+  const expiredLicences = licences.filter((l) => l.status === "EXPIRED" || (l.status === "APPROVED" && l.validTo + 86400 <= now));
   const historyLicences = licences.filter((l) => l.status === "DENIED" || l.status === "REVOKED");
 
   const visibleLicences = activeTab === "active" ? activeLicences
@@ -263,7 +264,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
               const netEarnings = feeRef ? Math.round(feeRef * sharePct / 100) : null;
               const platformPct = 100 - (l.agencySharePct ?? 20) - (l.talentSharePct ?? 65);
               const preauthActive = l.preauthUntil !== null && l.preauthUntil > now;
-              const isExpired = l.validTo < now || l.status === "EXPIRED";
+              const isExpired = l.validTo + 86400 <= now || l.status === "EXPIRED";
 
               return (
                 <div key={l.id} className="rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>

@@ -60,7 +60,8 @@ export async function POST(
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (licence.validTo < now) {
+  // validTo is stored as midnight of the expiry date — licence is valid through end of that day
+  if (licence.validTo + 86400 <= now) {
     return NextResponse.json({ error: "Licence has expired" }, { status: 409 });
   }
 
