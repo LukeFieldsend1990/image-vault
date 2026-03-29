@@ -71,8 +71,8 @@ export default async function AdminBridgePage() {
     .orderBy(sql`${bridgeGrants.createdAt} desc`)
     .all();
 
-  // Filter out expired (offlineUntil < now)
-  const liveGrants = activeGrants.filter((g) => g.offlineUntil > now);
+  // Filter out expired grants (by licence expiry, not offline grace period)
+  const liveGrants = activeGrants.filter((g) => g.expiresAt > now);
 
   // Resolve user emails for grants
   const grantUserIds = [...new Set(liveGrants.map((g) => g.userId))];

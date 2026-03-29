@@ -49,6 +49,8 @@ export async function GET(req: NextRequest) {
       agencySharePct: talentSettings.agencySharePct,
       talentSharePct: talentSettings.talentSharePct,
       deliveryMode: licences.deliveryMode,
+      preauthUntil: licences.preauthUntil,
+      preauthSetBy: licences.preauthSetBy,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
@@ -188,7 +190,7 @@ export async function POST(req: NextRequest) {
       packageName: pkg2?.name ?? packageId,
       validFrom,
       validTo,
-      reviewUrl: `${baseUrl}/vault/authorise`,
+      reviewUrl: `${baseUrl}/vault/licences`,
     });
     await sendEmail({ to: talentUser.email, subject, html });
   })();

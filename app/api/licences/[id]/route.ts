@@ -47,6 +47,8 @@ export async function GET(
       downloadCount: licences.downloadCount,
       lastDownloadAt: licences.lastDownloadAt,
       createdAt: licences.createdAt,
+      preauthUntil: licences.preauthUntil,
+      preauthSetBy: licences.preauthSetBy,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))

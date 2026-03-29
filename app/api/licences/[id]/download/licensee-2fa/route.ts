@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { totpCredentials, users, licences, scanPackages } from "@/lib/db/schema";
+import { totpCredentials, users, licences, scanPackages, scanFiles, downloadEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { verifyTotpCode } from "@/lib/auth/totp";
 import { eq } from "drizzle-orm";
@@ -64,6 +64,55 @@ export async function POST(
     return NextResponse.json({ error: "Invalid code" }, { status: 401 });
   }
 
+  // Check if talent has pre-authorised this licence (not applicable for AI training licences)
+  const licenceRow = await db
+    .select({ preauthUntil: licences.preauthUntil, permitAiTraining: licences.permitAiTraining, fileScope: licences.fileScope, downloadCount: licences.downloadCount, validTo: licences.validTo })
+    .from(licences)
+    .where(eq(licences.id, id))
+    .get();
+
+  const preauthActive = licenceRow && licenceRow.preauthUntil && licenceRow.preauthUntil > now && !licenceRow.permitAiTraining;
+
+  if (preauthActive && licenceRow) {
+    // Auto-complete without requiring talent TOTP
+    const DOWNLOAD_TOKEN_TTL = 48 * 60 * 60;
+    const tokenExpiry = now + DOWNLOAD_TOKEN_TTL;
+
+    const files = await db
+      .select({ id: scanFiles.id, filename: scanFiles.filename })
+      .from(scanFiles)
+      .where(eq(scanFiles.packageId, dcSession.packageId))
+      .all();
+
+    const scopedFiles = licenceRow.fileScope === "all"
+      ? files
+      : files.filter(f => {
+          try { return (JSON.parse(licenceRow.fileScope) as string[]).includes(f.id); }
+          catch { return true; }
+        });
+
+    const downloadTokens: Array<{ fileId: string; filename: string; token: string }> = [];
+    for (const file of scopedFiles) {
+      const token = crypto.randomUUID();
+      await kv.put(`dl_token:${token}`, JSON.stringify({ licenceId: id, fileId: file.id, licenseeId: dcSession.licenseeId, expiresAt: tokenExpiry }), { expirationTtl: DOWNLOAD_TOKEN_TTL });
+      downloadTokens.push({ fileId: file.id, filename: file.filename, token });
+    }
+
+    const completed: DualCustodySession = { ...dcSession, step: "complete", downloadTokens };
+    const ttl = dcSession.expiresAt - now;
+    await kv.put(`dual_custody:${id}`, JSON.stringify(completed), { expirationTtl: ttl });
+
+    await db.update(licences).set({ downloadCount: (licenceRow.downloadCount ?? 0) + 1, lastDownloadAt: now }).where(eq(licences.id, id));
+
+    const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
+    const userAgent = req.headers.get("user-agent") ?? null;
+    for (const file of scopedFiles) {
+      await db.insert(downloadEvents).values({ id: crypto.randomUUID(), licenceId: id, licenseeId: dcSession.licenseeId, fileId: file.id, ip, userAgent, startedAt: now });
+    }
+
+    return NextResponse.json({ step: "complete", downloadTokens });
+  }
+
   const updated: DualCustodySession = { ...dcSession, step: "awaiting_talent" };
   const ttl = dcSession.expiresAt - now;
   await kv.put(`dual_custody:${id}`, JSON.stringify(updated), { expirationTtl: ttl });
@@ -84,7 +133,7 @@ export async function POST(
       licenseeEmail: licenseeUser?.email ?? "Unknown",
       projectName: licenceRow.projectName,
       packageName: pkg.name,
-      authoriseUrl: `${baseUrl}/vault/authorise/${id}`,
+      authoriseUrl: `${baseUrl}/vault/licences`,
     });
     await sendEmail({ to: talentUser.email, subject, html });
   })();

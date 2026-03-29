@@ -26,7 +26,8 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { code?: string } = {};
+  type PreauthOption = "once" | "7d" | "14d" | "30d" | "licence";
+  let body: { code?: string; preauthOption?: PreauthOption } = {};
   try {
     body = JSON.parse(await req.text());
   } catch { /* ok */ }
@@ -65,9 +66,9 @@ export async function POST(
     return NextResponse.json({ error: "Invalid code" }, { status: 401 });
   }
 
-  // Fetch the licence to get file_scope
+  // Fetch the licence to get file_scope and preauth eligibility
   const [licence] = await db
-    .select({ fileScope: licences.fileScope, downloadCount: licences.downloadCount })
+    .select({ fileScope: licences.fileScope, downloadCount: licences.downloadCount, permitAiTraining: licences.permitAiTraining, validTo: licences.validTo })
     .from(licences)
     .where(eq(licences.id, id))
     .limit(1)
@@ -119,12 +120,23 @@ export async function POST(
   const ttl = dcSession.expiresAt - now;
   await kv.put(`dual_custody:${id}`, JSON.stringify(completed), { expirationTtl: ttl });
 
-  // Update licence stats
+  // Calculate preauth expiry if requested (not available for AI training licences)
+  let preauthUntil: number | null = null;
+  const opt = body.preauthOption;
+  if (opt && opt !== "once" && !licence.permitAiTraining) {
+    if (opt === "7d")      preauthUntil = now + 7  * 86400;
+    else if (opt === "14d") preauthUntil = now + 14 * 86400;
+    else if (opt === "30d") preauthUntil = now + 30 * 86400;
+    else if (opt === "licence") preauthUntil = licence.validTo;
+  }
+
+  // Update licence stats (and preauth if set)
   await db
     .update(licences)
     .set({
       downloadCount: (licence.downloadCount ?? 0) + 1,
       lastDownloadAt: now,
+      ...(preauthUntil !== null ? { preauthUntil, preauthSetBy: session.sub } : {}),
     })
     .where(eq(licences.id, id));
 

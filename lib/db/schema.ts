@@ -95,6 +95,9 @@ export const licences = sqliteTable("licences", {
   downloadCount: integer("download_count").notNull().default(0),
   lastDownloadAt: integer("last_download_at"),
   deliveryMode: text("delivery_mode", { enum: ["standard", "bridge_only"] }).notNull().default("standard"),
+  // Pre-authorisation: talent (or rep-confirmed) blanket approval for future downloads
+  preauthUntil: integer("preauth_until"),   // unix timestamp; null = no active pre-auth
+  preauthSetBy: text("preauth_set_by").references(() => users.id), // who set it
   createdAt: integer("created_at").notNull(),
 });
 
