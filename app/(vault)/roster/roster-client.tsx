@@ -178,13 +178,12 @@ function TalentCard({ talent }: { talent: TalentRow }) {
             </div>
           )}
 
-          {/* TMDB badge */}
           {talent.tmdbId && (
             <div
               className="absolute bottom-2 left-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
               style={{ background: "#01b4e490", color: "#fff" }}
             >
-              TMDB
+              Verified
             </div>
           )}
         </div>

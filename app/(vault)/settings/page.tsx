@@ -215,7 +215,7 @@ export default async function SettingsPage({
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                TMDB Verified
+                Identity Verified
               </span>
             )}
           </div>
@@ -277,7 +277,7 @@ export default async function SettingsPage({
 
                   {identity.tmdbId && (
                     <p className="mt-2 text-[10px]" style={{ color: "var(--color-muted)" }}>
-                      TMDB ID #{identity.tmdbId}
+                      Industry profile linked
                     </p>
                   )}
 
@@ -287,7 +287,7 @@ export default async function SettingsPage({
                       className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium"
                       style={{ color: "var(--color-accent)" }}
                     >
-                      Link TMDB profile
+                      Link identity profile
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="9 18 15 12 9 6" />
                       </svg>

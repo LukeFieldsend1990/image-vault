@@ -184,8 +184,8 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
             </h1>
             <p className="mb-8 text-sm" style={{ color: "var(--color-muted)" }}>
               {isUpdate
-                ? "Search for your name to link your vault to your verified TMDB industry profile."
-                : "Search for your name and we\u2019ll pull your profile from The Movie Database. This links your vault to your verified industry identity."}
+                ? "Search for your name to link your vault to your verified industry profile."
+                : "Search for your name and we\u2019ll pull your profile from our industry database. This links your vault to your verified identity."}
             </p>
 
             <form onSubmit={handleSearch} className="flex gap-2 mb-6">
@@ -309,7 +309,7 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
 
                 {selected.popularity > 0 && (
                   <p className="mt-3 text-[10px]" style={{ color: "var(--color-muted)" }}>
-                    TMDB popularity: {selected.popularity}
+                    Industry profile score: {selected.popularity}
                   </p>
                 )}
               </div>
@@ -388,10 +388,7 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
           </div>
         </div>
         <div className="text-xs" style={{ color: "var(--color-sidebar-muted)" }}>
-          <span className="font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
-            Powered by TMDB.
-          </span>{" "}
-          Industry identity verification via The Movie Database.
+          Industry identity verification powered by our verified talent database.
         </div>
       </div>
     </div>
