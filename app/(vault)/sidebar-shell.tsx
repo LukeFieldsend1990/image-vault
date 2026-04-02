@@ -36,14 +36,14 @@ export default function SidebarShell({ children }: { children: React.ReactNode }
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <div>
+        <a href="/dashboard">
           <div className="text-[9px] font-semibold tracking-[0.2em] uppercase" style={{ color: "var(--color-sidebar-muted)" }}>
             United Agents
           </div>
           <div className="text-xs font-medium leading-none tracking-wide" style={{ color: "var(--color-sidebar-fg)" }}>
             Image Vault
           </div>
-        </div>
+        </a>
       </div>
 
       {/* ── Backdrop ── */}
