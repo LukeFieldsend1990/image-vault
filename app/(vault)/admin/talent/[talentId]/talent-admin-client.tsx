@@ -269,14 +269,14 @@ function PermissionsTab({ talentId }: { talentId: string }) {
               className="rounded border px-5 py-4"
               style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{meta.label}</p>
                   <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{meta.description}</p>
                 </div>
 
                 <div
-                  className="flex items-center rounded shrink-0 overflow-hidden"
+                  className="flex items-center rounded self-start shrink-0 overflow-hidden w-full sm:w-auto"
                   style={{ border: "1px solid var(--color-border)" }}
                 >
                   {PERMISSION_OPTIONS.map((opt, idx) => {
@@ -287,7 +287,7 @@ function PermissionsTab({ talentId }: { talentId: string }) {
                         key={opt.value}
                         disabled={isSaving}
                         onClick={() => void update(meta.type, opt.value)}
-                        className="px-3 py-1.5 text-[11px] font-medium transition"
+                        className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium transition"
                         style={{
                           background: active ? `${opt.color}18` : "transparent",
                           color: active ? opt.color : "var(--color-muted)",

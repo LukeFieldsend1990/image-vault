@@ -357,7 +357,8 @@ function PackageCard({
       style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
     >
       {/* ── Header row ── */}
-      <div className="px-5 py-4 flex items-center gap-4">
+      <div className="px-4 sm:px-5 py-4">
+        <div className="flex items-center gap-3 sm:gap-4">
         {/* Expand toggle */}
         <button
           onClick={toggleExpand}
@@ -392,7 +393,7 @@ function PackageCard({
 
         {/* Meta */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
             <p className="text-sm font-medium text-[--color-ink] truncate">{pkg.name}</p>
             {pkg.status === "uploading" ? (
               <>
@@ -435,8 +436,8 @@ function PackageCard({
           </div>
         </div>
 
-        {/* Right side: file count + size + actions */}
-        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+        {/* Right side: file count + size + actions (desktop) */}
+        <div className="hidden sm:flex items-center gap-4 shrink-0">
           <div className="text-right">
             <p className="text-xs font-medium text-[--color-ink]">
               {pkg.fileCount} file{pkg.fileCount !== 1 ? "s" : ""}
@@ -447,7 +448,6 @@ function PackageCard({
               </p>
             )}
           </div>
-          {/* Preview — only for ready packages */}
           {pkg.status === "ready" && (
             <button
               onClick={() => setPreviewOpen((v) => !v)}
@@ -462,7 +462,6 @@ function PackageCard({
               </svg>
             </button>
           )}
-          {/* Add files */}
           <button
             onClick={() => onAddFiles(pkg.id)}
             className="p-1.5 rounded transition opacity-40 hover:opacity-100"
@@ -475,7 +474,6 @@ function PackageCard({
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
-          {/* Chain of custody */}
           <Link
             href={`/vault/packages/${pkg.id}/chain-of-custody`}
             className="p-1.5 rounded transition opacity-40 hover:opacity-100"
@@ -508,6 +506,74 @@ function PackageCard({
               </svg>
             )}
           </button>
+        </div>
+        </div>
+        {/* Mobile: file count + action icons on second row */}
+        <div className="flex sm:hidden items-center justify-between mt-2 pl-8">
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            {pkg.fileCount} file{pkg.fileCount !== 1 ? "s" : ""}
+            {pkg.totalSizeBytes != null && pkg.totalSizeBytes > 0 && ` · ${formatBytes(pkg.totalSizeBytes)}`}
+          </p>
+          <div className="flex items-center gap-1">
+            {pkg.status === "ready" && (
+              <button
+                onClick={() => setPreviewOpen((v) => !v)}
+                className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+                style={{ color: "var(--color-ink)" }}
+                title="Preview scan"
+                aria-label="Preview scan"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={() => onAddFiles(pkg.id)}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }}
+              title="Add files to package"
+              aria-label="Add files to package"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <Link
+              href={`/vault/packages/${pkg.id}/chain-of-custody`}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }}
+              title="Chain of custody"
+              aria-label="View chain of custody"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </Link>
+            <button
+              onClick={() => onDelete(pkg.id)}
+              disabled={deleting}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100 disabled:opacity-20"
+              style={{ color: "var(--color-ink)" }}
+              title="Delete package"
+              aria-label="Delete package"
+            >
+              {deleting ? (
+                <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                  <path d="M9 6V4h6v2" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

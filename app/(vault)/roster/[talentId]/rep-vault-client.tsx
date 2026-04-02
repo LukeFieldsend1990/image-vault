@@ -330,76 +330,113 @@ function PackageCard({ pkg, onDelete, deleting }: { pkg: ScanPackage; onDelete: 
 
   return (
     <div className="border rounded-sm overflow-hidden" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-      <div className="px-5 py-4 flex items-center gap-4">
-        <button
-          onClick={toggleExpand}
-          className="shrink-0 p-1 rounded transition opacity-40 hover:opacity-100"
-          style={{ color: "var(--color-ink)" }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
-        {pkg.coverImageKey && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={`/api/vault/packages/${pkg.id}/cover`} alt="Cover"
-            className="shrink-0 rounded object-cover"
-            style={{ width: 44, height: 58, background: "var(--color-border)" }} />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5 min-w-0">
-            <p className="text-sm font-medium truncate min-w-0" style={{ color: "var(--color-ink)" }}>{pkg.name}</p>
-            <span className="shrink-0 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
-              style={{ background: `${statusColor}18`, color: statusColor }}>
-              {pkg.status}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {pkg.studioName && <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{pkg.studioName}</span>}
-            {pkg.captureDate && (
-              <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-                {pkg.studioName && "· "}
-                {new Date(pkg.captureDate * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="text-right mr-2">
-            <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
-              {pkg.fileCount} file{pkg.fileCount !== 1 ? "s" : ""}
-            </p>
-            {pkg.totalSizeBytes != null && pkg.totalSizeBytes > 0 && (
-              <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>{formatBytes(pkg.totalSizeBytes)}</p>
-            )}
-          </div>
-          {pkg.status === "ready" && (
-            <button onClick={() => setPreviewOpen((v) => !v)}
-              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
-              style={{ color: "var(--color-ink)" }} title="Preview scan">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            </button>
-          )}
-          <Link href={`/vault/packages/${pkg.id}/chain-of-custody`}
-            className="p-1.5 rounded transition opacity-40 hover:opacity-100"
-            style={{ color: "var(--color-ink)" }} title="Chain of custody">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-          </Link>
-          <button onClick={() => onDelete(pkg.id)} disabled={deleting}
-            className="p-1.5 rounded transition opacity-40 hover:opacity-100 disabled:opacity-20"
-            style={{ color: "var(--color-ink)" }} title="Delete package">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6M14 11v6M9 6V4h6v2" />
+      <div className="px-4 sm:px-5 py-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <button
+            onClick={toggleExpand}
+            className="shrink-0 p-1 rounded transition opacity-40 hover:opacity-100"
+            style={{ color: "var(--color-ink)" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
+              <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>
+          {pkg.coverImageKey && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/api/vault/packages/${pkg.id}/cover`} alt="Cover"
+              className="shrink-0 rounded object-cover"
+              style={{ width: 44, height: 58, background: "var(--color-border)" }} />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5 min-w-0">
+              <p className="text-sm font-medium truncate min-w-0" style={{ color: "var(--color-ink)" }}>{pkg.name}</p>
+              <span className="shrink-0 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
+                style={{ background: `${statusColor}18`, color: statusColor }}>
+                {pkg.status}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {pkg.studioName && <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{pkg.studioName}</span>}
+              {pkg.captureDate && (
+                <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>
+                  {pkg.studioName && "· "}
+                  {new Date(pkg.captureDate * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <div className="text-right mr-2">
+              <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+                {pkg.fileCount} file{pkg.fileCount !== 1 ? "s" : ""}
+              </p>
+              {pkg.totalSizeBytes != null && pkg.totalSizeBytes > 0 && (
+                <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>{formatBytes(pkg.totalSizeBytes)}</p>
+              )}
+            </div>
+            {pkg.status === "ready" && (
+              <button onClick={() => setPreviewOpen((v) => !v)}
+                className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+                style={{ color: "var(--color-ink)" }} title="Preview scan">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            )}
+            <Link href={`/vault/packages/${pkg.id}/chain-of-custody`}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }} title="Chain of custody">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </Link>
+            <button onClick={() => onDelete(pkg.id)} disabled={deleting}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100 disabled:opacity-20"
+              style={{ color: "var(--color-ink)" }} title="Delete package">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6M9 6V4h6v2" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        {/* Mobile: file count + action icons on second row */}
+        <div className="flex sm:hidden items-center justify-between mt-2 pl-8">
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            {pkg.fileCount} file{pkg.fileCount !== 1 ? "s" : ""}
+            {pkg.totalSizeBytes != null && pkg.totalSizeBytes > 0 && ` · ${formatBytes(pkg.totalSizeBytes)}`}
+          </p>
+          <div className="flex items-center gap-1">
+            {pkg.status === "ready" && (
+              <button onClick={() => setPreviewOpen((v) => !v)}
+                className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+                style={{ color: "var(--color-ink)" }} title="Preview scan">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            )}
+            <Link href={`/vault/packages/${pkg.id}/chain-of-custody`}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }} title="Chain of custody">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </Link>
+            <button onClick={() => onDelete(pkg.id)} disabled={deleting}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100 disabled:opacity-20"
+              style={{ color: "var(--color-ink)" }} title="Delete package">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6M9 6V4h6v2" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -520,7 +557,7 @@ function PermissionsTab({ talentId }: { talentId: string }) {
   const permMap = Object.fromEntries(permissions.map((p) => [p.licenceType, p.permission])) as Record<string, Permission["permission"]>;
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 sm:px-8 py-6">
       <p className="text-xs mb-5" style={{ color: "var(--color-muted)" }}>
         Control which licence types can be used for this talent. Reps can set defaults on their behalf — talent can always override in their own settings.
       </p>
@@ -544,7 +581,7 @@ function PermissionsTab({ talentId }: { talentId: string }) {
 
                 {/* Segmented control */}
                 <div
-                  className="flex items-center rounded self-start shrink-0 overflow-hidden"
+                  className="flex items-center rounded self-start shrink-0 overflow-hidden w-full sm:w-auto"
                   style={{ border: "1px solid var(--color-border)" }}
                 >
                   {PERMISSION_OPTIONS.map((opt, idx) => {
@@ -555,7 +592,7 @@ function PermissionsTab({ talentId }: { talentId: string }) {
                         key={opt.value}
                         disabled={isSaving}
                         onClick={() => void update(meta.type, opt.value)}
-                        className="px-3 py-1.5 text-[11px] font-medium transition"
+                        className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium transition"
                         style={{
                           background: active ? `${opt.color}18` : "transparent",
                           color: active ? opt.color : "var(--color-muted)",

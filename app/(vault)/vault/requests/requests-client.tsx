@@ -86,7 +86,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-8">
         <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
           Incoming Requests
@@ -130,10 +130,10 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                   </div>
                 )}
 
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     {isRep && r.talentEmail && (
-                      <p className="text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--color-accent)" }}>
+                      <p className="truncate text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--color-accent)" }}>
                         {r.talentEmail}
                       </p>
                     )}
