@@ -314,6 +314,23 @@ export function scanBookingCancelledEmail(p: ScanBookingCancelledParams): { subj
   };
 }
 
+export interface PasswordResetParams {
+  resetUrl: string;
+  expiresInMinutes: number;
+}
+
+export function passwordResetEmail(p: PasswordResetParams): { subject: string; html: string } {
+  return {
+    subject: "Password reset — Image Vault",
+    html: layout(`
+      <p>We received a request to reset your Image Vault password.</p>
+      <p>Click the button below to choose a new password. This link expires in ${p.expiresInMinutes} minutes.</p>
+      <a class="btn" href="${p.resetUrl}">Reset password</a>
+      <p class="muted" style="margin-top: 24px;">If you didn't request this, you can safely ignore this email. Your password will not be changed.</p>
+    `),
+  };
+}
+
 export interface DownloadCompleteParams {
   recipientEmail: string;
   isLicensee: boolean;

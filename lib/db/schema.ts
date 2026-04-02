@@ -26,6 +26,15 @@ export const refreshTokens = sqliteTable("refresh_tokens", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+export const passwordResetTokens = sqliteTable("password_reset_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: integer("expires_at").notNull(), // unix timestamp
+  usedAt: integer("used_at"), // unix timestamp; null until consumed
+  createdAt: integer("created_at").notNull(), // unix timestamp
+});
+
 export const scanPackages = sqliteTable("scan_packages", {
   id: text("id").primaryKey(), // UUID
   talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
