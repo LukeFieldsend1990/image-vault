@@ -98,7 +98,7 @@ export default async function VaultLayout({
         {/* Logo */}
         <div className="flex flex-col justify-between h-full py-8">
           <div>
-            <div className="px-6 mb-10">
+            <a href="/dashboard" className="block px-6 mb-10">
               <div className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: "var(--color-sidebar-muted)" }}>
                 United Agents
               </div>
@@ -108,7 +108,7 @@ export default async function VaultLayout({
                 </div>
               </div>
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
-            </div>
+            </a>
 
             <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} />
           </div>
