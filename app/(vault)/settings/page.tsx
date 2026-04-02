@@ -7,6 +7,7 @@ import { talentProfiles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
+import ChangePassword from "./change-password";
 
 const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
@@ -412,9 +413,11 @@ export default async function SettingsPage({
       {/* Security */}
       <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Security</h2>
-        <div className="space-y-3 text-sm" style={{ color: "var(--color-muted)" }}>
-          <p>Change password <span className="text-xs">(coming soon)</span></p>
-          <p>Regenerate authenticator <span className="text-xs">(coming soon)</span></p>
+        <div className="space-y-4">
+          <ChangePassword />
+          <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+            Regenerate authenticator <span className="text-xs">(coming soon)</span>
+          </p>
         </div>
       </div>
 
