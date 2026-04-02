@@ -152,6 +152,7 @@ export default async function AdminBridgePage() {
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
           Active Sessions
         </h2>
+        <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
         <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
           {/* Header */}
           <div
@@ -213,6 +214,7 @@ export default async function AdminBridgePage() {
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
           Event Log
         </h2>
+        <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
         <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
           {/* Header */}
           <div

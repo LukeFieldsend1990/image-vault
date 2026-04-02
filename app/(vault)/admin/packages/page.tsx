@@ -122,6 +122,7 @@ export default async function AdminPackagesPage() {
         </p>
       </div>
 
+      <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
       <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         {/* Header */}
         <div

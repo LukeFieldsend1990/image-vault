@@ -206,6 +206,7 @@ export default function InviteManager() {
       </div>
 
       {/* Invite table */}
+      <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
       <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         <div
           className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[700px]"

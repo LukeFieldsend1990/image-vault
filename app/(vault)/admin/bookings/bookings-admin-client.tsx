@@ -401,7 +401,8 @@ export default function BookingsAdminClient() {
               </button>
 
               {/* Expanded slots */}
-              {expandedId === ev.id && (
+              {expandedId === ev.id && (<>
+                <p className="text-[10px] text-right sm:hidden mb-1 px-5 pt-2" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
                 <div className="border-t overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
                   <table className="w-full min-w-[600px] text-xs">
                     <thead>
@@ -463,7 +464,7 @@ export default function BookingsAdminClient() {
                     <p className="px-5 py-3 text-xs" style={{ color: "var(--color-muted)" }}>No slots.</p>
                   )}
                 </div>
-              )}
+              </>)}
             </div>
           ))}
         </div>

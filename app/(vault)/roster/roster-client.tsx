@@ -516,6 +516,8 @@ export default function RosterClient() {
                 <p className="text-sm" style={{ color: "var(--color-muted)" }}>No licences across your roster yet.</p>
               </div>
             ) : (
+              <>
+              <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
               <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
                 <table className="w-full text-sm min-w-[600px]">
                   <thead>
@@ -575,6 +577,7 @@ export default function RosterClient() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </>
         )
