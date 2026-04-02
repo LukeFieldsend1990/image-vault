@@ -69,10 +69,10 @@ export default async function AdminTalentPage() {
         </p>
       </div>
 
-      <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         {/* Header */}
         <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
+          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
           style={{
             gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1fr 1fr",
             color: "var(--color-muted)",
@@ -100,7 +100,7 @@ export default async function AdminTalentPage() {
           return (
             <div
               key={u.id}
-              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm"
+              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[800px]"
               style={{
                 gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1fr 1fr",
                 borderColor: "var(--color-border)",

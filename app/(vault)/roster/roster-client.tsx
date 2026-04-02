@@ -516,8 +516,8 @@ export default function RosterClient() {
                 <p className="text-sm" style={{ color: "var(--color-muted)" }}>No licences across your roster yet.</p>
               </div>
             ) : (
-              <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
-                <table className="w-full text-sm">
+              <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
+                <table className="w-full text-sm min-w-[600px]">
                   <thead>
                     <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
                       {["Talent", "Project", "Type", "Fee", "Status", "Date"].map((h) => (
@@ -542,10 +542,10 @@ export default function RosterClient() {
                             borderBottom: "1px solid var(--color-border)",
                           }}
                         >
-                          <td className="px-4 py-3 font-medium truncate max-w-[120px]" style={{ color: "var(--color-ink)" }}>
+                          <td className="px-4 py-3 font-medium whitespace-nowrap" style={{ color: "var(--color-ink)" }}>
                             {l.talentName ?? "—"}
                           </td>
-                          <td className="px-4 py-3 truncate max-w-[140px]" style={{ color: "var(--color-ink)" }}>
+                          <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-ink)" }}>
                             {l.projectName ?? l.productionCompany ?? "—"}
                           </td>
                           <td className="px-4 py-3" style={{ color: "var(--color-muted)" }}>

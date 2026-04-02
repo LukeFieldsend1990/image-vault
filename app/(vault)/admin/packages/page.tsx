@@ -122,10 +122,10 @@ export default async function AdminPackagesPage() {
         </p>
       </div>
 
-      <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         {/* Header */}
         <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
+          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
           style={{
             gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr",
             color: "var(--color-muted)",
@@ -151,7 +151,7 @@ export default async function AdminPackagesPage() {
             <div key={p.id} className="border-b last:border-0" style={{ borderColor: "var(--color-border)" }}>
               {/* Main row */}
               <div
-                className="grid items-center px-5 py-3.5 text-sm"
+                className="grid items-center px-5 py-3.5 text-sm min-w-[800px]"
                 style={{ gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr" }}
               >
                 {/* Package name + chain of custody link */}

@@ -125,7 +125,7 @@ function SettingsTab({ talentId, initial }: { talentId: string; initial: TalentS
           Configure how approved licence fees are distributed. The three values must sum to exactly 100.
         </p>
 
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           {[
             { label: "Talent %", value: talentPct, onChange: setTalentPct },
             { label: "Agency %", value: agencyPct, onChange: setAgencyPct },

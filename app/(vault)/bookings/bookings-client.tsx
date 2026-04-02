@@ -185,9 +185,9 @@ export default function BookingsClient() {
       )}
 
       {!loading && !error && (
-        <div className="flex gap-6 items-start flex-wrap lg:flex-nowrap">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
           {/* Calendar */}
-          <div className="flex-shrink-0" style={{ minWidth: 320 }}>
+          <div className="w-full lg:w-auto lg:flex-shrink-0 lg:min-w-[320px]">
             <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
               {/* Month nav */}
               <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--color-border)" }}>

@@ -433,7 +433,7 @@ export default function UploadModal({
 
       {/* Panel */}
       <div
-        className="relative w-full max-w-lg rounded-sm border shadow-2xl"
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-sm border shadow-2xl"
         style={{ background: "var(--color-bg)", borderColor: "var(--color-border)" }}
       >
         {/* Header */}

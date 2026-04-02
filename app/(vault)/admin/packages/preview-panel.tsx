@@ -80,7 +80,7 @@ function Panel({ packageId }: { packageId: string }) {
               </svg>
             </button>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={lightbox.url} alt={lightbox.filename} className="rounded w-full object-contain" style={{ maxHeight: "70vh" }} />
+            <img src={lightbox.url} alt={lightbox.filename} className="rounded max-w-full w-full object-contain" style={{ maxHeight: "70vh" }} />
             {lightbox.fileKey === coverKey ? (
               <div className="flex items-center gap-2 rounded px-4 py-2 text-sm font-medium" style={{ background: "var(--color-accent)", color: "#fff" }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

@@ -52,10 +52,10 @@ export default async function AdminAuditPage() {
         </p>
       </div>
 
-      <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         {/* Header */}
         <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
+          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
           style={{
             gridTemplateColumns: "1.6fr 1.4fr 1.2fr 1fr 1fr 1fr",
             color: "var(--color-muted)",
@@ -78,7 +78,7 @@ export default async function AdminAuditPage() {
         {events.map((e) => (
           <div
             key={e.id}
-            className="grid items-center px-5 py-3 border-b last:border-0 text-xs"
+            className="grid items-center px-5 py-3 border-b last:border-0 text-xs min-w-[800px]"
             style={{
               gridTemplateColumns: "1.6fr 1.4fr 1.2fr 1fr 1fr 1fr",
               borderColor: "var(--color-border)",

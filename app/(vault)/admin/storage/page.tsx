@@ -52,10 +52,10 @@ export default async function AdminStoragePage() {
         </p>
       </div>
 
-      <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         {/* Header */}
         <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
+          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[600px]"
           style={{
             gridTemplateColumns: "2fr 1fr 1fr 1fr",
             color: "var(--color-muted)",
@@ -79,7 +79,7 @@ export default async function AdminStoragePage() {
           return (
             <div
               key={r.talentId}
-              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm"
+              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[600px]"
               style={{
                 gridTemplateColumns: "2fr 1fr 1fr 1fr",
                 borderColor: "var(--color-border)",

@@ -402,8 +402,8 @@ export default function BookingsAdminClient() {
 
               {/* Expanded slots */}
               {expandedId === ev.id && (
-                <div className="border-t" style={{ borderColor: "var(--color-border)" }}>
-                  <table className="w-full text-xs">
+                <div className="border-t overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
+                  <table className="w-full min-w-[600px] text-xs">
                     <thead>
                       <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
                         <th className="px-5 py-2 text-left font-semibold uppercase tracking-wider" style={{ color: "var(--color-muted)", width: 100 }}>Time</th>

@@ -59,10 +59,10 @@ export default async function AdminPipelinePage() {
         </p>
       </div>
 
-      <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         {/* Header */}
         <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
+          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
           style={{
             gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr",
             color: "var(--color-muted)",
@@ -86,7 +86,7 @@ export default async function AdminPipelinePage() {
           const color = STATUS_COLOR[job.status] ?? "#6b7280";
           const skus = JSON.parse(job.skus) as string[];
           return (
-            <div key={job.id} className="grid items-center px-5 py-3.5 text-sm border-b last:border-0" style={{
+            <div key={job.id} className="grid items-center px-5 py-3.5 text-sm border-b last:border-0 min-w-[800px]" style={{
               gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 1fr",
               borderColor: "var(--color-border)",
             }}>

@@ -152,10 +152,10 @@ export default async function AdminBridgePage() {
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
           Active Sessions
         </h2>
-        <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+        <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
           {/* Header */}
           <div
-            className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
+            className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
             style={{
               gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 80px",
               color: "var(--color-muted)",
@@ -180,7 +180,7 @@ export default async function AdminBridgePage() {
           {liveGrants.map((g) => (
             <div
               key={g.id}
-              className="grid items-center px-5 py-3.5 text-sm border-b last:border-0"
+              className="grid items-center px-5 py-3.5 text-sm border-b last:border-0 min-w-[800px]"
               style={{ gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr 80px", borderColor: "var(--color-border)" }}
             >
               <div className="min-w-0">
@@ -213,10 +213,10 @@ export default async function AdminBridgePage() {
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
           Event Log
         </h2>
-        <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+        <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
           {/* Header */}
           <div
-            className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
+            className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
             style={{
               gridTemplateColumns: "1fr 1.5fr 1fr 1fr 2fr",
               color: "var(--color-muted)",
@@ -253,7 +253,7 @@ export default async function AdminBridgePage() {
             return (
               <div
                 key={e.id}
-                className="grid items-start px-5 py-3 text-xs border-b last:border-0"
+                className="grid items-start px-5 py-3 text-xs border-b last:border-0 min-w-[800px]"
                 style={{ gridTemplateColumns: "1fr 1.5fr 1fr 1fr 2fr", borderColor: "var(--color-border)" }}
               >
                 <span style={{ color: "var(--color-muted)" }}>{tsTime(e.createdAt)}</span>

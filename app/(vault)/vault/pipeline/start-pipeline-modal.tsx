@@ -73,7 +73,7 @@ export default function StartPipelineModal({ packageId, packageName, onClose }: 
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="w-full max-w-md rounded-lg shadow-xl"
+        className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg shadow-xl"
         style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
       >
         {/* Header */}

@@ -61,7 +61,7 @@ export default function SidebarShell({ children }: { children: React.ReactNode }
           // Desktop: always visible static sidebar
           "lg:relative lg:flex lg:translate-x-0 lg:w-56",
           // Mobile: fixed full-height drawer
-          "fixed inset-y-0 left-0 z-50 w-64 flex flex-col",
+          "fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs flex flex-col",
           "transition-transform duration-200 ease-in-out",
           open ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
