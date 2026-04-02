@@ -453,7 +453,7 @@ function PackageCard({ pkg, onDelete, deleting }: { pkg: ScanPackage; onDelete: 
           ) : files.length === 0 ? (
             <p className="px-14 py-3 text-xs" style={{ color: "var(--color-muted)" }}>No files in this package.</p>
           ) : (
-            <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
+            <div className="divide-y max-h-[50vh] sm:max-h-none overflow-y-auto" style={{ borderColor: "var(--color-border)" }}>
               {files.filter((f) => f.uploadStatus === "complete").length > 1 && (
                 <div className="px-14 py-2.5 flex justify-end" style={{ background: "var(--color-surface)" }}>
                   <button onClick={() => void handleBundleDownload()} disabled={bundleDownloading}
