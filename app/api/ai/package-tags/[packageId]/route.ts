@@ -1,11 +1,10 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { suggestPackageTags } from "@/lib/ai/package-tags";
+import { callAiService } from "@/lib/ai/service";
 import { eq } from "drizzle-orm";
 
 // GET /api/ai/package-tags/:packageId — return all tags for the package
@@ -37,10 +36,7 @@ export async function POST(
   if (isErrorResponse(session)) return session;
 
   const { packageId } = await params;
-  const db = getDb();
-  const { env } = getRequestContext();
-
-  await suggestPackageTags(env, db, packageId);
-
-  return NextResponse.json({ ok: true });
+  return callAiService(req, session, `/package-tags/${packageId}`, {
+    method: "POST",
+  });
 }

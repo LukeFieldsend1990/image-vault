@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import type { drizzle } from "drizzle-orm/d1";
 import {
   licences,
   scanPackages,
@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof drizzle>;
 
 export interface Signal {
   type: string;

@@ -6,6 +6,7 @@ declare global {
     SESSIONS_KV: KVNamespace;
     SCANS_BUCKET: R2Bucket;
     AI: Ai;
+    AI_SERVICE: Fetcher;
     JWT_SECRET: string;
     ENVIRONMENT: string;
     APP_URL: string;

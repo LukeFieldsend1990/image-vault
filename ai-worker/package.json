@@ -1,0 +1,9 @@
+{
+  "name": "image-vault-ai-worker",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --config ai-worker/wrangler.toml",
+    "deploy": "wrangler deploy --config ai-worker/wrangler.toml",
+    "cf-typegen": "wrangler types --config ai-worker/wrangler.toml --output ai-worker/worker-env.d.ts"
+  }
+}

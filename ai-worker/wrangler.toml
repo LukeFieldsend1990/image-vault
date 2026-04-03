@@ -1,0 +1,21 @@
+name = "image-vault-ai"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "image-vault-db"
+database_id = "71665618-0498-48bd-a243-962eb4810769"
+migrations_dir = "../drizzle/migrations"
+
+[ai]
+binding = "AI"
+
+[vars]
+APP_URL = "https://changling.io"
+
+# Secrets (set via: wrangler secret put SECRET_NAME --config ai-worker/wrangler.toml)
+# ANTHROPIC_API_KEY  - Anthropic API key for Claude Haiku
