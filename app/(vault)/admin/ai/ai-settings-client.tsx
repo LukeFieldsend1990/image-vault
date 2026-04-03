@@ -10,9 +10,17 @@ interface CostData {
 }
 
 interface LastBatch {
-  batchId: string;
-  createdAt: number;
+  id: string;
+  triggerType: string;
+  status: string;
+  initiatedByEmail: string | null;
+  repsTargeted: number | null;
+  repsProcessed: number | null;
   suggestionsCreated: number;
+  skipped: string | null;
+  error: string | null;
+  startedAt: number;
+  completedAt: number | null;
 }
 
 interface LogEntry {
@@ -32,7 +40,7 @@ interface LogEntry {
 interface Props {
   initialSettings: Record<string, string>;
   initialCosts: CostData;
-  lastBatch: LastBatch | null;
+  recentBatchRuns: LastBatch[];
   recentLogs: LogEntry[];
 }
 
@@ -58,7 +66,7 @@ function timeAgo(unix: number): string {
   return `${days}d ago`;
 }
 
-export function AiSettingsClient({ initialSettings, initialCosts, lastBatch, recentLogs }: Props) {
+export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRuns, recentLogs }: Props) {
   const [settings, setSettings] = useState(initialSettings);
   const [costs] = useState(initialCosts);
   const [saving, setSaving] = useState<string | null>(null);
@@ -313,7 +321,7 @@ export function AiSettingsClient({ initialSettings, initialCosts, lastBatch, rec
           <h2 style={labelStyle}>Manual Batch Trigger</h2>
         </div>
         <div style={{ padding: 20 }}>
-          {lastBatch && (
+          {recentBatchRuns[0] && (
             <div
               style={{
                 marginBottom: 16,
@@ -328,13 +336,13 @@ export function AiSettingsClient({ initialSettings, initialCosts, lastBatch, rec
               }}
             >
               <div>
-                <span style={{ fontWeight: 600, color: "var(--color-ink)" }}>Last run:</span>{" "}
+                <span style={{ fontWeight: 600, color: "var(--color-ink)" }}>Latest run:</span>{" "}
                 <span style={{ color: "var(--color-muted)" }}>
-                  {formatTimestamp(lastBatch.createdAt)} ({timeAgo(lastBatch.createdAt)})
+                  {formatTimestamp(recentBatchRuns[0].startedAt)} ({timeAgo(recentBatchRuns[0].startedAt)})
                 </span>
               </div>
               <span style={{ color: "var(--color-ink)", fontWeight: 500 }}>
-                {lastBatch.suggestionsCreated} suggestion{lastBatch.suggestionsCreated !== 1 ? "s" : ""} created
+                {recentBatchRuns[0].status}
               </span>
             </div>
           )}
@@ -374,7 +382,7 @@ export function AiSettingsClient({ initialSettings, initialCosts, lastBatch, rec
                 color: "#166534",
               }}
             >
-              Batch started in background. Refresh this page in a minute to see results.
+              Batch started in background. Refresh this page to inspect the run status below.
             </div>
           )}
 
@@ -391,6 +399,22 @@ export function AiSettingsClient({ initialSettings, initialCosts, lastBatch, rec
               }}
             >
               Error: {batchError}
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={cardStyle}>
+        <div style={headerStyle}>
+          <h2 style={labelStyle}>Recent Batch Runs</h2>
+        </div>
+        <div style={{ padding: 20 }}>
+          {recentBatchRuns.length === 0 ? (
+            <p style={{ fontSize: 12, color: "var(--color-muted)" }}>No batch runs recorded yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {recentBatchRuns.map((run) => (
+                <BatchRunCard key={run.id} run={run} />
+              ))}
             </div>
           )}
         </div>
@@ -417,6 +441,101 @@ export function AiSettingsClient({ initialSettings, initialCosts, lastBatch, rec
 }
 
 /* ── Sub-components ────────────────────────────────────────────────────────── */
+
+function BatchRunCard({ run }: { run: LastBatch }) {
+  const [expanded, setExpanded] = useState(false);
+  const isError = run.status === "failed";
+  const isStarted = run.status === "started";
+  const skipped = run.skipped ? JSON.parse(run.skipped) as string[] : [];
+
+  return (
+    <div
+      style={{
+        border: isError ? "1px solid rgba(220,38,38,0.3)" : "1px solid var(--color-border)",
+        borderRadius: 6,
+        background: isError ? "rgba(220,38,38,0.04)" : "var(--color-surface)",
+        overflow: "hidden",
+      }}
+    >
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          width: "100%",
+          padding: "10px 14px",
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 8,
+          textAlign: "left",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              padding: "2px 6px",
+              borderRadius: 4,
+              background: isError ? "rgba(220,38,38,0.12)" : isStarted ? "rgba(217,119,6,0.12)" : "rgba(22,163,74,0.12)",
+              color: isError ? "#991b1b" : isStarted ? "#9a3412" : "#166534",
+              textTransform: "uppercase",
+            }}
+          >
+            {run.status}
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-ink)" }}>
+            {run.triggerType}
+          </span>
+          <span style={{ fontSize: 11, color: "var(--color-muted)" }}>
+            {run.suggestionsCreated} suggestion{run.suggestionsCreated !== 1 ? "s" : ""}
+          </span>
+          {typeof run.repsProcessed === "number" && (
+            <span style={{ fontSize: 11, color: "var(--color-muted)" }}>
+              {run.repsProcessed}/{run.repsTargeted ?? run.repsProcessed} reps
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: "var(--color-muted)" }}>
+            {timeAgo(run.startedAt)}
+          </span>
+          <span style={{ fontSize: 10, color: "var(--color-muted)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+            ▼
+          </span>
+        </div>
+      </button>
+      {expanded && (
+        <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <p style={{ fontSize: 11, color: "var(--color-muted)", margin: 0 }}>
+            Started: {formatTimestamp(run.startedAt)}
+            {run.completedAt ? ` · Completed: ${formatTimestamp(run.completedAt)}` : ""}
+          </p>
+          {run.initiatedByEmail && (
+            <p style={{ fontSize: 11, color: "var(--color-muted)", margin: 0 }}>
+              Initiated by: {run.initiatedByEmail}
+            </p>
+          )}
+          <p style={{ fontSize: 11, color: "var(--color-muted)", margin: 0 }}>
+            Batch ID: {run.id}
+          </p>
+          {run.error && (
+            <pre style={{ fontSize: 11, color: "#991b1b", background: "rgba(220,38,38,0.06)", padding: 8, borderRadius: 4, overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0 }}>
+              {run.error}
+            </pre>
+          )}
+          {skipped.length > 0 && (
+            <pre style={{ fontSize: 11, color: "var(--color-ink)", background: "var(--color-border)", padding: 8, borderRadius: 4, overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0, maxHeight: 180, overflow: "auto" }}>
+              {JSON.stringify(skipped, null, 2)}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function LogCard({ log }: { log: LogEntry }) {
   const [expanded, setExpanded] = useState(false);

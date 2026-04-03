@@ -19,6 +19,7 @@ import {
   suggestions,
   aiSettings,
   aiCostLog,
+  aiBatchRuns,
 } from "./schema";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -49,6 +50,14 @@ interface SuggestionFromLLM {
   entityType: string;
   entityId: string;
   priority: number;
+}
+
+interface BatchRunResult {
+  batchId: string;
+  repsTargeted: number;
+  repsProcessed: number;
+  suggestionsCreated: number;
+  skipped: string[];
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -149,6 +158,53 @@ async function logCost(db: Db, entry: {
     response: entry.response ?? null,
     createdAt: Math.floor(Date.now() / 1000),
   });
+}
+
+async function createBatchRun(db: Db, entry: {
+  id: string;
+  triggerType: "manual" | "scheduled";
+  initiatedByUserId?: string;
+  initiatedByEmail?: string;
+  startedAt: number;
+}) {
+  await db.insert(aiBatchRuns).values({
+    id: entry.id,
+    triggerType: entry.triggerType,
+    status: "started",
+    initiatedByUserId: entry.initiatedByUserId ?? null,
+    initiatedByEmail: entry.initiatedByEmail ?? null,
+    repsTargeted: null,
+    repsProcessed: null,
+    suggestionsCreated: 0,
+    skipped: null,
+    error: null,
+    startedAt: entry.startedAt,
+    completedAt: null,
+    updatedAt: entry.startedAt,
+  });
+}
+
+async function completeBatchRun(db: Db, result: BatchRunResult) {
+  const now = Math.floor(Date.now() / 1000);
+  await db.update(aiBatchRuns).set({
+    status: "completed",
+    repsTargeted: result.repsTargeted,
+    repsProcessed: result.repsProcessed,
+    suggestionsCreated: result.suggestionsCreated,
+    skipped: JSON.stringify(result.skipped),
+    completedAt: now,
+    updatedAt: now,
+  }).where(eq(aiBatchRuns.id, result.batchId));
+}
+
+async function failBatchRun(db: Db, batchId: string, error: unknown) {
+  const now = Math.floor(Date.now() / 1000);
+  await db.update(aiBatchRuns).set({
+    status: "failed",
+    error: error instanceof Error ? error.message : String(error),
+    completedAt: now,
+    updatedAt: now,
+  }).where(eq(aiBatchRuns.id, batchId));
 }
 
 // ── Signal Gathering ───────────────────────────────────────────────────────
@@ -460,44 +516,55 @@ async function getTargetReps(
     .all();
 }
 
-async function runSuggestionBatch(env: Env, db: Db, options?: { manual?: boolean }): Promise<void> {
+async function runSuggestionBatch(
+  env: Env,
+  db: Db,
+  options: { manual?: boolean; batchId: string }
+): Promise<BatchRunResult> {
   const manual = options?.manual ?? false;
   const now = Math.floor(Date.now() / 1000);
+  const batchId = options.batchId;
 
   // Pre-flight checks
   if (!(await isEnabled(db))) {
     console.log("AI features disabled — skipping batch");
-    return;
+    return { batchId, repsTargeted: 0, repsProcessed: 0, suggestionsCreated: 0, skipped: ["ai_disabled"] };
   }
   if (await isBudgetExhausted(db)) {
     console.log("Budget exhausted — skipping batch");
-    return;
+    return { batchId, repsTargeted: 0, repsProcessed: 0, suggestionsCreated: 0, skipped: ["budget_exhausted"] };
   }
 
   const reps = await getTargetReps(db, manual, now);
 
   if (reps.length === 0) {
     console.log(`No ${manual ? "eligible" : "active"} reps — skipping batch`);
-    return;
+    return { batchId, repsTargeted: 0, repsProcessed: 0, suggestionsCreated: 0, skipped: ["no_reps"] };
   }
 
-  const batchId = crypto.randomUUID();
   let totalSuggestions = 0;
+  let repsProcessed = 0;
+  const skipped: string[] = [];
 
   for (const rep of reps) {
     // Re-check budget per rep
     if (await isBudgetExhausted(db)) {
       console.log(`Budget exhausted mid-batch at rep ${rep.id}`);
+      skipped.push(`budget_exhausted_at_rep_${rep.id}`);
       break;
     }
 
     const signals = await gatherSignals(db, rep.id);
-    if (signals.length === 0) continue;
+    if (signals.length === 0) {
+      skipped.push(`no_signals_${rep.id}`);
+      continue;
+    }
 
     const prompt = JSON.stringify({ repId: rep.id, signals });
     const result = await callLLM(env, db, prompt);
     if (!result) {
       console.log(`LLM call failed for rep ${rep.id}`);
+      skipped.push(`llm_failed_${rep.id}`);
       continue;
     }
 
@@ -517,6 +584,7 @@ async function runSuggestionBatch(env: Env, db: Db, options?: { manual?: boolean
     const parsed = parseSuggestions(result.text);
     if (parsed.length === 0) {
       console.log(`Suggestion parse failed for rep ${rep.id}`, result.text.slice(0, 500));
+      skipped.push(`parse_failed_${rep.id}`);
       continue;
     }
 
@@ -526,6 +594,7 @@ async function runSuggestionBatch(env: Env, db: Db, options?: { manual?: boolean
     );
 
     // Insert new suggestions (skip duplicates)
+    let insertedForRep = 0;
     for (const s of parsed) {
       if (s.entityType && s.entityId) {
         const existing = await db.select({ id: suggestions.id }).from(suggestions)
@@ -534,7 +603,10 @@ async function runSuggestionBatch(env: Env, db: Db, options?: { manual?: boolean
             eq(suggestions.entityId, s.entityId), isNull(suggestions.acknowledgedAt),
             sql`expires_at > ${now}`,
           )).limit(1).get();
-        if (existing) continue;
+        if (existing) {
+          skipped.push(`duplicate_${rep.id}_${s.entityType}_${s.entityId}`);
+          continue;
+        }
       }
 
       const deepLink = await resolveSuggestionDeepLink(db, s);
@@ -549,10 +621,20 @@ async function runSuggestionBatch(env: Env, db: Db, options?: { manual?: boolean
         expiresAt: now + SUGGESTION_TTL, batchId, createdAt: now,
       });
       totalSuggestions++;
+      insertedForRep++;
     }
+
+    if (insertedForRep > 0) repsProcessed++;
   }
 
   console.log(`Batch ${batchId}: ${reps.length} reps, ${totalSuggestions} suggestions created`);
+  return {
+    batchId,
+    repsTargeted: reps.length,
+    repsProcessed,
+    suggestionsCreated: totalSuggestions,
+    skipped,
+  };
 }
 
 async function handleManualRun(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -563,9 +645,27 @@ async function handleManualRun(request: Request, env: Env, ctx: ExecutionContext
   }
 
   const db = drizzle(env.DB);
-  ctx.waitUntil(runSuggestionBatch(env, db, { manual: true }));
+  const startedAt = Math.floor(Date.now() / 1000);
+  const batchId = crypto.randomUUID();
+  await createBatchRun(db, {
+    id: batchId,
+    triggerType: "manual",
+    initiatedByUserId: actor.userId,
+    initiatedByEmail: actor.email,
+    startedAt,
+  });
+  ctx.waitUntil((async () => {
+    try {
+      const result = await runSuggestionBatch(env, db, { manual: true, batchId });
+      await completeBatchRun(db, result);
+    } catch (error) {
+      await failBatchRun(db, batchId, error);
+      throw error;
+    }
+  })());
   return Response.json({
     status: "started",
+    batchId,
     message: "Batch running in background. Check suggestions or costs panel for results.",
   });
 }
@@ -583,7 +683,20 @@ const handler = {
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     const db = drizzle(env.DB);
-    await runSuggestionBatch(env, db);
+    const startedAt = Math.floor(Date.now() / 1000);
+    const batchId = crypto.randomUUID();
+    await createBatchRun(db, {
+      id: batchId,
+      triggerType: "scheduled",
+      startedAt,
+    });
+    try {
+      const result = await runSuggestionBatch(env, db, { batchId });
+      await completeBatchRun(db, result);
+    } catch (error) {
+      await failBatchRun(db, batchId, error);
+      throw error;
+    }
   },
 };
 

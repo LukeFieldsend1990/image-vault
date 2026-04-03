@@ -3,7 +3,7 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { aiSettings, aiCostLog, suggestions } from "@/lib/db/schema";
+import { aiSettings, aiCostLog, aiBatchRuns } from "@/lib/db/schema";
 import { sql, desc } from "drizzle-orm";
 import { AiSettingsClient } from "./ai-settings-client";
 
@@ -13,7 +13,7 @@ export default async function AdminAiPage() {
 
   const fourteenDaysAgo = Math.floor(Date.now() / 1000) - 14 * 86400;
 
-  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow, lastBatchRow, recentLogs] =
+  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow, recentBatchRuns, recentLogs] =
     await Promise.all([
       db.select({ key: aiSettings.key, value: aiSettings.value }).from(aiSettings).all(),
       db
@@ -50,16 +50,22 @@ export default async function AdminAiPage() {
         .get(),
       db
         .select({
-          batchId: suggestions.batchId,
-          createdAt: sql<number>`max(${suggestions.createdAt})`,
-          count: sql<number>`count(*)`,
+          id: aiBatchRuns.id,
+          triggerType: aiBatchRuns.triggerType,
+          status: aiBatchRuns.status,
+          initiatedByEmail: aiBatchRuns.initiatedByEmail,
+          repsTargeted: aiBatchRuns.repsTargeted,
+          repsProcessed: aiBatchRuns.repsProcessed,
+          suggestionsCreated: aiBatchRuns.suggestionsCreated,
+          skipped: aiBatchRuns.skipped,
+          error: aiBatchRuns.error,
+          startedAt: aiBatchRuns.startedAt,
+          completedAt: aiBatchRuns.completedAt,
         })
-        .from(suggestions)
-        .where(sql`${suggestions.batchId} is not null`)
-        .groupBy(suggestions.batchId)
-        .orderBy(desc(suggestions.createdAt))
-        .limit(1)
-        .get(),
+        .from(aiBatchRuns)
+        .orderBy(desc(aiBatchRuns.startedAt))
+        .limit(10)
+        .all(),
       db
         .select({
           id: aiCostLog.id,
@@ -132,11 +138,19 @@ export default async function AdminAiPage() {
       <AiSettingsClient
         initialSettings={initialSettings}
         initialCosts={initialCosts}
-        lastBatch={lastBatchRow ? {
-          batchId: lastBatchRow.batchId!,
-          createdAt: lastBatchRow.createdAt,
-          suggestionsCreated: lastBatchRow.count,
-        } : null}
+        recentBatchRuns={recentBatchRuns.map((r) => ({
+          id: r.id,
+          triggerType: r.triggerType,
+          status: r.status,
+          initiatedByEmail: r.initiatedByEmail,
+          repsTargeted: r.repsTargeted,
+          repsProcessed: r.repsProcessed,
+          suggestionsCreated: r.suggestionsCreated,
+          skipped: r.skipped,
+          error: r.error,
+          startedAt: r.startedAt,
+          completedAt: r.completedAt,
+        }))}
         recentLogs={recentLogs.map((l) => ({
           id: l.id,
           feature: l.feature,
