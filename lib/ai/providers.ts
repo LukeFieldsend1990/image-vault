@@ -1,8 +1,8 @@
-import { getDb } from "@/lib/db";
+import type { drizzle } from "drizzle-orm/d1";
 import { logAiCost, checkBudget, isAiEnabled } from "./cost-tracker";
 import { PRICING } from "./constants";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof drizzle>;
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -21,12 +21,13 @@ interface AiResult {
 
 export async function callWorkersAi(
   ai: Ai,
-  params: { messages: Message[]; model?: string }
+  params: { messages: Message[]; model?: string; maxTokens?: number }
 ): Promise<AiResult> {
   const model = params.model ?? "@cf/meta/llama-3.1-8b-instruct";
 
   const response = await ai.run(model as Parameters<Ai["run"]>[0], {
     messages: params.messages,
+    max_tokens: params.maxTokens ?? 1024,
   }) as { response?: string };
 
   const text = response?.response ?? "";
@@ -124,7 +125,10 @@ export async function callAi(
         system: params.system,
       });
     } else if (env.AI) {
-      result = await callWorkersAi(env.AI, { messages });
+      result = await callWorkersAi(env.AI, {
+        messages,
+        maxTokens: params.feature === "suggestions" ? 1024 : 512,
+      });
     } else {
       return null;
     }
@@ -144,7 +148,10 @@ export async function callAi(
     // Fallback: if Anthropic failed, try Workers AI
     if (useAnthropic && env.AI) {
       try {
-        result = await callWorkersAi(env.AI, { messages });
+        result = await callWorkersAi(env.AI, {
+          messages,
+          maxTokens: params.feature === "suggestions" ? 1024 : 512,
+        });
       } catch {
         return null;
       }

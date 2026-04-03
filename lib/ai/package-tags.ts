@@ -1,11 +1,11 @@
-import { getDb } from "@/lib/db";
+import type { drizzle } from "drizzle-orm/d1";
 import { scanPackages, scanFiles, talentProfiles, packageTags } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { callAi } from "./providers";
 import { isAiEnabled } from "./cost-tracker";
 import { METADATA_TAG_PROMPT, ALL_TAGS, TAG_VOCABULARY } from "./constants";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof drizzle>;
 
 interface TagSuggestion {
   tag: string;

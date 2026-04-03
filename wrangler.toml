@@ -58,6 +58,14 @@ queue = "pipeline-jobs"
 [ai]
 binding = "AI"
 
+[[services]]
+binding = "AI_SERVICE"
+service = "image-vault-ai"
+
+[[services]]
+binding = "AI_CRON_SERVICE"
+service = "image-vault-ai-cron"
+
 # -------------------------------------------------------------------
 # Secrets (set via: wrangler secret put SECRET_NAME)
 # -------------------------------------------------------------------
