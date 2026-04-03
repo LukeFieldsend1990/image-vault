@@ -8,7 +8,7 @@ import {
   requireBridgeToken,
   isBridgeTokenError,
 } from "@/lib/auth/requireBridgeToken";
-import { checkBridgeAnomalies } from "@/lib/ai/security-alerts";
+import { triggerAiService } from "@/lib/ai/service";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 
 const ALLOWED_EVENT_TYPES = new Set([
@@ -99,20 +99,26 @@ export async function POST(req: NextRequest) {
     createdAt: now,
   });
 
-  // Fire-and-forget: check for security anomalies
-  void (async () => {
-    try {
-      const env = getRequestContext().env as unknown as { AI?: Ai; ANTHROPIC_API_KEY?: string };
-      await checkBridgeAnomalies(db, env, {
+  const { ctx } = getRequestContext();
+  ctx.waitUntil(
+    triggerAiService(req, "/security/bridge-event", {
+      method: "POST",
+      contentType: "application/json",
+      headers: {
+        "x-ai-source": "bridge-events",
+      },
+      body: JSON.stringify({
         grantId: grantId ?? null,
         packageId,
         deviceId,
         eventType,
         severity,
         userId: auth.userId,
-      });
-    } catch { /* non-fatal */ }
-  })();
+      }),
+    }).catch(() => {
+      // non-fatal
+    })
+  );
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

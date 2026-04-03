@@ -18,15 +18,15 @@ function getService(binding: ServiceBindingName) {
   return (env as ServiceBindingEnv)[binding];
 }
 
-async function callService(
+async function forwardAiService(
   req: Request,
-  session: SessionLike,
   binding: ServiceBindingName,
   path: string,
   init?: {
     method?: string;
     body?: BodyInit | null;
     contentType?: string | null;
+    headers?: HeadersInit;
   }
 ): Promise<Response> {
   const service = getService(binding);
@@ -37,11 +37,7 @@ async function callService(
   const url = new URL(req.url);
   url.pathname = path;
 
-  const headers = new Headers({
-    "x-ai-user-id": session.sub,
-    "x-ai-user-role": session.role,
-    "x-ai-user-email": session.email,
-  });
+  const headers = new Headers(init?.headers);
 
   if (init?.contentType) {
     headers.set("content-type", init.contentType);
@@ -64,9 +60,18 @@ export async function callAiService(
     method?: string;
     body?: BodyInit | null;
     contentType?: string | null;
+    headers?: HeadersInit;
   }
 ): Promise<Response> {
-  return callService(req, session, "AI_SERVICE", path, init);
+  const headers = new Headers(init?.headers);
+  headers.set("x-ai-user-id", session.sub);
+  headers.set("x-ai-user-role", session.role);
+  headers.set("x-ai-user-email", session.email);
+
+  return forwardAiService(req, "AI_SERVICE", path, {
+    ...init,
+    headers,
+  });
 }
 
 export async function callAiCronService(
@@ -77,7 +82,29 @@ export async function callAiCronService(
     method?: string;
     body?: BodyInit | null;
     contentType?: string | null;
+    headers?: HeadersInit;
   }
 ): Promise<Response> {
-  return callService(req, session, "AI_CRON_SERVICE", path, init);
+  const headers = new Headers(init?.headers);
+  headers.set("x-ai-user-id", session.sub);
+  headers.set("x-ai-user-role", session.role);
+  headers.set("x-ai-user-email", session.email);
+
+  return forwardAiService(req, "AI_CRON_SERVICE", path, {
+    ...init,
+    headers,
+  });
+}
+
+export async function triggerAiService(
+  req: Request,
+  path: string,
+  init?: {
+    method?: string;
+    body?: BodyInit | null;
+    contentType?: string | null;
+    headers?: HeadersInit;
+  }
+): Promise<Response> {
+  return forwardAiService(req, "AI_SERVICE", path, init);
 }

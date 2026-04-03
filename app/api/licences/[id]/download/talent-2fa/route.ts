@@ -8,7 +8,7 @@ import { verifyTotpCode } from "@/lib/auth/totp";
 import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { downloadCompleteEmail } from "@/lib/email/templates";
-import { checkDownloadAnomalies } from "@/lib/ai/security-alerts";
+import { triggerAiService } from "@/lib/ai/service";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import type { DualCustodySession } from "../initiate/route";
 
@@ -158,20 +158,24 @@ export async function POST(
     });
   }
 
-  // Fire-and-forget: check for download anomalies
-  void (async () => {
-    try {
-      const cfEnv = getRequestContext().env as unknown as { AI?: Ai; ANTHROPIC_API_KEY?: string };
-      for (const file of scopedFiles) {
-        await checkDownloadAnomalies(db, cfEnv, {
-          licenceId: id,
-          licenseeId: dcSession.licenseeId,
-          fileId: file.id,
-          ip,
-        });
-      }
-    } catch { /* non-fatal */ }
-  })();
+  const { ctx } = getRequestContext();
+  ctx.waitUntil(
+    triggerAiService(req, "/security/download-event", {
+      method: "POST",
+      contentType: "application/json",
+      headers: {
+        "x-ai-source": "download-complete",
+      },
+      body: JSON.stringify({
+        licenceId: id,
+        licenseeId: dcSession.licenseeId,
+        fileIds: scopedFiles.map((file) => file.id),
+        ip,
+      }),
+    }).catch(() => {
+      // non-fatal
+    })
+  );
 
   // Notify both parties (fire-and-forget)
   void (async () => {
