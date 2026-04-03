@@ -8,16 +8,20 @@ interface SessionLike {
 
 interface ServiceBindingEnv {
   AI_SERVICE?: Fetcher;
+  AI_CRON_SERVICE?: Fetcher;
 }
 
-function getAiService() {
+type ServiceBindingName = keyof ServiceBindingEnv;
+
+function getService(binding: ServiceBindingName) {
   const { env } = getRequestContext();
-  return (env as ServiceBindingEnv).AI_SERVICE;
+  return (env as ServiceBindingEnv)[binding];
 }
 
-export async function callAiService(
+async function callService(
   req: Request,
   session: SessionLike,
+  binding: ServiceBindingName,
   path: string,
   init?: {
     method?: string;
@@ -25,9 +29,9 @@ export async function callAiService(
     contentType?: string | null;
   }
 ): Promise<Response> {
-  const service = getAiService();
+  const service = getService(binding);
   if (!service) {
-    return Response.json({ error: "AI service binding is not configured" }, { status: 500 });
+    return Response.json({ error: `${binding} service binding is not configured` }, { status: 500 });
   }
 
   const url = new URL(req.url);
@@ -50,4 +54,30 @@ export async function callAiService(
       body: init?.body ?? null,
     })
   );
+}
+
+export async function callAiService(
+  req: Request,
+  session: SessionLike,
+  path: string,
+  init?: {
+    method?: string;
+    body?: BodyInit | null;
+    contentType?: string | null;
+  }
+): Promise<Response> {
+  return callService(req, session, "AI_SERVICE", path, init);
+}
+
+export async function callAiCronService(
+  req: Request,
+  session: SessionLike,
+  path: string,
+  init?: {
+    method?: string;
+    body?: BodyInit | null;
+    contentType?: string | null;
+  }
+): Promise<Response> {
+  return callService(req, session, "AI_CRON_SERVICE", path, init);
 }

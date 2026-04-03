@@ -16,7 +16,6 @@ import {
   talentProfiles,
   licences,
   scanPackages,
-  scanFiles,
   suggestions,
   aiSettings,
   aiCostLog,
@@ -29,6 +28,12 @@ interface Env {
   AI: Ai;
   ANTHROPIC_API_KEY?: string;
   APP_URL: string;
+}
+
+interface Actor {
+  userId: string;
+  role: string;
+  email: string;
 }
 
 interface Signal {
@@ -51,6 +56,7 @@ interface SuggestionFromLLM {
 const SUGGESTION_TTL = 7 * 24 * 60 * 60; // 7 days
 const ACTIVE_WINDOW = 48 * 60 * 60; // 48 hours
 const MAX_SUGGESTIONS_PER_REP = 10;
+const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 const HAIKU_PRICING = { input: 0.80 / 1_000_000, output: 4.00 / 1_000_000 };
 
@@ -77,6 +83,27 @@ Do not include disclaimers, greetings, or commentary outside the JSON array.`;
 
 type Db = ReturnType<typeof drizzle>;
 
+function getActor(request: Request): Actor | null {
+  const userId = request.headers.get("x-ai-user-id");
+  const role = request.headers.get("x-ai-user-role");
+  const email = request.headers.get("x-ai-user-email");
+
+  if (!userId || !role || !email) return null;
+  return { userId, role, email };
+}
+
+function requireActor(request: Request): Actor | Response {
+  const actor = getActor(request);
+  if (!actor) {
+    return Response.json({ error: "Unauthorised" }, { status: 401 });
+  }
+  return actor;
+}
+
+function isAdmin(actor: Actor) {
+  return actor.role === "admin" || ADMIN_EMAILS.includes(actor.email);
+}
+
 async function isEnabled(db: Db): Promise<boolean> {
   const row = await db
     .select({ value: aiSettings.value })
@@ -102,6 +129,7 @@ async function isBudgetExhausted(db: Db): Promise<boolean> {
 async function logCost(db: Db, entry: {
   provider: string; model: string; feature: string;
   inputTokens: number; outputTokens: number; estimatedCostUsd: number; error?: string;
+  prompt?: string; response?: string;
 }) {
   await db.insert(aiCostLog).values({
     id: crypto.randomUUID(),
@@ -112,6 +140,8 @@ async function logCost(db: Db, entry: {
     outputTokens: entry.outputTokens,
     estimatedCostUsd: entry.estimatedCostUsd,
     error: entry.error ?? null,
+    prompt: entry.prompt ?? null,
+    response: entry.response ?? null,
     createdAt: Math.floor(Date.now() / 1000),
   });
 }
@@ -288,6 +318,7 @@ async function callLLM(
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: signalsJson },
       ],
+      max_tokens: 1024,
     }) as { response?: string };
     const text = res?.response ?? "";
     if (text.includes("[")) {
@@ -295,7 +326,9 @@ async function callLLM(
       const outputTokens = Math.ceil(text.length / 4);
       return { text, provider: "workers_ai", model: "@cf/meta/llama-3.1-8b-instruct", inputTokens, outputTokens };
     }
-  } catch { /* fall through to Anthropic */ }
+  } catch (error) {
+    console.log("Workers AI failed for suggestion batch, falling back to Anthropic", error);
+  }
 
   // Fallback: Anthropic
   if (!env.ANTHROPIC_API_KEY) return null;
@@ -367,98 +400,150 @@ function parseSuggestions(text: string): SuggestionFromLLM[] {
 
 // ── Main Scheduled Handler ─────────────────────────────────────────────────
 
-export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    const db = drizzle(env.DB);
-    const now = Math.floor(Date.now() / 1000);
-
-    // Pre-flight checks
-    if (!(await isEnabled(db))) {
-      console.log("AI features disabled — skipping batch");
-      return;
-    }
-    if (await isBudgetExhausted(db)) {
-      console.log("Budget exhausted — skipping batch");
-      return;
-    }
-
-    // Find active reps (logged in within 48h)
-    const cutoff = now - ACTIVE_WINDOW;
-    const activeReps = await db.select({ id: users.id, email: users.email })
+async function getTargetReps(
+  db: Db,
+  manual: boolean,
+  now: number
+): Promise<Array<{ id: string; email: string }>> {
+  if (manual) {
+    return db.select({ id: users.id, email: users.email })
       .from(users)
-      .innerJoin(refreshTokens, eq(users.id, refreshTokens.userId))
-      .where(and(eq(users.role, "rep"), sql`${refreshTokens.createdAt} > ${cutoff}`, isNull(users.suspendedAt)))
-      .groupBy(users.id)
+      .where(and(eq(users.role, "rep"), isNull(users.suspendedAt)))
       .all();
+  }
 
-    if (activeReps.length === 0) {
-      console.log("No active reps — skipping batch");
-      return;
+  const cutoff = now - ACTIVE_WINDOW;
+  return db.select({ id: users.id, email: users.email })
+    .from(users)
+    .innerJoin(refreshTokens, eq(users.id, refreshTokens.userId))
+    .where(and(eq(users.role, "rep"), sql`${refreshTokens.createdAt} > ${cutoff}`, isNull(users.suspendedAt)))
+    .groupBy(users.id)
+    .all();
+}
+
+async function runSuggestionBatch(env: Env, db: Db, options?: { manual?: boolean }): Promise<void> {
+  const manual = options?.manual ?? false;
+  const now = Math.floor(Date.now() / 1000);
+
+  // Pre-flight checks
+  if (!(await isEnabled(db))) {
+    console.log("AI features disabled — skipping batch");
+    return;
+  }
+  if (await isBudgetExhausted(db)) {
+    console.log("Budget exhausted — skipping batch");
+    return;
+  }
+
+  const reps = await getTargetReps(db, manual, now);
+
+  if (reps.length === 0) {
+    console.log(`No ${manual ? "eligible" : "active"} reps — skipping batch`);
+    return;
+  }
+
+  const batchId = crypto.randomUUID();
+  let totalSuggestions = 0;
+
+  for (const rep of reps) {
+    // Re-check budget per rep
+    if (await isBudgetExhausted(db)) {
+      console.log(`Budget exhausted mid-batch at rep ${rep.id}`);
+      break;
     }
 
-    const batchId = crypto.randomUUID();
-    let totalSuggestions = 0;
+    const signals = await gatherSignals(db, rep.id);
+    if (signals.length === 0) continue;
 
-    for (const rep of activeReps) {
-      // Re-check budget per rep
-      if (await isBudgetExhausted(db)) {
-        console.log(`Budget exhausted mid-batch at rep ${rep.id}`);
-        break;
+    const prompt = JSON.stringify({ repId: rep.id, signals });
+    const result = await callLLM(env, db, prompt);
+    if (!result) {
+      console.log(`LLM call failed for rep ${rep.id}`);
+      continue;
+    }
+
+    // Log cost
+    const cost = result.provider === "anthropic"
+      ? result.inputTokens * HAIKU_PRICING.input + result.outputTokens * HAIKU_PRICING.output
+      : 0;
+
+    await logCost(db, {
+      provider: result.provider, model: result.model, feature: "suggestions",
+      inputTokens: result.inputTokens, outputTokens: result.outputTokens,
+      estimatedCostUsd: cost,
+      prompt: prompt.slice(0, 2000),
+      response: result.text.slice(0, 4000),
+    });
+
+    const parsed = parseSuggestions(result.text);
+    if (parsed.length === 0) {
+      console.log(`Suggestion parse failed for rep ${rep.id}`, result.text.slice(0, 500));
+      continue;
+    }
+
+    // Clean expired suggestions
+    await db.delete(suggestions).where(
+      and(eq(suggestions.userId, rep.id), isNull(suggestions.acknowledgedAt), sql`expires_at < ${now}`)
+    );
+
+    // Insert new suggestions (skip duplicates)
+    for (const s of parsed) {
+      if (s.entityType && s.entityId) {
+        const existing = await db.select({ id: suggestions.id }).from(suggestions)
+          .where(and(
+            eq(suggestions.userId, rep.id), eq(suggestions.entityType, s.entityType),
+            eq(suggestions.entityId, s.entityId), isNull(suggestions.acknowledgedAt),
+            sql`expires_at > ${now}`,
+          )).limit(1).get();
+        if (existing) continue;
       }
 
-      const signals = await gatherSignals(db, rep.id);
-      if (signals.length === 0) continue;
-
-      const result = await callLLM(env, db, JSON.stringify({ repId: rep.id, signals }));
-      if (!result) {
-        console.log(`LLM call failed for rep ${rep.id}`);
-        continue;
-      }
-
-      // Log cost
-      const cost = result.provider === "anthropic"
-        ? result.inputTokens * HAIKU_PRICING.input + result.outputTokens * HAIKU_PRICING.output
-        : 0;
-
-      await logCost(db, {
-        provider: result.provider, model: result.model, feature: "suggestions",
-        inputTokens: result.inputTokens, outputTokens: result.outputTokens,
-        estimatedCostUsd: cost,
+      await db.insert(suggestions).values({
+        id: crypto.randomUUID(), userId: rep.id,
+        category: s.category, feature: "rep_suggestions",
+        title: s.title, body: s.body,
+        deepLink: s.deepLink || null, entityType: s.entityType || null,
+        entityId: s.entityId || null, priority: s.priority,
+        acknowledgedAt: null, clickedAt: null,
+        expiresAt: now + SUGGESTION_TTL, batchId, createdAt: now,
       });
+      totalSuggestions++;
+    }
+  }
 
-      const parsed = parseSuggestions(result.text);
-      if (parsed.length === 0) continue;
+  console.log(`Batch ${batchId}: ${reps.length} reps, ${totalSuggestions} suggestions created`);
+}
 
-      // Clean expired suggestions
-      await db.delete(suggestions).where(
-        and(eq(suggestions.userId, rep.id), isNull(suggestions.acknowledgedAt), sql`expires_at < ${now}`)
-      );
+async function handleManualRun(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const actor = requireActor(request);
+  if (actor instanceof Response) return actor;
+  if (!isAdmin(actor)) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-      // Insert new suggestions (skip duplicates)
-      for (const s of parsed) {
-        if (s.entityType && s.entityId) {
-          const existing = await db.select({ id: suggestions.id }).from(suggestions)
-            .where(and(
-              eq(suggestions.userId, rep.id), eq(suggestions.entityType, s.entityType),
-              eq(suggestions.entityId, s.entityId), isNull(suggestions.acknowledgedAt),
-              sql`expires_at > ${now}`,
-            )).limit(1).get();
-          if (existing) continue;
-        }
+  const db = drizzle(env.DB);
+  ctx.waitUntil(runSuggestionBatch(env, db, { manual: true }));
+  return Response.json({
+    status: "started",
+    message: "Batch running in background. Check suggestions or costs panel for results.",
+  });
+}
 
-        await db.insert(suggestions).values({
-          id: crypto.randomUUID(), userId: rep.id,
-          category: s.category, feature: "rep_suggestions",
-          title: s.title, body: s.body,
-          deepLink: s.deepLink || null, entityType: s.entityType || null,
-          entityId: s.entityId || null, priority: s.priority,
-          acknowledgedAt: null, clickedAt: null,
-          expiresAt: now + SUGGESTION_TTL, batchId, createdAt: now,
-        });
-        totalSuggestions++;
-      }
+const handler = {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (request.method === "POST" && url.pathname === "/batch/run") {
+      return handleManualRun(request, env, ctx);
     }
 
-    console.log(`Batch ${batchId}: ${activeReps.length} reps, ${totalSuggestions} suggestions created`);
+    return Response.json({ error: "Not found" }, { status: 404 });
+  },
+
+  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+    const db = drizzle(env.DB);
+    await runSuggestionBatch(env, db);
   },
 };
+
+export default handler;
