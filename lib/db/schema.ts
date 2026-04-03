@@ -46,6 +46,18 @@ export const scanPackages = sqliteTable("scan_packages", {
   totalSizeBytes: integer("total_size_bytes"), // filled on completion
   status: text("status", { enum: ["uploading", "ready", "error"] }).notNull().default("uploading"),
   coverImageKey: text("cover_image_key"),
+  // Extended metadata (enriched post-upload)
+  scanType: text("scan_type", { enum: ["light_stage", "photogrammetry", "lidar", "structured_light", "other"] }),
+  resolution: text("resolution"),
+  polygonCount: integer("polygon_count"),
+  colorSpace: text("color_space"),
+  hasMesh: integer("has_mesh", { mode: "boolean" }).default(false),
+  hasTexture: integer("has_texture", { mode: "boolean" }).default(false),
+  hasHdr: integer("has_hdr", { mode: "boolean" }).default(false),
+  hasMotionCapture: integer("has_motion_capture", { mode: "boolean" }).default(false),
+  compatibleEngines: text("compatible_engines"), // JSON: ["unreal", "unity", "maya", "blender"]
+  tags: text("tags"), // JSON: ["full_body", "face_only", "hands"]
+  internalNotes: text("internal_notes"),
   createdAt: integer("created_at").notNull(), // unix timestamp
   updatedAt: integer("updated_at").notNull(), // unix timestamp
 });
@@ -107,6 +119,8 @@ export const licences = sqliteTable("licences", {
   // Pre-authorisation: talent (or rep-confirmed) blanket approval for future downloads
   preauthUntil: integer("preauth_until"),   // unix timestamp; null = no active pre-auth
   preauthSetBy: text("preauth_set_by").references(() => users.id), // who set it
+  productionId: text("production_id").references(() => productions.id),
+  productionCompanyId: text("production_company_id").references(() => productionCompanies.id),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -236,6 +250,33 @@ export const pipelineOutputs = sqliteTable("pipeline_outputs", {
   filename: text("filename").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
   createdAt: integer("created_at").notNull(),
+});
+
+// ── Production entities ──────────────────────────────────────────────────────
+
+export const productionCompanies = sqliteTable("production_companies", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  website: text("website"),
+  notes: text("notes"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const productions = sqliteTable("productions", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  companyId: text("company_id").references(() => productionCompanies.id),
+  type: text("type", { enum: ["film", "tv_series", "tv_movie", "commercial", "game", "music_video", "other"] }),
+  year: integer("year"),
+  status: text("status", { enum: ["development", "pre_production", "production", "post_production", "released", "cancelled"] }),
+  imdbId: text("imdb_id"),
+  tmdbId: integer("tmdb_id"),
+  director: text("director"),
+  vfxSupervisor: text("vfx_supervisor"),
+  notes: text("notes"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
 });
 
 export const downloadEvents = sqliteTable("download_events", {
