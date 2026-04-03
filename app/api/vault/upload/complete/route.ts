@@ -17,7 +17,7 @@ function cfEnv(key: string): string | undefined {
 }
 import { sendEmail } from "@/lib/email/send";
 import { uploadCompleteEmail } from "@/lib/email/templates";
-import { suggestPackageTags } from "@/lib/ai/package-tags";
+import { triggerAiService } from "@/lib/ai/service";
 
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
@@ -174,13 +174,17 @@ export async function POST(req: NextRequest) {
         await sendEmail({ to: talentUser.email, subject, html });
       })();
 
-      // Fire-and-forget: suggest metadata tags via AI
-      void (async () => {
-        try {
-          const env = getRequestContext().env as unknown as { AI?: Ai; ANTHROPIC_API_KEY?: string };
-          await suggestPackageTags(env, db, packageId);
-        } catch { /* non-fatal */ }
-      })();
+      const { ctx } = getRequestContext();
+      ctx.waitUntil(
+        triggerAiService(req, `/package-tags/auto/${packageId}`, {
+          method: "POST",
+          headers: {
+            "x-ai-source": "upload-complete",
+          },
+        }).catch(() => {
+          // non-fatal
+        })
+      );
     }
   }
 

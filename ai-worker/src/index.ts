@@ -4,7 +4,7 @@ import * as schema from "@/lib/db/schema";
 import { isAiEnabled, isFeatureEnabled } from "@/lib/ai/cost-tracker";
 import { callAi } from "@/lib/ai/providers";
 import { suggestPackageTags } from "@/lib/ai/package-tags";
-import { checkBridgeAnomalies } from "@/lib/ai/security-alerts";
+import { checkBridgeAnomalies, checkDownloadAnomalies } from "@/lib/ai/security-alerts";
 import { runSuggestionBatch } from "@/lib/ai/suggestion-engine";
 import { FEE_GUIDANCE_PROMPT } from "@/lib/ai/constants";
 
@@ -152,6 +152,16 @@ async function handlePackageTagSuggestion(request: Request, env: Env, packageId:
   return Response.json({ ok: true });
 }
 
+async function handleAutoPackageTagSuggestion(request: Request, env: Env, packageId: string) {
+  if (request.headers.get("x-ai-source") !== "upload-complete") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const db = getDb(env);
+  await suggestPackageTags(env, db, packageId);
+  return Response.json({ ok: true });
+}
+
 async function handleRunBatch(request: Request, env: Env, ctx: ExecutionContext) {
   const actor = requireActor(request);
   if (actor instanceof Response) return actor;
@@ -204,6 +214,41 @@ async function handleBridgeSecurityEvent(request: Request, env: Env) {
   return Response.json({ ok: true });
 }
 
+async function handleDownloadSecurityEvent(request: Request, env: Env) {
+  if (request.headers.get("x-ai-source") !== "download-complete") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: {
+    licenceId?: string | null;
+    licenseeId?: string;
+    fileIds?: string[];
+    ip?: string | null;
+  };
+
+  try {
+    body = await request.json() as typeof body;
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (!body.licenceId || !body.licenseeId || !Array.isArray(body.fileIds)) {
+    return Response.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  const db = getDb(env);
+  for (const fileId of body.fileIds) {
+    await checkDownloadAnomalies(db, env, {
+      licenceId: body.licenceId,
+      licenseeId: body.licenseeId,
+      fileId,
+      ip: body.ip ?? null,
+    });
+  }
+
+  return Response.json({ ok: true });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -213,6 +258,14 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname.startsWith("/package-tags/")) {
+      if (url.pathname.startsWith("/package-tags/auto/")) {
+        const packageId = url.pathname.slice("/package-tags/auto/".length);
+        if (!packageId) {
+          return Response.json({ error: "packageId is required" }, { status: 400 });
+        }
+        return handleAutoPackageTagSuggestion(request, env, packageId);
+      }
+
       const packageId = url.pathname.slice("/package-tags/".length);
       if (!packageId) {
         return Response.json({ error: "packageId is required" }, { status: 400 });
@@ -226,6 +279,10 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/security/bridge-event") {
       return handleBridgeSecurityEvent(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/security/download-event") {
+      return handleDownloadSecurityEvent(request, env);
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });
