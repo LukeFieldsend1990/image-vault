@@ -138,6 +138,7 @@ export async function callAi(
       outputTokens: 0,
       estimatedCostUsd: 0,
       error: err instanceof Error ? err.message : String(err),
+      prompt: params.userMessage.slice(0, 2000),
     });
 
     // Fallback: if Anthropic failed, try Workers AI
@@ -167,6 +168,8 @@ export async function callAi(
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
     estimatedCostUsd: cost,
+    prompt: params.userMessage.slice(0, 2000),
+    response: result.text.slice(0, 4000),
   });
 
   return { text: result.text };

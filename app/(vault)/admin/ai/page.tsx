@@ -13,7 +13,7 @@ export default async function AdminAiPage() {
 
   const fourteenDaysAgo = Math.floor(Date.now() / 1000) - 14 * 86400;
 
-  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow, lastBatchRow] =
+  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow, lastBatchRow, recentLogs] =
     await Promise.all([
       db.select({ key: aiSettings.key, value: aiSettings.value }).from(aiSettings).all(),
       db
@@ -60,6 +60,24 @@ export default async function AdminAiPage() {
         .orderBy(desc(suggestions.createdAt))
         .limit(1)
         .get(),
+      db
+        .select({
+          id: aiCostLog.id,
+          feature: aiCostLog.feature,
+          provider: aiCostLog.provider,
+          model: aiCostLog.model,
+          inputTokens: aiCostLog.inputTokens,
+          outputTokens: aiCostLog.outputTokens,
+          estimatedCostUsd: aiCostLog.estimatedCostUsd,
+          error: aiCostLog.error,
+          prompt: aiCostLog.prompt,
+          response: aiCostLog.response,
+          createdAt: aiCostLog.createdAt,
+        })
+        .from(aiCostLog)
+        .orderBy(desc(aiCostLog.createdAt))
+        .limit(20)
+        .all(),
     ]);
 
   const initialSettings: Record<string, string> = {};
@@ -119,6 +137,19 @@ export default async function AdminAiPage() {
           createdAt: lastBatchRow.createdAt,
           suggestionsCreated: lastBatchRow.count,
         } : null}
+        recentLogs={recentLogs.map((l) => ({
+          id: l.id,
+          feature: l.feature,
+          provider: l.provider,
+          model: l.model,
+          inputTokens: l.inputTokens,
+          outputTokens: l.outputTokens,
+          cost: l.estimatedCostUsd,
+          error: l.error,
+          prompt: l.prompt,
+          response: l.response,
+          createdAt: l.createdAt,
+        }))}
       />
     </div>
   );
