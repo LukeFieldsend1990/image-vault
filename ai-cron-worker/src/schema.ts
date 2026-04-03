@@ -107,3 +107,19 @@ export const aiCostLog = sqliteTable("ai_cost_log", {
   response: text("response"),
   createdAt: integer("created_at").notNull(),
 });
+
+export const aiBatchRuns = sqliteTable("ai_batch_runs", {
+  id: text("id").primaryKey(),
+  triggerType: text("trigger_type").notNull(),
+  status: text("status").notNull(),
+  initiatedByUserId: text("initiated_by_user_id"),
+  initiatedByEmail: text("initiated_by_email"),
+  repsTargeted: integer("reps_targeted"),
+  repsProcessed: integer("reps_processed"),
+  suggestionsCreated: integer("suggestions_created").notNull().default(0),
+  skipped: text("skipped"),
+  error: text("error"),
+  startedAt: integer("started_at").notNull(),
+  completedAt: integer("completed_at"),
+  updatedAt: integer("updated_at").notNull(),
+});
