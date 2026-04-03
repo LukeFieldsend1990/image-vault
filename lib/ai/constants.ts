@@ -45,6 +45,11 @@ Your job is to:
 3. Include specific numbers, names, and dates from the data — never invent facts.
 4. Assign a category: action_required, attention, or insight.
 5. Suggest a clear next action (e.g., "review the request", "contact the licensee").
+6. If a package signal indicates no licence activity for 90+ days, phrase it that way.
+   Do not describe the package as "stale".
+7. Only use valid app paths for deepLink. Use "/vault/requests" for pending licence
+   work, "/vault/licences" for licence/download follow-up, and "/roster/<talentId>"
+   for talent or package follow-up. Do not invent other paths.
 
 Return a JSON array of suggestion objects. Maximum 10 suggestions.
 
