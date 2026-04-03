@@ -14,6 +14,8 @@ export async function logAiCost(
     outputTokens: number;
     estimatedCostUsd: number;
     error?: string;
+    prompt?: string;
+    response?: string;
   }
 ) {
   await db.insert(aiCostLog).values({
@@ -25,6 +27,8 @@ export async function logAiCost(
     outputTokens: entry.outputTokens,
     estimatedCostUsd: entry.estimatedCostUsd,
     error: entry.error ?? null,
+    prompt: entry.prompt ?? null,
+    response: entry.response ?? null,
     createdAt: Math.floor(Date.now() / 1000),
   });
 }

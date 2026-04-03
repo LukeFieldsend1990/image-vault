@@ -15,10 +15,25 @@ interface LastBatch {
   suggestionsCreated: number;
 }
 
+interface LogEntry {
+  id: string;
+  feature: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+  error: string | null;
+  prompt: string | null;
+  response: string | null;
+  createdAt: number;
+}
+
 interface Props {
   initialSettings: Record<string, string>;
   initialCosts: CostData;
   lastBatch: LastBatch | null;
+  recentLogs: LogEntry[];
 }
 
 function formatTimestamp(unix: number): string {
@@ -43,7 +58,7 @@ function timeAgo(unix: number): string {
   return `${days}d ago`;
 }
 
-export function AiSettingsClient({ initialSettings, initialCosts, lastBatch }: Props) {
+export function AiSettingsClient({ initialSettings, initialCosts, lastBatch, recentLogs }: Props) {
   const [settings, setSettings] = useState(initialSettings);
   const [costs] = useState(initialCosts);
   const [saving, setSaving] = useState<string | null>(null);
@@ -380,11 +395,129 @@ export function AiSettingsClient({ initialSettings, initialCosts, lastBatch }: P
           )}
         </div>
       </div>
+      {/* ── AI Call Logs ────────────────────────────────────────────────── */}
+      <div style={cardStyle}>
+        <div style={headerStyle}>
+          <h2 style={labelStyle}>Recent AI Calls (Last 20)</h2>
+        </div>
+        <div style={{ padding: 20 }}>
+          {recentLogs.length === 0 ? (
+            <p style={{ fontSize: 12, color: "var(--color-muted)" }}>No AI calls recorded yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {recentLogs.map((log) => (
+                <LogCard key={log.id} log={log} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ── Sub-components ────────────────────────────────────────────────────────── */
+
+function LogCard({ log }: { log: LogEntry }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      style={{
+        border: log.error ? "1px solid rgba(220,38,38,0.3)" : "1px solid var(--color-border)",
+        borderRadius: 6,
+        background: log.error ? "rgba(220,38,38,0.04)" : "var(--color-surface)",
+        overflow: "hidden",
+      }}
+    >
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          width: "100%",
+          padding: "10px 14px",
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 8,
+          textAlign: "left",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              padding: "2px 6px",
+              borderRadius: 4,
+              background: log.error ? "rgba(220,38,38,0.12)" : "rgba(22,163,74,0.12)",
+              color: log.error ? "#991b1b" : "#166534",
+              textTransform: "uppercase",
+            }}
+          >
+            {log.error ? "error" : "ok"}
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-ink)" }}>
+            {log.feature}
+          </span>
+          <span style={{ fontSize: 11, color: "var(--color-muted)" }}>
+            {log.provider}/{log.model.split("/").pop()}
+          </span>
+          <span style={{ fontSize: 11, color: "var(--color-muted)" }}>
+            {log.inputTokens + log.outputTokens} tok
+          </span>
+          <span style={{ fontSize: 11, color: "var(--color-muted)" }}>
+            ${log.cost.toFixed(4)}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: "var(--color-muted)" }}>
+            {timeAgo(log.createdAt)}
+          </span>
+          <span style={{ fontSize: 10, color: "var(--color-muted)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+            ▼
+          </span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {log.error && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 600, color: "#991b1b", marginBottom: 4, textTransform: "uppercase" }}>Error</p>
+              <pre style={{ fontSize: 11, color: "#991b1b", background: "rgba(220,38,38,0.06)", padding: 8, borderRadius: 4, overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0 }}>
+                {log.error}
+              </pre>
+            </div>
+          )}
+          {log.prompt && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 600, color: "var(--color-muted)", marginBottom: 4, textTransform: "uppercase" }}>Prompt</p>
+              <pre style={{ fontSize: 11, color: "var(--color-ink)", background: "var(--color-border)", padding: 8, borderRadius: 4, overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0, maxHeight: 200, overflow: "auto" }}>
+                {log.prompt}
+              </pre>
+            </div>
+          )}
+          {log.response && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 600, color: "var(--color-muted)", marginBottom: 4, textTransform: "uppercase" }}>Response</p>
+              <pre style={{ fontSize: 11, color: "var(--color-ink)", background: "var(--color-border)", padding: 8, borderRadius: 4, overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0, maxHeight: 300, overflow: "auto" }}>
+                {log.response}
+              </pre>
+            </div>
+          )}
+          {!log.prompt && !log.response && !log.error && (
+            <p style={{ fontSize: 11, color: "var(--color-muted)", fontStyle: "italic" }}>
+              No prompt/response data logged for this call (pre-logging update).
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ToggleRow({
   label,

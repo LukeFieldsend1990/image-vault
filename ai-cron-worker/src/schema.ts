@@ -103,5 +103,7 @@ export const aiCostLog = sqliteTable("ai_cost_log", {
   outputTokens: integer("output_tokens").notNull().default(0),
   estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
   error: text("error"),
+  prompt: text("prompt"),
+  response: text("response"),
   createdAt: integer("created_at").notNull(),
 });
