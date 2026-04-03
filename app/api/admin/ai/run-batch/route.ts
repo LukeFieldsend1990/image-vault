@@ -11,6 +11,7 @@ const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"]
 /**
  * POST /api/admin/ai/run-batch
  * Admin-only manual trigger for the AI suggestion batch.
+ * Uses waitUntil() to run in background — returns immediately.
  */
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
@@ -22,13 +23,22 @@ export async function POST(req: NextRequest) {
   const db = getDb();
 
   let aiEnv: { AI?: Ai; ANTHROPIC_API_KEY?: string };
+  let ctx: ExecutionContext | null = null;
   try {
-    const { env: cfEnv } = getRequestContext();
-    aiEnv = cfEnv as unknown as { AI?: Ai; ANTHROPIC_API_KEY?: string };
+    const reqCtx = getRequestContext();
+    aiEnv = reqCtx.env as unknown as { AI?: Ai; ANTHROPIC_API_KEY?: string };
+    ctx = reqCtx.ctx;
   } catch {
     aiEnv = {};
   }
 
+  if (ctx) {
+    // Run batch in background via waitUntil — response returns immediately
+    ctx.waitUntil(runSuggestionBatch(aiEnv, db, { manual: true }));
+    return NextResponse.json({ status: "started", message: "Batch running in background. Check suggestions or costs panel for results." });
+  }
+
+  // Fallback: no execution context (local dev) — run synchronously
   try {
     const result = await runSuggestionBatch(aiEnv, db, { manual: true });
     return NextResponse.json(result);
