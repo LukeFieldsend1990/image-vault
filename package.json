@@ -12,7 +12,9 @@
     "lint": "eslint",
     "cf-typegen": "wrangler types",
     "deploy:worker": "wrangler deploy --config pipeline-worker/wrangler.toml",
-    "worker:dev": "wrangler dev --config pipeline-worker/wrangler.toml"
+    "worker:dev": "wrangler dev --config pipeline-worker/wrangler.toml",
+    "deploy:ai-cron": "wrangler deploy --config ai-cron-worker/wrangler.toml",
+    "ai-cron:dev": "wrangler dev --config ai-cron-worker/wrangler.toml"
   },
   "dependencies": {
     "aws4fetch": "^1.0.20",
