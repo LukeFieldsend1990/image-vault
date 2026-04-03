@@ -2,6 +2,8 @@ name = "image-vault-ai-cron"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
 
 # -------------------------------------------------------------------
 # Cron triggers — twice daily at 07:00 and 14:00 UTC
