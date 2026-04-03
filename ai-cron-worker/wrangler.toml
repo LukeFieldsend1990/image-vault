@@ -1,0 +1,36 @@
+name = "image-vault-ai-cron"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# -------------------------------------------------------------------
+# Cron triggers — twice daily at 07:00 and 14:00 UTC
+# -------------------------------------------------------------------
+[triggers]
+crons = ["0 7 * * *", "0 14 * * *"]
+
+# -------------------------------------------------------------------
+# D1 Database (shared with main app)
+# -------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "image-vault-db"
+database_id = "71665618-0498-48bd-a243-962eb4810769"
+
+# -------------------------------------------------------------------
+# Workers AI
+# -------------------------------------------------------------------
+[ai]
+binding = "AI"
+
+# -------------------------------------------------------------------
+# Environment Variables
+# -------------------------------------------------------------------
+[vars]
+APP_URL = "https://changling.io"
+
+# -------------------------------------------------------------------
+# Secrets (set via: wrangler secret put SECRET_NAME --config ai-cron-worker/wrangler.toml)
+# -------------------------------------------------------------------
+# ANTHROPIC_API_KEY  - Anthropic API key for Claude Haiku
+# CRON_SECRET        - Shared secret for authenticating batch API calls (optional, direct D1 access used instead)

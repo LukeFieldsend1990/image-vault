@@ -7,6 +7,7 @@ export const users = sqliteTable("users", {
   role: text("role", { enum: ["talent", "rep", "licensee", "admin"] }).notNull().default("talent"),
   vaultLocked: integer("vault_locked", { mode: "boolean" }).notNull().default(false),
   suspendedAt: integer("suspended_at"), // unix timestamp; null = active
+  phone: text("phone"), // optional, E.164 format
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -287,6 +288,59 @@ export const bridgeGrants = sqliteTable("bridge_grants", {
   createdAt: integer("created_at").notNull(),
   revokedAt: integer("revoked_at"),
 });
+
+// ── AI tables ────────────────────────────────────────────────────────────────
+
+export const aiSettings = sqliteTable("ai_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedBy: text("updated_by").references(() => users.id),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const suggestions = sqliteTable("suggestions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  category: text("category").notNull(), // action_required | attention | insight | security
+  feature: text("feature").notNull(), // suggestions | fee_guidance | security_alerts
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  deepLink: text("deep_link"),
+  entityType: text("entity_type"), // licence | package | talent | download
+  entityId: text("entity_id"),
+  priority: integer("priority").notNull().default(50),
+  acknowledgedAt: integer("acknowledged_at"),
+  clickedAt: integer("clicked_at"),
+  expiresAt: integer("expires_at").notNull(),
+  batchId: text("batch_id"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const packageTags = sqliteTable("package_tags", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  tag: text("tag").notNull(),
+  category: text("category").notNull(), // scan_type | quality | compatibility | completeness
+  status: text("status").notNull().default("suggested"), // suggested | accepted | dismissed
+  suggestedBy: text("suggested_by").notNull().default("ai"), // ai | user
+  reviewedBy: text("reviewed_by").references(() => users.id),
+  reviewedAt: integer("reviewed_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const aiCostLog = sqliteTable("ai_cost_log", {
+  id: text("id").primaryKey(),
+  provider: text("provider").notNull(), // workers_ai | anthropic
+  model: text("model").notNull(),
+  feature: text("feature").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+});
+
+// ── Bridge tables ─────────────────────────────────────────────────────────────
 
 export const bridgeEvents = sqliteTable("bridge_events", {
   id: text("id").primaryKey(),

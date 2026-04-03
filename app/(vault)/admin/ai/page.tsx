@@ -1,0 +1,105 @@
+export const runtime = "edge";
+
+import Link from "next/link";
+import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { getDb } from "@/lib/db";
+import { aiSettings, aiCostLog } from "@/lib/db/schema";
+import { sql } from "drizzle-orm";
+import { AiSettingsClient } from "./ai-settings-client";
+
+export default async function AdminAiPage() {
+  await requireAdmin();
+  const db = getDb();
+
+  const fourteenDaysAgo = Math.floor(Date.now() / 1000) - 14 * 86400;
+
+  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow] =
+    await Promise.all([
+      db.select({ key: aiSettings.key, value: aiSettings.value }).from(aiSettings).all(),
+      db
+        .select({ total: sql<number>`coalesce(sum(estimated_cost_usd), 0)` })
+        .from(aiCostLog)
+        .where(sql`created_at >= ${fourteenDaysAgo}`)
+        .get(),
+      db
+        .select({
+          feature: aiCostLog.feature,
+          cost: sql<number>`coalesce(sum(estimated_cost_usd), 0)`,
+          calls: sql<number>`count(*)`,
+        })
+        .from(aiCostLog)
+        .where(sql`created_at >= ${fourteenDaysAgo}`)
+        .groupBy(aiCostLog.feature)
+        .orderBy(sql`sum(estimated_cost_usd) desc`)
+        .all(),
+      db
+        .select({
+          provider: aiCostLog.provider,
+          cost: sql<number>`coalesce(sum(estimated_cost_usd), 0)`,
+          calls: sql<number>`count(*)`,
+        })
+        .from(aiCostLog)
+        .where(sql`created_at >= ${fourteenDaysAgo}`)
+        .groupBy(aiCostLog.provider)
+        .orderBy(sql`sum(estimated_cost_usd) desc`)
+        .all(),
+      db
+        .select({ value: aiSettings.value })
+        .from(aiSettings)
+        .where(sql`key = 'budget_ceiling_usd'`)
+        .get(),
+    ]);
+
+  const initialSettings: Record<string, string> = {};
+  for (const row of settingsRows) {
+    initialSettings[row.key] = row.value;
+  }
+
+  const ceiling = parseFloat(ceilingRow?.value ?? "50");
+  const totalSpend = totalSpendRow?.total ?? 0;
+
+  const initialCosts = {
+    totalSpend,
+    ceiling,
+    byFeature: byFeatureRows.map((r) => ({
+      feature: r.feature,
+      cost: r.cost,
+      calls: r.calls,
+    })),
+    byProvider: byProviderRows.map((r) => ({
+      provider: r.provider,
+      cost: r.cost,
+      calls: r.calls,
+    })),
+  };
+
+  return (
+    <div className="p-8 max-w-5xl">
+      <div className="mb-8">
+        <Link
+          href="/settings?tab=admin"
+          className="text-xs mb-3 inline-block"
+          style={{ color: "var(--color-accent)" }}
+        >
+          &larr; Back to Settings
+        </Link>
+        <div className="flex items-center gap-2 mb-1">
+          <span
+            className="text-[9px] uppercase tracking-[0.2em] font-semibold px-2 py-0.5 rounded"
+            style={{ background: "rgba(192,57,43,0.12)", color: "var(--color-accent)" }}
+          >
+            Admin
+          </span>
+        </div>
+        <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>
+          AI Features
+        </h1>
+        <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
+          Manage AI capabilities, monitor costs and trigger batch jobs.
+        </p>
+      </div>
+
+      <AiSettingsClient initialSettings={initialSettings} initialCosts={initialCosts} />
+    </div>
+  );
+}
