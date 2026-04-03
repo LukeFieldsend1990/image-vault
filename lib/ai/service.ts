@@ -15,14 +15,14 @@ function getAiService() {
   return (env as ServiceBindingEnv).AI_SERVICE;
 }
 
-export async function callAiService(
+async function forwardAiService(
   req: Request,
-  session: SessionLike,
   path: string,
   init?: {
     method?: string;
     body?: BodyInit | null;
     contentType?: string | null;
+    headers?: HeadersInit;
   }
 ): Promise<Response> {
   const service = getAiService();
@@ -33,11 +33,7 @@ export async function callAiService(
   const url = new URL(req.url);
   url.pathname = path;
 
-  const headers = new Headers({
-    "x-ai-user-id": session.sub,
-    "x-ai-user-role": session.role,
-    "x-ai-user-email": session.email,
-  });
+  const headers = new Headers(init?.headers);
 
   if (init?.contentType) {
     headers.set("content-type", init.contentType);
@@ -50,4 +46,39 @@ export async function callAiService(
       body: init?.body ?? null,
     })
   );
+}
+
+export async function callAiService(
+  req: Request,
+  session: SessionLike,
+  path: string,
+  init?: {
+    method?: string;
+    body?: BodyInit | null;
+    contentType?: string | null;
+    headers?: HeadersInit;
+  }
+): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  headers.set("x-ai-user-id", session.sub);
+  headers.set("x-ai-user-role", session.role);
+  headers.set("x-ai-user-email", session.email);
+
+  return forwardAiService(req, path, {
+    ...init,
+    headers,
+  });
+}
+
+export async function triggerAiService(
+  req: Request,
+  path: string,
+  init?: {
+    method?: string;
+    body?: BodyInit | null;
+    contentType?: string | null;
+    headers?: HeadersInit;
+  }
+): Promise<Response> {
+  return forwardAiService(req, path, init);
 }
