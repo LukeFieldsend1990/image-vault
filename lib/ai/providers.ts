@@ -1,8 +1,8 @@
-import { getDb } from "@/lib/db";
+import type { drizzle } from "drizzle-orm/d1";
 import { logAiCost, checkBudget, isAiEnabled } from "./cost-tracker";
 import { PRICING } from "./constants";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof drizzle>;
 
 interface Message {
   role: "system" | "user" | "assistant";

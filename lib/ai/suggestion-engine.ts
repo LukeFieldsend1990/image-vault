@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import type { drizzle } from "drizzle-orm/d1";
 import { users, refreshTokens, talentReps, suggestions } from "@/lib/db/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { callAi } from "./providers";
@@ -11,7 +11,7 @@ import {
 } from "./constants";
 import { gatherSignalsForRep } from "./signals";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof drizzle>;
 
 interface SuggestionFromLLM {
   title: string;

@@ -1,8 +1,8 @@
-import { getDb } from "@/lib/db";
+import type { drizzle } from "drizzle-orm/d1";
 import { aiCostLog, aiSettings } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof drizzle>;
 
 export async function logAiCost(
   db: Db,
