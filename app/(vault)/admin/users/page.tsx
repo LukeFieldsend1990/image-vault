@@ -39,6 +39,7 @@ export default async function AdminUsersPage() {
       role: users.role,
       createdAt: users.createdAt,
       suspendedAt: users.suspendedAt,
+      emailMuted: users.emailMuted,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -177,6 +178,7 @@ export default async function AdminUsersPage() {
                 userId={u.id}
                 isSuspended={!!u.suspendedAt}
                 isCurrentUser={u.id === currentUserId}
+                emailMuted={!!u.emailMuted}
               />
             </div>
           );

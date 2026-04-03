@@ -7,6 +7,9 @@
  */
 
 import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getDb } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { inArray } from "drizzle-orm";
 
 export interface EmailPayload {
   to: string | string[];
@@ -35,6 +38,26 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
   if (!apiKey) {
     console.warn("[email] RESEND_API_KEY not set — skipping email to", payload.to);
     return;
+  }
+
+  // Filter out recipients whose email is muted by an admin
+  const recipients = Array.isArray(payload.to) ? payload.to : [payload.to];
+  try {
+    const db = getDb();
+    const rows = await db
+      .select({ email: users.email, emailMuted: users.emailMuted })
+      .from(users)
+      .where(inArray(users.email, recipients))
+      .all();
+    const muted = new Set(rows.filter((r) => r.emailMuted).map((r) => r.email));
+    const filtered = recipients.filter((e) => !muted.has(e));
+    if (filtered.length === 0) {
+      console.log("[email] All recipients muted — skipping email:", payload.subject);
+      return;
+    }
+    payload = { ...payload, to: filtered };
+  } catch {
+    // If DB lookup fails (e.g. outside request context), proceed with original recipients
   }
 
   const doSend = async () => {
