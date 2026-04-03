@@ -9,6 +9,8 @@
     "preview": "npm run pages:build && wrangler pages dev",
     "deploy": "npm run pages:build && wrangler pages deploy",
     "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint",
     "cf-typegen": "wrangler types",
     "deploy:worker": "wrangler deploy --config pipeline-worker/wrangler.toml",
@@ -31,11 +33,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.1",
     "drizzle-kit": "^0.31.9",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vitest": "^4.1.2",
     "wrangler": "^4.67.0"
   }
 }
