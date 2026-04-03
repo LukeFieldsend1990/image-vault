@@ -10,6 +10,16 @@ interface FeeGuidance {
   count: number;
 }
 
+interface FeeGuidanceResponse {
+  guidance?: string | null;
+  stats?: {
+    p25?: number;
+    p75?: number;
+    median?: number;
+    count?: number;
+  } | null;
+}
+
 interface Props {
   licenceType: string;
   territory: string | null;
@@ -19,6 +29,41 @@ interface Props {
 
 function formatPence(pence: number): string {
   return `\u00a3${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
+}
+
+function parseGuidance(data: unknown): FeeGuidance | null {
+  if (!data || typeof data !== "object") return null;
+
+  const flat = data as Partial<FeeGuidance>;
+  if (
+    typeof flat.text === "string" &&
+    typeof flat.p25 === "number" &&
+    typeof flat.p75 === "number" &&
+    typeof flat.median === "number" &&
+    typeof flat.count === "number"
+  ) {
+    return flat as FeeGuidance;
+  }
+
+  const nested = data as FeeGuidanceResponse;
+  if (
+    typeof nested.guidance !== "string" ||
+    !nested.stats ||
+    typeof nested.stats.p25 !== "number" ||
+    typeof nested.stats.p75 !== "number" ||
+    typeof nested.stats.median !== "number" ||
+    typeof nested.stats.count !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    text: nested.guidance,
+    p25: nested.stats.p25,
+    p75: nested.stats.p75,
+    median: nested.stats.median,
+    count: nested.stats.count,
+  };
 }
 
 export default function FeeGuidanceCard({ licenceType, territory, exclusivity, proposedFee }: Props) {
@@ -34,7 +79,7 @@ export default function FeeGuidanceCard({ licenceType, territory, exclusivity, p
 
     fetch(`/api/ai/fee-guidance?${params.toString()}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setGuidance((data as FeeGuidance | null) ?? null))
+      .then((data) => setGuidance(parseGuidance(data)))
       .catch(() => setGuidance(null))
       .finally(() => setLoading(false));
   }, [licenceType, territory, exclusivity, proposedFee]);
