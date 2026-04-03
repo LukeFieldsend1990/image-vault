@@ -9,22 +9,46 @@ interface CostData {
   byProvider: { provider: string; cost: number; calls: number }[];
 }
 
-interface BatchResult {
-  repsProcessed: number;
+interface LastBatch {
+  batchId: string;
+  createdAt: number;
   suggestionsCreated: number;
 }
 
 interface Props {
   initialSettings: Record<string, string>;
   initialCosts: CostData;
+  lastBatch: LastBatch | null;
 }
 
-export function AiSettingsClient({ initialSettings, initialCosts }: Props) {
+function formatTimestamp(unix: number): string {
+  const d = new Date(unix * 1000);
+  return d.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function timeAgo(unix: number): string {
+  const seconds = Math.floor(Date.now() / 1000) - unix;
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+export function AiSettingsClient({ initialSettings, initialCosts, lastBatch }: Props) {
   const [settings, setSettings] = useState(initialSettings);
   const [costs] = useState(initialCosts);
   const [saving, setSaving] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
-  const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
+  const [batchStarted, setBatchStarted] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
 
   const updateSetting = useCallback(async (key: string, value: string) => {
@@ -53,13 +77,12 @@ export function AiSettingsClient({ initialSettings, initialCosts }: Props) {
 
   const runBatch = useCallback(async () => {
     setBatchRunning(true);
-    setBatchResult(null);
+    setBatchStarted(false);
     setBatchError(null);
     try {
       const res = await fetch("/api/admin/ai/run-batch", { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json() as BatchResult;
-      setBatchResult(data);
+      setBatchStarted(true);
     } catch (err: unknown) {
       setBatchError(err instanceof Error ? err.message : "Batch failed");
     } finally {
@@ -275,6 +298,32 @@ export function AiSettingsClient({ initialSettings, initialCosts }: Props) {
           <h2 style={labelStyle}>Manual Batch Trigger</h2>
         </div>
         <div style={{ padding: 20 }}>
+          {lastBatch && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: "10px 14px",
+                borderRadius: 6,
+                background: "var(--color-surface)",
+                border: "1px solid var(--color-border)",
+                fontSize: 12,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <span style={{ fontWeight: 600, color: "var(--color-ink)" }}>Last run:</span>{" "}
+                <span style={{ color: "var(--color-muted)" }}>
+                  {formatTimestamp(lastBatch.createdAt)} ({timeAgo(lastBatch.createdAt)})
+                </span>
+              </div>
+              <span style={{ color: "var(--color-ink)", fontWeight: 500 }}>
+                {lastBatch.suggestionsCreated} suggestion{lastBatch.suggestionsCreated !== 1 ? "s" : ""} created
+              </span>
+            </div>
+          )}
+
           <p style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 12 }}>
             Run the suggestion-generation batch job on demand. This processes all reps and creates
             new AI suggestions.
@@ -295,10 +344,10 @@ export function AiSettingsClient({ initialSettings, initialCosts }: Props) {
               transition: "opacity 0.15s",
             }}
           >
-            {batchRunning ? "Running..." : "Run Batch Now"}
+            {batchRunning ? "Starting..." : "Run Batch Now"}
           </button>
 
-          {batchResult && (
+          {batchStarted && (
             <div
               style={{
                 marginTop: 12,
@@ -310,8 +359,7 @@ export function AiSettingsClient({ initialSettings, initialCosts }: Props) {
                 color: "#166534",
               }}
             >
-              Batch complete: {batchResult.repsProcessed} reps processed,{" "}
-              {batchResult.suggestionsCreated} suggestions created.
+              Batch started in background. Refresh this page in a minute to see results.
             </div>
           )}
 

@@ -3,8 +3,8 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { aiSettings, aiCostLog } from "@/lib/db/schema";
-import { sql } from "drizzle-orm";
+import { aiSettings, aiCostLog, suggestions } from "@/lib/db/schema";
+import { sql, desc } from "drizzle-orm";
 import { AiSettingsClient } from "./ai-settings-client";
 
 export default async function AdminAiPage() {
@@ -13,7 +13,7 @@ export default async function AdminAiPage() {
 
   const fourteenDaysAgo = Math.floor(Date.now() / 1000) - 14 * 86400;
 
-  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow] =
+  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow, lastBatchRow] =
     await Promise.all([
       db.select({ key: aiSettings.key, value: aiSettings.value }).from(aiSettings).all(),
       db
@@ -47,6 +47,18 @@ export default async function AdminAiPage() {
         .select({ value: aiSettings.value })
         .from(aiSettings)
         .where(sql`key = 'budget_ceiling_usd'`)
+        .get(),
+      db
+        .select({
+          batchId: suggestions.batchId,
+          createdAt: sql<number>`max(${suggestions.createdAt})`,
+          count: sql<number>`count(*)`,
+        })
+        .from(suggestions)
+        .where(sql`${suggestions.batchId} is not null`)
+        .groupBy(suggestions.batchId)
+        .orderBy(desc(suggestions.createdAt))
+        .limit(1)
         .get(),
     ]);
 
@@ -99,7 +111,15 @@ export default async function AdminAiPage() {
         </p>
       </div>
 
-      <AiSettingsClient initialSettings={initialSettings} initialCosts={initialCosts} />
+      <AiSettingsClient
+        initialSettings={initialSettings}
+        initialCosts={initialCosts}
+        lastBatch={lastBatchRow ? {
+          batchId: lastBatchRow.batchId!,
+          createdAt: lastBatchRow.createdAt,
+          suggestionsCreated: lastBatchRow.count,
+        } : null}
+      />
     </div>
   );
 }
