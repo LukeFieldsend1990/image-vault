@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
 import ChangePassword from "./change-password";
+import PhoneField from "./phone-field";
 
 const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
@@ -25,6 +26,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/productions", label: "Productions", description: "Production entities and companies" },
   { href: "/admin/storage", label: "Storage", description: "Per-talent storage usage" },
   { href: "/admin/bridge", label: "Bridge", description: "Active Bridge sessions and tamper event log" },
+  { href: "/admin/ai", label: "AI Features", description: "AI settings, cost tracking and batch controls" },
 ];
 
 type Role = "talent" | "rep" | "licensee" | "admin";
@@ -410,6 +412,15 @@ export default async function SettingsPage({
           <VaultLockToggle />
         </div>
       )}
+
+      {/* Contact Phone */}
+      <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-muted)" }}>Contact Phone</h2>
+        <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
+          Optional phone number for licence-related communication.
+        </p>
+        <PhoneField />
+      </div>
 
       {/* Security */}
       <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>

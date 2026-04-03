@@ -17,6 +17,7 @@ function cfEnv(key: string): string | undefined {
 }
 import { sendEmail } from "@/lib/email/send";
 import { uploadCompleteEmail } from "@/lib/email/templates";
+import { suggestPackageTags } from "@/lib/ai/package-tags";
 
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
@@ -171,6 +172,14 @@ export async function POST(req: NextRequest) {
           vaultUrl: `${baseUrl}/dashboard`,
         });
         await sendEmail({ to: talentUser.email, subject, html });
+      })();
+
+      // Fire-and-forget: suggest metadata tags via AI
+      void (async () => {
+        try {
+          const env = getRequestContext().env as unknown as { AI?: Ai; ANTHROPIC_API_KEY?: string };
+          await suggestPackageTags(env, db, packageId);
+        } catch { /* non-fatal */ }
       })();
     }
   }

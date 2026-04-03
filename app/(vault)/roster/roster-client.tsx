@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import SuggestionsPanel from "./suggestions-panel";
 
 interface TalentRow {
   talentId: string;
@@ -304,6 +305,9 @@ export default function RosterClient() {
           </p>
         )}
       </div>
+
+      {/* AI Suggestions */}
+      <SuggestionsPanel />
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">

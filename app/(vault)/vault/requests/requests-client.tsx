@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import FeeGuidanceCard from "./fee-guidance-card";
 
 interface Licence {
   id: string;
@@ -211,6 +212,18 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                       <p className="mb-1" style={{ color: "var(--color-muted)" }}>Intended use</p>
                       <p className="leading-relaxed" style={{ color: "var(--color-ink)" }}>{r.intendedUse}</p>
                     </div>
+
+                    {/* AI Fee Guidance */}
+                    {r.licenceType && (
+                      <div className="px-3 py-3">
+                        <FeeGuidanceCard
+                          licenceType={r.licenceType}
+                          territory={r.territory}
+                          exclusivity={r.exclusivity}
+                          proposedFee={r.proposedFee}
+                        />
+                      </div>
+                    )}
 
                     {r.proposedFee && netEarnings !== null && (
                       <div className="px-3 py-3 space-y-1">

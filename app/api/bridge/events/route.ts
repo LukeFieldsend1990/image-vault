@@ -8,6 +8,8 @@ import {
   requireBridgeToken,
   isBridgeTokenError,
 } from "@/lib/auth/requireBridgeToken";
+import { checkBridgeAnomalies } from "@/lib/ai/security-alerts";
+import { getRequestContext } from "@cloudflare/next-on-pages";
 
 const ALLOWED_EVENT_TYPES = new Set([
   "tamper_detected",
@@ -96,6 +98,21 @@ export async function POST(req: NextRequest) {
     detail: detail !== undefined ? JSON.stringify(detail) : null,
     createdAt: now,
   });
+
+  // Fire-and-forget: check for security anomalies
+  void (async () => {
+    try {
+      const env = getRequestContext().env as unknown as { AI?: Ai; ANTHROPIC_API_KEY?: string };
+      await checkBridgeAnomalies(db, env, {
+        grantId: grantId ?? null,
+        packageId,
+        deviceId,
+        eventType,
+        severity,
+        userId: auth.userId,
+      });
+    } catch { /* non-fatal */ }
+  })();
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }
