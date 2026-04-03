@@ -134,6 +134,7 @@ export async function POST(
       validTo: licences.validTo,
       fileScope: licences.fileScope,
       licenceType: licences.licenceType,
+      downloadCount: licences.downloadCount,
     })
     .from(licences)
     .where(eq(licences.id, licenceId))
@@ -287,7 +288,7 @@ export async function POST(
 
   const keyId = "bridge-signing-key-1";
 
-  // ── 8. Record the grant ───────────────────────────────────────────────────
+  // ── 8. Record the grant + bump licence download counter ──────────────────
   await db.insert(bridgeGrants).values({
     id: grantId,
     licenceId,
@@ -303,6 +304,14 @@ export async function POST(
     offlineUntil,
     createdAt: now,
   });
+
+  await db
+    .update(licences)
+    .set({
+      downloadCount: (licence.downloadCount ?? 0) + 1,
+      lastDownloadAt: now,
+    })
+    .where(eq(licences.id, licenceId));
 
   return NextResponse.json({
     manifest: manifestJson,
