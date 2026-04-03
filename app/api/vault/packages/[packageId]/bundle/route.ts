@@ -7,6 +7,7 @@ import { scanPackages, scanFiles, downloadEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq, and } from "drizzle-orm";
+import { getRequestContext } from "@cloudflare/next-on-pages";
 
 // ── CRC-32 ────────────────────────────────────────────────────────────────────
 
@@ -208,7 +209,7 @@ export async function GET(
     }
 
     // Log download events
-    void Promise.all(
+    const logPromise = Promise.all(
       files.map((f) =>
         db.insert(downloadEvents).values({
           id: crypto.randomUUID(),
@@ -223,6 +224,12 @@ export async function GET(
         })
       )
     );
+    try {
+      const { ctx } = getRequestContext();
+      ctx.waitUntil(logPromise);
+    } catch {
+      await logPromise;
+    }
 
     // Central directory
     const cdOffset = offset;

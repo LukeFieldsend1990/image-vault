@@ -75,7 +75,7 @@ export async function GET(
 
   // Log the talent's own download to the chain of custody
   const now = Math.floor(Date.now() / 1000);
-  void db.insert(downloadEvents).values({
+  const logPromise = db.insert(downloadEvents).values({
     id: crypto.randomUUID(),
     licenceId: null,
     licenseeId: session.sub,
@@ -86,6 +86,12 @@ export async function GET(
     startedAt: now,
     completedAt: now,
   });
+  try {
+    const { ctx } = getRequestContext();
+    ctx.waitUntil(logPromise);
+  } catch {
+    await logPromise;
+  }
 
   const contentType = file.contentType ?? "application/octet-stream";
   const filename = encodeURIComponent(file.filename);
