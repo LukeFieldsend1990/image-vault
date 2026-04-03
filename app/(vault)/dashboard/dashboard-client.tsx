@@ -595,7 +595,7 @@ function PackageCard({
               No files in this package.
             </p>
           ) : (
-            <div className="divide-y max-h-[50vh] sm:max-h-none overflow-y-auto" style={{ borderColor: "var(--color-border)" }}>
+            <div className="divide-y max-h-[50vh] overflow-y-auto" style={{ borderColor: "var(--color-border)" }}>
               {/* Bundle download — shown when >1 complete file */}
               {files.filter((f) => f.uploadStatus === "complete").length > 1 && (
                 <div className="px-14 py-2.5 flex justify-end" style={{ background: "var(--color-surface)" }}>
