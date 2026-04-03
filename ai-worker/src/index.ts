@@ -4,6 +4,7 @@ import * as schema from "@/lib/db/schema";
 import { isAiEnabled, isFeatureEnabled } from "@/lib/ai/cost-tracker";
 import { callAi } from "@/lib/ai/providers";
 import { suggestPackageTags } from "@/lib/ai/package-tags";
+import { checkBridgeAnomalies } from "@/lib/ai/security-alerts";
 import { runSuggestionBatch } from "@/lib/ai/suggestion-engine";
 import { FEE_GUIDANCE_PROMPT } from "@/lib/ai/constants";
 
@@ -166,6 +167,43 @@ async function handleRunBatch(request: Request, env: Env, ctx: ExecutionContext)
   });
 }
 
+async function handleBridgeSecurityEvent(request: Request, env: Env) {
+  if (request.headers.get("x-ai-source") !== "bridge-events") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: {
+    grantId?: string | null;
+    packageId?: string;
+    deviceId?: string;
+    eventType?: string;
+    severity?: string;
+    userId?: string | null;
+  };
+
+  try {
+    body = await request.json() as typeof body;
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (!body.packageId || !body.deviceId || !body.eventType || !body.severity) {
+    return Response.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  const db = getDb(env);
+  await checkBridgeAnomalies(db, env, {
+    grantId: body.grantId ?? null,
+    packageId: body.packageId,
+    deviceId: body.deviceId,
+    eventType: body.eventType,
+    severity: body.severity,
+    userId: body.userId ?? null,
+  });
+
+  return Response.json({ ok: true });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -184,6 +222,10 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/batch/run") {
       return handleRunBatch(request, env, ctx);
+    }
+
+    if (request.method === "POST" && url.pathname === "/security/bridge-event") {
+      return handleBridgeSecurityEvent(request, env);
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });

@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import type { drizzle } from "drizzle-orm/d1";
 import {
   suggestions,
   downloadEvents,
@@ -12,7 +12,7 @@ import { callAi } from "./providers";
 import { isAiEnabled, getSettingValue } from "./cost-tracker";
 import { SECURITY_ALERT_PROMPT, SUGGESTION_TTL_SECONDS } from "./constants";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof drizzle>;
 
 async function getDailyAlertCount(db: Db): Promise<number> {
   const dayAgo = Math.floor(Date.now() / 1000) - 86400;
