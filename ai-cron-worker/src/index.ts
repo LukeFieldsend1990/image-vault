@@ -72,6 +72,11 @@ Your job is to:
 3. Include specific numbers, names, and dates from the data — never invent facts.
 4. Assign a category: action_required, attention, or insight.
 5. Suggest a clear next action (e.g., "review the request", "contact the licensee").
+6. If a package signal indicates no licence activity for 90+ days, phrase it that way.
+   Do not describe the package as "stale".
+7. Only use valid app paths for deepLink. Use "/vault/requests" for pending licence
+   work, "/vault/licences" for licence/download follow-up, and "/roster/<talentId>"
+   for talent or package follow-up. Do not invent other paths.
 
 Return a JSON array of suggestion objects. Maximum 10 suggestions.
 
@@ -270,7 +275,7 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
     }
   }
 
-  // 5. Stale packages (no licence activity in 90 days)
+  // 5. Packages with no licence activity in the last 90 days
   const ninetyDaysAgo = now - 90 * 86400;
   const packages = await db.select({
     id: scanPackages.id, talentId: scanPackages.talentId, name: scanPackages.name,
@@ -294,10 +299,11 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
   }
   for (const [tid, pkgs] of staleByTalent) {
     signals.push({
-      type: "stale_packages",
+      type: "package_no_activity_90d",
       data: {
         talentId: tid, talentName: nameMap.get(tid) ?? "Unknown",
         packageCount: pkgs.length,
+        noLicenceActivityDays: 90,
         packages: pkgs.map((p) => ({ packageId: p.id, packageName: p.name })),
       },
     });
@@ -368,6 +374,7 @@ async function callLLM(
 
 const VALID_CATEGORIES = new Set(["action_required", "attention", "insight", "security"]);
 const VALID_ENTITY_TYPES = new Set(["licence", "package", "talent", "download"]);
+const STATIC_DEEP_LINKS = new Set(["/roster", "/vault/requests", "/vault/licences", "/settings/bridge"]);
 
 function parseSuggestions(text: string): SuggestionFromLLM[] {
   let jsonStr = text.trim();
@@ -396,6 +403,38 @@ function parseSuggestions(text: string): SuggestionFromLLM[] {
   } catch {
     return [];
   }
+}
+
+function sanitizeDeepLink(deepLink: string): string | null {
+  if (!deepLink.startsWith("/")) return null;
+  if (STATIC_DEEP_LINKS.has(deepLink)) return deepLink;
+  if (/^\/roster\/[^/]+$/.test(deepLink)) return deepLink;
+  return null;
+}
+
+async function resolveSuggestionDeepLink(db: Db, suggestion: SuggestionFromLLM): Promise<string | null> {
+  if (suggestion.entityType === "licence" && suggestion.entityId) {
+    const licence = await db.select({ status: licences.status }).from(licences)
+      .where(eq(licences.id, suggestion.entityId)).limit(1).get();
+    if (!licence) return "/vault/requests";
+    return licence.status === "PENDING" ? "/vault/requests" : "/vault/licences";
+  }
+
+  if (suggestion.entityType === "package" && suggestion.entityId) {
+    const pkg = await db.select({ talentId: scanPackages.talentId }).from(scanPackages)
+      .where(eq(scanPackages.id, suggestion.entityId)).limit(1).get();
+    return pkg ? `/roster/${pkg.talentId}` : "/roster";
+  }
+
+  if (suggestion.entityType === "talent" && suggestion.entityId) {
+    return `/roster/${suggestion.entityId}`;
+  }
+
+  if (suggestion.entityType === "download") {
+    return "/vault/licences";
+  }
+
+  return sanitizeDeepLink(suggestion.deepLink);
 }
 
 // ── Main Scheduled Handler ─────────────────────────────────────────────────
@@ -498,11 +537,13 @@ async function runSuggestionBatch(env: Env, db: Db, options?: { manual?: boolean
         if (existing) continue;
       }
 
+      const deepLink = await resolveSuggestionDeepLink(db, s);
+
       await db.insert(suggestions).values({
         id: crypto.randomUUID(), userId: rep.id,
         category: s.category, feature: "rep_suggestions",
         title: s.title, body: s.body,
-        deepLink: s.deepLink || null, entityType: s.entityType || null,
+        deepLink, entityType: s.entityType || null,
         entityId: s.entityId || null, priority: s.priority,
         acknowledgedAt: null, clickedAt: null,
         expiresAt: now + SUGGESTION_TTL, batchId, createdAt: now,

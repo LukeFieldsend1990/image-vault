@@ -7,7 +7,6 @@ import {
   talentProfiles,
   refreshTokens,
   users,
-  downloadEvents,
 } from "@/lib/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
@@ -277,7 +276,7 @@ export async function getStalePackageSignals(db: Db, repId: string): Promise<Sig
 
   const ninetyDaysAgo = Math.floor(Date.now() / 1000) - 90 * 86400;
 
-  // Packages with no licence activity in 90+ days
+  // Packages with no licence activity in the last 90 days
   const packages = await db
     .select({
       id: scanPackages.id,
@@ -312,12 +311,12 @@ export async function getStalePackageSignals(db: Db, repId: string): Promise<Sig
 
     if (!recentLicence) {
       stale.push({
-        type: "stale_package",
+        type: "package_no_activity_90d",
         data: {
           packageId: pkg.id,
           talentId: pkg.talentId,
           packageName: pkg.name,
-          daysSinceActivity: Math.floor((Date.now() / 1000 - pkg.createdAt) / 86400),
+          noLicenceActivityDays: 90,
         },
       });
     }
@@ -342,15 +341,15 @@ export async function getStalePackageSignals(db: Db, repId: string): Promise<Sig
   }
 
   return Array.from(byTalent.entries()).map(([talentId, pkgs]) => ({
-    type: "stale_packages",
+    type: "package_no_activity_90d",
     data: {
       talentId,
       talentName: nameMap.get(talentId) ?? "Unknown",
       packageCount: pkgs.length,
+      noLicenceActivityDays: 90,
       packages: pkgs.map((s) => ({
         packageId: s.data.packageId,
         packageName: s.data.packageName,
-        daysSinceActivity: s.data.daysSinceActivity,
       })),
     },
   }));

@@ -1,5 +1,5 @@
 import type { drizzle } from "drizzle-orm/d1";
-import { users, refreshTokens, talentReps, suggestions } from "@/lib/db/schema";
+import { users, refreshTokens, suggestions, licences, scanPackages } from "@/lib/db/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { callAi } from "./providers";
 import { isAiEnabled, checkBudget } from "./cost-tracker";
@@ -25,6 +25,7 @@ interface SuggestionFromLLM {
 
 const VALID_CATEGORIES = new Set(["action_required", "attention", "insight", "security"]);
 const VALID_ENTITY_TYPES = new Set(["licence", "package", "talent", "download"]);
+const STATIC_DEEP_LINKS = new Set(["/roster", "/vault/requests", "/vault/licences", "/settings/bridge"]);
 
 function validateSuggestion(s: unknown): SuggestionFromLLM | null {
   if (!s || typeof s !== "object") return null;
@@ -72,6 +73,46 @@ function parseLLMResponse(text: string): SuggestionFromLLM[] {
   } catch {
     return [];
   }
+}
+
+function sanitizeDeepLink(deepLink: string): string | null {
+  if (!deepLink.startsWith("/")) return null;
+  if (STATIC_DEEP_LINKS.has(deepLink)) return deepLink;
+  if (/^\/roster\/[^/]+$/.test(deepLink)) return deepLink;
+  return null;
+}
+
+async function resolveSuggestionDeepLink(db: Db, suggestion: SuggestionFromLLM): Promise<string | null> {
+  if (suggestion.entityType === "licence" && suggestion.entityId) {
+    const licence = await db
+      .select({ status: licences.status })
+      .from(licences)
+      .where(eq(licences.id, suggestion.entityId))
+      .limit(1)
+      .get();
+    if (!licence) return "/vault/requests";
+    return licence.status === "PENDING" ? "/vault/requests" : "/vault/licences";
+  }
+
+  if (suggestion.entityType === "package" && suggestion.entityId) {
+    const pkg = await db
+      .select({ talentId: scanPackages.talentId })
+      .from(scanPackages)
+      .where(eq(scanPackages.id, suggestion.entityId))
+      .limit(1)
+      .get();
+    return pkg ? `/roster/${pkg.talentId}` : "/roster";
+  }
+
+  if (suggestion.entityType === "talent" && suggestion.entityId) {
+    return `/roster/${suggestion.entityId}`;
+  }
+
+  if (suggestion.entityType === "download") {
+    return "/vault/licences";
+  }
+
+  return sanitizeDeepLink(suggestion.deepLink);
 }
 
 async function getActiveReps(db: Db, skipActivityCheck: boolean): Promise<Array<{ id: string; email: string }>> {
@@ -197,6 +238,8 @@ export async function runSuggestionBatch(
         if (existing) continue; // Don't duplicate
       }
 
+      const deepLink = await resolveSuggestionDeepLink(db, s);
+
       await db.insert(suggestions).values({
         id: crypto.randomUUID(),
         userId: rep.id,
@@ -204,7 +247,7 @@ export async function runSuggestionBatch(
         feature: "rep_suggestions",
         title: s.title,
         body: s.body,
-        deepLink: s.deepLink || null,
+        deepLink,
         entityType: s.entityType || null,
         entityId: s.entityId || null,
         priority: s.priority,
