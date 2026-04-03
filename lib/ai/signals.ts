@@ -361,7 +361,7 @@ export async function getApproachingCapacitySignals(db: Db, repId: string): Prom
   if (talentIds.length === 0) return [];
 
   const storageRow = await db
-    .select({ total: sql<number>`coalesce(sum(sf.size_bytes), 0)` })
+    .select({ total: sql<number>`coalesce(sum(${scanFiles.sizeBytes}), 0)` })
     .from(scanFiles)
     .innerJoin(scanPackages, eq(scanFiles.packageId, scanPackages.id))
     .where(
