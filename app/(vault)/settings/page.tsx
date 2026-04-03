@@ -22,6 +22,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/pipeline", label: "Pipeline", description: "Digital double pipeline jobs" },
   { href: "/admin/talent", label: "Talent Settings", description: "Pipeline, fee splits & permissions" },
   { href: "/admin/audit", label: "Audit Log", description: "Last 500 download events" },
+  { href: "/admin/productions", label: "Productions", description: "Production entities and companies" },
   { href: "/admin/storage", label: "Storage", description: "Per-talent storage usage" },
   { href: "/admin/bridge", label: "Bridge", description: "Active Bridge sessions and tamper event log" },
 ];

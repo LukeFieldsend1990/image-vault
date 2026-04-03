@@ -98,6 +98,16 @@ All data is client-side encrypted before leaving the browser. The platform holds
 - [ ] Admin can create and manage popup events and slots (`/admin/bookings`)
 - [ ] Post-scan: admin uploads completed package directly to talent's vault; talent is notified
 
+### 3.9 Production Entities & Package Metadata
+- [ ] Productions as first-class entities with deduplicated names (not free-text strings on licences)
+- [ ] Production companies as first-class entities
+- [ ] Autocomplete suggest-on-type in licence request form — matches existing, creates new if no match
+- [ ] Admin pages to browse/search/edit productions and companies (`/admin/productions`)
+- [ ] Merge duplicate productions (reassign licences)
+- [ ] Extended scan package metadata — scan type, resolution, polygon count, capabilities flags, tags
+- [ ] Package metadata editing page (`/vault/packages/[id]/metadata`) — talent/rep/admin can enrich post-upload
+- [ ] Backfill migration: existing free-text `project_name`/`production_company` → entity FKs
+
 ### 3.7 Admin Panel
 - [x] User management — invite (via `/admin/invites`), suspend/unsuspend (`PATCH /api/admin/users/[id]`, revokes refresh tokens immediately), delete (`DELETE /api/admin/users/[id]`); suspended users blocked at login + refresh
 - [x] Platform-wide audit log — `/admin/audit` shows last 500 download events with licensee, file, project, IP, timestamp
@@ -775,6 +785,196 @@ CREATE TABLE scan_bookings (
 - `scanUploadedEmail` — post-scan notification: "Your scan is ready in your vault"
 
 ---
+
+### 🟣 Phase 5.7 — Production Entities & Package Metadata
+
+Productions (films, TV shows, games, commercials) are first-class entities rather than free-text strings. This gives us deduplication, cross-licence reporting ("which productions have licensed this talent?"), and a place to hang future metadata (IMDB links, shoot dates, VFX supervisors, etc.) without schema changes.
+
+The same pattern applies to production companies — deduplicated entities that can be enriched later.
+
+#### Design Principles
+
+1. **Zero-friction creation** — typing a name in the licence request form is enough to create a production or company. No separate "create" step required.
+2. **Suggest-on-type** — as the user types, an autocomplete dropdown shows matching existing entities. Selecting one links the licence to that entity. Typing a new name creates a new entity on submit.
+3. **Enrich later** — admin and rep users can add metadata to productions and companies from dedicated detail pages. The entity is useful from the moment it's created with just a name.
+4. **Backwards-compatible** — existing licences with free-text `project_name` / `production_company` are migrated into the new tables. No data loss.
+
+---
+
+#### DB Schema
+
+**Migration — `0012_productions.sql`:**
+
+```sql
+-- Production companies (studios, VFX houses, ad agencies)
+CREATE TABLE production_companies (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  website TEXT,
+  notes TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE UNIQUE INDEX idx_production_companies_name ON production_companies(name COLLATE NOCASE);
+
+-- Productions (films, TV shows, games, commercials)
+CREATE TABLE productions (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  company_id TEXT REFERENCES production_companies(id),
+  type TEXT CHECK(type IN ('film', 'tv_series', 'tv_movie', 'commercial', 'game', 'music_video', 'other')),
+  year INTEGER,                     -- release/target year
+  status TEXT CHECK(status IN ('development', 'pre_production', 'production', 'post_production', 'released', 'cancelled')),
+  imdb_id TEXT,                     -- e.g. "tt1234567"
+  tmdb_id INTEGER,
+  director TEXT,
+  vfx_supervisor TEXT,
+  notes TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE UNIQUE INDEX idx_productions_name_company ON productions(name COLLATE NOCASE, company_id);
+
+-- Link licences to production entities (nullable FKs — migration backfills these)
+ALTER TABLE licences ADD COLUMN production_id TEXT REFERENCES productions(id);
+ALTER TABLE licences ADD COLUMN production_company_id TEXT REFERENCES production_companies(id);
+```
+
+**Migration strategy:**
+1. Create tables and add nullable FK columns to `licences`
+2. Run a backfill: for each distinct `(project_name, production_company)` pair in `licences`, insert into `production_companies` (deduplicated by name) and `productions`, then set the FK columns
+3. New licence creation always populates the FK columns
+4. Legacy `project_name` / `production_company` text columns remain for now (read fallback) — can be dropped in a future migration once all reads use the FK
+
+---
+
+#### Scan Package Metadata (extended)
+
+**Migration — `0013_package_metadata.sql`:**
+
+```sql
+-- Extended metadata for scan packages — all optional, enriched post-upload
+ALTER TABLE scan_packages ADD COLUMN scan_type TEXT CHECK(scan_type IN ('light_stage', 'photogrammetry', 'lidar', 'structured_light', 'other'));
+ALTER TABLE scan_packages ADD COLUMN resolution TEXT;            -- e.g. "8K", "4K"
+ALTER TABLE scan_packages ADD COLUMN polygon_count INTEGER;      -- mesh complexity
+ALTER TABLE scan_packages ADD COLUMN color_space TEXT;           -- e.g. "ACES", "sRGB", "Linear"
+ALTER TABLE scan_packages ADD COLUMN has_mesh INTEGER DEFAULT 0;
+ALTER TABLE scan_packages ADD COLUMN has_texture INTEGER DEFAULT 0;
+ALTER TABLE scan_packages ADD COLUMN has_hdr INTEGER DEFAULT 0;
+ALTER TABLE scan_packages ADD COLUMN has_motion_capture INTEGER DEFAULT 0;
+ALTER TABLE scan_packages ADD COLUMN compatible_engines TEXT;    -- JSON: ["unreal", "unity", "maya", "blender"]
+ALTER TABLE scan_packages ADD COLUMN tags TEXT;                  -- JSON: ["full_body", "face_only", "hands", "dental"]
+ALTER TABLE scan_packages ADD COLUMN internal_notes TEXT;        -- admin/talent notes not shown to licensees
+```
+
+These fields power the capabilities badges on the Digital Actor Card (§P0.2) and enable licensees to filter the directory by technical requirements.
+
+---
+
+#### API Routes
+
+**Productions & Companies — autocomplete + CRUD:**
+
+| Method | Route | Description | Auth |
+|---|---|---|---|
+| `GET` | `/api/productions/search?q=` | Autocomplete search — returns top 10 matching productions by name (case-insensitive prefix match). Includes `company.name` in response. | Any authenticated |
+| `GET` | `/api/production-companies/search?q=` | Autocomplete search — returns top 10 matching companies by name | Any authenticated |
+| `POST` | `/api/productions` | Create a production (name required, all else optional). If `companyName` is provided and no `companyId`, auto-creates the company. | Any authenticated |
+| `GET` | `/api/productions/[id]` | Get production detail with all metadata + linked licences count | Any authenticated |
+| `PATCH` | `/api/productions/[id]` | Update production metadata (name, type, year, status, IMDB, etc.) | Admin, Rep |
+| `GET` | `/api/production-companies/[id]` | Get company detail with linked productions | Any authenticated |
+| `PATCH` | `/api/production-companies/[id]` | Update company metadata | Admin, Rep |
+
+**Scan Package Metadata:**
+
+| Method | Route | Description | Auth |
+|---|---|---|---|
+| `GET` | `/api/vault/packages/[id]/metadata` | Get extended package metadata | Talent, Rep (own), Admin |
+| `PATCH` | `/api/vault/packages/[id]/metadata` | Update extended package metadata fields | Talent, Rep (own), Admin |
+
+---
+
+#### UI Pages
+
+**Production Detail — `/admin/productions`:**
+- Searchable/filterable list of all productions in the system
+- Columns: Name, Company, Type, Year, Status, Licences (count), Created
+- Click through to detail page
+
+**Production Detail — `/admin/productions/[id]`:**
+- Editable form with all metadata fields (type, year, status, IMDB/TMDB ID, director, VFX supervisor, notes)
+- Linked company (autocomplete to change)
+- List of all licences associated with this production (talent name, package, status, fee)
+- "Merge" action — combine duplicate productions (reassigns all licences to the target)
+
+**Company Detail — `/admin/productions/companies`:**
+- Same pattern: searchable list → detail page with editable metadata + linked productions
+
+**Licence Request Form — updated Step 1 (Project Details):**
+- `projectName` text input → **autocomplete input** that searches `/api/productions/search`
+  - Dropdown shows matching productions with company name and year
+  - Selecting one populates `productionId` and auto-fills `productionCompany`
+  - Typing a new name that doesn't match → creates a new production on submit
+- `productionCompany` text input → **autocomplete input** that searches `/api/production-companies/search`
+  - Same pattern: suggest existing, create new on submit
+- Visual indicator when linking to an existing entity vs creating new (e.g. subtle "New" badge)
+
+**Scan Package Metadata — `/vault/packages/[id]/metadata`:**
+- Editable form accessible from the package card in the vault dashboard (pencil/edit icon)
+- Sections:
+  - **Scan Details** — scan type (dropdown), resolution, polygon count, color space
+  - **Capabilities** — toggle switches: has mesh, has texture, has HDR, has motion capture
+  - **Compatibility** — multi-select: Unreal, Unity, Maya, Blender, Houdini, etc.
+  - **Tags** — tag input: full body, face only, hands, dental, etc.
+  - **Internal Notes** — textarea (not visible to licensees)
+- Auto-save on field change (debounced PATCH) or explicit Save button
+- Talent and reps can edit their own packages; admins can edit any
+
+---
+
+#### Autocomplete Component
+
+A shared `<Autocomplete>` component used across the licence request form and admin pages:
+
+```
+┌─────────────────────────────────────────┐
+│ The Ody...                              │
+├─────────────────────────────────────────┤
+│ 🎬 The Odyssey (2025) — Universal       │  ← existing match
+│ 🎬 The Odyssey Returns — Netflix        │  ← existing match
+│ ➕ Create "The Ody..." as new production │  ← always last option
+└─────────────────────────────────────────┘
+```
+
+- Debounced search (300ms) on keystroke
+- Minimum 2 characters before searching
+- Keyboard navigable (arrow keys + enter)
+- Shows entity type icon + name + disambiguating context (company, year)
+- "Create new" option always visible at bottom when input doesn't exactly match an existing entity
+
+---
+
+#### Migration Path (existing data)
+
+1. Deploy migration `0012_productions.sql` — creates tables + adds FK columns
+2. Run backfill script (one-time):
+   - `SELECT DISTINCT production_company FROM licences` → insert into `production_companies`
+   - `SELECT DISTINCT project_name, production_company FROM licences` → insert into `productions` with company FK
+   - `UPDATE licences SET production_id = ..., production_company_id = ...` matching on text
+3. Update all reads to prefer FK join, fall back to text columns
+4. Future: drop text columns once confident
+
+---
+
+#### Future Extensions (not in scope now)
+
+- TMDB/IMDB lookup for productions (auto-populate metadata from external DB)
+- Production contacts (VFX supervisor, line producer) as sub-entities
+- Production-level access controls (all talent on a production visible to the licensee)
+- Production budgets and deal tracking
+- Company verification / trust levels
 
 ### 🟢 Phase 6 — Production Hardening
 - [ ] Pen test

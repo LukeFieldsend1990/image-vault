@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Autocomplete, type AutocompleteOption } from "@/components/autocomplete";
 
 // ── Licence type definitions ──────────────────────────────────────────────────
 
@@ -183,6 +184,31 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
   const [permitAiTraining, setPermitAiTraining] = useState(false);
   const [declared, setDeclared] = useState(false);
 
+  // Production entity IDs (set when selecting an existing entity from autocomplete)
+  const [productionId, setProductionId] = useState<string | null>(null);
+  const [productionCompanyId, setProductionCompanyId] = useState<string | null>(null);
+
+  const fetchProductions = useCallback(async (q: string): Promise<AutocompleteOption[]> => {
+    const res = await fetch(`/api/productions?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return [];
+    const data = await res.json() as { productions: { id: string; name: string; companyName?: string; year?: number }[] };
+    return data.productions.map((p) => ({
+      id: p.id,
+      label: p.name,
+      sublabel: [p.companyName, p.year].filter(Boolean).join(" · ") || undefined,
+    }));
+  }, []);
+
+  const fetchCompanies = useCallback(async (q: string): Promise<AutocompleteOption[]> => {
+    const res = await fetch(`/api/production-companies?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return [];
+    const data = await res.json() as { companies: { id: string; name: string }[] };
+    return data.companies.map((c) => ({
+      id: c.id,
+      label: c.name,
+    }));
+  }, []);
+
   const selectedType = LICENCE_TYPES.find((t) => t.id === licenceType);
   const aiImplied = selectedType?.aiImplied ?? false;
   const effectiveAi = aiImplied || permitAiTraining;
@@ -254,6 +280,8 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
           exclusivity,
           permitAiTraining: effectiveAi,
           proposedFee: proposedFeePence,
+          productionId: productionId ?? undefined,
+          productionCompanyId: productionCompanyId ?? undefined,
         }),
       });
       const data = await res.json() as { error?: string };
@@ -319,28 +347,28 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
           Tell us about the production and the period of use.
         </p>
         <div className="space-y-4">
-          <div>
-            <label className={labelClass} style={{ color: "var(--color-text)" }}>Project name *</label>
-            <input
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="e.g. The Odyssey (2025)"
-              className={inputClass}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label className={labelClass} style={{ color: "var(--color-text)" }}>Production company *</label>
-            <input
-              type="text"
-              value={productionCompany}
-              onChange={(e) => setProductionCompany(e.target.value)}
-              placeholder="e.g. Universal Pictures"
-              className={inputClass}
-              style={inputStyle}
-            />
-          </div>
+          <Autocomplete
+            value={projectName}
+            onChange={(v) => { setProjectName(v); setProductionId(null); }}
+            onSelect={(opt) => { setProjectName(opt.label); setProductionId(opt.id); }}
+            onCreateNew={() => setProductionId(null)}
+            fetchOptions={fetchProductions}
+            placeholder="e.g. The Odyssey (2025)"
+            label="Project name"
+            required
+            createLabel="Create new production"
+          />
+          <Autocomplete
+            value={productionCompany}
+            onChange={(v) => { setProductionCompany(v); setProductionCompanyId(null); }}
+            onSelect={(opt) => { setProductionCompany(opt.label); setProductionCompanyId(opt.id); }}
+            onCreateNew={() => setProductionCompanyId(null)}
+            fetchOptions={fetchCompanies}
+            placeholder="e.g. Universal Pictures"
+            label="Production company"
+            required
+            createLabel="Create new company"
+          />
           <div>
             <label className={labelClass} style={{ color: "var(--color-text)" }}>Intended use — describe specifically *</label>
             <textarea

@@ -2,9 +2,9 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users, talentReps, talentSettings } from "@/lib/db/schema";
+import { licences, scanPackages, users, talentReps, talentSettings, productions, productionCompanies } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, like } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceRequestedEmail } from "@/lib/email/templates";
 
@@ -110,6 +110,8 @@ export async function POST(req: NextRequest) {
     exclusivity?: string;
     permitAiTraining?: boolean;
     proposedFee?: number;
+    productionId?: string;
+    productionCompanyId?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -151,6 +153,51 @@ export async function POST(req: NextRequest) {
   const now = Math.floor(Date.now() / 1000);
   const licenceId = crypto.randomUUID();
 
+  // Resolve or create production company entity
+  let resolvedCompanyId = body.productionCompanyId ?? null;
+  if (!resolvedCompanyId && productionCompany) {
+    const [existing] = await db
+      .select({ id: productionCompanies.id })
+      .from(productionCompanies)
+      .where(like(productionCompanies.name, productionCompany.trim()))
+      .limit(1)
+      .all();
+    if (existing) {
+      resolvedCompanyId = existing.id;
+    } else {
+      resolvedCompanyId = crypto.randomUUID();
+      await db.insert(productionCompanies).values({
+        id: resolvedCompanyId,
+        name: productionCompany.trim(),
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+
+  // Resolve or create production entity
+  let resolvedProductionId = body.productionId ?? null;
+  if (!resolvedProductionId && projectName) {
+    const [existing] = await db
+      .select({ id: productions.id })
+      .from(productions)
+      .where(like(productions.name, projectName.trim()))
+      .limit(1)
+      .all();
+    if (existing) {
+      resolvedProductionId = existing.id;
+    } else {
+      resolvedProductionId = crypto.randomUUID();
+      await db.insert(productions).values({
+        id: resolvedProductionId,
+        name: projectName.trim(),
+        companyId: resolvedCompanyId,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+
   await db.insert(licences).values({
     id: licenceId,
     talentId: pkg.talentId,
@@ -168,6 +215,8 @@ export async function POST(req: NextRequest) {
     exclusivity: (body.exclusivity as "non_exclusive" | "sole" | "exclusive" | undefined) ?? "non_exclusive",
     permitAiTraining: body.permitAiTraining ?? false,
     proposedFee: body.proposedFee ?? null,
+    productionId: resolvedProductionId,
+    productionCompanyId: resolvedCompanyId,
     downloadCount: 0,
     createdAt: now,
   });
