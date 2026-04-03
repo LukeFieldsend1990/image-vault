@@ -2,6 +2,8 @@ name = "image-vault-ai-cron"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
 
 # -------------------------------------------------------------------
 # Cron triggers — twice daily at 07:00 and 14:00 UTC
@@ -16,6 +18,7 @@ crons = ["0 7 * * *", "0 14 * * *"]
 binding = "DB"
 database_name = "image-vault-db"
 database_id = "71665618-0498-48bd-a243-962eb4810769"
+migrations_dir = "../drizzle/migrations"
 
 # -------------------------------------------------------------------
 # Workers AI

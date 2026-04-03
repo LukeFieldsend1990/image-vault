@@ -19,10 +19,23 @@ export async function POST(req: NextRequest) {
   const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
   if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { env } = getRequestContext();
   const db = getDb();
 
-  const result = await runSuggestionBatch(env, db);
+  let aiEnv: { AI?: Ai; ANTHROPIC_API_KEY?: string };
+  try {
+    const { env: cfEnv } = getRequestContext();
+    aiEnv = cfEnv as unknown as { AI?: Ai; ANTHROPIC_API_KEY?: string };
+  } catch {
+    aiEnv = {};
+  }
 
-  return NextResponse.json(result);
+  try {
+    const result = await runSuggestionBatch(aiEnv, db);
+    return NextResponse.json(result);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Batch failed", stack: err instanceof Error ? err.stack : undefined },
+      { status: 500 }
+    );
+  }
 }
