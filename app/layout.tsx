@@ -12,6 +12,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Image Vault",
   description: "Secure likeness archive for talent",
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({
