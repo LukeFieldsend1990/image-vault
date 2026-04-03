@@ -8,6 +8,7 @@ export const users = sqliteTable("users", {
   vaultLocked: integer("vault_locked", { mode: "boolean" }).notNull().default(false),
   suspendedAt: integer("suspended_at"), // unix timestamp; null = active
   phone: text("phone"), // optional, E.164 format
+  emailMuted: integer("email_muted", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

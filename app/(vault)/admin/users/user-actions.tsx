@@ -7,11 +7,12 @@ interface Props {
   userId: string;
   isSuspended: boolean;
   isCurrentUser: boolean;
+  emailMuted: boolean;
 }
 
-export default function UserActions({ userId, isSuspended, isCurrentUser }: Props) {
+export default function UserActions({ userId, isSuspended, isCurrentUser, emailMuted }: Props) {
   const router = useRouter();
-  const [loading, setLoading] = useState<"suspend" | "delete" | null>(null);
+  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (isCurrentUser) {
@@ -26,6 +27,27 @@ export default function UserActions({ userId, isSuspended, isCurrentUser }: Prop
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ suspended: !isSuspended }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function handleEmailToggle() {
+    setLoading("email");
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailMuted: !emailMuted }),
       });
       if (!res.ok) {
         const d = await res.json() as { error?: string };
@@ -69,6 +91,17 @@ export default function UserActions({ userId, isSuspended, isCurrentUser }: Prop
         }
       >
         {loading === "suspend" ? "…" : isSuspended ? "Unsuspend" : "Suspend"}
+      </button>
+      <button
+        onClick={handleEmailToggle}
+        disabled={loading !== null}
+        className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+        style={emailMuted
+          ? { borderColor: "rgba(22,101,52,0.3)", color: "#166534", background: "rgba(22,101,52,0.06)" }
+          : { borderColor: "rgba(107,114,128,0.3)", color: "#6b7280", background: "rgba(107,114,128,0.06)" }
+        }
+      >
+        {loading === "email" ? "…" : emailMuted ? "Unmute Email" : "Mute Email"}
       </button>
       <button
         onClick={handleDelete}
