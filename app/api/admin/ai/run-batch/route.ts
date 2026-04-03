@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await runSuggestionBatch(aiEnv, db);
+    const result = await runSuggestionBatch(aiEnv, db, { manual: true });
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(

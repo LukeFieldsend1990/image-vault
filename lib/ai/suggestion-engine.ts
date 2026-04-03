@@ -74,7 +74,16 @@ function parseLLMResponse(text: string): SuggestionFromLLM[] {
   }
 }
 
-async function getActiveReps(db: Db): Promise<Array<{ id: string; email: string }>> {
+async function getActiveReps(db: Db, skipActivityCheck: boolean): Promise<Array<{ id: string; email: string }>> {
+  if (skipActivityCheck) {
+    // Manual trigger: return all non-suspended reps
+    return db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(and(eq(users.role, "rep"), isNull(users.suspendedAt)))
+      .all();
+  }
+
   const cutoff = Math.floor(Date.now() / 1000) - ACTIVE_USER_WINDOW_SECONDS;
 
   // Find reps who have active refresh tokens created within the last 48h
@@ -100,19 +109,22 @@ async function getActiveReps(db: Db): Promise<Array<{ id: string; email: string 
 
 export async function runSuggestionBatch(
   env: { AI?: Ai; ANTHROPIC_API_KEY?: string },
-  db: Db
+  db: Db,
+  options?: { manual?: boolean }
 ): Promise<{
   repsProcessed: number;
   suggestionsCreated: number;
   skipped: string[];
 }> {
+  const manual = options?.manual ?? false;
+
   const enabled = await isAiEnabled(db);
   if (!enabled) return { repsProcessed: 0, suggestionsCreated: 0, skipped: ["ai_disabled"] };
 
   const budget = await checkBudget(db);
   if (budget.exhausted) return { repsProcessed: 0, suggestionsCreated: 0, skipped: ["budget_exhausted"] };
 
-  const reps = await getActiveReps(db);
+  const reps = await getActiveReps(db, manual);
   if (reps.length === 0) return { repsProcessed: 0, suggestionsCreated: 0, skipped: ["no_active_reps"] };
 
   const now = Math.floor(Date.now() / 1000);
