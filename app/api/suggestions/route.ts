@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { suggestions } from "@/lib/db/schema";
+import { suggestions, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and, isNull, gt, asc } from "drizzle-orm";
 
@@ -13,6 +13,16 @@ export async function GET(req: NextRequest) {
 
   const now = Math.floor(Date.now() / 1000);
   const db = getDb();
+
+  // Check if AI is disabled for this user
+  const user = await db
+    .select({ aiDisabled: users.aiDisabled })
+    .from(users)
+    .where(eq(users.id, session.sub))
+    .get();
+  if (user?.aiDisabled) {
+    return NextResponse.json({ suggestions: [], aiDisabled: true });
+  }
 
   const rows = await db
     .select()

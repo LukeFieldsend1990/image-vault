@@ -8,11 +8,12 @@ interface Props {
   isSuspended: boolean;
   isCurrentUser: boolean;
   emailMuted: boolean;
+  aiDisabled: boolean;
 }
 
-export default function UserActions({ userId, isSuspended, isCurrentUser, emailMuted }: Props) {
+export default function UserActions({ userId, isSuspended, isCurrentUser, emailMuted, aiDisabled }: Props) {
   const router = useRouter();
-  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | null>(null);
+  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (isCurrentUser) {
@@ -48,6 +49,27 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emailMuted: !emailMuted }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function handleAiToggle() {
+    setLoading("ai");
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aiDisabled: !aiDisabled }),
       });
       if (!res.ok) {
         const d = await res.json() as { error?: string };
@@ -102,6 +124,17 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
         }
       >
         {loading === "email" ? "…" : emailMuted ? "Unmute Email" : "Mute Email"}
+      </button>
+      <button
+        onClick={handleAiToggle}
+        disabled={loading !== null}
+        className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+        style={aiDisabled
+          ? { borderColor: "rgba(22,101,52,0.3)", color: "#166534", background: "rgba(22,101,52,0.06)" }
+          : { borderColor: "rgba(139,92,246,0.3)", color: "#8b5cf6", background: "rgba(139,92,246,0.06)" }
+        }
+      >
+        {loading === "ai" ? "…" : aiDisabled ? "Enable AI" : "Disable AI"}
       </button>
       <button
         onClick={handleDelete}

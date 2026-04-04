@@ -1,5 +1,5 @@
 import type { drizzle } from "drizzle-orm/d1";
-import { scanPackages, scanFiles, talentProfiles, packageTags } from "@/lib/db/schema";
+import { scanPackages, scanFiles, talentProfiles, packageTags, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { callAi } from "./providers";
 import { isAiEnabled } from "./cost-tracker";
@@ -67,6 +67,14 @@ export async function suggestPackageTags(
     .get();
 
   if (!pkg) return;
+
+  // Check if AI is disabled for the talent who owns this package
+  const talent = await db
+    .select({ aiDisabled: users.aiDisabled })
+    .from(users)
+    .where(eq(users.id, pkg.talentId))
+    .get();
+  if (talent?.aiDisabled) return;
 
   // Get file manifest
   const files = await db
