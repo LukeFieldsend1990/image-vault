@@ -28,11 +28,15 @@ export default function SuggestionsPanel() {
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [dismissing, setDismissing] = useState<Set<string>>(new Set());
+  const [aiDisabled, setAiDisabled] = useState(false);
 
   useEffect(() => {
     fetch("/api/suggestions")
-      .then((r) => r.json() as Promise<{ suggestions?: Suggestion[] }>)
-      .then((d) => setSuggestions(d.suggestions ?? []))
+      .then((r) => r.json() as Promise<{ suggestions?: Suggestion[]; aiDisabled?: boolean }>)
+      .then((d) => {
+        setSuggestions(d.suggestions ?? []);
+        if (d.aiDisabled) setAiDisabled(true);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -63,6 +67,9 @@ export default function SuggestionsPanel() {
   );
 
   const count = suggestions.length;
+
+  // Hide panel entirely when AI is disabled for this user
+  if (aiDisabled) return null;
 
   return (
     <div

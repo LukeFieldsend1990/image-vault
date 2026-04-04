@@ -40,6 +40,7 @@ export default async function AdminUsersPage() {
       createdAt: users.createdAt,
       suspendedAt: users.suspendedAt,
       emailMuted: users.emailMuted,
+      aiDisabled: users.aiDisabled,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -171,6 +172,14 @@ export default async function AdminUsersPage() {
                     Suspended
                   </span>
                 )}
+                {u.aiDisabled && (
+                  <span
+                    className="ml-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                    style={{ background: "rgba(139,92,246,0.12)", color: "#8b5cf6" }}
+                  >
+                    AI Off
+                  </span>
+                )}
               </div>
 
               {/* Actions */}
@@ -179,6 +188,7 @@ export default async function AdminUsersPage() {
                 isSuspended={!!u.suspendedAt}
                 isCurrentUser={u.id === currentUserId}
                 emailMuted={!!u.emailMuted}
+                aiDisabled={!!u.aiDisabled}
               />
             </div>
           );

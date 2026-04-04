@@ -27,16 +27,17 @@ export async function PATCH(
   if (isErrorResponse(session)) return session;
   if (session instanceof NextResponse) return session;
 
-  let body: { suspended?: boolean; emailMuted?: boolean } = {};
+  let body: { suspended?: boolean; emailMuted?: boolean; aiDisabled?: boolean } = {};
   try {
     body = JSON.parse(await req.text());
   } catch { /* ok */ }
 
   const hasSuspended = typeof body.suspended === "boolean";
   const hasEmailMuted = typeof body.emailMuted === "boolean";
+  const hasAiDisabled = typeof body.aiDisabled === "boolean";
 
-  if (!hasSuspended && !hasEmailMuted) {
-    return NextResponse.json({ error: "suspended or emailMuted (boolean) is required" }, { status: 400 });
+  if (!hasSuspended && !hasEmailMuted && !hasAiDisabled) {
+    return NextResponse.json({ error: "suspended, emailMuted, or aiDisabled (boolean) is required" }, { status: 400 });
   }
 
   const db = getDb();
@@ -61,7 +62,14 @@ export async function PATCH(
       .where(eq(users.id, id));
   }
 
-  return NextResponse.json({ suspended: body.suspended, emailMuted: body.emailMuted });
+  if (hasAiDisabled) {
+    await db
+      .update(users)
+      .set({ aiDisabled: body.aiDisabled! })
+      .where(eq(users.id, id));
+  }
+
+  return NextResponse.json({ suspended: body.suspended, emailMuted: body.emailMuted, aiDisabled: body.aiDisabled });
 }
 
 // DELETE /api/admin/users/[id] — permanently delete a user

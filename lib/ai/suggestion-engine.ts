@@ -117,11 +117,11 @@ async function resolveSuggestionDeepLink(db: Db, suggestion: SuggestionFromLLM):
 
 async function getActiveReps(db: Db, skipActivityCheck: boolean): Promise<Array<{ id: string; email: string }>> {
   if (skipActivityCheck) {
-    // Manual trigger: return all non-suspended reps
+    // Manual trigger: return all non-suspended, AI-enabled reps
     return db
       .select({ id: users.id, email: users.email })
       .from(users)
-      .where(and(eq(users.role, "rep"), isNull(users.suspendedAt)))
+      .where(and(eq(users.role, "rep"), isNull(users.suspendedAt), eq(users.aiDisabled, false)))
       .all();
   }
 
@@ -139,7 +139,8 @@ async function getActiveReps(db: Db, skipActivityCheck: boolean): Promise<Array<
       and(
         eq(users.role, "rep"),
         sql`${refreshTokens.createdAt} > ${cutoff}`,
-        isNull(users.suspendedAt)
+        isNull(users.suspendedAt),
+        eq(users.aiDisabled, false)
       )
     )
     .groupBy(users.id)
