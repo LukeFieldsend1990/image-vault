@@ -113,9 +113,9 @@ export const licences = sqliteTable("licences", {
   territory: text("territory"),
   exclusivity: text("exclusivity", { enum: ["non_exclusive", "sole", "exclusive"] }).default("non_exclusive"),
   permitAiTraining: integer("permit_ai_training", { mode: "boolean" }).notNull().default(false),
-  proposedFee: integer("proposed_fee"),  // pence
-  agreedFee: integer("agreed_fee"),      // pence (set on approval)
-  platformFee: integer("platform_fee"),  // pence (15% of agreed_fee)
+  proposedFee: integer("proposed_fee"),  // cents
+  agreedFee: integer("agreed_fee"),      // cents (set on approval)
+  platformFee: integer("platform_fee"),  // cents (15% of agreed_fee)
   downloadCount: integer("download_count").notNull().default(0),
   lastDownloadAt: integer("last_download_at"),
   deliveryMode: text("delivery_mode", { enum: ["standard", "bridge_only"] }).notNull().default("standard"),

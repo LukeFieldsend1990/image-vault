@@ -78,7 +78,7 @@ export async function getPendingLicenceSignals(db: Db, repId: string): Promise<S
           projectName: p.projectName,
           productionCompany: p.productionCompany,
           licenceType: p.licenceType,
-          proposedFee: p.proposedFee,
+          proposedFeeUSD: p.proposedFee ? p.proposedFee / 100 : null,
         })),
       },
     });
@@ -147,7 +147,7 @@ export async function getExpiringNoDownloadSignals(db: Db, repId: string): Promi
         projectName: row.projectName,
         productionCompany: row.productionCompany,
         daysUntilExpiry,
-        agreedFee: row.agreedFee,
+        agreedFeeUSD: row.agreedFee ? row.agreedFee / 100 : null,
         licenseeEmail: licensee?.email ?? null,
         licenseePhone: licensee?.phone ?? null,
       },
@@ -257,9 +257,9 @@ export async function getRevenueOpportunitySignals(db: Db, repId: string): Promi
           talentId: p.talentId,
           projectName: p.projectName,
           licenceType: p.licenceType,
-          proposedFee: p.proposedFee,
-          averageFee: avgFee,
-          medianFee: median,
+          proposedFeeUSD: p.proposedFee ? p.proposedFee / 100 : null,
+          averageFeeUSD: avgFee / 100,
+          medianFeeUSD: median / 100,
           percentBelow: pctBelow,
           comparableCount: comparables.length,
         },
@@ -276,7 +276,7 @@ export async function getStalePackageSignals(db: Db, repId: string): Promise<Sig
 
   const ninetyDaysAgo = Math.floor(Date.now() / 1000) - 90 * 86400;
 
-  // Packages with no licence activity in the last 90 days
+  // Packages with no licence activity in the last 90 days (only if package is 90+ days old)
   const packages = await db
     .select({
       id: scanPackages.id,
@@ -288,7 +288,8 @@ export async function getStalePackageSignals(db: Db, repId: string): Promise<Sig
     .where(
       and(
         inArray(scanPackages.talentId, talentIds),
-        eq(scanPackages.status, "ready")
+        eq(scanPackages.status, "ready"),
+        sql`${scanPackages.createdAt} < ${ninetyDaysAgo}`
       )
     )
     .all();

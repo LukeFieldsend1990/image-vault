@@ -12,6 +12,7 @@ function LoginInner() {
 
   const [step, setStep] = useState<Step>("credentials");
   const [pendingToken, setPendingToken] = useState("");
+  const [totpCode, setTotpCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -50,12 +51,9 @@ function LoginInner() {
     }
   }
 
-  async function handleTotp(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function submitTotp(code: string) {
     setError("");
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
-    const code = (fd.get("code") as string).replace(/\s/g, "");
 
     try {
       const res = await fetch("/api/auth/login/verify-2fa", {
@@ -76,6 +74,23 @@ function LoginInner() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleTotpChange(value: string) {
+    // Allow only digits and spaces
+    const filtered = value.replace(/[^\d\s]/g, "");
+    setTotpCode(filtered);
+    // Auto-submit when 6 digits entered
+    const digits = filtered.replace(/\s/g, "");
+    if (digits.length === 6) {
+      submitTotp(digits);
+    }
+  }
+
+  function handleTotp(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const digits = totpCode.replace(/\s/g, "");
+    if (digits.length > 0) submitTotp(digits);
   }
 
   return (
@@ -207,6 +222,8 @@ function LoginInner() {
                     required
                     placeholder="000 000"
                     maxLength={7}
+                    value={totpCode}
+                    onChange={(e) => handleTotpChange(e.target.value)}
                     className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-ink] tracking-widest text-center"
                     style={{ borderRadius: "var(--radius)" }}
                   />

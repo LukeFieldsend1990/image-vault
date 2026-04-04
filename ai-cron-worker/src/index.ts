@@ -251,7 +251,7 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
         count: items.length, oldestDaysAgo: Math.floor((now - oldest) / 86400),
         licences: items.map((i) => ({
           id: i.id, projectName: i.projectName, productionCompany: i.productionCompany,
-          licenceType: i.licenceType, proposedFee: i.proposedFee,
+          licenceType: i.licenceType, proposedFeeUSD: i.proposedFee ? i.proposedFee / 100 : null,
         })),
       },
     });
@@ -283,7 +283,7 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
           licenceId: e.id, talentId: e.talentId, talentName: nameMap.get(e.talentId) ?? "Unknown",
           projectName: e.projectName, productionCompany: e.productionCompany,
           daysUntilExpiry: Math.floor((e.validTo - now) / 86400),
-          agreedFee: e.agreedFee, licenseeEmail: lic?.email ?? null, licenseePhone: lic?.phone ?? null,
+          agreedFeeUSD: e.agreedFee ? e.agreedFee / 100 : null, licenseeEmail: lic?.email ?? null, licenseePhone: lic?.phone ?? null,
         },
       });
     }
@@ -323,20 +323,21 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
         type: "revenue_opportunity",
         data: {
           licenceId: p.id, talentId: p.talentId, projectName: p.projectName,
-          licenceType: p.licenceType, proposedFee: p.proposedFee,
-          averageFee: avg, percentBelow: Math.round((1 - p.proposedFee! / avg) * 100),
+          licenceType: p.licenceType, proposedFeeUSD: p.proposedFee ? p.proposedFee / 100 : null,
+          averageFeeUSD: avg / 100, percentBelow: Math.round((1 - p.proposedFee! / avg) * 100),
           comparableCount: comps.length,
         },
       });
     }
   }
 
-  // 5. Packages with no licence activity in the last 90 days
+  // 5. Packages with no licence activity in the last 90 days (only if package is 90+ days old)
   const ninetyDaysAgo = now - 90 * 86400;
   const packages = await db.select({
     id: scanPackages.id, talentId: scanPackages.talentId, name: scanPackages.name,
   }).from(scanPackages)
-    .where(and(inArray(scanPackages.talentId, talentIds), eq(scanPackages.status, "ready")))
+    .where(and(inArray(scanPackages.talentId, talentIds), eq(scanPackages.status, "ready"),
+      sql`${scanPackages.createdAt} < ${ninetyDaysAgo}`))
     .all();
 
   const stalePkgs: Array<{ talentId: string; name: string; id: string }> = [];
