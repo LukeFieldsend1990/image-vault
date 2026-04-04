@@ -26,7 +26,7 @@ export default function SuggestionsPanel() {
   const router = useRouter();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [dismissing, setDismissing] = useState<Set<string>>(new Set());
   const [aiDisabled, setAiDisabled] = useState(false);
 
