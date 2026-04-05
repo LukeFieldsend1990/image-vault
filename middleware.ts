@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 
 const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin"];
 const AUTH_PAGES = ["/login", "/signup", "/setup-2fa"];
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;

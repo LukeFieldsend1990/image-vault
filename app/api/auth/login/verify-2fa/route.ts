@@ -7,7 +7,10 @@ import { totpCredentials, refreshTokens } from "@/lib/db/schema";
 import { verifyTotpCode } from "@/lib/auth/totp";
 import { signSessionJwt } from "@/lib/auth/jwt";
 import { generateToken, hashToken, setAuthCookies } from "@/lib/auth/session";
+import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { eq } from "drizzle-orm";
+
+const TOTP_LIMIT = { action: "2fa", maxAttempts: 5, windowSeconds: 300 };
 
 export async function POST(req: NextRequest) {
   let body: { pendingToken?: string; code?: string };
@@ -20,6 +23,15 @@ export async function POST(req: NextRequest) {
   const { pendingToken, code } = body;
   if (!pendingToken || !code) {
     return NextResponse.json({ error: "pendingToken and code are required" }, { status: 400 });
+  }
+
+  // Rate limit: 5 attempts per 5 minutes per IP
+  const rl = await checkRateLimit(getClientIp(req), TOTP_LIMIT);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } },
+    );
   }
 
   const kv = getRequestContext().env.SESSIONS_KV;

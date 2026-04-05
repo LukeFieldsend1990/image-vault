@@ -4,10 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { pipelineJobs, pipelineStages, scanPackages, talentSettings } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, desc, sql } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 const STAGE_NAMES = ["validate", "classify", "assemble", "bundle", "notify"] as const;
 
@@ -17,9 +16,9 @@ export async function GET(req: NextRequest) {
   if (isErrorResponse(session)) return session;
 
   const db = getDb();
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
+  const admin = session.role === "admin" || isAdmin(session.email);
 
-  const jobs = isAdmin
+  const jobs = admin
     ? await db.select().from(pipelineJobs).orderBy(desc(pipelineJobs.createdAt)).all()
     : await db.select().from(pipelineJobs)
         .where(eq(pipelineJobs.talentId, session.sub))
@@ -34,7 +33,7 @@ export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
+  const admin = session.role === "admin" || isAdmin(session.email);
   const body = await req.json() as { packageId?: string; skus?: string[] };
 
   if (!body.packageId) {
@@ -55,7 +54,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Auth: talent owns package, or admin
-  if (pkg.talentId !== session.sub && !isAdmin) {
+  if (pkg.talentId !== session.sub && !admin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

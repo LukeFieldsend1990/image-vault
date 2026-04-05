@@ -5,11 +5,10 @@ import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { scanFiles, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { and, eq } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 function cfEnv(key: string): string | undefined {
   try {
@@ -86,8 +85,8 @@ export async function GET(
   // Owner, rep, or any authenticated licensee/admin can view preview of a ready package
   const isOwner = pkg.talentId === session.sub;
   const isRep = session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId));
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
-  const isBrowser = session.role === "licensee" || isAdmin;
+  const admin = session.role === "admin" || isAdmin(session.email);
+  const isBrowser = session.role === "licensee" || admin;
   if (!isOwner && !isRep && !isBrowser) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

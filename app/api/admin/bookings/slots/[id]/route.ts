@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanSlots, scanBookings } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and } from "drizzle-orm";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 // PATCH /api/admin/bookings/slots/[id] — mark slot completed or cancelled
 export async function PATCH(
@@ -16,7 +15,7 @@ export async function PATCH(
   const { id } = await params;
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
-  if (!ADMIN_EMAILS.includes(session.email ?? "")) {
+  if (!isAdmin(session.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { aiCostLog, aiSettings } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, gt, desc, sql } from "drizzle-orm";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 /**
  * GET /api/admin/ai/costs
@@ -16,8 +15,8 @@ export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
-  if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);

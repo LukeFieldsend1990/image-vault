@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { aiSettings } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq } from "drizzle-orm";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 const VALID_KEYS = [
   "enabled",
@@ -24,8 +23,8 @@ export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
-  if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const db = getDb();
   const rows = await db.select().from(aiSettings).all();
@@ -47,8 +46,8 @@ export async function PATCH(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
-  if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json() as { key: string; value: string };
   const { key, value } = body;

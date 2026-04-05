@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { pipelineJobs, pipelineStages, pipelineOutputs, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq } from "drizzle-orm";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 // GET /api/pipeline/jobs/[id] — job detail with stages + outputs
 export async function GET(
@@ -18,7 +17,7 @@ export async function GET(
 
   const { id } = await params;
   const db = getDb();
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
+  const admin = session.role === "admin" || isAdmin(session.email);
 
   const job = await db
     .select()
@@ -27,7 +26,7 @@ export async function GET(
     .get();
 
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (job.talentId !== session.sub && !isAdmin) {
+  if (job.talentId !== session.sub && !admin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -51,7 +50,7 @@ export async function DELETE(
 
   const { id } = await params;
   const db = getDb();
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
+  const admin = session.role === "admin" || isAdmin(session.email);
 
   const job = await db
     .select({ id: pipelineJobs.id, talentId: pipelineJobs.talentId, status: pipelineJobs.status })
@@ -60,7 +59,7 @@ export async function DELETE(
     .get();
 
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (job.talentId !== session.sub && !isAdmin) {
+  if (job.talentId !== session.sub && !admin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (job.status !== "queued") {
