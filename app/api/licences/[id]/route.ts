@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { licences, scanPackages, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq } from "drizzle-orm";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 // GET /api/licences/[id] — fetch a single licence (talent, licensee, admin)
 export async function GET(
@@ -59,8 +58,8 @@ export async function GET(
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const isOwner = row.talentId === session.sub || row.licenseeId === session.sub;
-  const isAdmin = ADMIN_EMAILS.includes(session.email);
-  if (!isOwner && !isAdmin) {
+  const admin = isAdmin(session.email);
+  if (!isOwner && !admin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -87,8 +86,8 @@ export async function PATCH(
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const isOwner = row.talentId === session.sub;
-  const isAdmin = ADMIN_EMAILS.includes(session.email);
-  if (!isOwner && !isAdmin) {
+  const admin = isAdmin(session.email);
+  if (!isOwner && !admin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

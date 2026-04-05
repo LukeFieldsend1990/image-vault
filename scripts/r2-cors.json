@@ -1,0 +1,21 @@
+{
+  "cors_rules": [
+    {
+      "allowed_origins": [
+        "https://changling.io",
+        "https://*.changling.io",
+        "http://localhost:3000"
+      ],
+      "allowed_methods": ["GET", "PUT", "HEAD"],
+      "allowed_headers": [
+        "Content-Type",
+        "Content-Length",
+        "x-amz-content-sha256",
+        "x-amz-date",
+        "authorization"
+      ],
+      "expose_headers": ["ETag"],
+      "max_age_seconds": 3600
+    }
+  ]
+}

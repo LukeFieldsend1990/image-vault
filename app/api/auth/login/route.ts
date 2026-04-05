@@ -5,7 +5,10 @@ import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { users, totpCredentials } from "@/lib/db/schema";
 import { verifyPassword, dummyPasswordCheck } from "@/lib/auth/password";
+import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { eq } from "drizzle-orm";
+
+const LOGIN_LIMIT = { action: "login", maxAttempts: 10, windowSeconds: 900 };
 
 export async function POST(req: NextRequest) {
   let body: { email?: string; password?: string };
@@ -18,6 +21,15 @@ export async function POST(req: NextRequest) {
   const { email, password } = body;
   if (!email || !password) {
     return NextResponse.json({ error: "email and password are required" }, { status: 400 });
+  }
+
+  // Rate limit: 10 attempts per 15 minutes per IP
+  const rl = await checkRateLimit(getClientIp(req), LOGIN_LIMIT);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many login attempts. Try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } },
+    );
   }
 
   const db = getDb();

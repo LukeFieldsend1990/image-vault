@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, licences, downloadEvents, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq, inArray } from "drizzle-orm";
 
@@ -77,12 +78,11 @@ export async function GET(
     return NextResponse.json({ error: "Package not found" }, { status: 404 });
   }
 
-  const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
   const isOwner = pkg.talentId === session.sub;
   const isRep = session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId));
-  const isAdmin = ADMIN_EMAILS.includes(session.email);
+  const admin = isAdmin(session.email);
 
-  if (!isOwner && !isRep && !isAdmin) {
+  if (!isOwner && !isRep && !admin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

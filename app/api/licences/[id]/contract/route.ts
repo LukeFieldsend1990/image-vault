@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { licences, scanPackages, scanFiles, users, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and, count } from "drizzle-orm";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 const LICENCE_TYPE_LABELS: Record<string, string> = {
   film_double: "Film / Digital Double",
@@ -60,8 +59,8 @@ export async function GET(
   if (!lic) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const isOwner = lic.talentId === session.sub || lic.licenseeId === session.sub;
-  const isAdmin = ADMIN_EMAILS.includes(session.email);
-  if (!isOwner && !isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = isAdmin(session.email);
+  if (!isOwner && !admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Fetch related records in parallel
   const [pkg, talentUser, talentProfile, licenseeUser, fileCount] = await Promise.all([

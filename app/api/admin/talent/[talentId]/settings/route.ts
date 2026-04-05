@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { users, talentSettings, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq } from "drizzle-orm";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 /**
  * GET /api/admin/talent/[talentId]/settings
@@ -19,8 +18,8 @@ export async function GET(
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
-  if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { talentId } = await params;
   const db = getDb();
@@ -56,8 +55,8 @@ export async function PUT(
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
-  if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { talentId } = await params;
   const body = await req.json() as {

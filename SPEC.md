@@ -15,6 +15,9 @@
 7. [Multi-Tenancy & Branding](#7-multi-tenancy--branding)
 8. [Cross-Functional Requirements](#8-cross-functional-requirements)
 9. [Product Backlog / TODO](#9-product-backlog--todo)
+10. [April 8 Pitch — Agency Feature Sprint](#10-april-8-pitch--agency-feature-sprint)
+11. [In-App Notification Centre](#11-in-app-notification-centre)
+12. [Access Windows — Controlled Temporary Download Access](#12-access-windows--controlled-temporary-download-access)
 
 ---
 
@@ -87,7 +90,7 @@ All data is client-side encrypted before leaving the browser. The platform holds
 
 ### 3.6 Notifications
 - [x] Email notifications via Resend — all transactional emails implemented: new licence request, licence approved, licence denied, licence revoked, upload complete, dual-custody download authorisation request, dual-custody download complete, user invite (`lib/email/templates.ts` + `lib/email/send.ts`)
-- [ ] In-app notification centre
+- [ ] In-app notification centre — spec in §11
 - [ ] Configurable notification preferences per user
 
 ### 3.8 Scan Bookings
@@ -491,17 +494,31 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [ ] Third-party penetration test of auth and download flows
 - [ ] OWASP Top 10 audit of API routes
 - [ ] Key management design review
+- [x] Rate limiting on login (10/15 min) and 2FA verify (5/5 min) — KV sliding window
+- [ ] Fix signup user enumeration: currently returns 409 for existing email vs 400 for bad input — should return identical responses
+- [ ] Admin email whitelist is hardcoded in `lib/auth/adminEmails.ts` (by design — not an env var). Standalone workers (`ai-worker`, `ai-cron-worker`) maintain their own copy — keep in sync manually on change
+- [ ] Download event notifications include client IP address — review GDPR implications and add opt-out or anonymisation
 
 ### 8.3 Infrastructure & DevOps
 - [x] Cloudflare Pages Git integration — production deploys on merge to main, preview deploys per branch
 - [ ] Connect GitHub repo to Cloudflare Pages project in dashboard
-- [ ] Secrets set via Cloudflare Pages dashboard environment variables (RESEND_API_KEY, RESEND_FROM_EMAIL, JWT_SECRET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, TMDB_API_KEY)
+- [ ] **Required secrets** — set via Cloudflare Pages dashboard or `wrangler secret put` before go-live:
+  - `JWT_SECRET` — session signing
+  - `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` + `CF_ACCOUNT_ID` — presigned R2 URLs (upload & Bridge)
+  - `RESEND_API_KEY` + `RESEND_FROM_EMAIL` — transactional email (licence requests, approvals, download alerts)
+  - `TMDB_API_KEY` — talent onboarding search
+  - `BRIDGE_SIGNING_KEY_JWK` — manifest signing for CAS Bridge desktop app
+  - `NEXT_PUBLIC_BASE_URL` — used in all email links; falls back to `https://changling.io`
+  - `ANTHROPIC_API_KEY` — AI suggestion engine (optional, graceful degrade)
+  - `MESHY_API_KEY` — pipeline GLB generation (optional, graceful degrade)
+- [ ] Add startup secret validation: log missing required secrets on cold start so misconfigs surface immediately instead of crashing on first request
+- [ ] R2 CORS configuration for browser-direct presigned uploads — apply via `scripts/r2-cors-apply.sh` (requires `CF_ACCOUNT_ID` + `CF_API_TOKEN`)
 - [ ] R2 bucket soft delete / lifecycle policy
 - [x] D1 database migration strategy (Drizzle ORM — numbered SQL migrations applied via `wrangler d1 migrations apply`)
 - [x] Cloudflare Workers observability — `[observability] enabled = true` in wrangler.toml; 200K events/day, 3-day retention; `wrangler tail` for real-time streaming
 - [ ] Cloudflare Logpush → long-term audit log retention (R2 or external SIEM) — requires paid plan
 - [ ] Bot Fight Mode enabled in Cloudflare dashboard (Security → Bots)
-- [ ] Rate limiting rules on `/api/auth/login`, `/api/auth/verify-totp`, `/api/auth/signup` (5 rules free)
+- [x] Rate limiting on auth routes — implemented in-app via KV sliding window (`lib/auth/rateLimit.ts`); Cloudflare dashboard rules optional additional layer
 - [ ] Cloudflare Turnstile on login + signup forms (free, GDPR-safe CAPTCHA)
 - [ ] Uptime monitoring and alerting
 
@@ -691,8 +708,9 @@ CREATE TABLE download_events (
 
 ### 🟠 Phase 5 — Notifications & Admin
 - [x] Email notifications via Resend — all transactional templates built and wired (`lib/email/templates.ts`): upload complete, download authorisation request, download complete, licence requested/approved/denied/revoked, invite
+- [ ] Email delivery reliability: currently fire-and-forget with silent failure if `RESEND_API_KEY` missing or API errors. Add: (a) log failed sends to D1 for admin visibility, (b) optional retry queue (KV-backed, 3 attempts with backoff)
 - [x] Cloudflare observability enabled — `[observability] enabled = true` in `wrangler.toml`; view logs at Pages → Functions → Logs; tail locally with `wrangler tail`
-- [ ] In-app notification centre
+- [ ] In-app notification centre — spec in §11, migration `0026_notifications.sql`
 - [x] Admin panel — user management (invite/suspend/delete), audit log (`/admin/audit`), storage dashboard (`/admin/storage`)
 - [ ] Admin billing summary (R2 costs per talent)
 - [ ] Feature flags
@@ -1346,3 +1364,466 @@ Real detection (reverse image search, AI model) is Phase 7 post-pitch.
 | How do you prevent AI misuse? | Training datasets are blocked by default. Detection monitoring flags unauthorised use. |
 | How do agencies make money? | Commission on every licence — typically 15–20% of agreed fee, tracked automatically. |
 | What happens if an actor leaves the agency? | Delegation is revoked. The talent retains their vault. The agency loses access immediately. |
+
+---
+
+## 11. In-App Notification Centre
+
+Lightweight, poll-based notification system stored in D1. No WebSockets — notifications are fetched on page load and periodically via client-side polling. Complements existing Resend email notifications with an in-app feed.
+
+### 11.1 Notification Events
+
+| Event | Recipients | Click-through |
+|---|---|---|
+| Licence requested | Talent, Rep | `/vault/requests/[licenceId]` |
+| Licence approved | Licensee | `/licences` |
+| Licence denied | Licensee | `/licences` |
+| Download initiated | Talent | `/vault/licences` |
+| Download completed | Talent, Licensee | `/vault/licences` or `/licences/[licenceId]/download` |
+| Rep delegation request | Talent | `/settings/delegation` |
+| Access window expiring soon | Talent | `/vault/licences` |
+| Access window download | Talent | `/vault/licences` |
+| Package upload complete | Talent, Rep | `/vault` |
+
+Notifications are created server-side by the existing API routes that handle these events (licence creation, approval, download completion, etc.). Each event inserts one row per recipient into the `notifications` table.
+
+### 11.2 UI
+
+**Bell icon in nav:**
+- Displayed in the top nav bar for all authenticated users
+- Unread count badge (red circle with number) — hidden when zero
+- Badge count fetched on page load and every 60 seconds via `GET /api/notifications?unread=true&limit=0` (returns count only)
+
+**Dropdown panel:**
+- Opens on bell click — shows the 20 most recent notifications
+- Each row: icon (by event type), message text, relative timestamp ("2h ago"), read/unread indicator (dot)
+- Unread items have a subtle background highlight
+- Click a notification: navigates to the click-through URL and marks it as read
+- "Mark all read" link at the top of the panel
+- "View all" link at the bottom — navigates to a full `/notifications` page (stretch, not required for V1)
+
+### 11.3 API Routes
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/notifications` | List notifications for the authenticated user. Query params: `limit` (default 20), `offset`, `unread` (boolean filter). Returns `{ notifications, unreadCount }`. |
+| `PATCH` | `/api/notifications/[id]` | Mark a single notification as read. Body: `{ read: true }`. Returns 204. |
+| `POST` | `/api/notifications/read-all` | Mark all notifications as read for the authenticated user. Returns 204. |
+
+All routes are scoped to the authenticated user's ID from the JWT. No user can read or modify another user's notifications.
+
+### 11.4 DB Schema
+
+**Migration — `0026_notifications.sql`:**
+
+```sql
+CREATE TABLE notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  href TEXT,
+  read INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX idx_notifications_user_unread ON notifications(user_id, read, created_at DESC);
+CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
+```
+
+- `type` — one of: `licence_requested`, `licence_approved`, `licence_denied`, `download_initiated`, `download_completed`, `rep_delegation_request`, `window_expiring`, `window_download`, `upload_complete`
+- `href` — the relative URL to navigate to on click (e.g. `/vault/requests/abc123`)
+- `read` — 0 = unread, 1 = read
+- Composite index on `(user_id, read, created_at DESC)` for efficient unread-first queries
+
+### 11.5 Notification Creation (Server-Side Helper)
+
+A shared helper `lib/notifications/create.ts` inserts notification rows. Called from existing API route handlers:
+
+```
+createNotification({ userId, type, title, body?, href? })
+```
+
+Bulk variant for multi-recipient events (e.g. download completed notifies both parties):
+
+```
+createNotifications([{ userId, type, title, body?, href? }, ...])
+```
+
+No queue or background job — notifications are inserted synchronously as part of the existing request handler. D1 writes are fast enough for single-row inserts.
+
+### 11.6 Cleanup
+
+Notifications older than 90 days are eligible for deletion. A scheduled cleanup can be added later (Cloudflare Cron Trigger or manual admin action). Not required for V1.
+
+---
+
+## 12. Access Windows — Controlled Temporary Download Access
+
+### 12.1 Problem
+
+The dual-custody download flow is the platform's core security promise: **both talent and licensee must complete 2FA before any file leaves the vault**. This is non-negotiable for the pitch narrative ("no download happens without your involvement").
+
+But in practice, busy actors and their reps cannot be expected to pull out their authenticator app every time a VFX team needs to re-download a scan package during a 6-week shoot. The current "pre-authorisation" feature (`preauthUntil` on licences) solves this functionally but **silently auto-completes the talent side** — which undermines the security story. If a licensee downloads and the talent never knew, that is not dual custody. That is a backdoor with a timer.
+
+**Access Windows** replace pre-authorisation with a deliberate, visible, bounded grant of temporary access that the talent consciously opens and can close at any moment.
+
+### 12.2 Concept
+
+An Access Window is a time-boxed period during which a specific licensee can download files under a specific licence **without requiring talent 2FA on each download**. The licensee still completes their own 2FA every time. The key differences from the old pre-auth:
+
+1. **Intentional ceremony** — talent opens the window via a dedicated action with 2FA confirmation, not a quiet checkbox
+2. **Hard limits** — maximum duration (90 days), maximum download count, and automatic expiry
+3. **Full visibility** — every download during the window is logged and the talent receives notifications
+4. **Instant revocation** — talent can slam the window shut from any device, effective immediately
+5. **Audit trail** — the window itself is a first-class record with its own lifecycle events
+6. **No AI training** — Access Windows cannot be opened for licences with `permitAiTraining = true` (those always require per-download dual custody)
+
+The metaphor is a hotel safe with a timed unlock: you deliberately open it, you know exactly when it closes, and you get a receipt for everything that was taken out.
+
+### 12.3 User Stories
+
+**Talent / Rep:**
+- As a talent, I want to grant a production company a 2-week download window so they can pull files on their own schedule without interrupting my day
+- As a talent, I want to see at a glance which licences have an open window and when each expires
+- As a talent, I want to receive a daily summary of all downloads that happened through open windows yesterday
+- As a talent, I want to close a window immediately if I change my mind, revoking all remaining access
+- As a rep, I want to open and manage windows on behalf of my talent, so the actor does not need to be involved in production logistics
+- As a talent, I want to set a maximum number of downloads within the window, so a production cannot pull the same files 500 times
+
+**Licensee:**
+- As a licensee, I want to request a download window so I do not have to coordinate schedules with the talent's rep every time my team needs a file
+- As a licensee, I want to see clearly whether a window is active for my licence, and how much time and how many downloads remain
+- As a licensee, I want to download files freely during an active window without any additional approval steps beyond my own 2FA
+
+**Platform Admin:**
+- As an admin, I want to see all open windows across the platform for security monitoring
+- As an admin, I want to force-close a window if suspicious activity is detected
+
+### 12.4 Rules & Limits
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| Maximum window duration | 90 days | No open-ended access; forces periodic re-evaluation |
+| Default duration options | 48 hours, 1 week, 2 weeks, 1 month | Covers common production timelines |
+| Custom duration | Yes, up to 90 days | Talent enters a specific date |
+| Maximum downloads per window | Configurable (default: 50) | Prevents bulk scraping; talent can set lower |
+| Minimum downloads per window | 1 | A window with 0 downloads is pointless |
+| AI training licences | Window not available | Always requires per-download dual custody |
+| Opening ceremony | Talent must complete 2FA to open | Prevents accidental or unauthorised opening |
+| Closing | Instant, no 2FA required | Reducing access should have zero friction |
+| Notification on each download | Yes (email, in-app when built) | Talent stays informed even if not approving |
+| Daily digest | Yes, sent at 08:00 talent local time | Summary of yesterday's window activity |
+| Expired window behaviour | Downloads revert to full dual custody | No grace period |
+| Multiple concurrent windows | One per licence (opening a new one replaces the existing) | Keeps the mental model simple |
+| Extension | Talent can extend an active window (new 2FA required) | Opens a new window from now |
+
+### 12.5 Database Schema
+
+**New table: `access_windows`**
+
+This is a first-class entity, not a column on the licences table. It has its own lifecycle and audit history.
+
+```sql
+CREATE TABLE access_windows (
+  id TEXT PRIMARY KEY,                    -- UUID
+  licence_id TEXT NOT NULL REFERENCES licences(id) ON DELETE CASCADE,
+  talent_id TEXT NOT NULL REFERENCES users(id),
+  licensee_id TEXT NOT NULL REFERENCES users(id),
+  opened_by TEXT NOT NULL REFERENCES users(id),  -- talent or rep who opened it
+  opened_at INTEGER NOT NULL,             -- unix timestamp
+  expires_at INTEGER NOT NULL,            -- unix timestamp
+  max_downloads INTEGER NOT NULL DEFAULT 50,
+  downloads_used INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'closed', 'expired', 'exhausted')),
+  closed_by TEXT REFERENCES users(id),    -- who closed it (null if expired/exhausted)
+  closed_at INTEGER,                      -- when it was closed/expired/exhausted
+  close_reason TEXT,                      -- 'manual' | 'expired' | 'exhausted' | 'admin' | 'licence_revoked'
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX idx_access_windows_licence ON access_windows(licence_id);
+CREATE INDEX idx_access_windows_status ON access_windows(status) WHERE status = 'active';
+CREATE INDEX idx_access_windows_talent ON access_windows(talent_id);
+```
+
+**New table: `access_window_events`**
+
+Every significant event on a window is logged. This is the tamper-evident audit trail.
+
+```sql
+CREATE TABLE access_window_events (
+  id TEXT PRIMARY KEY,
+  window_id TEXT NOT NULL REFERENCES access_windows(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL CHECK(event_type IN ('opened', 'download', 'extended', 'closed', 'expired', 'exhausted')),
+  actor_id TEXT REFERENCES users(id),     -- who triggered the event (null for system events like expiry)
+  metadata TEXT,                          -- JSON: { fileId, filename, ip } for downloads; { newExpiresAt } for extensions
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX idx_window_events_window ON access_window_events(window_id);
+CREATE INDEX idx_window_events_type ON access_window_events(event_type);
+```
+
+### 12.6 Migration from Pre-Auth
+
+The existing `preauthUntil` / `preauthSetBy` columns on `licences` are superseded by `access_windows`. Migration strategy:
+
+1. Deploy migration `0027_working_windows.sql` — creates new tables
+2. On first deploy, a one-time backfill creates `access_windows` rows for any licence where `preauthUntil > now()`
+3. Update `licensee-2fa` route to check `access_windows` instead of `licences.preauthUntil`
+4. Update `talent-2fa` route to remove pre-auth option picker; replace with "Open Access Window" CTA post-authorisation
+5. Old columns remain (D1 cannot drop columns) but are no longer read or written
+
+### 12.7 API Endpoints
+
+| Method | Route | Description | Auth |
+|---|---|---|---|
+| `POST` | `/api/licences/[id]/window` | Open a new Access Window. Body: `{ duration: "48h"\|"1w"\|"2w"\|"1m"\|"custom", customExpiresAt?: number, maxDownloads?: number, code: string }`. Requires talent/rep 2FA. Closes any existing active window on this licence first. | Talent, Rep |
+| `GET` | `/api/licences/[id]/window` | Get the current active window for a licence (if any). Returns window details + remaining time + remaining downloads. | Talent, Rep, Licensee (own licence) |
+| `DELETE` | `/api/licences/[id]/window` | Close the active window immediately. No 2FA required. | Talent, Rep, Admin |
+| `PATCH` | `/api/licences/[id]/window` | Extend the active window. Body: `{ duration, customExpiresAt?, code }`. Requires 2FA. Replaces expires_at. | Talent, Rep |
+| `GET` | `/api/licences/[id]/window/activity` | List all events for the current or most recent window. Paginated. | Talent, Rep, Admin |
+| `POST` | `/api/licences/[id]/window/request` | Licensee requests that a window be opened. Creates a notification to talent/rep. Body: `{ requestedDuration: "48h"\|"1w"\|"2w"\|"1m", reason: string }`. | Licensee |
+| `GET` | `/api/windows/active` | List all active windows for the current user (talent: their licences; rep: their roster; admin: all). | Talent, Rep, Admin |
+| `GET` | `/api/admin/windows` | Admin view of all active windows platform-wide with talent, licensee, licence details. | Admin |
+
+### 12.8 Integration with Dual-Custody Flow
+
+The existing `licensee-2fa` route changes behaviour when an active Access Window exists:
+
+```
+1. Licensee initiates download session
+        |
+2. Licensee completes their own 2FA (always required)
+        |
+3. System checks: is there an active Access Window for this licence?
+   - Window exists AND status = 'active' AND expires_at > now AND downloads_used < max_downloads?
+        |
+   YES: Skip talent 2FA step
+        |  - Generate download tokens
+        |  - Increment downloads_used on the window
+        |  - Log access_window_event (type: 'download')
+        |  - Log download_event (as normal)
+        |  - Send per-download notification to talent (email)
+        |  - Return download tokens to licensee
+        |
+   NO: Fall through to standard dual-custody flow
+        |  - Advance to 'awaiting_talent' step
+        |  - Notify talent to complete 2FA
+```
+
+If the window becomes exhausted (downloads_used reaches max_downloads) during a download, the window status transitions to `'exhausted'` and the talent is notified. The next download attempt reverts to full dual custody.
+
+### 12.9 Notifications
+
+| Trigger | Recipient | Channel | Content |
+|---|---|---|---|
+| Window opened | Licensee | Email | "A download window has been opened for [Project]. You can download until [date]. [n] downloads remaining." |
+| Window opened | Talent (confirmation) | Email | "You opened a download window for [Licensee] on [Project]. Expires [date]. Max [n] downloads." |
+| Download via window | Talent | Email | "[Licensee] downloaded [n] files from [Package] via your access window. [remaining] downloads left. [Close Window]" |
+| Daily digest (if any window activity) | Talent | Email (08:00 local) | "Yesterday's access window activity: [n] downloads across [m] licences. [Details link]" |
+| Window closing soon (24h) | Talent + Licensee | Email | "Access window for [Project] expires in 24 hours." |
+| Window closed (manual) | Licensee | Email | "The download window for [Project] has been closed by [Talent/Rep]." |
+| Window expired | Talent + Licensee | Email | "The access window for [Project] has expired. Future downloads require dual-custody authorisation." |
+| Window exhausted | Talent + Licensee | Email | "The access window for [Project] has reached its download limit ([n] downloads). Future downloads require dual-custody authorisation." |
+| Window request (from licensee) | Talent / Rep | Email | "[Licensee] is requesting a download window for [Project]. Reason: [reason]. [Open Window] CTA button, [Ignore] link" |
+
+### 12.10 UI
+
+#### 12.10.1 Opening a Window (Talent / Rep)
+
+Accessible from the licence detail page and from the "Authorise Download" page (as an alternative to one-off 2FA).
+
+**Trigger:** "Open Access Window" button on any active licence card. Also offered during the dual-custody flow as an upsell: *"Tired of approving every download? Open a window instead."*
+
+```
+┌─── Open Access Window ────────────────────────────────────────┐
+│                                                                │
+│  Licence: The Odyssey — Universal Pictures                     │
+│  Licensee: vfx@universalstudios.com                           │
+│                                                                │
+│  How long should this window stay open?                        │
+│                                                                │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │  48 hrs  │  │  1 week  │  │ 2 weeks  │  │ 1 month  │      │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘      │
+│                                                                │
+│  ┌──────────────────────┐                                      │
+│  │  Custom: [date picker]│                                     │
+│  └──────────────────────┘                                      │
+│                                                                │
+│  Maximum downloads:  [ 50 ▾ ]                                  │
+│                                                                │
+│  ── What this means ───────────────────────────────────        │
+│  • The licensee can download files under this licence          │
+│    without your approval for the duration above                │
+│  • You will be notified of every download                      │
+│  • You can close this window at any time                       │
+│  • Your 2FA is required to open this window                    │
+│                                                                │
+│  Enter your authenticator code to confirm:                     │
+│  ┌──────────────────┐                                          │
+│  │ ● ● ● ● ● ●     │                                          │
+│  └──────────────────┘                                          │
+│                                                                │
+│  [Cancel]                              [Open Window]           │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Mobile-first consideration:** The duration options are large tap targets (min 48px height). The 2FA code input uses `inputMode="numeric"` with auto-advance between digits. The entire flow is completable in under 10 seconds on a phone.
+
+#### 12.10.2 Active Window Badge (Licence Card)
+
+On the talent's licence list and the licensee's licence list, an active window shows as a coloured badge with a countdown:
+
+```
+┌─── The Odyssey — Universal Pictures ───────────────────────┐
+│  Status: APPROVED            ┌──────────────────────────┐  │
+│  Type: Film / Double         │  Window open             │  │
+│  Fee: £120,000               │ 12 days left · 38 of 50  │  │
+│  Downloads: 12               │ [Close Window]            │  │
+│                              └──────────────────────────┘  │
+│  [View Details]  [Window Activity]                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The badge border is green when > 7 days remain, amber when < 7 days, red when < 24 hours. Talent sees a "Close Window" button directly on the card. Licensee sees a "Window Active" indicator without close controls.
+
+#### 12.10.3 Window Activity Feed (Talent)
+
+Accessible from the licence detail page or the active window badge. Shows a chronological log of everything that happened during the window.
+
+```
+┌─── Access Window Activity ─────────────────────────────────┐
+│  The Odyssey — Universal Pictures                           │
+│  Window opened: 3 Apr 2026 · Expires: 17 Apr 2026          │
+│  Downloads: 12 of 50                                        │
+│                                                             │
+│  ── Today ──────────────────────────────────────────────    │
+│  14:32  Downloaded body_scan_v2.obj (2.3 GB)               │
+│         IP: 203.0.113.42 · London, UK                       │
+│                                                             │
+│  14:30  Downloaded face_hdr_lighting.exr (890 MB)          │
+│         IP: 203.0.113.42 · London, UK                       │
+│                                                             │
+│  ── Yesterday ──────────────────────────────────────────    │
+│  09:15  Downloaded full_body_mesh.fbx (4.1 GB)             │
+│         IP: 203.0.113.42 · London, UK                       │
+│                                                             │
+│  ── 3 Apr ──────────────────────────────────────────────    │
+│  16:00  Window opened by agent@unitedagents.co.uk          │
+│         Duration: 2 weeks · Max downloads: 50               │
+│                                                             │
+│                                                             │
+│  [Close Window]                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 12.10.4 Licensee Window Request
+
+On the licensee's download page, if no window is active and the licence is approved:
+
+```
+┌─── Download Options ───────────────────────────────────────┐
+│                                                             │
+│  Standard download (dual custody)                           │
+│  Both you and the talent must verify. [Start Download]      │
+│                                                             │
+│  ── or ──                                                   │
+│                                                             │
+│  Request an Access Window                                   │
+│  Ask the talent to open a temporary download window         │
+│  so your team can download without per-file approval.       │
+│                                                             │
+│  Suggested duration: [ 2 weeks ]                            │
+│  Reason: [Working on VFX shots for Act 2, team needs       │
+│           repeated access to reference meshes             ] │
+│                                                             │
+│  [Send Request]                                             │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 12.10.5 Dual-Custody Upsell
+
+When a talent completes a standard dual-custody 2FA authorisation, after success show a contextual prompt:
+
+```
+┌─── Download Authorised ────────────────────────────────────┐
+│                                                             │
+│  Download tokens issued to vfx@universalstudios.com.       │
+│                                                             │
+│  ── Save time next time? ───────────────────────────────   │
+│  Open an Access Window so this licensee can download        │
+│  without waiting for your approval each time.               │
+│                                                             │
+│  [Open a 2-Week Window]   [No thanks]                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+This replaces the old pre-auth option picker that appeared during the talent-2fa step.
+
+#### 12.10.6 Admin Windows Dashboard
+
+`/admin/windows` — table of all active windows platform-wide:
+
+| Talent | Licensee | Project | Opened | Expires | Downloads | Status | Actions |
+|---|---|---|---|---|---|---|---|
+| Almorah Vane | Universal VFX | The Odyssey | 3 Apr | 17 Apr | 12 / 50 | Active | [Force Close] |
+| Daniel Osei | Netflix Post | Glass Onion 3 | 1 Apr | 1 May | 3 / 25 | Active | [Force Close] |
+
+### 12.11 Email Templates
+
+**`accessWindowOpenedTalentEmail`** — confirmation to talent/rep:
+- Subject: "Access window opened — [Project Name]"
+- Body: Licensee name, duration, max downloads, expiry date, link to close window
+
+**`accessWindowOpenedLicenseeEmail`** — notification to licensee:
+- Subject: "Download access granted — [Project Name]"
+- Body: Duration, max downloads, expiry date, link to download page
+
+**`accessWindowDownloadEmail`** — per-download notification to talent:
+- Subject: "[Licensee] downloaded files via your access window"
+- Body: File names, sizes, IP, remaining downloads, link to close window
+
+**`accessWindowDigestEmail`** — daily digest to talent (only sent if activity occurred):
+- Subject: "Access window activity — [date]"
+- Body: Table of downloads grouped by licence, total files, total bytes, remaining window time
+
+**`accessWindowExpiringEmail`** — 24h warning to both parties:
+- Subject: "Access window expires tomorrow — [Project Name]"
+- Body: Expiry time, downloads used, link to extend (talent) or download now (licensee)
+
+**`accessWindowClosedEmail`** — notification to licensee:
+- Subject: "Access window closed — [Project Name]"
+- Body: Reason (manual/expired/exhausted), next steps (request new window or use dual custody)
+
+**`accessWindowRequestEmail`** — licensee request to talent:
+- Subject: "[Licensee] is requesting a download window"
+- Body: Project, requested duration, reason, [Open Window] CTA button, [Ignore] link
+
+### 12.12 Implementation Notes
+
+**Phase 1 (build now):**
+- Migration `0027_working_windows.sql`
+- `POST /api/licences/[id]/window` (open)
+- `GET /api/licences/[id]/window` (read)
+- `DELETE /api/licences/[id]/window` (close)
+- Update `licensee-2fa` to check `access_windows` table
+- Remove old pre-auth option from `talent-2fa`
+- Window badge on licence cards
+- Open Window modal (talent/rep)
+
+**Phase 2 (next sprint):**
+- `PATCH /api/licences/[id]/window` (extend)
+- `POST /api/licences/[id]/window/request` (licensee request)
+- `GET /api/licences/[id]/window/activity` (event feed)
+- Window activity feed UI
+- Daily digest email (requires Cloudflare Cron Trigger)
+- 24h expiry warning email
+- `/admin/windows` dashboard
+- Dual-custody upsell prompt

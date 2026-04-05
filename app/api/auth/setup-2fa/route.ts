@@ -7,7 +7,10 @@ import { totpCredentials, refreshTokens } from "@/lib/db/schema";
 import { generateTotpSecret, buildOtpauthUrl, verifyTotpCode } from "@/lib/auth/totp";
 import { signSessionJwt } from "@/lib/auth/jwt";
 import { generateToken, hashToken, setAuthCookies } from "@/lib/auth/session";
+import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { eq } from "drizzle-orm";
+
+const SETUP_2FA_LIMIT = { action: "setup-2fa", maxAttempts: 5, windowSeconds: 300 };
 
 /** GET /api/auth/setup-2fa?token=<uuid>
  *  Returns { otpauthUrl, secret } — idempotent (reuses existing unverified secret)
@@ -71,6 +74,15 @@ export async function POST(req: NextRequest) {
   const { token, code } = body;
   if (!token || !code) {
     return NextResponse.json({ error: "token and code are required" }, { status: 400 });
+  }
+
+  // Rate limit: 5 attempts per 5 minutes per IP
+  const rl = await checkRateLimit(getClientIp(req), SETUP_2FA_LIMIT);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } },
+    );
   }
 
   const kv = getRequestContext().env.SESSIONS_KV;

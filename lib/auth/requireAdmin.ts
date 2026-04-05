@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
+import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 
 export async function requireAdmin(): Promise<{ userId: string; email: string }> {
   const cookieStore = await cookies();

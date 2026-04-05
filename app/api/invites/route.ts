@@ -4,16 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { invites, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and, isNull, gt, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
-
-function isAdmin(email: string | undefined): boolean {
-  return !!email && ADMIN_EMAILS.includes(email);
-}
 
 // GET /api/invites — admin: list all invites; talent: list own invites
 export async function GET(req: NextRequest) {

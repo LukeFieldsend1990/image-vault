@@ -2,9 +2,8 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { callAiCronService } from "@/lib/ai/service";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 /**
  * POST /api/admin/ai/run-batch
@@ -15,7 +14,7 @@ export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
-  if (!isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   return callAiCronService(req, session, "/batch/run", { method: "POST" });
 }

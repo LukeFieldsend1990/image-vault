@@ -4,11 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { pipelineOutputs, pipelineJobs } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq } from "drizzle-orm";
 import { AwsClient } from "aws4fetch";
 import { getRequestContext } from "@cloudflare/next-on-pages";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 const DOWNLOAD_TTL = 3600; // 1 hour presigned URL
 
 function cfEnv(key: string): string | undefined {
@@ -28,7 +27,7 @@ export async function GET(
 
   const { id } = await params;
   const db = getDb();
-  const isAdmin = session.role === "admin" || ADMIN_EMAILS.includes(session.email);
+  const admin = session.role === "admin" || isAdmin(session.email);
 
   const output = await db
     .select()
@@ -46,7 +45,7 @@ export async function GET(
     .get();
 
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (job.talentId !== session.sub && !isAdmin) {
+  if (job.talentId !== session.sub && !admin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

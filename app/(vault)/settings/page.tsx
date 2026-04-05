@@ -9,8 +9,7 @@ import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
 import ChangePassword from "./change-password";
 import PhoneField from "./phone-field";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
+import { isAdmin } from "@/lib/auth/adminEmails";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -67,8 +66,8 @@ export default async function SettingsPage({
 }) {
   const { tab } = await searchParams;
   const user = await getSessionData();
-  const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email));
-  const activeTab = tab === "admin" && isAdmin ? "admin" : "account";
+  const userIsAdmin = isAdmin(user?.email);
+  const activeTab = tab === "admin" && userIsAdmin ? "admin" : "account";
 
   // Fetch talent identity for talent users
   let identity: {
@@ -118,7 +117,7 @@ export default async function SettingsPage({
         >
           Account
         </Link>
-        {isAdmin && (
+        {userIsAdmin && (
           <Link
             href="/settings?tab=admin"
             className="px-4 py-2 text-sm font-medium transition border-b-2 -mb-px"
