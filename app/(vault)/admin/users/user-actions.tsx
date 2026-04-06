@@ -17,10 +17,6 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
   const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (isCurrentUser) {
-    return <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>;
-  }
-
   async function handleSuspend() {
     setLoading("suspend");
     setError(null);
@@ -125,17 +121,19 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
 
   return (
     <div className="flex items-center gap-2">
-      <button
-        onClick={handleSuspend}
-        disabled={loading !== null}
-        className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
-        style={isSuspended
-          ? { borderColor: "rgba(22,101,52,0.3)", color: "#166534", background: "rgba(22,101,52,0.06)" }
-          : { borderColor: "rgba(217,119,6,0.3)", color: "#d97706", background: "rgba(217,119,6,0.06)" }
-        }
-      >
-        {loading === "suspend" ? "…" : isSuspended ? "Unsuspend" : "Suspend"}
-      </button>
+      {!isCurrentUser && (
+        <button
+          onClick={handleSuspend}
+          disabled={loading !== null}
+          className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+          style={isSuspended
+            ? { borderColor: "rgba(22,101,52,0.3)", color: "#166534", background: "rgba(22,101,52,0.06)" }
+            : { borderColor: "rgba(217,119,6,0.3)", color: "#d97706", background: "rgba(217,119,6,0.06)" }
+          }
+        >
+          {loading === "suspend" ? "…" : isSuspended ? "Unsuspend" : "Suspend"}
+        </button>
+      )}
       <button
         onClick={handleEmailToggle}
         disabled={loading !== null}
@@ -169,14 +167,16 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
       >
         {loading === "inbound" ? "…" : inboundEnabled ? "Inbox On" : "Enable Inbox"}
       </button>
-      <button
-        onClick={handleDelete}
-        disabled={loading !== null}
-        className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
-        style={{ borderColor: "rgba(192,57,43,0.3)", color: "#c0392b", background: "rgba(192,57,43,0.06)" }}
-      >
-        {loading === "delete" ? "…" : "Delete"}
-      </button>
+      {!isCurrentUser && (
+        <button
+          onClick={handleDelete}
+          disabled={loading !== null}
+          className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+          style={{ borderColor: "rgba(192,57,43,0.3)", color: "#c0392b", background: "rgba(192,57,43,0.06)" }}
+        >
+          {loading === "delete" ? "…" : "Delete"}
+        </button>
+      )}
       {error && (
         <span className="text-[10px]" style={{ color: "#c0392b" }}>{error}</span>
       )}
