@@ -52,6 +52,10 @@ R2_BUCKET_NAME = "image-vault-scans"   # override with "image-vault-scans-dev" f
 binding = "PIPELINE_QUEUE"
 queue = "pipeline-jobs"
 
+[[queues.producers]]
+binding = "INBOUND_QUEUE"
+queue = "inbound-email"
+
 # -------------------------------------------------------------------
 # Workers AI
 # -------------------------------------------------------------------
@@ -82,3 +86,4 @@ service = "image-vault-ai-cron"
 # BRIDGE_SIGNING_KEY_JWK  - P-256 private key JWK for signing Bridge grant manifests
 #                           Generate with: node scripts/generate-bridge-key.mjs
 # ANTHROPIC_API_KEY       - Anthropic API key for Claude Haiku (AI features: fee guidance, licence summaries)
+# RESEND_WEBHOOK_SECRET   - Svix webhook signing secret (from Resend dashboard → Webhooks)

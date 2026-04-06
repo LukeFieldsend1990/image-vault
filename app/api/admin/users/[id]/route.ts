@@ -26,7 +26,7 @@ export async function PATCH(
   if (isErrorResponse(session)) return session;
   if (session instanceof NextResponse) return session;
 
-  let body: { suspended?: boolean; emailMuted?: boolean; aiDisabled?: boolean } = {};
+  let body: { suspended?: boolean; emailMuted?: boolean; aiDisabled?: boolean; inboundEnabled?: boolean } = {};
   try {
     body = JSON.parse(await req.text());
   } catch { /* ok */ }
@@ -34,9 +34,10 @@ export async function PATCH(
   const hasSuspended = typeof body.suspended === "boolean";
   const hasEmailMuted = typeof body.emailMuted === "boolean";
   const hasAiDisabled = typeof body.aiDisabled === "boolean";
+  const hasInboundEnabled = typeof body.inboundEnabled === "boolean";
 
-  if (!hasSuspended && !hasEmailMuted && !hasAiDisabled) {
-    return NextResponse.json({ error: "suspended, emailMuted, or aiDisabled (boolean) is required" }, { status: 400 });
+  if (!hasSuspended && !hasEmailMuted && !hasAiDisabled && !hasInboundEnabled) {
+    return NextResponse.json({ error: "suspended, emailMuted, aiDisabled, or inboundEnabled (boolean) is required" }, { status: 400 });
   }
 
   const db = getDb();
@@ -68,7 +69,14 @@ export async function PATCH(
       .where(eq(users.id, id));
   }
 
-  return NextResponse.json({ suspended: body.suspended, emailMuted: body.emailMuted, aiDisabled: body.aiDisabled });
+  if (hasInboundEnabled) {
+    await db
+      .update(users)
+      .set({ inboundEnabled: body.inboundEnabled! })
+      .where(eq(users.id, id));
+  }
+
+  return NextResponse.json({ suspended: body.suspended, emailMuted: body.emailMuted, aiDisabled: body.aiDisabled, inboundEnabled: body.inboundEnabled });
 }
 
 // DELETE /api/admin/users/[id] — permanently delete a user

@@ -1,0 +1,41 @@
+name = "image-vault-comms-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# -------------------------------------------------------------------
+# Queue consumer — inbound email processing
+# -------------------------------------------------------------------
+[[queues.consumers]]
+queue = "inbound-email"
+max_batch_size = 5           # emails are lighter than pipeline jobs
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "inbound-email-dlq"
+
+# -------------------------------------------------------------------
+# D1 Database (shared with main app)
+# -------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "image-vault-db"
+database_id = "71665618-0498-48bd-a243-962eb4810769"
+
+# -------------------------------------------------------------------
+# Workers AI binding (for triage)
+# -------------------------------------------------------------------
+[ai]
+binding = "AI"
+
+# -------------------------------------------------------------------
+# Environment Variables
+# -------------------------------------------------------------------
+[vars]
+RESEND_FROM_EMAIL = "Changling <noreply@changling.io>"
+APP_URL = "https://changling.io"
+
+# -------------------------------------------------------------------
+# Secrets (set via: wrangler secret put SECRET_NAME --config comms-worker/wrangler.toml)
+# -------------------------------------------------------------------
+# RESEND_API_KEY       - Fetch inbound emails + send notifications
+# ANTHROPIC_API_KEY    - AI triage (Haiku)
