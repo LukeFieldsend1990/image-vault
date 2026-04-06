@@ -10,6 +10,7 @@ export const users = sqliteTable("users", {
   phone: text("phone"), // optional, E.164 format
   emailMuted: integer("email_muted", { mode: "boolean" }).notNull().default(false),
   aiDisabled: integer("ai_disabled", { mode: "boolean" }).notNull().default(false),
+  inboundEnabled: integer("inbound_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -413,4 +414,101 @@ export const bridgeEvents = sqliteTable("bridge_events", {
   severity: text("severity").notNull().default("warn"), // info|warn|critical
   detail: text("detail"), // JSON blob
   createdAt: integer("created_at").notNull(),
+});
+
+// ── Inbound email intake ─────────────────────────────────────────────────────
+
+export const inboundAliases = sqliteTable("inbound_aliases", {
+  id: text("id").primaryKey(),
+  alias: text("alias").notNull().unique(),
+  aliasType: text("alias_type", { enum: ["user", "licence", "package", "talent"] }).notNull().default("user"),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ownerEntityId: text("owner_entity_id"),
+  status: text("status", { enum: ["active", "revoked", "expired"] }).notNull().default("active"),
+  createdAt: integer("created_at").notNull(),
+  expiresAt: integer("expires_at"),
+  lastUsedAt: integer("last_used_at"),
+});
+
+export const receivedEmails = sqliteTable("received_emails", {
+  id: text("id").primaryKey(),
+  resendEmailId: text("resend_email_id").unique(),
+  messageId: text("message_id"),
+  inReplyTo: text("in_reply_to"),
+  references: text("references"), // JSON array of Message-IDs
+  aliasId: text("alias_id").references(() => inboundAliases.id, { onDelete: "set null" }),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+  ownerEntityId: text("owner_entity_id"),
+  fromName: text("from_name"),
+  fromEmail: text("from_email").notNull(),
+  subject: text("subject"),
+  sentAt: integer("sent_at"),
+  receivedAt: integer("received_at").notNull(),
+  textBody: text("text_body"),
+  htmlBody: text("html_body"),
+  normalizedText: text("normalized_text"),
+  rawHeadersJson: text("raw_headers_json"),
+  spamScore: real("spam_score"),
+  processingStatus: text("processing_status", {
+    enum: ["pending", "fetching", "processing", "triaged", "failed"],
+  }).notNull().default("pending"),
+  routingStatus: text("routing_status", {
+    enum: ["matched", "unmatched", "quarantine"],
+  }).notNull().default("matched"),
+  dedupeKey: text("dedupe_key"),
+  threadKey: text("thread_key"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const receivedEmailRecipients = sqliteTable("received_email_recipients", {
+  id: text("id").primaryKey(),
+  emailId: text("email_id").notNull().references(() => receivedEmails.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["to", "cc", "bcc"] }).notNull(),
+  displayName: text("display_name"),
+  address: text("address").notNull(),
+});
+
+export const receivedEmailAttachments = sqliteTable("received_email_attachments", {
+  id: text("id").primaryKey(),
+  emailId: text("email_id").notNull().references(() => receivedEmails.id, { onDelete: "cascade" }),
+  filename: text("filename"),
+  contentType: text("content_type"),
+  sizeBytes: integer("size_bytes"),
+  storageKey: text("storage_key"),
+  checksum: text("checksum"),
+  scanStatus: text("scan_status", { enum: ["pending", "clean", "suspicious", "blocked"] }).notNull().default("pending"),
+  textExtractionStatus: text("text_extraction_status", {
+    enum: ["pending", "done", "failed", "skipped"],
+  }).notNull().default("pending"),
+  extractedText: text("extracted_text"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const aiTriageResults = sqliteTable("ai_triage_results", {
+  id: text("id").primaryKey(),
+  emailId: text("email_id").notNull().references(() => receivedEmails.id, { onDelete: "cascade" }),
+  modelName: text("model_name").notNull(),
+  promptVersion: text("prompt_version").notNull().default("v1"),
+  summary: text("summary"),
+  category: text("category"),
+  urgency: text("urgency", { enum: ["low", "medium", "high", "critical"] }),
+  confidence: real("confidence"),
+  structuredDataJson: text("structured_data_json"),
+  recommendedAction: text("recommended_action"),
+  riskFlagsJson: text("risk_flags_json"),
+  reviewStatus: text("review_status", {
+    enum: ["pending", "approved", "rejected", "auto_applied"],
+  }).notNull().default("pending"),
+  reviewedBy: text("reviewed_by").references(() => users.id),
+  reviewedAt: integer("reviewed_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const emailThreadLinks = sqliteTable("email_thread_links", {
+  id: text("id").primaryKey(),
+  ownerEntityId: text("owner_entity_id"),
+  threadKey: text("thread_key").notNull().unique(),
+  latestEmailId: text("latest_email_id").references(() => receivedEmails.id, { onDelete: "set null" }),
+  emailCount: integer("email_count").notNull().default(1),
+  updatedAt: integer("updated_at").notNull(),
 });

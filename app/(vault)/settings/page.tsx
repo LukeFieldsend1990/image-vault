@@ -412,6 +412,24 @@ export default async function SettingsPage({
         </div>
       )}
 
+      {/* Email Intake */}
+      <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Email Intake</h2>
+        <Link
+          href="/settings/email-intake"
+          className="flex items-center justify-between text-sm"
+          style={{ color: "var(--color-ink)" }}
+        >
+          <span>Manage intake address</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </Link>
+        <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+          Generate a CC address to ingest external email conversations with AI triage.
+        </p>
+      </div>
+
       {/* Contact Phone */}
       <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-muted)" }}>Contact Phone</h2>

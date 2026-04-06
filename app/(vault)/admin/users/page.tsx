@@ -41,6 +41,7 @@ export default async function AdminUsersPage() {
       suspendedAt: users.suspendedAt,
       emailMuted: users.emailMuted,
       aiDisabled: users.aiDisabled,
+      inboundEnabled: users.inboundEnabled,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -180,6 +181,14 @@ export default async function AdminUsersPage() {
                     AI Off
                   </span>
                 )}
+                {u.inboundEnabled && (
+                  <span
+                    className="ml-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                    style={{ background: "rgba(37,99,235,0.12)", color: "#2563eb" }}
+                  >
+                    Inbox
+                  </span>
+                )}
               </div>
 
               {/* Actions */}
@@ -189,6 +198,7 @@ export default async function AdminUsersPage() {
                 isCurrentUser={u.id === currentUserId}
                 emailMuted={!!u.emailMuted}
                 aiDisabled={!!u.aiDisabled}
+                inboundEnabled={!!u.inboundEnabled}
               />
             </div>
           );
