@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -83,7 +83,7 @@ export default function EmailDetailClient() {
   const [retriaging, setRetriaging] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
 
-  const fetchDetail = useCallback(async () => {
+  async function fetchDetail() {
     const res = await fetch(`/api/inbound/emails/${id}`);
     if (!res.ok) {
       router.push("/inbox");
@@ -100,11 +100,12 @@ export default function EmailDetailClient() {
     setAttachments(data.attachments ?? []);
     setTriageResults(data.triageResults ?? []);
     setLoading(false);
-  }, [id, router]);
+  }
 
   useEffect(() => {
-    fetchDetail();
-  }, [fetchDetail]);
+    void fetchDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const handleRetriage = async () => {
     setRetriaging(true);
