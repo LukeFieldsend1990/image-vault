@@ -238,9 +238,12 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled }: { role: Role; email?: string; pipelineEnabled?: boolean }) {
+export function NavLinks({ role, pipelineEnabled, inboundEnabled }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean }) {
   const pathname = usePathname();
-  const base = navItemsForRole(role);
+  let base = navItemsForRole(role);
+  if (!inboundEnabled) {
+    base = base.filter((item) => item.href !== "/inbox");
+  }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]
     : base;
