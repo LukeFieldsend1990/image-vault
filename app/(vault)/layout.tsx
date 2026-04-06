@@ -90,7 +90,7 @@ async function getInboundEnabled(userId: string): Promise<boolean> {
       .from(users)
       .where(eq(users.id, userId))
       .get();
-    return row?.inboundEnabled === 1;
+    return !!row?.inboundEnabled;
   } catch {
     return false;
   }
