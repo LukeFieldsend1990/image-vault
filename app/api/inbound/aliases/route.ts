@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const alias = generateAlias(aliasType);
+  const alias = generateAlias();
   const id = crypto.randomUUID();
 
   await db.insert(inboundAliases).values({

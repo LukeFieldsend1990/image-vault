@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 interface AliasInfo {
@@ -29,7 +29,7 @@ export default function EmailIntakeClient() {
   const [copied, setCopied] = useState<string | null>(null);
   const [enabled, setEnabled] = useState(true);
 
-  const fetchAliases = useCallback(async () => {
+  async function fetchAliases() {
     const res = await fetch("/api/inbound/aliases");
     if (res.ok) {
       const data = (await res.json()) as { enabled: boolean; aliases: AliasInfo[] };
@@ -37,11 +37,12 @@ export default function EmailIntakeClient() {
       setAliases(data.aliases ?? []);
     }
     setLoading(false);
-  }, []);
+  }
 
   useEffect(() => {
-    fetchAliases();
-  }, [fetchAliases]);
+    void fetchAliases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const generateAlias = async () => {
     setCreating(true);

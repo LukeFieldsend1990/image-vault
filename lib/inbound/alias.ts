@@ -47,7 +47,7 @@ const NOUNS = [
   "whale","willow","wind","wing","wolf","wren","yarrow","yew","zenith","zephyr",
 ];
 
-export function generateAlias(_type: string): string {
+export function generateAlias(): string {
   const bytes = new Uint8Array(2);
   crypto.getRandomValues(bytes);
 

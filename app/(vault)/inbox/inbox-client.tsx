@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 interface TriageSummary {
@@ -69,7 +69,7 @@ export default function InboxClient() {
   const [copied, setCopied] = useState(false);
   const [enabled, setEnabled] = useState(true);
 
-  const fetchData = useCallback(async () => {
+  async function fetchData() {
     const [emailsRes, aliasRes] = await Promise.all([
       fetch("/api/inbound/emails"),
       fetch("/api/inbound/aliases"),
@@ -85,11 +85,12 @@ export default function InboxClient() {
       setAlias(active ?? null);
     }
     setLoading(false);
-  }, []);
+  }
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    void fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const generateAlias = async () => {
     const res = await fetch("/api/inbound/aliases", {
