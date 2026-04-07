@@ -1,9 +1,8 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
-import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
+import { scanPackages, scanFiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq, asc } from "drizzle-orm";
@@ -20,12 +19,12 @@ export async function GET(
   const db = getDb();
 
   const pkg = await db
-    .select({ id: scanPackages.id, talentId: scanPackages.talentId })
+    .select({ id: scanPackages.id, talentId: scanPackages.talentId, deletedAt: scanPackages.deletedAt })
     .from(scanPackages)
     .where(eq(scanPackages.id, packageId))
     .get();
 
-  if (!pkg) {
+  if (!pkg || pkg.deletedAt) {
     return NextResponse.json({ error: "Package not found" }, { status: 404 });
   }
 
@@ -69,12 +68,12 @@ export async function DELETE(
 
   // Verify package belongs to authed user (or a delegated rep)
   const pkg = await db
-    .select({ id: scanPackages.id, talentId: scanPackages.talentId })
+    .select({ id: scanPackages.id, talentId: scanPackages.talentId, deletedAt: scanPackages.deletedAt })
     .from(scanPackages)
     .where(eq(scanPackages.id, packageId))
     .get();
 
-  if (!pkg) {
+  if (!pkg || pkg.deletedAt) {
     return NextResponse.json({ error: "Package not found" }, { status: 404 });
   }
 
@@ -87,31 +86,13 @@ export async function DELETE(
     }
   }
 
-  // Abort any open R2 multipart uploads before deleting DB records
-  const openSessions = await db
-    .select({
-      id: uploadSessions.id,
-      r2Key: uploadSessions.r2Key,
-      r2UploadId: uploadSessions.r2UploadId,
-    })
-    .from(uploadSessions)
-    .innerJoin(scanFiles, eq(scanFiles.id, uploadSessions.scanFileId))
-    .where(eq(scanFiles.packageId, packageId))
-    .all();
+  const now = Math.floor(Date.now() / 1000);
 
-  const { env } = getRequestContext();
-
-  for (const s of openSessions) {
-    try {
-      const mu = env.SCANS_BUCKET.resumeMultipartUpload(s.r2Key, s.r2UploadId);
-      await mu.abort();
-    } catch {
-      // Best-effort — ignore if already expired
-    }
-  }
-
-  // Cascade delete handles scan_files and upload_sessions rows
-  await db.delete(scanPackages).where(eq(scanPackages.id, packageId));
+  // Soft-delete: set deletedAt + deletedBy instead of removing the row
+  await db
+    .update(scanPackages)
+    .set({ deletedAt: now, deletedBy: session.sub, updatedAt: now })
+    .where(eq(scanPackages.id, packageId));
 
   return NextResponse.json({ ok: true });
 }

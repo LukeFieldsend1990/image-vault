@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, isNull } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     })
     .from(scanPackages)
     .leftJoin(scanFiles, eq(scanFiles.packageId, scanPackages.id))
-    .where(eq(scanPackages.talentId, ownerId))
+    .where(and(eq(scanPackages.talentId, ownerId), isNull(scanPackages.deletedAt)))
     .groupBy(scanPackages.id)
     .orderBy(desc(scanPackages.createdAt))
     .all();

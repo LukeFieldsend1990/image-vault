@@ -193,14 +193,17 @@ export default async function AdminAuditPage() {
       .limit(LIMIT)
       .all(),
 
-    // Package creation
+    // Package creation + deletion
     db
       .select({
         id: scanPackages.id,
         name: scanPackages.name,
         status: scanPackages.status,
         createdAt: scanPackages.createdAt,
+        deletedAt: scanPackages.deletedAt,
+        deletedBy: scanPackages.deletedBy,
         talentEmail: sql<string>`(SELECT email FROM users WHERE id = ${scanPackages.talentId})`,
+        deletedByEmail: sql<string | null>`(SELECT email FROM users WHERE id = ${scanPackages.deletedBy})`,
       })
       .from(scanPackages)
       .orderBy(desc(scanPackages.createdAt))
@@ -403,6 +406,17 @@ export default async function AdminAuditPage() {
       meta: e.status,
       severity: "info",
     });
+    if (e.deletedAt) {
+      events.push({
+        id: `pkg-del-${e.id}`,
+        category: "vault",
+        timestamp: e.deletedAt,
+        actor: e.deletedByEmail ?? "unknown",
+        detail: `Package deleted — ${e.name}`,
+        meta: null,
+        severity: "warn",
+      });
+    }
   }
 
   // Invites
