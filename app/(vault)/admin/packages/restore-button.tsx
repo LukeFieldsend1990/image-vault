@@ -11,7 +11,10 @@ export default function RestoreButton({ packageId }: { packageId: string }) {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/packages/${packageId}/restore`, { method: "POST" });
-      if (res.ok) setRestored(true);
+      if (res.ok) {
+        setRestored(true);
+        window.location.reload();
+      }
     } finally {
       setLoading(false);
     }
