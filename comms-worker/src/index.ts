@@ -317,14 +317,8 @@ async function processInboundEmail(env: Env, msg: InboundMessage): Promise<void>
   const emailId = uuid();
 
   // 1. Use payload from webhook (Resend API can't fetch inbound emails)
-  console.log("[comms] Message keys:", Object.keys(msg));
-  console.log("[comms] msg.payload present:", !!msg.payload);
-  console.log("[comms] msg.payload type:", typeof msg.payload);
-  if (msg.payload) {
-    console.log("[comms] payload keys:", Object.keys(msg.payload));
-    console.log("[comms] payload.from:", msg.payload.from);
-    console.log("[comms] payload.subject:", msg.payload.subject);
-  }
+  // DEBUG: dump raw payload to see actual Resend structure
+  console.log("[comms] Full msg payload:", JSON.stringify(msg.payload, null, 2)?.slice(0, 2000));
   const email: ResendEmail | null = msg.payload ?? (
     env.RESEND_API_KEY ? await fetchResendEmail(env.RESEND_API_KEY, msg.resendEmailId) : null
   );
@@ -374,7 +368,7 @@ async function processInboundEmail(env: Env, msg: InboundMessage): Promise<void>
     textBody: email.text ?? null,
     htmlBody: email.html ?? null,
     normalizedText,
-    rawHeadersJson: JSON.stringify(headers),
+    rawHeadersJson: JSON.stringify({ _debug_payload_keys: Object.keys(msg.payload ?? {}), _debug_payload: msg.payload, headers }),
     processingStatus: "processing",
     routingStatus: "matched",
     dedupeKey: msg.resendEmailId,
