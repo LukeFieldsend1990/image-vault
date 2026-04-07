@@ -51,7 +51,8 @@ interface ResendEmail {
   text?: string;
   html?: string;
   created_at?: string;
-  headers?: Array<{ name: string; value: string }>;
+  // Resend receiving API sends headers as an object, not an array
+  headers?: Record<string, string>;
   attachments?: Array<{
     filename: string;
     content_type: string;
@@ -337,13 +338,24 @@ async function processInboundEmail(env: Env, msg: InboundMessage): Promise<void>
     return;
   }
 
-  // 2. Parse sender & headers
-  const sender = parseAddress(email.from);
-  const headers = email.headers ?? [];
-  const messageId = headers.find((h) => h.name.toLowerCase() === "message-id")?.value ?? null;
-  const inReplyTo = headers.find((h) => h.name.toLowerCase() === "in-reply-to")?.value ?? null;
-  const refsHeader = headers.find((h) => h.name.toLowerCase() === "references")?.value ?? null;
-  const referencesJson = refsHeader ? JSON.stringify(refsHeader.split(/\s+/).filter(Boolean)) : null;
+  // 2. Parse sender & headers (Resend sends headers as a flat object)
+  const headers = email.headers ?? {};
+  const fromHeader = headers["from"] ?? email.from;
+  const sender = parseAddress(fromHeader);
+  const messageId = headers["message-id"] ?? null;
+  const inReplyTo = headers["in-reply-to"] ?? null;
+  const refsRaw = headers["references"] ?? null;
+  // Resend may JSON-encode references as an array string
+  let referencesJson: string | null = null;
+  if (refsRaw) {
+    try {
+      // Already a JSON array string from Resend
+      const parsed = JSON.parse(refsRaw);
+      referencesJson = Array.isArray(parsed) ? refsRaw : JSON.stringify(refsRaw.split(/\s+/).filter(Boolean));
+    } catch {
+      referencesJson = JSON.stringify(refsRaw.split(/\s+/).filter(Boolean));
+    }
+  }
 
   // 3. Normalize body
   const normalizedText = email.text ?? (email.html ? htmlToText(email.html) : null);
@@ -376,10 +388,15 @@ async function processInboundEmail(env: Env, msg: InboundMessage): Promise<void>
     createdAt: ts,
   });
 
-  // 5. Store recipients
+  // 5. Store recipients — use headers for full recipient list (API to/cc only has alias)
+  function parseRecipientList(raw: string | undefined): string[] {
+    if (!raw) return [];
+    // Split on commas, but not commas inside quotes
+    return raw.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((s) => s.trim()).filter(Boolean);
+  }
   const allRecipients: Array<{ type: string; addresses: string[] }> = [
-    { type: "to", addresses: email.to ?? [] },
-    { type: "cc", addresses: email.cc ?? [] },
+    { type: "to", addresses: parseRecipientList(headers["to"]) },
+    { type: "cc", addresses: parseRecipientList(headers["cc"]) },
     { type: "bcc", addresses: email.bcc ?? [] },
   ];
   for (const group of allRecipients) {
