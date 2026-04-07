@@ -317,6 +317,14 @@ async function processInboundEmail(env: Env, msg: InboundMessage): Promise<void>
   const emailId = uuid();
 
   // 1. Use payload from webhook (Resend API can't fetch inbound emails)
+  console.log("[comms] Message keys:", Object.keys(msg));
+  console.log("[comms] msg.payload present:", !!msg.payload);
+  console.log("[comms] msg.payload type:", typeof msg.payload);
+  if (msg.payload) {
+    console.log("[comms] payload keys:", Object.keys(msg.payload));
+    console.log("[comms] payload.from:", msg.payload.from);
+    console.log("[comms] payload.subject:", msg.payload.subject);
+  }
   const email: ResendEmail | null = msg.payload ?? (
     env.RESEND_API_KEY ? await fetchResendEmail(env.RESEND_API_KEY, msg.resendEmailId) : null
   );
