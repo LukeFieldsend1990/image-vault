@@ -39,6 +39,7 @@ interface InboundMessage {
   aliasId: string;
   ownerUserId: string;
   ownerEntityId: string | null;
+  payload?: ResendEmail;
 }
 
 interface ResendEmail {
@@ -315,13 +316,10 @@ async function processInboundEmail(env: Env, msg: InboundMessage): Promise<void>
   const ts = now();
   const emailId = uuid();
 
-  if (!env.RESEND_API_KEY) {
-    console.error("[comms] RESEND_API_KEY not set");
-    return;
-  }
-
-  // 1. Fetch full email from Resend
-  const email = await fetchResendEmail(env.RESEND_API_KEY, msg.resendEmailId);
+  // 1. Use payload from webhook (Resend API can't fetch inbound emails)
+  const email: ResendEmail | null = msg.payload ?? (
+    env.RESEND_API_KEY ? await fetchResendEmail(env.RESEND_API_KEY, msg.resendEmailId) : null
+  );
   if (!email) {
     await db.insert(receivedEmails).values({
       id: emailId,

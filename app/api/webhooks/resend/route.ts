@@ -97,7 +97,14 @@ export async function POST(req: NextRequest) {
       email_id?: string;
       to?: string[];
       cc?: string[];
+      bcc?: string[];
       from?: string;
+      subject?: string;
+      text?: string;
+      html?: string;
+      headers?: Array<{ name: string; value: string }>;
+      attachments?: Array<{ filename: string; content_type: string; size: number }>;
+      created_at?: string;
     };
   };
   try {
@@ -159,13 +166,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, routed: false, reason: "feature_disabled" });
   }
 
-  // 8. Enqueue to comms worker
+  // 8. Enqueue to comms worker (pass full payload — Resend API can't fetch inbound emails)
   if (queue) {
     await queue.send({
       resendEmailId,
       aliasId: alias.id,
       ownerUserId: alias.ownerUserId,
       ownerEntityId: alias.ownerEntityId,
+      payload: event.data,
     });
   } else {
     console.warn("[webhook] INBOUND_QUEUE not available — message not processed");
