@@ -41,6 +41,13 @@ export async function GET(req: NextRequest) {
       createdAt: scanPackages.createdAt,
       updatedAt: scanPackages.updatedAt,
       fileCount: sql<number>`count(${scanFiles.id})`.as("file_count"),
+      scanType: scanPackages.scanType,
+      tags: scanPackages.tags,
+      hasMesh: scanPackages.hasMesh,
+      hasTexture: scanPackages.hasTexture,
+      hasHdr: scanPackages.hasHdr,
+      hasMotionCapture: scanPackages.hasMotionCapture,
+      compatibleEngines: scanPackages.compatibleEngines,
     })
     .from(scanPackages)
     .leftJoin(scanFiles, eq(scanFiles.packageId, scanPackages.id))

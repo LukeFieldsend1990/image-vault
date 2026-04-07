@@ -16,6 +16,13 @@ interface ScanPackage {
   coverImageKey: string | null;
   createdAt: number;
   fileCount: number;
+  scanType: string | null;
+  tags: string | null;
+  hasMesh: boolean | null;
+  hasTexture: boolean | null;
+  hasHdr: boolean | null;
+  hasMotionCapture: boolean | null;
+  compatibleEngines: string | null;
 }
 
 interface ScanFile {
@@ -434,6 +441,44 @@ function PackageCard({
               </>
             )}
           </div>
+          {/* Metadata chips */}
+          {(() => {
+            const tags: string[] = (() => { try { return pkg.tags ? JSON.parse(pkg.tags) as string[] : []; } catch { return []; } })();
+            const caps: string[] = [
+              pkg.hasMesh && "Mesh",
+              pkg.hasTexture && "Textures",
+              pkg.hasHdr && "HDR",
+              pkg.hasMotionCapture && "MoCap",
+            ].filter(Boolean) as string[];
+            const scanTypeLabel: Record<string, string> = {
+              light_stage: "Light Stage", photogrammetry: "Photogrammetry",
+              lidar: "LiDAR", structured_light: "Structured Light", other: "Other",
+            };
+            const hasAny = pkg.scanType || caps.length > 0 || tags.length > 0;
+            if (!hasAny) return null;
+            return (
+              <div className="hidden sm:flex flex-wrap items-center gap-1.5 mt-1.5">
+                {pkg.scanType && (
+                  <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-sm"
+                    style={{ background: "var(--color-accent)", color: "#fff", opacity: 0.85 }}>
+                    {scanTypeLabel[pkg.scanType] ?? pkg.scanType}
+                  </span>
+                )}
+                {caps.map((cap) => (
+                  <span key={cap} className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-sm"
+                    style={{ background: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}>
+                    {cap}
+                  </span>
+                ))}
+                {tags.map((tag) => (
+                  <span key={tag} className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm"
+                    style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Right side: file count + size + actions (desktop) */}
@@ -483,6 +528,21 @@ function PackageCard({
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </Link>
+          <Link
+            href={`/vault/packages/${pkg.id}/metadata`}
+            className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+            style={{ color: "var(--color-ink)" }}
+            title="Edit metadata"
+            aria-label="Edit package metadata"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="14" y2="12" />
+              <line x1="4" y1="18" x2="10" y2="18" />
+              <polyline points="16 16 19 19 22 16" />
+              <line x1="19" y1="10" x2="19" y2="19" />
             </svg>
           </Link>
           <button
@@ -550,6 +610,21 @@ function PackageCard({
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </Link>
+            <Link
+              href={`/vault/packages/${pkg.id}/metadata`}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }}
+              title="Edit metadata"
+              aria-label="Edit package metadata"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6" />
+                <line x1="4" y1="12" x2="14" y2="12" />
+                <line x1="4" y1="18" x2="10" y2="18" />
+                <polyline points="16 16 19 19 22 16" />
+                <line x1="19" y1="10" x2="19" y2="19" />
               </svg>
             </Link>
             <button
