@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq } from "drizzle-orm";
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 // POST /api/admin/packages/:packageId/restore — restore a soft-deleted package
 export async function POST(
@@ -16,7 +15,7 @@ export async function POST(
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "admin" || !ADMIN_EMAILS.includes(session.email ?? "")) {
+  if (!isAdmin(session.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
