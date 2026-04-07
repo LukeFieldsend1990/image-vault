@@ -52,6 +52,12 @@ const URGENCY_COLORS: Record<string, { bg: string; text: string }> = {
   critical: { bg: "#7c3aed18", text: "#7c3aed" },
 };
 
+const REVIEW_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  pending: { bg: "#d9770618", text: "#d97706", label: "Pending" },
+  approved: { bg: "#16a34a18", text: "#16a34a", label: "Approved" },
+  rejected: { bg: "#dc262618", text: "#dc2626", label: "Rejected" },
+};
+
 function formatDate(ts: number): string {
   const d = new Date(ts * 1000);
   const now = new Date();
@@ -273,6 +279,17 @@ export default function InboxClient() {
                           style={{ background: "#dc262618", color: "#dc2626" }}
                         >
                           low confidence
+                        </span>
+                      )}
+                      {email.triage.reviewStatus && REVIEW_STATUS_STYLES[email.triage.reviewStatus] && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded"
+                          style={{
+                            background: REVIEW_STATUS_STYLES[email.triage.reviewStatus].bg,
+                            color: REVIEW_STATUS_STYLES[email.triage.reviewStatus].text,
+                          }}
+                        >
+                          {REVIEW_STATUS_STYLES[email.triage.reviewStatus].label}
                         </span>
                       )}
                     </div>

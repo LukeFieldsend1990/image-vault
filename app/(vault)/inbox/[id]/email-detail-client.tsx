@@ -82,6 +82,7 @@ export default function EmailDetailClient() {
   const [loading, setLoading] = useState(true);
   const [retriaging, setRetriaging] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
+  const [linkedAssets, setLinkedAssets] = useState<Array<{ type: string; name: string; href: string }>>([]);
 
   async function fetchDetail() {
     const res = await fetch(`/api/inbound/emails/${id}`);
@@ -100,6 +101,13 @@ export default function EmailDetailClient() {
     setAttachments(data.attachments ?? []);
     setTriageResults(data.triageResults ?? []);
     setLoading(false);
+
+    // Fetch linked assets based on triage structured data
+    const assetsRes = await fetch(`/api/inbound/emails/${id}/linked-assets`);
+    if (assetsRes.ok) {
+      const assetsData = (await assetsRes.json()) as { assets: Array<{ type: string; name: string; href: string }> };
+      setLinkedAssets(assetsData.assets ?? []);
+    }
   }
 
   useEffect(() => {
@@ -219,31 +227,96 @@ export default function EmailDetailClient() {
           )}
 
           {latestTriage.recommendedAction && (
-            <div className="mb-3">
-              <span className="text-xs" style={{ color: "var(--color-muted)" }}>Recommended action:</span>
-              <p className="text-sm mt-0.5">{latestTriage.recommendedAction}</p>
+            <div
+              className="mb-3 px-3 py-2 rounded text-sm"
+              style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
+            >
+              <span className="text-[10px] uppercase tracking-wider font-medium block mb-1" style={{ color: "var(--color-muted)" }}>
+                Recommended action
+              </span>
+              {latestTriage.recommendedAction}
             </div>
           )}
 
+          {/* Action items */}
+          {(() => {
+            const items = latestTriage.structuredData?.action_items;
+            if (!Array.isArray(items) || items.length === 0) return null;
+            return (
+              <div className="mb-3">
+                <span className="text-[10px] uppercase tracking-wider font-medium block mb-1.5" style={{ color: "var(--color-muted)" }}>
+                  Action items
+                </span>
+                <div className="flex flex-col gap-1.5">
+                  {items.map((item: string, i: number) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 px-3 py-1.5 rounded text-xs"
+                      style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
+                    >
+                      <span style={{ color: "var(--color-muted)" }}>{i + 1}.</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Linked assets */}
+          {(() => {
+            if (!latestTriage.structuredData) return null;
+            const links: Array<{ label: string; href: string }> = [];
+            for (const asset of linkedAssets) {
+              links.push({ label: `${asset.type === "package" ? "Package" : "Licence"}: ${asset.name}`, href: asset.href });
+            }
+            if (links.length === 0) return null;
+            return (
+              <div className="mb-3">
+                <span className="text-[10px] uppercase tracking-wider font-medium block mb-1.5" style={{ color: "var(--color-muted)" }}>
+                  Linked assets
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {links.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className="text-xs px-2.5 py-1 rounded transition hover:opacity-80"
+                      style={{ background: "#2563eb18", color: "#2563eb", border: "1px solid #2563eb30" }}
+                    >
+                      {link.label} &rarr;
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Structured data */}
-          {latestTriage.structuredData && Object.keys(latestTriage.structuredData).length > 0 && (
-            <div className="mb-3">
-              <span className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Extracted fields:</span>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                {Object.entries(latestTriage.structuredData).map(([key, value]) => {
-                  if (!value || (Array.isArray(value) && value.length === 0)) return null;
-                  return (
+          {(() => {
+            if (!latestTriage.structuredData) return null;
+            const entries = Object.entries(latestTriage.structuredData).filter(
+              ([key, value]) => key !== "action_items" && value && !(Array.isArray(value) && value.length === 0)
+            );
+            if (entries.length === 0) return null;
+            return (
+              <div className="mb-3">
+                <span className="text-[10px] uppercase tracking-wider font-medium block mb-1.5" style={{ color: "var(--color-muted)" }}>
+                  Extracted fields
+                </span>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  {entries.map(([key, value]) => (
                     <div key={key}>
                       <span style={{ color: "var(--color-muted)" }}>
                         {key.replace(/_/g, " ")}:
                       </span>{" "}
                       <span>{Array.isArray(value) ? value.join(", ") : String(value)}</span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Risk flags */}
           {latestTriage.riskFlags.length > 0 && (
