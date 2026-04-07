@@ -167,14 +167,20 @@ export async function POST(req: NextRequest) {
   }
 
   // 8. Enqueue to comms worker (pass full payload — Resend API can't fetch inbound emails)
+  console.log("[webhook] event.data keys:", Object.keys(event.data));
+  console.log("[webhook] event.data.from:", event.data.from);
+  console.log("[webhook] event.data.subject:", event.data.subject);
+  console.log("[webhook] event.data.text length:", event.data.text?.length ?? "null");
   if (queue) {
-    await queue.send({
+    const queueMsg = {
       resendEmailId,
       aliasId: alias.id,
       ownerUserId: alias.ownerUserId,
       ownerEntityId: alias.ownerEntityId,
       payload: event.data,
-    });
+    };
+    console.log("[webhook] Enqueuing message, payload keys:", Object.keys(queueMsg.payload));
+    await queue.send(queueMsg);
   } else {
     console.warn("[webhook] INBOUND_QUEUE not available — message not processed");
   }
