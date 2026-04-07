@@ -3,6 +3,7 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import AdminPackagePreviewToggle from "./preview-panel";
+import RestoreButton from "./restore-button";
 import { getDb } from "@/lib/db";
 import { scanPackages, users, scanFiles, talentProfiles, downloadEvents } from "@/lib/db/schema";
 import { sql, eq, isNull } from "drizzle-orm";
@@ -36,6 +37,7 @@ const STATUS_COLOR: Record<string, string> = {
   uploading: "#d97706",
   ready: "#166534",
   error: "#991b1b",
+  deleted: "#6b7280",
 };
 
 export default async function AdminPackagesPage() {
@@ -54,6 +56,8 @@ export default async function AdminPackagesPage() {
       createdAt: scanPackages.createdAt,
       talentId: scanPackages.talentId,
       coverImageKey: scanPackages.coverImageKey,
+      deletedAt: scanPackages.deletedAt,
+      deletedBy: scanPackages.deletedBy,
       talentEmail: users.email,
     })
     .from(scanPackages)
@@ -199,15 +203,18 @@ export default async function AdminPackagesPage() {
                 </span>
 
                 {/* Status */}
-                <span
-                  className="inline-flex items-center text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded w-fit"
-                  style={{
-                    background: `${STATUS_COLOR[p.status ?? "uploading"]}18`,
-                    color: STATUS_COLOR[p.status ?? "uploading"],
-                  }}
-                >
-                  {p.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-flex items-center text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded w-fit"
+                    style={{
+                      background: `${STATUS_COLOR[p.deletedAt ? "deleted" : (p.status ?? "uploading")]}18`,
+                      color: STATUS_COLOR[p.deletedAt ? "deleted" : (p.status ?? "uploading")],
+                    }}
+                  >
+                    {p.deletedAt ? "deleted" : p.status}
+                  </span>
+                  {p.deletedAt && <RestoreButton packageId={p.id} />}
+                </div>
 
                 {/* Created */}
                 <span className="text-xs" style={{ color: "var(--color-muted)" }}>

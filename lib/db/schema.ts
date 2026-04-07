@@ -64,6 +64,8 @@ export const scanPackages = sqliteTable("scan_packages", {
   internalNotes: text("internal_notes"),
   createdAt: integer("created_at").notNull(), // unix timestamp
   updatedAt: integer("updated_at").notNull(), // unix timestamp
+  deletedAt: integer("deleted_at"),           // unix timestamp; null = active
+  deletedBy: text("deleted_by"),              // user ID who soft-deleted
 });
 
 export const scanFiles = sqliteTable("scan_files", {

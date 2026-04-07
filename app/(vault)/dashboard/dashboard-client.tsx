@@ -711,6 +711,7 @@ export default function DashboardClient() {
   const [resumePackageId, setResumePackageId] = useState<string | null>(null);
   const [addToPackageId, setAddToPackageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -747,11 +748,17 @@ export default function DashboardClient() {
     setModalOpen(true);
   }
 
-  async function handleDelete(packageId: string) {
-    setDeletingId(packageId);
+  function handleDelete(packageId: string) {
+    setConfirmDeleteId(packageId);
+  }
+
+  async function confirmDelete() {
+    if (!confirmDeleteId) return;
+    setDeletingId(confirmDeleteId);
+    setConfirmDeleteId(null);
     try {
-      await fetch(`/api/vault/packages/${packageId}`, { method: "DELETE" });
-      setPackages((prev) => prev.filter((p) => p.id !== packageId));
+      await fetch(`/api/vault/packages/${confirmDeleteId}`, { method: "DELETE" });
+      setPackages((prev) => prev.filter((p) => p.id !== confirmDeleteId));
     } finally {
       setDeletingId(null);
     }
@@ -872,6 +879,43 @@ export default function DashboardClient() {
           resumePackageId={resumePackageId ?? undefined}
           addToPackageId={addToPackageId ?? undefined}
         />
+      )}
+
+      {/* ── Delete confirmation modal ── */}
+      {confirmDeleteId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setConfirmDeleteId(null); }}
+        >
+          <div
+            className="rounded-lg shadow-xl w-full max-w-sm p-6"
+            style={{ background: "var(--color-bg)" }}
+          >
+            <h2 className="text-base font-semibold mb-2" style={{ color: "var(--color-ink)" }}>
+              Delete package?
+            </h2>
+            <p className="text-sm mb-5" style={{ color: "var(--color-muted)" }}>
+              This package will be removed from your vault. An admin can restore it if needed.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="px-4 py-2 text-xs font-medium rounded transition"
+                style={{ color: "var(--color-ink)", border: "1px solid var(--color-border)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void confirmDelete()}
+                className="px-4 py-2 text-xs font-medium rounded transition text-white"
+                style={{ background: "#991b1b" }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

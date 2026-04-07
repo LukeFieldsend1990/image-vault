@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { users, scanPackages, scanFiles, talentProfiles, talentLicencePermissions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { eq, sql, and, desc, isNull } from "drizzle-orm";
 
 const LICENCE_TYPES = [
   "commercial",
@@ -84,7 +84,7 @@ export async function GET(
         eq(scanFiles.packageId, scanPackages.id),
         eq(scanFiles.uploadStatus, "complete"),
       ))
-      .where(and(eq(scanPackages.talentId, id), eq(scanPackages.status, "ready")))
+      .where(and(eq(scanPackages.talentId, id), eq(scanPackages.status, "ready"), isNull(scanPackages.deletedAt)))
       .groupBy(scanPackages.id)
       .orderBy(desc(scanPackages.createdAt))
       .all(),
