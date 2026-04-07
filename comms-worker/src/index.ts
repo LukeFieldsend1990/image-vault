@@ -39,7 +39,6 @@ interface InboundMessage {
   aliasId: string;
   ownerUserId: string;
   ownerEntityId: string | null;
-  payload?: ResendEmail;
 }
 
 interface ResendEmail {
@@ -128,11 +127,12 @@ async function fetchResendEmail(
   apiKey: string,
   emailId: string
 ): Promise<ResendEmail | null> {
-  const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
+  // Inbound emails use /emails/receiving/{id} — not /emails/{id}
+  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
   if (!res.ok) {
-    console.error("[comms] Failed to fetch email from Resend:", res.status);
+    console.error("[comms] Failed to fetch inbound email from Resend:", res.status, await res.text());
     return null;
   }
   return res.json() as Promise<ResendEmail>;
@@ -316,12 +316,12 @@ async function processInboundEmail(env: Env, msg: InboundMessage): Promise<void>
   const ts = now();
   const emailId = uuid();
 
-  // 1. Use payload from webhook (Resend API can't fetch inbound emails)
-  // DEBUG: dump raw payload to see actual Resend structure
-  console.log("[comms] Full msg payload:", JSON.stringify(msg.payload, null, 2)?.slice(0, 2000));
-  const email: ResendEmail | null = msg.payload ?? (
-    env.RESEND_API_KEY ? await fetchResendEmail(env.RESEND_API_KEY, msg.resendEmailId) : null
-  );
+  // 1. Fetch full email from Resend (webhook only sends metadata, not body)
+  if (!env.RESEND_API_KEY) {
+    console.error("[comms] RESEND_API_KEY not set");
+    return;
+  }
+  const email = await fetchResendEmail(env.RESEND_API_KEY, msg.resendEmailId);
   if (!email) {
     await db.insert(receivedEmails).values({
       id: emailId,
@@ -368,7 +368,7 @@ async function processInboundEmail(env: Env, msg: InboundMessage): Promise<void>
     textBody: email.text ?? null,
     htmlBody: email.html ?? null,
     normalizedText,
-    rawHeadersJson: JSON.stringify({ _debug_payload_keys: Object.keys(msg.payload ?? {}), _debug_payload: msg.payload, headers }),
+    rawHeadersJson: JSON.stringify(headers),
     processingStatus: "processing",
     routingStatus: "matched",
     dedupeKey: msg.resendEmailId,
