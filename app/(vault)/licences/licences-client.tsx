@@ -8,6 +8,12 @@ type LicenceStatus = "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
 interface Licence {
   id: string;
   packageName: string | null;
+  packageScanType: string | null;
+  packageTags: string | null;
+  packageHasMesh: boolean | null;
+  packageHasTexture: boolean | null;
+  packageHasHdr: boolean | null;
+  packageHasMotionCapture: boolean | null;
   talentEmail: string | null;
   projectName: string;
   productionCompany: string;
@@ -25,8 +31,8 @@ interface Licence {
   territory: string | null;
   exclusivity: string | null;
   permitAiTraining: boolean;
-  proposedFee: number | null;  // pence
-  agreedFee: number | null;    // pence
+  proposedFee: number | null;
+  agreedFee: number | null;
 }
 
 const TABS: { label: string; value: LicenceStatus | "ALL" }[] = [
@@ -57,6 +63,14 @@ const EXCLUSIVITY_LABELS: Record<string, string> = {
   non_exclusive: "Non-exclusive",
   sole: "Sole",
   exclusive: "Exclusive",
+};
+
+const SCAN_TYPE_LABELS: Record<string, string> = {
+  light_stage: "Light Stage",
+  photogrammetry: "Photogrammetry",
+  lidar: "LiDAR",
+  structured_light: "Structured Light",
+  other: "Other",
 };
 
 function formatDate(ts: number | null): string {
@@ -178,6 +192,39 @@ export default function LicencesClient() {
                     <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
                       {l.packageName ?? "Unknown package"} · {l.talentEmail ?? "—"}
                     </p>
+                    {/* Package metadata chips */}
+                    {(() => {
+                      const tags: string[] = (() => { try { return l.packageTags ? JSON.parse(l.packageTags) as string[] : []; } catch { return []; } })();
+                      const caps: string[] = [
+                        l.packageHasMesh && "Mesh",
+                        l.packageHasTexture && "Textures",
+                        l.packageHasHdr && "HDR",
+                        l.packageHasMotionCapture && "MoCap",
+                      ].filter(Boolean) as string[];
+                      if (!l.packageScanType && caps.length === 0 && tags.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                          {l.packageScanType && (
+                            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-sm"
+                              style={{ background: "var(--color-accent)", color: "#fff", opacity: 0.85 }}>
+                              {SCAN_TYPE_LABELS[l.packageScanType] ?? l.packageScanType}
+                            </span>
+                          )}
+                          {caps.map((cap) => (
+                            <span key={cap} className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-sm"
+                              style={{ background: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}>
+                              {cap}
+                            </span>
+                          ))}
+                          {tags.map((tag) => (
+                            <span key={tag} className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm"
+                              style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
                       Licence period: {formatDate(l.validFrom)} – {formatDate(l.validTo)}
                     </p>
