@@ -15,7 +15,7 @@ export const ALL_TAGS = new Set<string>(
 );
 
 export type SuggestionCategory = "action_required" | "attention" | "insight" | "security";
-export type AIFeature = "suggestions" | "fee_guidance" | "metadata_tags" | "security_alerts" | "licence_summary";
+export type AIFeature = "suggestions" | "fee_guidance" | "metadata_tags" | "security_alerts" | "licence_summary" | "email_triage";
 
 // ── Pricing (USD per token) ──────────────────────────────────────────────────
 

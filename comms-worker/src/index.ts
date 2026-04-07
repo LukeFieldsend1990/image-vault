@@ -263,9 +263,9 @@ async function runTriage(
     outputTokens = Math.ceil(text.length / 4);
   }
 
-  // Log cost
-  const costPerInput = modelName.includes("haiku") ? 0.25 / 1_000_000 : 0;
-  const costPerOutput = modelName.includes("haiku") ? 1.25 / 1_000_000 : 0;
+  // Log cost (Haiku 4.5 pricing: $0.80/1M input, $4.00/1M output)
+  const costPerInput = modelName.includes("haiku") ? 0.80 / 1_000_000 : 0;
+  const costPerOutput = modelName.includes("haiku") ? 4.00 / 1_000_000 : 0;
   await db.insert(aiCostLog).values({
     id: uuid(),
     provider: modelName.includes("haiku") ? "anthropic" : "workers_ai",
