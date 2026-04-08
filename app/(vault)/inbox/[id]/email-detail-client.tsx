@@ -1,8 +1,31 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+
+interface SkillParameter {
+  name: string;
+  type: "string" | "number" | "boolean" | "select";
+  description: string;
+  required: boolean;
+  default?: unknown;
+  options?: string[];
+}
+
+interface SkillSuggestion {
+  skillId: string;
+  displayName: string;
+  description: string;
+  prefilled: Record<string, unknown>;
+  confidence: number;
+}
+
+interface SkillResultData {
+  success: boolean;
+  message: string;
+  data?: Record<string, unknown>;
+}
 
 interface Recipient {
   id: string;
@@ -83,6 +106,11 @@ export default function EmailDetailClient() {
   const [retriaging, setRetriaging] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [linkedAssets, setLinkedAssets] = useState<Array<{ type: string; name: string; href: string }>>([]);
+  const [skills, setSkills] = useState<SkillSuggestion[]>([]);
+  const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
+  const [skillForms, setSkillForms] = useState<Record<string, Record<string, unknown>>>({});
+  const [executingSkill, setExecutingSkill] = useState<string | null>(null);
+  const [skillResults, setSkillResults] = useState<Record<string, SkillResultData>>({});
 
   async function fetchDetail() {
     const res = await fetch(`/api/inbound/emails/${id}`);
@@ -102,11 +130,25 @@ export default function EmailDetailClient() {
     setTriageResults(data.triageResults ?? []);
     setLoading(false);
 
-    // Fetch linked assets based on triage structured data
-    const assetsRes = await fetch(`/api/inbound/emails/${id}/linked-assets`);
+    // Fetch linked assets and skills in parallel
+    const [assetsRes, skillsRes] = await Promise.all([
+      fetch(`/api/inbound/emails/${id}/linked-assets`),
+      fetch(`/api/inbound/emails/${id}/skills`),
+    ]);
     if (assetsRes.ok) {
       const assetsData = (await assetsRes.json()) as { assets: Array<{ type: string; name: string; href: string }> };
       setLinkedAssets(assetsData.assets ?? []);
+    }
+    if (skillsRes.ok) {
+      const skillsData = (await skillsRes.json()) as { suggestions: SkillSuggestion[] };
+      const suggestions = skillsData.suggestions ?? [];
+      setSkills(suggestions);
+      // Pre-fill forms from suggestions
+      const forms: Record<string, Record<string, unknown>> = {};
+      for (const s of suggestions) {
+        forms[s.skillId] = { ...s.prefilled };
+      }
+      setSkillForms(forms);
     }
   }
 
@@ -132,6 +174,26 @@ export default function EmailDetailClient() {
     });
     await fetchDetail();
   };
+
+  const handleExecuteSkill = async (skillId: string) => {
+    setExecutingSkill(skillId);
+    const params = skillForms[skillId] ?? {};
+    const res = await fetch(`/api/inbound/emails/${id}/skills`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skillId, params }),
+    });
+    const result = (await res.json()) as SkillResultData;
+    setSkillResults((prev) => ({ ...prev, [skillId]: result }));
+    setExecutingSkill(null);
+  };
+
+  const updateSkillParam = useCallback((skillId: string, key: string, value: unknown) => {
+    setSkillForms((prev) => ({
+      ...prev,
+      [skillId]: { ...prev[skillId], [key]: value },
+    }));
+  }, []);
 
   if (loading) {
     return (
@@ -371,6 +433,169 @@ export default function EmailDetailClient() {
             >
               {retriaging ? "Re-triaging..." : "Re-triage"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Suggested Actions (Skills) */}
+      {skills.length > 0 && (
+        <div
+          className="rounded p-4 mb-6"
+          style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <h2 className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
+            Suggested Actions
+          </h2>
+          <div className="flex flex-col gap-2">
+            {skills.map((skill) => {
+              const isExpanded = expandedSkill === skill.skillId;
+              const result = skillResults[skill.skillId];
+              const isExecuting = executingSkill === skill.skillId;
+
+              return (
+                <div
+                  key={skill.skillId}
+                  className="rounded"
+                  style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}
+                >
+                  <button
+                    onClick={() => setExpandedSkill(isExpanded ? null : skill.skillId)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                      <span className="text-sm font-medium">{skill.displayName}</span>
+                      {skill.confidence < 0.6 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#d9770618", color: "#d97706" }}>
+                          low confidence
+                        </span>
+                      )}
+                    </div>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-3 pb-3" style={{ borderTop: "1px solid var(--color-border)" }}>
+                      <p className="text-xs mt-2 mb-3" style={{ color: "var(--color-muted)" }}>
+                        {skill.description}
+                      </p>
+
+                      {/* Parameter form */}
+                      <div className="flex flex-col gap-2 mb-3">
+                        {Object.entries(skill.prefilled).map(([key, defaultVal]) => (
+                          <div key={key}>
+                            <label className="text-[10px] uppercase tracking-wider font-medium block mb-1" style={{ color: "var(--color-muted)" }}>
+                              {key.replace(/_/g, " ")}
+                            </label>
+                            {key === "role" ? (
+                              <select
+                                value={(skillForms[skill.skillId]?.[key] as string) ?? (defaultVal as string) ?? ""}
+                                onChange={(e) => updateSkillParam(skill.skillId, key, e.target.value)}
+                                className="w-full text-xs px-2 py-1.5 rounded"
+                                style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+                              >
+                                <option value="talent">Talent</option>
+                                <option value="rep">Rep</option>
+                                <option value="licensee">Licensee</option>
+                              </select>
+                            ) : key === "licence_type" ? (
+                              <select
+                                value={(skillForms[skill.skillId]?.[key] as string) ?? (defaultVal as string) ?? ""}
+                                onChange={(e) => updateSkillParam(skill.skillId, key, e.target.value)}
+                                className="w-full text-xs px-2 py-1.5 rounded"
+                                style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+                              >
+                                <option value="">Any</option>
+                                <option value="film_double">Film Double</option>
+                                <option value="game_character">Game Character</option>
+                                <option value="commercial">Commercial</option>
+                                <option value="ai_avatar">AI Avatar</option>
+                                <option value="training_data">Training Data</option>
+                                <option value="monitoring_reference">Monitoring Reference</option>
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={(skillForms[skill.skillId]?.[key] as string) ?? (defaultVal as string) ?? ""}
+                                onChange={(e) => updateSkillParam(skill.skillId, key, e.target.value)}
+                                className="w-full text-xs px-2 py-1.5 rounded"
+                                style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Result display */}
+                      {result && (
+                        <div
+                          className="mb-3 px-3 py-2 rounded text-xs"
+                          style={{
+                            background: result.success ? "#16a34a12" : "#dc262612",
+                            border: `1px solid ${result.success ? "#16a34a30" : "#dc262630"}`,
+                            color: result.success ? "#16a34a" : "#dc2626",
+                          }}
+                        >
+                          {result.message}
+                          {result.success && Array.isArray(result.data?.licences) && (
+                            <div className="mt-2 flex flex-col gap-1">
+                              {(result.data.licences as Array<Record<string, unknown>>).map((lic) => (
+                                <div
+                                  key={lic.id as string}
+                                  className="flex items-center justify-between px-2 py-1 rounded"
+                                  style={{ background: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+                                >
+                                  <span>{lic.projectName as string} — {lic.productionCompany as string}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className="px-1.5 py-0.5 rounded text-[10px]"
+                                      style={{
+                                        background: (lic.status as string) === "APPROVED" ? "#16a34a18" : "#d9770618",
+                                        color: (lic.status as string) === "APPROVED" ? "#16a34a" : "#d97706",
+                                      }}
+                                    >
+                                      {lic.status as string}
+                                    </span>
+                                    <Link
+                                      href={lic.link as string}
+                                      className="text-[10px] px-1.5 py-0.5 rounded transition hover:opacity-80"
+                                      style={{ background: "#2563eb18", color: "#2563eb" }}
+                                    >
+                                      View
+                                    </Link>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => handleExecuteSkill(skill.skillId)}
+                        disabled={isExecuting}
+                        className="px-3 py-1.5 text-xs rounded transition font-medium"
+                        style={{ background: "#0a0a0a", color: "#fff", opacity: isExecuting ? 0.6 : 1 }}
+                      >
+                        {isExecuting ? "Running..." : `Run: ${skill.displayName}`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
