@@ -7,7 +7,7 @@ const skill: SkillDefinition = {
   id: "find-licence",
   name: "Find Licence Details",
   description: "Look up licence records and generate a direct link for the licensee view",
-  categories: ["licence_request", "clarification", "billing"],
+  categories: ["clarification", "billing"],
   parameters: [
     {
       name: "talent_name",

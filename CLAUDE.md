@@ -211,7 +211,7 @@ case "my-skill": {
 |----------|----------------|
 | `onboarding` | Send Signup Invite |
 | `introduction` | Send Signup Invite |
-| `licence_request` | Find Licence Details |
+| `licence_request` | Find Package & Start Licence |
 | `clarification` | Find Licence Details |
 | `billing` | Find Licence Details |
 

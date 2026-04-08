@@ -5,3 +5,4 @@
 
 import "./send-signup-invite";
 import "./find-licence";
+import "./find-package";
