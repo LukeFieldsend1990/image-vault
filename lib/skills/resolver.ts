@@ -42,6 +42,17 @@ export function resolveSkills(
         break;
       }
 
+      case "find-package": {
+        // Pre-fill from production name (often the package name) and talent
+        if (typeof structuredData.production_name === "string") {
+          prefilled.package_name = structuredData.production_name;
+        }
+        if (typeof structuredData.talent_name === "string") {
+          prefilled.talent_name = structuredData.talent_name;
+        }
+        break;
+      }
+
       case "find-licence": {
         if (typeof structuredData.talent_name === "string") {
           prefilled.talent_name = structuredData.talent_name;

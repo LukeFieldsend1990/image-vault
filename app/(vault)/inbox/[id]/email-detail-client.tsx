@@ -549,6 +549,52 @@ export default function EmailDetailClient() {
                           }}
                         >
                           {result.message}
+                          {/* Package results */}
+                          {result.success && Array.isArray(result.data?.packages) && (
+                            <div className="mt-2 flex flex-col gap-1.5">
+                              {(result.data.packages as Array<Record<string, unknown>>).map((pkg) => (
+                                <div
+                                  key={pkg.id as string}
+                                  className="rounded px-3 py-2"
+                                  style={{ background: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+                                >
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="font-medium text-xs">{pkg.name as string}</span>
+                                    <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+                                      {pkg.talentName as string}
+                                    </span>
+                                  </div>
+                                  {typeof pkg.description === "string" && pkg.description && (
+                                    <p className="text-[11px] mb-1.5" style={{ color: "var(--color-muted)" }}>
+                                      {pkg.description}
+                                    </p>
+                                  )}
+                                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                    {typeof pkg.scanType === "string" && pkg.scanType && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
+                                        {pkg.scanType.replace(/_/g, " ")}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+                                      {pkg.fileCount as number} file{(pkg.fileCount as number) !== 1 ? "s" : ""} · {pkg.totalSize as string}
+                                    </span>
+                                    {pkg.hasMesh === true && <span className="text-[10px] px-1 py-0.5 rounded" style={{ background: "#2563eb12", color: "#2563eb" }}>mesh</span>}
+                                    {pkg.hasTexture === true && <span className="text-[10px] px-1 py-0.5 rounded" style={{ background: "#2563eb12", color: "#2563eb" }}>texture</span>}
+                                    {pkg.hasHdr === true && <span className="text-[10px] px-1 py-0.5 rounded" style={{ background: "#2563eb12", color: "#2563eb" }}>HDR</span>}
+                                    {pkg.hasMotionCapture === true && <span className="text-[10px] px-1 py-0.5 rounded" style={{ background: "#2563eb12", color: "#2563eb" }}>mocap</span>}
+                                  </div>
+                                  <Link
+                                    href={pkg.licenceRequestLink as string}
+                                    className="inline-block px-3 py-1.5 rounded text-[11px] font-medium transition hover:opacity-80"
+                                    style={{ background: "#0a0a0a", color: "#fff" }}
+                                  >
+                                    Start Licence Request
+                                  </Link>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {/* Licence results */}
                           {result.success && Array.isArray(result.data?.licences) && (
                             <div className="mt-2 flex flex-col gap-1">
                               {(result.data.licences as Array<Record<string, unknown>>).map((lic) => (
