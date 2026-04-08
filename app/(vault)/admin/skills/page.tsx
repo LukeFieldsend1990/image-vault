@@ -1,7 +1,10 @@
 export const runtime = "edge";
 
 import { requireAdmin } from "@/lib/auth/requireAdmin";
+import { getDb } from "@/lib/db";
+import { skillExecutions } from "@/lib/db/schema";
 import { getAllSkills } from "@/lib/skills/registry";
+import { eq, and, gte, sql } from "drizzle-orm";
 import "@/lib/skills/definitions";
 
 const TYPE_BADGE: Record<string, string> = {
@@ -15,6 +18,28 @@ export default async function AdminSkillsPage() {
   await requireAdmin();
 
   const skills = getAllSkills();
+  const db = getDb();
+  const now = Math.floor(Date.now() / 1000);
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
+
+  // Fetch monthly execution counts per skill
+  const usageRows = await db
+    .select({
+      skillId: skillExecutions.skillId,
+      total: sql<number>`count(*)`,
+      successes: sql<number>`sum(case when ${skillExecutions.success} = 1 then 1 else 0 end)`,
+    })
+    .from(skillExecutions)
+    .where(gte(skillExecutions.createdAt, thirtyDaysAgo))
+    .groupBy(skillExecutions.skillId)
+    .all();
+
+  const usageMap = new Map(
+    usageRows.map((r) => [r.skillId, { total: r.total, successes: r.successes }])
+  );
+
+  // Total executions this month
+  const totalExecutions = usageRows.reduce((sum, r) => sum + r.total, 0);
 
   return (
     <div className="p-8 max-w-5xl">
@@ -30,123 +55,162 @@ export default async function AdminSkillsPage() {
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
           Whitelisted MCP skills available to the email triage system.
-          {" "}{skills.length} skill{skills.length !== 1 ? "s" : ""} registered.
+          {" "}{skills.length} skill{skills.length !== 1 ? "s" : ""} registered
+          {" "}&middot; {totalExecutions} execution{totalExecutions !== 1 ? "s" : ""} this month.
         </p>
       </div>
 
       <div className="flex flex-col gap-4">
-        {skills.map((skill) => (
-          <div
-            key={skill.id}
-            className="rounded p-5"
-            style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-                  {skill.name}
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-                  {skill.description}
-                </p>
-              </div>
-              <span
-                className="text-[10px] font-mono px-2 py-0.5 rounded shrink-0 ml-4"
-                style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-muted)" }}
-              >
-                {skill.id}
-              </span>
-            </div>
+        {skills.map((skill) => {
+          const usage = usageMap.get(skill.id);
+          const total = usage?.total ?? 0;
+          const successes = usage?.successes ?? 0;
+          const failures = total - successes;
 
-            {/* Categories */}
-            <div className="flex items-center gap-1.5 mb-3">
-              <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: "var(--color-muted)" }}>
-                Triggers:
-              </span>
-              {skill.categories.map((cat) => (
+          return (
+            <div
+              key={skill.id}
+              className="rounded p-5"
+              style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                    {skill.name}
+                  </h2>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+                    {skill.description}
+                  </p>
+                </div>
                 <span
-                  key={cat}
-                  className="text-[10px] px-2 py-0.5 rounded"
-                  style={{ background: "rgba(192,57,43,0.08)", color: "var(--color-accent)", border: "1px solid rgba(192,57,43,0.2)" }}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded shrink-0 ml-4"
+                  style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-muted)" }}
                 >
-                  {cat}
+                  {skill.id}
                 </span>
-              ))}
-            </div>
+              </div>
 
-            {/* Parameters */}
-            {skill.parameters.length > 0 && (
-              <div>
-                <span className="text-[10px] uppercase tracking-wider font-medium block mb-1.5" style={{ color: "var(--color-muted)" }}>
-                  Parameters
-                </span>
-                <div
-                  className="rounded overflow-hidden"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  {/* Header */}
-                  <div
-                    className="grid text-[10px] uppercase tracking-widest font-semibold px-4 py-2"
-                    style={{
-                      gridTemplateColumns: "1.5fr 0.8fr 0.5fr 2fr",
-                      color: "var(--color-muted)",
-                      background: "var(--color-bg)",
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    <span>Name</span>
-                    <span>Type</span>
-                    <span>Req.</span>
-                    <span>Description</span>
-                  </div>
-                  {skill.parameters.map((param) => (
-                    <div
-                      key={param.name}
-                      className="grid items-center px-4 py-2 border-b last:border-0 text-xs"
-                      style={{
-                        gridTemplateColumns: "1.5fr 0.8fr 0.5fr 2fr",
-                        borderColor: "var(--color-border)",
-                      }}
+              {/* Usage + Categories row */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: "var(--color-muted)" }}>
+                    Triggers:
+                  </span>
+                  {skill.categories.map((cat) => (
+                    <span
+                      key={cat}
+                      className="text-[10px] px-2 py-0.5 rounded"
+                      style={{ background: "rgba(192,57,43,0.08)", color: "var(--color-accent)", border: "1px solid rgba(192,57,43,0.2)" }}
                     >
-                      <span className="font-mono text-[11px]">{param.name}</span>
-                      <div className="flex items-center gap-1">
-                        <span
-                          className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                          style={{
-                            background: `${TYPE_BADGE[param.type] ?? "#6b7280"}14`,
-                            color: TYPE_BADGE[param.type] ?? "#6b7280",
-                          }}
-                        >
-                          {param.type}
-                        </span>
-                      </div>
-                      <span style={{ color: param.required ? "var(--color-accent)" : "var(--color-muted)" }}>
-                        {param.required ? "yes" : "no"}
-                      </span>
-                      <div>
-                        <span style={{ color: "var(--color-muted)" }}>{param.description}</span>
-                        {param.options && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {param.options.map((opt) => (
-                              <span
-                                key={opt}
-                                className="text-[10px] px-1.5 py-0.5 rounded font-mono"
-                                style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
-                              >
-                                {opt}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                      {cat}
+                    </span>
                   ))}
                 </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-xs font-semibold tabular-nums"
+                    style={{ color: "var(--color-ink)" }}
+                  >
+                    {total}
+                  </span>
+                  <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+                    / month
+                  </span>
+                  {total > 0 && (
+                    <div className="flex items-center gap-1 ml-1">
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded"
+                        style={{ background: "#16a34a14", color: "#16a34a" }}
+                      >
+                        {successes} ok
+                      </span>
+                      {failures > 0 && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded"
+                          style={{ background: "#dc262614", color: "#dc2626" }}
+                        >
+                          {failures} failed
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        ))}
+
+              {/* Parameters */}
+              {skill.parameters.length > 0 && (
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider font-medium block mb-1.5" style={{ color: "var(--color-muted)" }}>
+                    Parameters
+                  </span>
+                  <div
+                    className="rounded overflow-hidden"
+                    style={{ border: "1px solid var(--color-border)" }}
+                  >
+                    {/* Header */}
+                    <div
+                      className="grid text-[10px] uppercase tracking-widest font-semibold px-4 py-2"
+                      style={{
+                        gridTemplateColumns: "1.5fr 0.8fr 0.5fr 2fr",
+                        color: "var(--color-muted)",
+                        background: "var(--color-bg)",
+                        borderBottom: "1px solid var(--color-border)",
+                      }}
+                    >
+                      <span>Name</span>
+                      <span>Type</span>
+                      <span>Req.</span>
+                      <span>Description</span>
+                    </div>
+                    {skill.parameters.map((param) => (
+                      <div
+                        key={param.name}
+                        className="grid items-center px-4 py-2 border-b last:border-0 text-xs"
+                        style={{
+                          gridTemplateColumns: "1.5fr 0.8fr 0.5fr 2fr",
+                          borderColor: "var(--color-border)",
+                        }}
+                      >
+                        <span className="font-mono text-[11px]">{param.name}</span>
+                        <div className="flex items-center gap-1">
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                            style={{
+                              background: `${TYPE_BADGE[param.type] ?? "#6b7280"}14`,
+                              color: TYPE_BADGE[param.type] ?? "#6b7280",
+                            }}
+                          >
+                            {param.type}
+                          </span>
+                        </div>
+                        <span style={{ color: param.required ? "var(--color-accent)" : "var(--color-muted)" }}>
+                          {param.required ? "yes" : "no"}
+                        </span>
+                        <div>
+                          <span style={{ color: "var(--color-muted)" }}>{param.description}</span>
+                          {param.options && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {param.options.map((opt) => (
+                                <span
+                                  key={opt}
+                                  className="text-[10px] px-1.5 py-0.5 rounded font-mono"
+                                  style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
+                                >
+                                  {opt}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

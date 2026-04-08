@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { receivedEmails, aiTriageResults } from "@/lib/db/schema";
+import { receivedEmails, aiTriageResults, skillExecutions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and, desc } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
@@ -138,6 +138,16 @@ export async function POST(
   };
 
   const result = await skill.execute(ctx, skillParams ?? {});
+
+  // Log execution for usage analytics
+  void db.insert(skillExecutions).values({
+    id: crypto.randomUUID(),
+    skillId,
+    userId: session.sub,
+    emailId: id,
+    success: result.success,
+    createdAt: Math.floor(Date.now() / 1000),
+  }).run().catch(() => {});
 
   return NextResponse.json(result, {
     status: result.success ? 200 : 422,
