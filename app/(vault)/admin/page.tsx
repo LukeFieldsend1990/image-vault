@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import { users, scanPackages, licences, downloadEvents, scanFiles } from "@/lib/db/schema";
 import { sql, inArray } from "drizzle-orm";
+import { getAllSkills } from "@/lib/skills/registry";
+import "@/lib/skills/definitions";
 
 function fmt(n: number): string {
   if (n >= 1e12) return (n / 1e12).toFixed(1) + " TB";
@@ -110,6 +112,12 @@ export default async function AdminOverviewPage() {
       value: String(dlCount?.n ?? 0),
       sub: "all time",
       href: "/admin/downloads",
+    },
+    {
+      label: "Triage Skills",
+      value: String(getAllSkills().length),
+      sub: "whitelisted",
+      href: "/admin/skills",
     },
   ];
 
