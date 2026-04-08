@@ -506,6 +506,15 @@ export const aiTriageResults = sqliteTable("ai_triage_results", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const skillExecutions = sqliteTable("skill_executions", {
+  id: text("id").primaryKey(),
+  skillId: text("skill_id").notNull(),
+  userId: text("user_id").notNull().references(() => users.id),
+  emailId: text("email_id").references(() => receivedEmails.id, { onDelete: "set null" }),
+  success: integer("success", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const emailThreadLinks = sqliteTable("email_thread_links", {
   id: text("id").primaryKey(),
   ownerEntityId: text("owner_entity_id"),
