@@ -69,7 +69,14 @@ export async function GET(
   const db = getDb();
 
   const pkg = await db
-    .select()
+    .select({
+      id: scanPackages.id,
+      talentId: scanPackages.talentId,
+      name: scanPackages.name,
+      captureDate: scanPackages.captureDate,
+      studioName: scanPackages.studioName,
+      createdAt: scanPackages.createdAt,
+    })
     .from(scanPackages)
     .where(eq(scanPackages.id, packageId))
     .get();
@@ -90,8 +97,28 @@ export async function GET(
 
   const [talentUser, files, licenceRows] = await Promise.all([
     db.select({ email: users.email }).from(users).where(eq(users.id, pkg.talentId)).get(),
-    db.select().from(scanFiles).where(eq(scanFiles.packageId, packageId)).all(),
-    db.select().from(licences).where(eq(licences.packageId, packageId)).all(),
+    db.select({
+      id: scanFiles.id,
+      packageId: scanFiles.packageId,
+      filename: scanFiles.filename,
+      sizeBytes: scanFiles.sizeBytes,
+      createdAt: scanFiles.createdAt,
+    }).from(scanFiles).where(eq(scanFiles.packageId, packageId)).all(),
+    db.select({
+      id: licences.id,
+      licenseeId: licences.licenseeId,
+      approvedBy: licences.approvedBy,
+      createdAt: licences.createdAt,
+      projectName: licences.projectName,
+      productionCompany: licences.productionCompany,
+      intendedUse: licences.intendedUse,
+      validFrom: licences.validFrom,
+      validTo: licences.validTo,
+      approvedAt: licences.approvedAt,
+      deniedAt: licences.deniedAt,
+      deniedReason: licences.deniedReason,
+      revokedAt: licences.revokedAt,
+    }).from(licences).where(eq(licences.packageId, packageId)).all(),
   ]);
 
   // Collect all user IDs we need emails for
@@ -101,11 +128,29 @@ export async function GET(
     if (l.approvedBy) userIdSet.add(l.approvedBy);
   }
 
-  let dlEvents: (typeof downloadEvents.$inferSelect)[] = [];
+  let dlEvents: {
+    fileId: string;
+    licenseeId: string;
+    licenceId: string | null;
+    startedAt: number;
+    bytesTransferred: number | null;
+    ip: string | null;
+    userAgent: string | null;
+    completedAt: number | null;
+  }[] = [];
   const fileIds = files.map((f) => f.id);
   if (fileIds.length > 0) {
     dlEvents = await db
-      .select()
+      .select({
+        fileId: downloadEvents.fileId,
+        licenseeId: downloadEvents.licenseeId,
+        licenceId: downloadEvents.licenceId,
+        startedAt: downloadEvents.startedAt,
+        bytesTransferred: downloadEvents.bytesTransferred,
+        ip: downloadEvents.ip,
+        userAgent: downloadEvents.userAgent,
+        completedAt: downloadEvents.completedAt,
+      })
       .from(downloadEvents)
       .where(inArray(downloadEvents.fileId, fileIds))
       .all();
