@@ -6,7 +6,7 @@ import { scanPackages, scanFiles, licences, downloadEvents, users } from "@/lib/
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { hasRepAccess } from "@/lib/auth/repAccess";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 export type CustodyEventType =
   | "package_created"
@@ -140,6 +140,8 @@ export async function GET(
   }[] = [];
   const fileIds = files.map((f) => f.id);
   if (fileIds.length > 0) {
+    // Use a subquery instead of inArray to avoid D1's bound-parameter limit
+    // (packages with hundreds of files would exceed the 100-parameter cap)
     dlEvents = await db
       .select({
         fileId: downloadEvents.fileId,
@@ -152,7 +154,7 @@ export async function GET(
         completedAt: downloadEvents.completedAt,
       })
       .from(downloadEvents)
-      .where(inArray(downloadEvents.fileId, fileIds))
+      .where(sql`${downloadEvents.fileId} IN (SELECT id FROM scan_files WHERE package_id = ${packageId})`)
       .all();
     for (const dl of dlEvents) userIdSet.add(dl.licenseeId);
   }
