@@ -8,8 +8,8 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import PackageMetadataForm from "./package-metadata-form";
 
-export default async function PackageMetadataPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function PackageMetadataPage({ params }: { params: Promise<{ packageId: string }> }) {
+  const { packageId: id } = await params;
   const cookieStore = await cookies();
   const session = cookieStore.get("session")?.value;
   if (!session) redirect("/login");
