@@ -29,12 +29,12 @@ async function canAccessPackage(db: ReturnType<typeof getDb>, packageId: string,
   return null;
 }
 
-// GET /api/vault/packages/[id]/metadata
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// GET /api/vault/packages/[packageId]/metadata
+export async function GET(req: NextRequest, { params }: { params: Promise<{ packageId: string }> }) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const { id } = await params;
+  const { packageId: id } = await params;
   const db = getDb();
   const pkg = await canAccessPackage(db, id, session);
   if (!pkg) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -64,12 +64,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ metadata: row });
 }
 
-// PATCH /api/vault/packages/[id]/metadata
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// PATCH /api/vault/packages/[packageId]/metadata
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ packageId: string }> }) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const { id } = await params;
+  const { packageId: id } = await params;
   const db = getDb();
   const pkg = await canAccessPackage(db, id, session);
   if (!pkg) return NextResponse.json({ error: "Not found" }, { status: 404 });
