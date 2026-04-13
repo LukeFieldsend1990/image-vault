@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { users, scanPackages, scanFiles, talentProfiles, talentLicencePermissions } from "@/lib/db/schema";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { eq, sql, and, desc, isNull } from "drizzle-orm";
 import TalentProfileClient from "./talent-profile-client";
 
 const LICENCE_TYPES = [
@@ -91,7 +91,7 @@ export default async function TalentProfilePage({
         eq(scanFiles.packageId, scanPackages.id),
         eq(scanFiles.uploadStatus, "complete"),
       ))
-      .where(and(eq(scanPackages.talentId, id), eq(scanPackages.status, "ready")))
+      .where(and(eq(scanPackages.talentId, id), eq(scanPackages.status, "ready"), isNull(scanPackages.deletedAt)))
       .groupBy(scanPackages.id)
       .orderBy(desc(scanPackages.createdAt))
       .all(),
