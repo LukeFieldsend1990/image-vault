@@ -513,6 +513,193 @@ const PERMISSION_OPTIONS: { value: Permission["permission"]; label: string; colo
   { value: "blocked", label: "Blocked", color: "#991b1b" },
 ];
 
+// ── Licences tab ──────────────────────────────────────────────────────────────
+
+type LicenceStatus = "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
+
+interface LicenceItem {
+  id: string;
+  packageName: string | null;
+  projectName: string;
+  productionCompany: string;
+  licenceType: string | null;
+  status: LicenceStatus;
+  validFrom: number;
+  validTo: number;
+  proposedFee: number | null;
+  agreedFee: number | null;
+  createdAt: number;
+  downloadCount: number;
+}
+
+const STATUS_COLOURS: Record<LicenceStatus, string> = {
+  PENDING: "#b45309",
+  APPROVED: "#166534",
+  DENIED: "#991b1b",
+  REVOKED: "#6b7280",
+  EXPIRED: "#6b7280",
+};
+
+const LICENCE_TABS: { label: string; value: LicenceStatus | "ALL" }[] = [
+  { label: "All", value: "ALL" },
+  { label: "Pending", value: "PENDING" },
+  { label: "Approved", value: "APPROVED" },
+  { label: "Denied", value: "DENIED" },
+];
+
+function formatDate(ts: number | null): string {
+  if (!ts) return "—";
+  return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function LicencesTab({ talentId }: { talentId: string }) {
+  const [allLicences, setAllLicences] = useState<LicenceItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<LicenceStatus | "ALL">("ALL");
+  const [acting, setActing] = useState<string | null>(null);
+
+  const fetchLicences = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/licences?talentId=${talentId}`)
+      .then((r) => r.json() as Promise<{ licences?: LicenceItem[] }>)
+      .then((d) => setAllLicences(d.licences ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [talentId]);
+
+  useEffect(() => { fetchLicences(); }, [fetchLicences]);
+
+  async function handleAction(licenceId: string, action: "approve" | "deny") {
+    setActing(licenceId);
+    try {
+      const res = await fetch(`/api/licences/${licenceId}/${action}`, { method: "POST" });
+      if (res.ok) fetchLicences();
+    } finally {
+      setActing(null);
+    }
+  }
+
+  const filtered = filter === "ALL" ? allLicences : allLicences.filter((l) => l.status === filter);
+  const pendingCount = allLicences.filter((l) => l.status === "PENDING").length;
+
+  if (loading) {
+    return (
+      <div className="px-8 py-6 space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-16 rounded border animate-pulse" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-8 py-6">
+      {/* Filter tabs */}
+      <div className="mb-5 flex gap-1 border-b" style={{ borderColor: "var(--color-border)" }}>
+        {LICENCE_TABS.map((t) => (
+          <button
+            key={t.value}
+            onClick={() => setFilter(t.value)}
+            className="px-3 py-2 text-xs transition relative"
+            style={{
+              color: filter === t.value ? "var(--color-ink)" : "var(--color-muted)",
+              fontWeight: filter === t.value ? 600 : 400,
+            }}
+          >
+            {t.label}
+            {t.value === "PENDING" && pendingCount > 0 && (
+              <span
+                className="ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                style={{ background: "var(--color-accent)", minWidth: "18px" }}
+              >
+                {pendingCount}
+              </span>
+            )}
+            {filter === t.value && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: "var(--color-accent)" }} />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+          {filter === "ALL" ? "No licences yet." : `No ${filter.toLowerCase()} licences.`}
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {filtered.map((l) => {
+          const fee = l.agreedFee ?? l.proposedFee;
+          return (
+            <div
+              key={l.id}
+              className="flex items-center justify-between gap-4 rounded border p-4"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                    {l.projectName}
+                  </p>
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                    style={{ background: `${STATUS_COLOURS[l.status]}18`, color: STATUS_COLOURS[l.status] }}
+                  >
+                    {l.status}
+                  </span>
+                  {l.licenceType && (
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{ background: "var(--color-border)", color: "var(--color-muted)" }}
+                    >
+                      {licenceTypeLabel(l.licenceType)}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
+                  {l.productionCompany} · {l.packageName ?? "Unknown package"}
+                </p>
+                <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
+                  {formatDate(l.validFrom)} – {formatDate(l.validTo)}
+                  {fee ? ` · ${fmtMoney(fee)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {l.status === "PENDING" && (
+                  <>
+                    <button
+                      onClick={() => handleAction(l.id, "approve")}
+                      disabled={acting === l.id}
+                      className="rounded px-3 py-1.5 text-xs font-medium text-white transition"
+                      style={{ background: "#166534", opacity: acting === l.id ? 0.5 : 1 }}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleAction(l.id, "deny")}
+                      disabled={acting === l.id}
+                      className="rounded border px-3 py-1.5 text-xs font-medium transition"
+                      style={{ borderColor: "var(--color-border)", color: "#991b1b", opacity: acting === l.id ? 0.5 : 1 }}
+                    >
+                      Deny
+                    </button>
+                  </>
+                )}
+                {l.status === "APPROVED" && l.downloadCount > 0 && (
+                  <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                    {l.downloadCount} download{l.downloadCount !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function PermissionsTab({ talentId }: { talentId: string }) {
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -901,7 +1088,7 @@ function RevenueTab({ talentId }: { talentId: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-type Tab = "vault" | "permissions" | "revenue" | "monitor";
+type Tab = "vault" | "licences" | "permissions" | "revenue" | "monitor";
 
 export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [packages, setPackages] = useState<ScanPackage[]>([]);
@@ -972,6 +1159,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "vault", label: "Vault" },
+    { id: "licences", label: "Licences" },
     { id: "permissions", label: "Permissions" },
     { id: "revenue", label: "Revenue" },
     { id: "monitor", label: "DeepScan" },
@@ -989,7 +1177,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
-        Acting as representative
+        Acting on behalf of <strong>{displayName}</strong>
         <Link href="/roster" className="ml-auto underline opacity-70 hover:opacity-100">
           Back to roster
         </Link>
@@ -1101,6 +1289,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
           </>
         )}
 
+        {activeTab === "licences" && <LicencesTab talentId={talentId} />}
         {activeTab === "permissions" && <PermissionsTab talentId={talentId} />}
         {activeTab === "revenue" && <RevenueTab talentId={talentId} />}
         {activeTab === "monitor" && (() => {

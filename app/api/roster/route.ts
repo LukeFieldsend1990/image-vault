@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { talentReps, users, scanPackages, talentProfiles, licences } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, and, count, sum, inArray } from "drizzle-orm";
+import { eq, and, count, sum, inArray, isNull } from "drizzle-orm";
 
 /** GET /api/roster — returns the list of talent the authed rep manages */
 export async function GET(req: NextRequest) {
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     .innerJoin(users, eq(users.id, talentReps.talentId))
     .leftJoin(
       scanPackages,
-      and(eq(scanPackages.talentId, talentReps.talentId), eq(scanPackages.status, "ready"))
+      and(eq(scanPackages.talentId, talentReps.talentId), eq(scanPackages.status, "ready"), isNull(scanPackages.deletedAt))
     )
     .leftJoin(talentProfiles, eq(talentProfiles.userId, talentReps.talentId))
     .where(eq(talentReps.repId, session.sub))

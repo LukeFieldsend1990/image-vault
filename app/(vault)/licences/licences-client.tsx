@@ -15,6 +15,7 @@ interface Licence {
   packageHasHdr: boolean | null;
   packageHasMotionCapture: boolean | null;
   talentEmail: string | null;
+  talentName: string | null;
   projectName: string;
   productionCompany: string;
   intendedUse: string;
@@ -190,7 +191,7 @@ export default function LicencesClient() {
                       )}
                     </div>
                     <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
-                      {l.packageName ?? "Unknown package"} · {l.talentEmail ?? "—"}
+                      {l.talentName ?? l.talentEmail ?? "—"} · {l.productionCompany} · {l.packageName ?? "Unknown package"}
                     </p>
                     {/* Package metadata chips */}
                     {(() => {

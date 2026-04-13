@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users, talentReps, talentSettings, productions, productionCompanies } from "@/lib/db/schema";
+import { licences, scanPackages, users, talentReps, talentSettings, talentProfiles, productions, productionCompanies } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, desc, and, inArray, like } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
       packageHasHdr: scanPackages.hasHdr,
       packageHasMotionCapture: scanPackages.hasMotionCapture,
       talentEmail: users.email,
+      talentName: talentProfiles.fullName,
       projectName: licences.projectName,
       productionCompany: licences.productionCompany,
       intendedUse: licences.intendedUse,
@@ -61,7 +62,8 @@ export async function GET(req: NextRequest) {
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
     .leftJoin(users, eq(users.id, licences.talentId))
-    .leftJoin(talentSettings, eq(talentSettings.talentId, licences.talentId));
+    .leftJoin(talentSettings, eq(talentSettings.talentId, licences.talentId))
+    .leftJoin(talentProfiles, eq(talentProfiles.userId, licences.talentId));
 
   if (session.role === "talent") {
     const whereClause = statusFilter
@@ -76,9 +78,12 @@ export async function GET(req: NextRequest) {
       .all();
     const talentIds = talentRows.map((r) => r.talentId);
     if (talentIds.length === 0) return NextResponse.json({ licences: [] });
+    // Optional talentId filter — scope to a single managed talent
+    const forTalent = searchParams.get("talentId");
+    const scopeIds = forTalent && talentIds.includes(forTalent) ? [forTalent] : talentIds;
     const whereClause = statusFilter
-      ? and(inArray(licences.talentId, talentIds), eq(licences.status, statusFilter as "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED"))
-      : inArray(licences.talentId, talentIds);
+      ? and(inArray(licences.talentId, scopeIds), eq(licences.status, statusFilter as "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED"))
+      : inArray(licences.talentId, scopeIds);
     rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).all();
   } else if (session.role === "licensee") {
     const whereClause = statusFilter
