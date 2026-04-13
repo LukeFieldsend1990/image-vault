@@ -787,6 +787,8 @@ export default function DashboardClient() {
   const [addToPackageId, setAddToPackageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [activeLicences, setActiveLicences] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState(0);
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -802,6 +804,17 @@ export default function DashboardClient() {
 
   useEffect(() => {
     void fetchPackages();
+    void (async () => {
+      try {
+        const res = await fetch("/api/licences");
+        if (res.ok) {
+          const data = await res.json() as { licences: { status: string; validTo?: number | null }[] };
+          const now = Math.floor(Date.now() / 1000);
+          setActiveLicences(data.licences.filter((l) => l.status === "APPROVED" && (!l.validTo || l.validTo > now)).length);
+          setPendingRequests(data.licences.filter((l) => l.status === "PENDING").length);
+        }
+      } catch { /* stats are non-critical */ }
+    })();
   }, [fetchPackages]);
 
   function handleUploadComplete() {
@@ -932,8 +945,8 @@ export default function DashboardClient() {
         {[
           { label: "Total scans", value: loading ? "—" : String(packages.length) },
           { label: "Storage used", value: loading ? "—" : totalSize > 0 ? formatBytes(totalSize) : "0 B" },
-          { label: "Active licences", value: "0" },
-          { label: "Pending requests", value: "0" },
+          { label: "Active licences", value: loading ? "—" : String(activeLicences) },
+          { label: "Pending requests", value: loading ? "—" : String(pendingRequests) },
         ].map((stat) => (
           <div key={stat.label}>
             <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
