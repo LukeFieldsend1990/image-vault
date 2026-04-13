@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 
@@ -27,6 +27,7 @@ interface ScanPackage {
   captureDate: number | null;
   studioName: string | null;
   totalSizeBytes: number | null;
+  coverImageKey: string | null;
   fileCount: number;
 }
 
@@ -70,34 +71,17 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 function PackagePreview({ packageId }: { packageId: string }) {
   const [data, setData] = useState<PreviewResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
 
-  function load() {
-    if (loaded) return;
-    setLoading(true);
+  useEffect(() => {
     fetch(`/api/packages/${packageId}/preview`)
       .then((r) => r.ok ? r.json() as Promise<PreviewResponse> : Promise.reject())
       .then((d) => { setData(d); setLoaded(true); })
       .catch(() => setLoaded(true))
       .finally(() => setLoading(false));
-  }
-
-  if (!loaded && !loading) {
-    return (
-      <button
-        onClick={load}
-        className="mt-4 flex items-center gap-1.5 text-xs transition hover:opacity-70"
-        style={{ color: "var(--color-muted)" }}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-        </svg>
-        Load preview
-      </button>
-    );
-  }
+  }, [packageId]);
 
   if (loading) return <p className="mt-4 text-xs" style={{ color: "var(--color-muted)" }}>Loading preview…</p>;
   if (!data) return <p className="mt-4 text-xs" style={{ color: "var(--color-muted)" }}>Preview unavailable.</p>;
@@ -323,7 +307,18 @@ export default function TalentProfileClient({
                 <div key={pkg.id} className="rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      {pkg.coverImageKey && (
+                        <div className="shrink-0 overflow-hidden rounded" style={{ width: 56, height: 72, background: "var(--color-border)" }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/api/vault/packages/${pkg.id}/cover`}
+                            alt={pkg.name}
+                            className="h-full w-full object-cover"
+                            onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }}
+                          />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{pkg.name}</p>
                         {pkg.description && (
                           <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>{pkg.description}</p>
@@ -400,20 +395,6 @@ export default function TalentProfileClient({
             })}
           </div>
 
-          {/* Request licence CTA */}
-          {packages.length > 0 && (
-            <Link
-              href={`/licences/request/${packages[0].id}`}
-              className="mt-4 flex items-center justify-center gap-2 w-full rounded px-4 py-3 text-sm font-medium text-white transition hover:opacity-80"
-              style={{ background: "var(--color-accent)" }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-              </svg>
-              Request a Licence
-            </Link>
-          )}
         </div>
 
       </div>

@@ -108,13 +108,15 @@ export default async function VaultLayout({
     getInboundEnabled(sub),
   ]);
 
+  const homeHref = role === "licensee" ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <SidebarShell>
+      <SidebarShell homeHref={homeHref}>
         {/* Logo */}
         <div className="flex flex-col justify-between h-full py-8">
           <div>
-            <a href="/dashboard" className="block px-6 mb-10">
+            <a href={homeHref} className="block px-6 mb-10">
               <div className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: "var(--color-sidebar-muted)" }}>
                 United Agents
               </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-export default function SidebarShell({ children }: { children: React.ReactNode }) {
+export default function SidebarShell({ children, homeHref = "/dashboard" }: { children: React.ReactNode; homeHref?: string }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -36,7 +36,7 @@ export default function SidebarShell({ children }: { children: React.ReactNode }
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <a href="/dashboard">
+        <a href={homeHref}>
           <div className="text-[9px] font-semibold tracking-[0.2em] uppercase" style={{ color: "var(--color-sidebar-muted)" }}>
             United Agents
           </div>

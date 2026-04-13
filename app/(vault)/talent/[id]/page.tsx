@@ -83,6 +83,7 @@ export default async function TalentProfilePage({
       captureDate: scanPackages.captureDate,
       studioName: scanPackages.studioName,
       totalSizeBytes: scanPackages.totalSizeBytes,
+      coverImageKey: scanPackages.coverImageKey,
       fileCount: sql<number>`count(${scanFiles.id})`.as("file_count"),
     })
       .from(scanPackages)
