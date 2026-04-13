@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { users, scanPackages, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, isNull } from "drizzle-orm";
 
 // GET /api/talent — list talent with at least one ready package (licensees only)
 export async function GET(req: NextRequest) {
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     .leftJoin(talentProfiles, eq(talentProfiles.userId, users.id))
     .leftJoin(
       scanPackages,
-      and(eq(scanPackages.talentId, users.id), eq(scanPackages.status, "ready"))
+      and(eq(scanPackages.talentId, users.id), eq(scanPackages.status, "ready"), isNull(scanPackages.deletedAt))
     )
     .where(eq(users.role, "talent"))
     .groupBy(users.id)
