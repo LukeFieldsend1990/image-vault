@@ -22,6 +22,15 @@ const EXCLUSIVITY_LABELS: Record<string, string> = {
   exclusive: "Exclusive",
 };
 
+const PERMITTED_USE_PHRASES: Record<string, string> = {
+  film_double: "the creation of visual effects, digital doubles, and promotional materials",
+  game_character: "the creation of interactive media assets, game characters, and promotional materials",
+  commercial: "the creation of commercial, advertising, and promotional materials",
+  ai_avatar: "the creation of AI-generated avatar content and associated materials",
+  training_data: "AI and machine learning model training and evaluation",
+  monitoring_reference: "identity verification and security reference purposes",
+};
+
 function fmtDate(unix: number | null): string {
   if (!unix) return "—";
   return new Date(unix * 1000).toLocaleDateString("en-GB", {
@@ -81,6 +90,7 @@ export async function GET(
   const platformFee = lic.platformFee ?? (agreedFee ? Math.round(agreedFee * 0.15) : null);
   const talentFee = agreedFee && platformFee ? agreedFee - platformFee : null;
   const fileCountNum = fileCount?.count ?? 0;
+  const permittedUsePhrase = lic.licenceType ? (PERMITTED_USE_PHRASES[lic.licenceType] ?? "the Permitted Use") : "the Permitted Use";
 
   const isDraft = lic.status !== "APPROVED";
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -477,13 +487,13 @@ export async function GET(
 
   <div class="cover-parties">
     <div class="cover-party">
-      <div class="cover-party-role">Licensor ("Talent")</div>
+      <div class="cover-party-role">Artist</div>
       <div class="cover-party-name">${talentName}</div>
       <div class="cover-party-detail">${talentUser?.email ?? ""}</div>
     </div>
     <div class="cover-between">and</div>
     <div class="cover-party">
-      <div class="cover-party-role">Licensee</div>
+      <div class="cover-party-role">Producer ("Licensee")</div>
       <div class="cover-party-name">${lic.productionCompany}</div>
       <div class="cover-party-detail">${licenseeUser?.email ?? ""}</div>
     </div>
@@ -523,13 +533,13 @@ export async function GET(
 <div class="section">
   <div class="section-title"><span class="section-number">—</span>Recitals</div>
   <p>
-    <strong>(A)</strong>&ensp;The Licensor is a professional in the entertainment industry whose three-dimensional
+    <strong>(A)</strong>&ensp;The Artist is a professional in the entertainment industry whose three-dimensional
     biometric likeness scan data (the "Licensed Material") is archived on the Changling Image Vault platform,
     a secure biometric asset management platform operated by Changling Ltd. ("Platform Operator").
   </p>
   <p>
-    <strong>(B)</strong>&ensp;The Licensee wishes to obtain a limited licence to use the Licensed Material in
-    connection with the project described herein, and the Licensor is willing to grant such a licence on
+    <strong>(B)</strong>&ensp;The Producer wishes to obtain a limited licence to use the Licensed Material in
+    connection with the project described herein, and the Artist is willing to grant such a licence on
     the terms and conditions set out in this Agreement.
   </p>
   <p>
@@ -553,18 +563,21 @@ export async function GET(
   <p>In this Agreement, unless the context requires otherwise:</p>
   <table class="def-table">
     <tr><td>"Agreement"</td><td>means this Biometric Likeness Licence Agreement together with all Schedules and any written amendments agreed in writing by the parties.</td></tr>
-    <tr><td>"Biometric Data"</td><td>means the three-dimensional volumetric scan data, photogrammetric point cloud data, surface normal maps, texture maps, and associated metadata constituting the physical likeness of the Licensor, as specified in Schedule 1.</td></tr>
-    <tr><td>"Effective Date"</td><td>means ${fmtDate(lic.approvedAt ?? lic.createdAt)}, being the date on which the Licensor confirmed approval via the Platform's authenticated authorisation mechanism.</td></tr>
+    <tr><td>"Artist"</td><td>means the individual whose physical likeness is the subject of the Biometric Data, being <strong>${talentName}</strong>, identified on the Platform as the talent and licensor of the Licensed Material.</td></tr>
+    <tr><td>"Biometric Data"</td><td>means all raw, untextured digital capture data relating to the Artist's physical likeness — including but not limited to 3D body scans, photogrammetry, voice samples, and Facial Action Coding System (FACS) data captured during the course of the Picture, as further described in Clause 9.1 and Schedule 1.</td></tr>
+    <tr><td>"Effective Date"</td><td>means ${fmtDate(lic.approvedAt ?? lic.createdAt)}, being the date on which the Artist confirmed approval via the Platform's authenticated authorisation mechanism.</td></tr>
     <tr><td>"Licensed Material"</td><td>means the scan package identified in Schedule 1, comprising all files delivered pursuant to this Agreement, including but not limited to mesh files, texture assets, and metadata files.</td></tr>
     <tr><td>"Licence Period"</td><td>means the period from ${fmtDate(lic.validFrom)} to ${fmtDate(lic.validTo)} (inclusive).</td></tr>
     <tr><td>"Permitted Use"</td><td>means the specific use described in Clause 3 and Schedule 2 of this Agreement, being a ${licenceTypeLabel} licence.</td></tr>
+    <tr><td>"Picture"</td><td>means the production identified as <strong>"${lic.projectName}"</strong> by ${lic.productionCompany}, as further described in Schedule 2.</td></tr>
     <tr><td>"Platform"</td><td>means the Changling Image Vault platform, operated by Changling Ltd., through which the Licensed Material is accessed and this Agreement is administered.</td></tr>
     <tr><td>"Platform Operator"</td><td>means Changling Ltd., acting as an intermediary and platform service provider and not as a party to the Permitted Use.</td></tr>
     <tr><td>"Platform Fee"</td><td>means the service fee payable to the Platform Operator, being ${fmtGBP(platformFee)} (representing 15% of the Agreed Fee).</td></tr>
-    <tr><td>"Agreed Fee"</td><td>means the total licence fee of ${fmtGBP(agreedFee)}, of which ${fmtGBP(talentFee)} is payable to the Licensor and ${fmtGBP(platformFee)} is payable to the Platform Operator as the Platform Fee.</td></tr>
+    <tr><td>"Producer"</td><td>means the party licensed to use the Biometric Data under this Agreement, being <strong>${lic.productionCompany}</strong>.</td></tr>
+    <tr><td>"Agreed Fee"</td><td>means the total licence fee of ${fmtGBP(agreedFee)}, of which ${fmtGBP(talentFee)} is payable to the Artist and ${fmtGBP(platformFee)} is payable to the Platform Operator as the Platform Fee.</td></tr>
     <tr><td>"Intellectual Property Rights"</td><td>means all patents, copyrights, database rights, trade marks, design rights, rights in confidential information, and all other intellectual property rights whether registered or unregistered, worldwide.</td></tr>
     <tr><td>"Personal Data"</td><td>has the meaning given in the UK General Data Protection Regulation (UK GDPR) as retained in UK domestic law by the European Union (Withdrawal) Act 2018.</td></tr>
-    <tr><td>"Moral Rights"</td><td>means the right of the Licensor to be identified as the subject of the Licensed Material and the right to object to derogatory treatment thereof, as provided by Chapter IV of the Copyright, Designs and Patents Act 1988.</td></tr>
+    <tr><td>"Moral Rights"</td><td>means the right of the Artist to be identified as the subject of the Licensed Material and the right to object to derogatory treatment thereof, as provided by Chapter IV of the Copyright, Designs and Patents Act 1988.</td></tr>
     <tr><td>"Synthetic Media"</td><td>means any digitally generated or manipulated audio-visual content that uses, incorporates, or is derived from the Licensed Material, including but not limited to deepfakes, neural radiance fields (NeRF), generative AI outputs, and digital doubles.</td></tr>
     <tr><td>"Territory"</td><td>means ${lic.territory ?? "Worldwide"}.</td></tr>
   </table>
@@ -575,11 +588,11 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
   <div class="section-title"><span class="section-number">2.</span>Grant of Licence</div>
-  <div class="clause"><span class="clause-num">2.1</span><span class="clause-body">Subject to the terms and conditions of this Agreement and the receipt of the Agreed Fee, the Licensor hereby grants to the Licensee a <strong>${exclusivityLabel.toLowerCase()}</strong>, <strong>non-sublicensable</strong>, <strong>non-transferable</strong> licence to use the Licensed Material solely for the Permitted Use within the Territory during the Licence Period.</span></div>
-  <div class="clause"><span class="clause-num">2.2</span><span class="clause-body">The licence granted under Clause 2.1 is limited to the specific Permitted Use described in Schedule 2. Any use of the Licensed Material outside the Permitted Use requires a separate written licence agreement with the Licensor.</span></div>
-  <div class="clause"><span class="clause-num">2.3</span><span class="clause-body">${lic.exclusivity === "exclusive" ? "During the Licence Period, the Licensor undertakes not to grant any equivalent rights in the Licensed Material to any third party for the same Permitted Use within the Territory." : lic.exclusivity === "sole" ? "The Licensor may continue to exploit the Licensed Material for their own purposes but shall not grant equivalent rights to any third party for the same Permitted Use within the Territory during the Licence Period." : "This licence is non-exclusive and the Licensor retains the right to grant equivalent licences to third parties for the same or similar uses."}</span></div>
-  <div class="clause"><span class="clause-num">2.4</span><span class="clause-body">The licence is granted for use within the Territory only. The Licensee shall not distribute, broadcast, or make available any content incorporating the Licensed Material outside the Territory without the prior written consent of the Licensor.</span></div>
-  <div class="clause"><span class="clause-num">2.5</span><span class="clause-body">This Agreement does not constitute a transfer of ownership of the Licensed Material or any Intellectual Property Rights therein. All rights not expressly granted are reserved by the Licensor.</span></div>
+  <div class="clause"><span class="clause-num">2.1</span><span class="clause-body">Subject to the terms and conditions of this Agreement and the receipt of the Agreed Fee, the Artist grants the Producer a restricted, <strong>${exclusivityLabel.toLowerCase()}</strong>, <strong>non-sublicensable</strong>, <strong>non-transferable</strong> licence to utilise the Biometric Data exclusively for ${permittedUsePhrase} directly associated with the specific Picture outlined in this Agreement, within the Territory during the Licence Period.</span></div>
+  <div class="clause"><span class="clause-num">2.2</span><span class="clause-body">The licence granted under Clause 2.1 is limited to the specific Permitted Use described in Schedule 2. Any use of the Biometric Data for sequels, derivative works, or purposes beyond the Permitted Use requires a separate, expressly negotiated licence addendum (see Clause 9.2).</span></div>
+  <div class="clause"><span class="clause-num">2.3</span><span class="clause-body">${lic.exclusivity === "exclusive" ? "During the Licence Period, the Artist undertakes not to grant any equivalent rights in the Licensed Material to any third party for the same Permitted Use within the Territory." : lic.exclusivity === "sole" ? "The Artist may continue to exploit the Licensed Material for their own purposes but shall not grant equivalent rights to any third party for the same Permitted Use within the Territory during the Licence Period." : "This licence is non-exclusive and the Artist retains the right to grant equivalent licences to third parties for the same or similar uses."}</span></div>
+  <div class="clause"><span class="clause-num">2.4</span><span class="clause-body">The licence is granted for use within the Territory only. The Producer shall not distribute, broadcast, or make available any content incorporating the Licensed Material outside the Territory without the prior written consent of the Artist.</span></div>
+  <div class="clause"><span class="clause-num">2.5</span><span class="clause-body">This Agreement does not constitute a transfer of ownership of the Biometric Data or any Intellectual Property Rights therein. All Biometric Data shall remain the sole and exclusive property of the Artist (Clause 9.1). All rights not expressly granted are reserved by the Artist.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
@@ -587,24 +600,26 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
   <div class="section-title"><span class="section-number">3.</span>Permitted Use</div>
-  <div class="clause"><span class="clause-num">3.1</span><span class="clause-body">The Licensed Material may be used solely in connection with the production identified as <strong>"${lic.projectName}"</strong> by ${lic.productionCompany}, being a <strong>${licenceTypeLabel}</strong> production.</span></div>
-  <div class="clause"><span class="clause-num">3.2</span><span class="clause-body">The specific intended application, as described by the Licensee at the time of requesting this licence, is set out in Schedule 2 of this Agreement.</span></div>
-  <div class="clause"><span class="clause-num">3.3</span><span class="clause-body">The Licensee acknowledges that the Licensed Material constitutes Biometric Data and Special Category Personal Data under UK GDPR and agrees to process it solely for the Permitted Use and in compliance with all applicable data protection legislation.</span></div>
+  <div class="clause"><span class="clause-num">3.1</span><span class="clause-body">The Biometric Data may be used solely in connection with the Picture, being a <strong>${licenceTypeLabel}</strong> production.</span></div>
+  <div class="clause"><span class="clause-num">3.2</span><span class="clause-body">The specific intended application, as described by the Producer at the time of requesting this licence, is set out in Schedule 2 of this Agreement.</span></div>
+  <div class="clause"><span class="clause-num">3.3</span><span class="clause-body">The Producer acknowledges that the Licensed Material constitutes Biometric Data and Special Category Personal Data under UK GDPR and agrees to process it solely for the Permitted Use and in compliance with all applicable data protection legislation.</span></div>
   ${lic.permitAiTraining ? `
   <div class="notice warning">
-    <strong>AI Processing Permission:</strong> The Licensor has expressly consented to the use of the Licensed Material
-    for artificial intelligence processing, including machine learning model training, subject to the restrictions
-    set out in Clause 4.4. This consent is specific to this Agreement and does not constitute a general or
-    open-ended consent to AI processing. The Licensee must ensure all AI processing complies with applicable
-    data protection law, including the requirement for a lawful basis under UK GDPR Article 9 for processing
-    special category biometric data.
+    <strong>AI Processing Addendum:</strong> The Artist has expressly negotiated and consented to the use of the
+    Biometric Data for artificial intelligence processing, including machine learning model training, subject to
+    the restrictions set out in Clause 4.4. This addendum constitutes the separate, expressly negotiated licence
+    referred to in Clause 9.2 with respect to AI training sets. This consent is specific to this Agreement and
+    does not constitute a general or open-ended consent to AI processing. The Producer must ensure all AI
+    processing complies with applicable data protection law, including the requirement for a lawful basis under
+    UK GDPR Article 9 for processing special category biometric data.
   </div>` : `
   <div class="notice">
-    <strong>AI Processing Restriction:</strong> The Licensor has <strong>NOT</strong> granted permission for the
-    use of the Licensed Material in connection with any form of artificial intelligence processing,
+    <strong>AI Processing Restriction:</strong> The Artist has <strong>NOT</strong> granted permission for the
+    use of the Biometric Data in connection with any form of artificial intelligence processing,
     including but not limited to machine learning model training, neural network training, synthetic media
-    generation, or any automated processing that extracts biometric feature vectors. Any such use is
-    strictly prohibited and will constitute a material breach of this Agreement.
+    generation, or any automated process that extracts, analyses, or encodes biometric feature vectors. Any such
+    use requires a separate, expressly negotiated licence addendum as contemplated by Clause 9.2 and will, absent
+    such addendum, constitute a material breach of this Agreement.
   </div>`}
 </div>
 
@@ -613,16 +628,16 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
   <div class="section-title"><span class="section-number">4.</span>Restrictions</div>
-  <p>The Licensee shall not, and shall procure that its employees, agents, and sub-contractors shall not:</p>
-  <div class="clause"><span class="clause-num">4.1</span><span class="clause-body">Use the Licensed Material for any purpose other than the Permitted Use without the prior written consent of the Licensor;</span></div>
+  <p>The Producer shall not, and shall procure that its employees, agents, and sub-contractors shall not:</p>
+  <div class="clause"><span class="clause-num">4.1</span><span class="clause-body">Use the Licensed Material for any purpose other than the Permitted Use without the prior written consent of the Artist;</span></div>
   <div class="clause"><span class="clause-num">4.2</span><span class="clause-body">Sublicence, sell, rent, transfer, assign, or otherwise dispose of the Licensed Material or any rights therein to any third party;</span></div>
-  <div class="clause"><span class="clause-num">4.3</span><span class="clause-body">Use the Licensed Material in any manner that is defamatory, obscene, unlawful, or that could damage the reputation of the Licensor;</span></div>
-  <div class="clause"><span class="clause-num">4.4</span><span class="clause-body">${lic.permitAiTraining ? "Use the Licensed Material to train, fine-tune, or evaluate any artificial intelligence model beyond the specific application described in Schedule 2, or make such trained models commercially available to third parties without a separate written agreement;" : "Use the Licensed Material for any form of machine learning, artificial intelligence training, neural network development, synthetic media generation, deepfake creation, or any automated process that extracts, analyses, or encodes biometric feature vectors;"}</span></div>
+  <div class="clause"><span class="clause-num">4.3</span><span class="clause-body">Use the Licensed Material in any manner that is defamatory, obscene, unlawful, or that could damage the reputation of the Artist;</span></div>
+  <div class="clause"><span class="clause-num">4.4</span><span class="clause-body">${lic.permitAiTraining ? "Use the Biometric Data to train, fine-tune, or evaluate any artificial intelligence model beyond the specific application described in the AI Processing Addendum (Clause 3) and Schedule 2, or make such trained models commercially available to third parties without a separate, expressly negotiated licence addendum (Clause 9.2);" : "Use the Biometric Data for any form of machine learning, artificial intelligence training, neural network development, synthetic media generation, deepfake creation, or any automated process that extracts, analyses, or encodes biometric feature vectors, unless a separate, expressly negotiated licence addendum has been executed pursuant to Clause 9.2;"}</span></div>
   <div class="clause"><span class="clause-num">4.5</span><span class="clause-body">Use the Licensed Material outside the Territory or beyond the Licence Period;</span></div>
   <div class="clause"><span class="clause-num">4.6</span><span class="clause-body">Modify, adapt, translate, or create derivative works of the Licensed Material except as expressly required for the Permitted Use;</span></div>
   <div class="clause"><span class="clause-num">4.7</span><span class="clause-body">Remove, obscure, or alter any copyright notices, watermarks, or other proprietary markings on or in the Licensed Material;</span></div>
   <div class="clause"><span class="clause-num">4.8</span><span class="clause-body">Store the Licensed Material on any publicly accessible server or make it available for download by any person who is not directly involved in the Permitted Use;</span></div>
-  <div class="clause"><span class="clause-num">4.9</span><span class="clause-body">Use the Licensed Material in a manner that infringes the Licensor's Moral Rights, including uses that are derogatory, misleading as to the Licensor's opinions or beliefs, or that place the Licensor in a false light.</span></div>
+  <div class="clause"><span class="clause-num">4.9</span><span class="clause-body">Use the Licensed Material in a manner that infringes the Artist's Moral Rights, including uses that are derogatory, misleading as to the Artist's opinions or beliefs, or that place the Artist in a false light.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
@@ -630,13 +645,13 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
   <div class="section-title"><span class="section-number">5.</span>Biometric Data &amp; Data Protection</div>
-  <div class="clause"><span class="clause-num">5.1</span><span class="clause-body">The Licensee acknowledges that the Licensed Material constitutes Biometric Data and Special Category Personal Data within the meaning of UK GDPR Article 9 and the Data Protection Act 2018, and agrees to process it lawfully, fairly, and transparently.</span></div>
-  <div class="clause"><span class="clause-num">5.2</span><span class="clause-body">The Licensee shall act as an independent Data Controller in respect of its processing of the Licensed Material and shall comply with all applicable data protection legislation, including but not limited to UK GDPR, the Data Protection Act 2018, and any applicable sector-specific biometric data regulations.</span></div>
-  <div class="clause"><span class="clause-num">5.3</span><span class="clause-body">The Licensee shall implement and maintain appropriate technical and organisational security measures to protect the Licensed Material against unauthorised access, loss, destruction, or alteration, including but not limited to encryption at rest and in transit, access controls restricted to those directly involved in the Permitted Use, and audit logging of all access to the Licensed Material.</span></div>
-  <div class="clause"><span class="clause-num">5.4</span><span class="clause-body">Upon expiry or termination of this Agreement, or upon the written request of the Licensor at any time, the Licensee shall securely delete or destroy all copies of the Licensed Material in its possession or under its control and shall provide written certification of such deletion within fourteen (14) days of the request.</span></div>
-  <div class="clause"><span class="clause-num">5.5</span><span class="clause-body">The Licensee shall not transfer or disclose the Licensed Material to any party located outside the United Kingdom or European Economic Area without the prior written consent of the Licensor and without ensuring that equivalent protections apply to the transfer.</span></div>
-  <div class="clause"><span class="clause-num">5.6</span><span class="clause-body">The Licensee shall notify the Licensor and the Platform Operator without undue delay (and in any event within 72 hours) of becoming aware of any actual or suspected breach of security relating to the Licensed Material.</span></div>
-  <div class="clause"><span class="clause-num">5.7</span><span class="clause-body">The Licensor retains the right to exercise their rights as a Data Subject under UK GDPR at any time, including the right to erasure (Article 17), subject to the legitimate interests of the Licensee in completing the Permitted Use during the Licence Period.</span></div>
+  <div class="clause"><span class="clause-num">5.1</span><span class="clause-body">The Producer acknowledges that the Licensed Material constitutes Biometric Data and Special Category Personal Data within the meaning of UK GDPR Article 9 and the Data Protection Act 2018, and agrees to process it lawfully, fairly, and transparently.</span></div>
+  <div class="clause"><span class="clause-num">5.2</span><span class="clause-body">The Producer shall act as an independent Data Controller in respect of its processing of the Licensed Material and shall comply with all applicable data protection legislation, including but not limited to UK GDPR, the Data Protection Act 2018, and any applicable sector-specific biometric data regulations.</span></div>
+  <div class="clause"><span class="clause-num">5.3</span><span class="clause-body">The Producer shall implement and maintain appropriate technical and organisational security measures to protect the Licensed Material against unauthorised access, loss, destruction, or alteration, including but not limited to encryption at rest and in transit, access controls restricted to those directly involved in the Permitted Use, and audit logging of all access to the Licensed Material.</span></div>
+  <div class="clause"><span class="clause-num">5.4</span><span class="clause-body">Upon expiry or termination of this Agreement, or upon the written request of the Artist at any time, the Producer shall: (a) facilitate the secure transfer of the master files of all Biometric Data to the Artist's designated encrypted storage provider (the "ImageVault") in accordance with Clause 9.3; (b) ensure that all copies of the raw Biometric Data in its possession or under its control, including those held by third-party VFX vendors, are securely purged, retaining only the final rendered assets necessary for the Picture's distribution; and (c) provide written certification of such actions within fourteen (14) days of the request.</span></div>
+  <div class="clause"><span class="clause-num">5.5</span><span class="clause-body">The Producer shall not transfer or disclose the Licensed Material to any party located outside the United Kingdom or European Economic Area without the prior written consent of the Artist and without ensuring that equivalent protections apply to the transfer.</span></div>
+  <div class="clause"><span class="clause-num">5.6</span><span class="clause-body">The Producer shall notify the Artist and the Platform Operator without undue delay (and in any event within 72 hours) of becoming aware of any actual or suspected breach of security relating to the Licensed Material.</span></div>
+  <div class="clause"><span class="clause-num">5.7</span><span class="clause-body">The Artist retains the right to exercise their rights as a Data Subject under UK GDPR at any time, including the right to erasure (Article 17), subject to the legitimate interests of the Producer in completing the Permitted Use during the Licence Period.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
@@ -645,9 +660,9 @@ export async function GET(
 <div class="section">
   <div class="section-title"><span class="section-number">6.</span>Licensed Material</div>
   <div class="clause"><span class="clause-num">6.1</span><span class="clause-body">The Licensed Material comprises the scan package described in Schedule 1, made available through the Platform's secure delivery infrastructure following completion of the dual-custody verification protocol.</span></div>
-  <div class="clause"><span class="clause-num">6.2</span><span class="clause-body">Delivery of the Licensed Material is effected solely via the Platform. The Licensor gives no warranty that the Licensed Material will be compatible with any particular software, hardware, or production pipeline, and the Licensee accepts the Licensed Material in the condition in which it is delivered.</span></div>
+  <div class="clause"><span class="clause-num">6.2</span><span class="clause-body">Delivery of the Licensed Material is effected solely via the Platform. The Artist gives no warranty that the Licensed Material will be compatible with any particular software, hardware, or production pipeline, and the Producer accepts the Licensed Material in the condition in which it is delivered.</span></div>
   <div class="clause"><span class="clause-num">6.3</span><span class="clause-body">The Platform's audit log constitutes the definitive record of when the Licensed Material was accessed and downloaded. Both parties agree that the Platform's download event records shall be admissible as evidence of delivery and access.</span></div>
-  <div class="clause"><span class="clause-num">6.4</span><span class="clause-body">The Licensor warrants that they have full right, power, and authority to enter into this Agreement and to grant the licence herein, and that the Licensed Material does not infringe the Intellectual Property Rights of any third party.</span></div>
+  <div class="clause"><span class="clause-num">6.4</span><span class="clause-body">The Artist warrants that they have full right, power, and authority to enter into this Agreement and to grant the licence herein, and that the Licensed Material does not infringe the Intellectual Property Rights of any third party.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
@@ -655,12 +670,12 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
   <div class="section-title"><span class="section-number">7.</span>Fees &amp; Payment</div>
-  <div class="clause"><span class="clause-num">7.1</span><span class="clause-body">In consideration of the rights granted under this Agreement, the Licensee shall pay the Agreed Fee of <strong>${fmtGBP(agreedFee)}</strong> (exclusive of VAT) in accordance with this Clause 7.</span></div>
-  <div class="clause"><span class="clause-num">7.2</span><span class="clause-body">The Agreed Fee shall be disbursed as follows: <strong>${fmtGBP(talentFee)}</strong> to the Licensor and <strong>${fmtGBP(platformFee)}</strong> (representing 15% of the Agreed Fee) to the Platform Operator as the Platform Service Fee.</span></div>
+  <div class="clause"><span class="clause-num">7.1</span><span class="clause-body">In consideration of the rights granted under this Agreement, the Producer shall pay the Agreed Fee of <strong>${fmtGBP(agreedFee)}</strong> (exclusive of VAT) in accordance with this Clause 7.</span></div>
+  <div class="clause"><span class="clause-num">7.2</span><span class="clause-body">The Agreed Fee shall be disbursed as follows: <strong>${fmtGBP(talentFee)}</strong> to the Artist and <strong>${fmtGBP(platformFee)}</strong> (representing 15% of the Agreed Fee) to the Platform Operator as the Platform Service Fee.</span></div>
   <div class="clause"><span class="clause-num">7.3</span><span class="clause-body">Payment of the Agreed Fee is due within thirty (30) days of the Effective Date unless otherwise agreed in writing by the parties. All payments shall be made in US dollars (USD) unless otherwise agreed.</span></div>
-  <div class="clause"><span class="clause-num">7.4</span><span class="clause-body">All sums payable under this Agreement are exclusive of Value Added Tax (VAT). Where VAT is applicable, it shall be charged in addition at the prevailing rate and shall be payable by the Licensee upon receipt of a valid VAT invoice.</span></div>
+  <div class="clause"><span class="clause-num">7.4</span><span class="clause-body">All sums payable under this Agreement are exclusive of Value Added Tax (VAT). Where VAT is applicable, it shall be charged in addition at the prevailing rate and shall be payable by the Producer upon receipt of a valid VAT invoice.</span></div>
   <div class="clause"><span class="clause-num">7.5</span><span class="clause-body">In the event of late payment, interest shall accrue on the outstanding amount at the rate of 8% per annum above the Bank of England base rate in accordance with the Late Payment of Commercial Debts (Interest) Act 1998.</span></div>
-  <div class="clause"><span class="clause-num">7.6</span><span class="clause-body">The Licensee shall not withhold, set off, or deduct any amount from the fees payable under this Agreement except as required by law.</span></div>
+  <div class="clause"><span class="clause-num">7.6</span><span class="clause-body">The Producer shall not withhold, set off, or deduct any amount from the fees payable under this Agreement except as required by law.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
@@ -668,73 +683,83 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
   <div class="section-title"><span class="section-number">8.</span>Intellectual Property Rights</div>
-  <div class="clause"><span class="clause-num">8.1</span><span class="clause-body">All Intellectual Property Rights in the Licensed Material remain vested in the Licensor absolutely. This Agreement does not operate as a transfer or assignment of any such rights.</span></div>
-  <div class="clause"><span class="clause-num">8.2</span><span class="clause-body">The Licensor asserts their Moral Rights in respect of the Licensed Material. The Licensee shall, where technically feasible, credit the Licensor in any productions incorporating the Licensed Material as: "<em>${talentName}</em> (biometric likeness provided via Changling Image Vault)".</span></div>
-  <div class="clause"><span class="clause-num">8.3</span><span class="clause-body">Any new works, derivative works, or productions created by the Licensee that incorporate the Licensed Material shall not be taken to confer any rights in the underlying Licensed Material upon the Licensee. The Licensee's rights are limited strictly to the completed production.</span></div>
-  <div class="clause"><span class="clause-num">8.4</span><span class="clause-body">If the Licensee becomes aware of any actual or threatened infringement of the Licensor's Intellectual Property Rights in the Licensed Material, it shall notify the Licensor promptly. The Licensor shall have sole control over any enforcement action.</span></div>
+  <div class="clause"><span class="clause-num">8.1</span><span class="clause-body">The Artist asserts their Moral Rights in respect of the Licensed Material. The Producer shall, where technically feasible, credit the Artist in any productions incorporating the Licensed Material as: "<em>${talentName}</em> (biometric likeness provided via Changling Image Vault)".</span></div>
+  <div class="clause"><span class="clause-num">8.2</span><span class="clause-body">If the Producer becomes aware of any actual or threatened infringement of the Artist's Intellectual Property Rights in the Licensed Material, it shall notify the Artist promptly. The Artist shall have sole control over any enforcement action.</span></div>
+  <div class="clause"><span class="clause-num">8.3</span><span class="clause-body">For the avoidance of doubt, ownership of all Biometric Data and the rights of the Artist and Producer in respect of derivative works and studio IP are governed by Clause 9.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<!--  9. AUDIT RIGHTS                                          -->
+<!--  9. BIOMETRIC DATA OWNERSHIP & PRODUCTION USE             -->
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
-  <div class="section-title"><span class="section-number">9.</span>Audit Rights</div>
-  <div class="clause"><span class="clause-num">9.1</span><span class="clause-body">The Licensor shall have the right, upon giving not less than five (5) business days' written notice to the Licensee, to audit the Licensee's use of the Licensed Material to verify compliance with the terms of this Agreement, no more than once per twelve-month period.</span></div>
-  <div class="clause"><span class="clause-num">9.2</span><span class="clause-body">The Licensor may request from the Platform Operator, at any time during the Licence Period or for two (2) years thereafter, a full export of all download events, access logs, and chain-of-custody records relating to the Licensed Material. The Platform Operator shall provide such records within five (5) business days of request.</span></div>
-  <div class="clause"><span class="clause-num">9.3</span><span class="clause-body">The Licensee shall maintain complete and accurate records of its use of the Licensed Material and shall make such records available to the Licensor upon request.</span></div>
-  <div class="clause"><span class="clause-num">9.4</span><span class="clause-body">If any audit reveals that the Licensee has used the Licensed Material in breach of this Agreement, the Licensee shall: (a) immediately cease such use; (b) pay the costs of the audit; and (c) pay additional licence fees or damages as determined by the parties or, failing agreement, by a court of competent jurisdiction.</span></div>
+  <div class="section-title"><span class="section-number">9.</span>Biometric Data Ownership &amp; Production Use</div>
+  <div class="clause"><span class="clause-num">9.1</span><span class="clause-body"><strong>Ownership of Raw Biometric Data.</strong> All raw, untextured digital capture data relating to the Artist's physical likeness — including but not limited to 3D body scans, photogrammetry, voice samples, and Facial Action Coding System (FACS) data captured during the course of this Production (collectively, "Biometric Data") — shall remain the sole and exclusive property of the Artist.</span></div>
+  <div class="clause"><span class="clause-num">9.2</span><span class="clause-body"><strong>Limited Licence for Production.</strong> Artist grants Producer a restricted, non-transferable licence to utilise the Biometric Data exclusively for the creation of visual effects and promotional materials directly associated with the specific Picture outlined in this Agreement. Any use of the Biometric Data for sequels, derivative works, video games, or AI training sets requires a separate, expressly negotiated licence.</span></div>
+  <div class="clause"><span class="clause-num">9.3</span><span class="clause-body"><strong>Data Governance &amp; The ImageVault.</strong> Upon the completion of principal photography (or at the conclusion of the VFX vendor's contractual requirement), Producer agrees to facilitate the secure transfer of the master files of all Biometric Data to the Artist's designated encrypted storage provider ("ImageVault"). Following this transfer and the completion of the Picture, Producer shall ensure that all third-party VFX vendors purge the raw Biometric Data from their active servers, retaining only the final rendered assets necessary for the Picture's distribution.</span></div>
+  <div class="clause"><span class="clause-num">9.4</span><span class="clause-body"><strong>Exclusions — Protection of Studio IP.</strong> It is expressly understood that this clause applies solely to the Artist's underlying physical and biometric identity. Producer retains full and exclusive ownership of all proprietary character designs, wardrobe, prosthetics, and final rendered, composited visual effects shots created for the Picture.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<!--  10. REVOCATION & TERMINATION                             -->
+<!--  10. AUDIT RIGHTS                                         -->
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
-  <div class="section-title"><span class="section-number">10.</span>Revocation &amp; Termination</div>
-  <div class="clause"><span class="clause-num">10.1</span><span class="clause-body">This Agreement shall automatically terminate upon expiry of the Licence Period unless renewed in writing by the parties.</span></div>
-  <div class="clause"><span class="clause-num">10.2</span><span class="clause-body">The Licensor may terminate this Agreement with immediate effect by written notice to the Licensee if:</span></div>
-  <div class="sub-clause"><span class="clause-num">10.2.1</span><span class="clause-body">the Licensee commits a material breach of any term of this Agreement and (if such breach is remediable) fails to remedy such breach within fourteen (14) days of being notified in writing;</span></div>
-  <div class="sub-clause"><span class="clause-num">10.2.2</span><span class="clause-body">the Licensee uses the Licensed Material for any purpose not expressly authorised by this Agreement, including any prohibited AI processing;</span></div>
-  <div class="sub-clause"><span class="clause-num">10.2.3</span><span class="clause-body">the Licensee becomes insolvent, enters administration, or is subject to a winding-up order;</span></div>
-  <div class="sub-clause"><span class="clause-num">10.2.4</span><span class="clause-body">there is a change of control of the Licensee without the prior written consent of the Licensor.</span></div>
-  <div class="clause"><span class="clause-num">10.3</span><span class="clause-body">The Platform Operator reserves the right to suspend or revoke access to the Licensed Material on the Platform in the event of a suspected security breach, regulatory requirement, or court order, without liability to either party.</span></div>
-  <div class="clause"><span class="clause-num">10.4</span><span class="clause-body">Upon termination or expiry, the Licensee shall immediately: (a) cease all use of the Licensed Material; (b) delete or destroy all copies in its possession or control; (c) confirm such deletion in writing to the Licensor within seven (7) days; and (d) pay all outstanding sums due under this Agreement.</span></div>
-  <div class="clause"><span class="clause-num">10.5</span><span class="clause-body">Termination of this Agreement shall not affect any rights or remedies of either party that have accrued prior to termination. Clauses 1, 4, 5.4, 8, 9, 10.4, 11, 12 and 13 shall survive termination.</span></div>
+  <div class="section-title"><span class="section-number">10.</span>Audit Rights</div>
+  <div class="clause"><span class="clause-num">10.1</span><span class="clause-body">The Artist shall have the right, upon giving not less than five (5) business days' written notice to the Producer, to audit the Producer's use of the Licensed Material to verify compliance with the terms of this Agreement, no more than once per twelve-month period.</span></div>
+  <div class="clause"><span class="clause-num">10.2</span><span class="clause-body">The Artist may request from the Platform Operator, at any time during the Licence Period or for two (2) years thereafter, a full export of all download events, access logs, and chain-of-custody records relating to the Licensed Material. The Platform Operator shall provide such records within five (5) business days of request.</span></div>
+  <div class="clause"><span class="clause-num">10.3</span><span class="clause-body">The Producer shall maintain complete and accurate records of its use of the Licensed Material and shall make such records available to the Artist upon request.</span></div>
+  <div class="clause"><span class="clause-num">10.4</span><span class="clause-body">If any audit reveals that the Producer has used the Licensed Material in breach of this Agreement, the Producer shall: (a) immediately cease such use; (b) pay the costs of the audit; and (c) pay additional licence fees or damages as determined by the parties or, failing agreement, by a court of competent jurisdiction.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<!--  11. LIABILITY & INDEMNITY                                -->
+<!--  11. REVOCATION & TERMINATION                             -->
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
-  <div class="section-title"><span class="section-number">11.</span>Liability &amp; Indemnity</div>
-  <div class="clause"><span class="clause-num">11.1</span><span class="clause-body">The Licensee shall indemnify, defend, and hold harmless the Licensor and the Platform Operator against all losses, damages, costs (including reasonable legal fees), claims, and liabilities arising from: (a) the Licensee's use of the Licensed Material in breach of this Agreement; (b) any infringement by the Licensee of third-party rights; (c) any data protection breach by the Licensee in respect of the Licensed Material; or (d) any misrepresentation made by the Licensee in the licence request.</span></div>
-  <div class="clause"><span class="clause-num">11.2</span><span class="clause-body">The Licensor's total aggregate liability to the Licensee under or in connection with this Agreement shall not exceed the Agreed Fee paid under this Agreement.</span></div>
-  <div class="clause"><span class="clause-num">11.3</span><span class="clause-body">Neither party shall be liable for: (a) any indirect, special, or consequential losses; (b) loss of profits or revenue; (c) loss of anticipated savings; or (d) loss of goodwill, in each case whether or not such losses were foreseeable or the party had been advised of their possibility.</span></div>
-  <div class="clause"><span class="clause-num">11.4</span><span class="clause-body">Nothing in this Agreement limits or excludes liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, or any other matter that cannot be excluded by law.</span></div>
+  <div class="section-title"><span class="section-number">11.</span>Revocation &amp; Termination</div>
+  <div class="clause"><span class="clause-num">11.1</span><span class="clause-body">This Agreement shall automatically terminate upon expiry of the Licence Period unless renewed in writing by the parties.</span></div>
+  <div class="clause"><span class="clause-num">11.2</span><span class="clause-body">The Artist may terminate this Agreement with immediate effect by written notice to the Producer if:</span></div>
+  <div class="sub-clause"><span class="clause-num">11.2.1</span><span class="clause-body">the Producer commits a material breach of any term of this Agreement and (if such breach is remediable) fails to remedy such breach within fourteen (14) days of being notified in writing;</span></div>
+  <div class="sub-clause"><span class="clause-num">11.2.2</span><span class="clause-body">the Producer uses the Licensed Material for any purpose not expressly authorised by this Agreement, including any prohibited AI processing;</span></div>
+  <div class="sub-clause"><span class="clause-num">11.2.3</span><span class="clause-body">the Producer becomes insolvent, enters administration, or is subject to a winding-up order;</span></div>
+  <div class="sub-clause"><span class="clause-num">11.2.4</span><span class="clause-body">there is a change of control of the Producer without the prior written consent of the Artist.</span></div>
+  <div class="clause"><span class="clause-num">11.3</span><span class="clause-body">The Platform Operator reserves the right to suspend or revoke access to the Licensed Material on the Platform in the event of a suspected security breach, regulatory requirement, or court order, without liability to either party.</span></div>
+  <div class="clause"><span class="clause-num">11.4</span><span class="clause-body">Upon termination or expiry, the Producer shall immediately: (a) cease all use of the Licensed Material; (b) delete or destroy all copies in its possession or control; (c) confirm such deletion in writing to the Artist within seven (7) days; and (d) pay all outstanding sums due under this Agreement.</span></div>
+  <div class="clause"><span class="clause-num">11.5</span><span class="clause-body">Termination of this Agreement shall not affect any rights or remedies of either party that have accrued prior to termination. Clauses 1, 4, 5.4, 8, 9, 10, 11.4, 12, 13 and 14 shall survive termination.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<!--  12. GOVERNING LAW                                        -->
+<!--  12. LIABILITY & INDEMNITY                                -->
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
-  <div class="section-title"><span class="section-number">12.</span>Governing Law &amp; Dispute Resolution</div>
-  <div class="clause"><span class="clause-num">12.1</span><span class="clause-body">This Agreement and any dispute or claim arising out of or in connection with it or its subject matter or formation (including non-contractual disputes or claims) shall be governed by and construed in accordance with the law of England and Wales.</span></div>
-  <div class="clause"><span class="clause-num">12.2</span><span class="clause-body">The parties irrevocably agree that the courts of England and Wales shall have exclusive jurisdiction to settle any dispute or claim arising out of or in connection with this Agreement.</span></div>
-  <div class="clause"><span class="clause-num">12.3</span><span class="clause-body">Before commencing any formal proceedings, the parties agree to attempt to resolve any dispute through good-faith negotiations for a period of not less than thirty (30) days following written notice from one party to the other identifying the dispute.</span></div>
+  <div class="section-title"><span class="section-number">12.</span>Liability &amp; Indemnity</div>
+  <div class="clause"><span class="clause-num">12.1</span><span class="clause-body">The Producer shall indemnify, defend, and hold harmless the Artist and the Platform Operator against all losses, damages, costs (including reasonable legal fees), claims, and liabilities arising from: (a) the Producer's use of the Licensed Material in breach of this Agreement; (b) any infringement by the Producer of third-party rights; (c) any data protection breach by the Producer in respect of the Licensed Material; or (d) any misrepresentation made by the Producer in the licence request.</span></div>
+  <div class="clause"><span class="clause-num">12.2</span><span class="clause-body">The Artist's total aggregate liability to the Producer under or in connection with this Agreement shall not exceed the Agreed Fee paid under this Agreement.</span></div>
+  <div class="clause"><span class="clause-num">12.3</span><span class="clause-body">Neither party shall be liable for: (a) any indirect, special, or consequential losses; (b) loss of profits or revenue; (c) loss of anticipated savings; or (d) loss of goodwill, in each case whether or not such losses were foreseeable or the party had been advised of their possibility.</span></div>
+  <div class="clause"><span class="clause-num">12.4</span><span class="clause-body">Nothing in this Agreement limits or excludes liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, or any other matter that cannot be excluded by law.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<!--  13. GENERAL                                              -->
+<!--  13. GOVERNING LAW                                        -->
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
-  <div class="section-title"><span class="section-number">13.</span>General Provisions</div>
-  <div class="clause"><span class="clause-num">13.1</span><span class="clause-body"><strong>Entire Agreement.</strong> This Agreement constitutes the entire agreement between the parties relating to its subject matter and supersedes all prior representations, agreements, negotiations, and understandings, whether oral or written.</span></div>
-  <div class="clause"><span class="clause-num">13.2</span><span class="clause-body"><strong>Variation.</strong> No amendment or variation of this Agreement shall be effective unless made in writing and signed by authorised representatives of both parties.</span></div>
-  <div class="clause"><span class="clause-num">13.3</span><span class="clause-body"><strong>Waiver.</strong> No failure or delay by a party to exercise any right or remedy provided under this Agreement shall constitute a waiver of that or any other right or remedy.</span></div>
-  <div class="clause"><span class="clause-num">13.4</span><span class="clause-body"><strong>Severability.</strong> If any provision of this Agreement is found invalid or unenforceable, that provision shall be modified to the minimum extent necessary to make it enforceable, and the remaining provisions shall continue in full force.</span></div>
-  <div class="clause"><span class="clause-num">13.5</span><span class="clause-body"><strong>Third Parties.</strong> Except for the Platform Operator in respect of the Platform Fee and audit provisions, no term of this Agreement is intended to confer a benefit on, or be enforceable by, any person who is not a party to this Agreement under the Contracts (Rights of Third Parties) Act 1999.</span></div>
-  <div class="clause"><span class="clause-num">13.6</span><span class="clause-body"><strong>Notices.</strong> All notices under this Agreement shall be in writing and delivered via the Platform's secure messaging system or to the email addresses of the parties as registered on the Platform.</span></div>
-  <div class="clause"><span class="clause-num">13.7</span><span class="clause-body"><strong>Force Majeure.</strong> Neither party shall be liable for any failure or delay in performance resulting from circumstances beyond their reasonable control, including natural disasters, pandemic, war, or government action, provided that the affected party gives prompt written notice and uses reasonable endeavours to resume performance.</span></div>
-  <div class="clause"><span class="clause-num">13.8</span><span class="clause-body"><strong>Platform Authentication Record.</strong> The parties acknowledge and agree that the Licensor's authenticated approval of this licence via the Platform's dual-custody mechanism (using time-based one-time password verification) constitutes a valid and binding acceptance of these terms and is equivalent in effect to a handwritten signature for the purposes of the Electronic Communications Act 2000.</span></div>
+  <div class="section-title"><span class="section-number">13.</span>Governing Law &amp; Dispute Resolution</div>
+  <div class="clause"><span class="clause-num">13.1</span><span class="clause-body">This Agreement and any dispute or claim arising out of or in connection with it or its subject matter or formation (including non-contractual disputes or claims) shall be governed by and construed in accordance with the law of England and Wales.</span></div>
+  <div class="clause"><span class="clause-num">13.2</span><span class="clause-body">The parties irrevocably agree that the courts of England and Wales shall have exclusive jurisdiction to settle any dispute or claim arising out of or in connection with this Agreement.</span></div>
+  <div class="clause"><span class="clause-num">13.3</span><span class="clause-body">Before commencing any formal proceedings, the parties agree to attempt to resolve any dispute through good-faith negotiations for a period of not less than thirty (30) days following written notice from one party to the other identifying the dispute.</span></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  14. GENERAL                                              -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-number">14.</span>General Provisions</div>
+  <div class="clause"><span class="clause-num">14.1</span><span class="clause-body"><strong>Entire Agreement.</strong> This Agreement constitutes the entire agreement between the parties relating to its subject matter and supersedes all prior representations, agreements, negotiations, and understandings, whether oral or written.</span></div>
+  <div class="clause"><span class="clause-num">14.2</span><span class="clause-body"><strong>Variation.</strong> No amendment or variation of this Agreement shall be effective unless made in writing and signed by authorised representatives of both parties.</span></div>
+  <div class="clause"><span class="clause-num">14.3</span><span class="clause-body"><strong>Waiver.</strong> No failure or delay by a party to exercise any right or remedy provided under this Agreement shall constitute a waiver of that or any other right or remedy.</span></div>
+  <div class="clause"><span class="clause-num">14.4</span><span class="clause-body"><strong>Severability.</strong> If any provision of this Agreement is found invalid or unenforceable, that provision shall be modified to the minimum extent necessary to make it enforceable, and the remaining provisions shall continue in full force.</span></div>
+  <div class="clause"><span class="clause-num">14.5</span><span class="clause-body"><strong>Third Parties.</strong> Except for the Platform Operator in respect of the Platform Fee and audit provisions, no term of this Agreement is intended to confer a benefit on, or be enforceable by, any person who is not a party to this Agreement under the Contracts (Rights of Third Parties) Act 1999.</span></div>
+  <div class="clause"><span class="clause-num">14.6</span><span class="clause-body"><strong>Notices.</strong> All notices under this Agreement shall be in writing and delivered via the Platform's secure messaging system or to the email addresses of the parties as registered on the Platform.</span></div>
+  <div class="clause"><span class="clause-num">14.7</span><span class="clause-body"><strong>Force Majeure.</strong> Neither party shall be liable for any failure or delay in performance resulting from circumstances beyond their reasonable control, including natural disasters, pandemic, war, or government action, provided that the affected party gives prompt written notice and uses reasonable endeavours to resume performance.</span></div>
+  <div class="clause"><span class="clause-num">14.8</span><span class="clause-body"><strong>Platform Authentication Record.</strong> The parties acknowledge and agree that the Artist's authenticated approval of this licence via the Platform's dual-custody mechanism (using time-based one-time password verification) constitutes a valid and binding acceptance of these terms and is equivalent in effect to a handwritten signature for the purposes of the Electronic Communications Act 2000.</span></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════ -->
@@ -763,7 +788,7 @@ export async function GET(
     <tr><th>Term</th><th>Detail</th></tr>
     <tr><td>Licence Type</td><td>${licenceTypeLabel}</td></tr>
     <tr><td>Project Name</td><td>${lic.projectName}</td></tr>
-    <tr><td>Licensee Organisation</td><td>${lic.productionCompany}</td></tr>
+    <tr><td>Production Company</td><td>${lic.productionCompany}</td></tr>
     <tr><td>Intended Use</td><td style="white-space:pre-line">${lic.intendedUse}</td></tr>
     <tr><td>Territory</td><td>${lic.territory ?? "Worldwide"}</td></tr>
     <tr><td>Exclusivity</td><td>${exclusivityLabel}</td></tr>
@@ -784,13 +809,13 @@ export async function GET(
 
   <p style="margin-bottom:24px">
     This Agreement has been entered into on the date first written above. The parties acknowledge that
-    the Licensor's authenticated approval of this licence via the Platform's two-factor authorisation
+    the Artist's authenticated approval of this licence via the Platform's two-factor authorisation
     mechanism constitutes binding acceptance of these terms.
   </p>
 
   <div class="sig-grid">
     <div class="sig-block">
-      <div class="sig-party">Signed for and on behalf of<br>Licensor ("Talent")</div>
+      <div class="sig-party">Signed for and on behalf of<br>the Artist</div>
       <div class="sig-line"></div>
       <div class="sig-label">Signature</div>
       <div class="sig-line"></div>
@@ -804,7 +829,7 @@ export async function GET(
       </div>
     </div>
     <div class="sig-block">
-      <div class="sig-party">Signed for and on behalf of<br>Licensee</div>
+      <div class="sig-party">Signed for and on behalf of<br>the Producer</div>
       <div class="sig-line"></div>
       <div class="sig-label">Signature</div>
       <div class="sig-line"></div>
