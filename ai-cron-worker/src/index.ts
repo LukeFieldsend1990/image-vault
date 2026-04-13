@@ -79,6 +79,7 @@ Your job is to:
    then pending requests, then login anomalies, then revenue insights.
 2. For each signal, write a 1-2 sentence suggestion in plain English.
 3. Include specific numbers, names, and dates from the data — never invent facts.
+   Fee values are already formatted as strings (e.g. "$120,000") — use them exactly as provided, do not reformat.
 4. Assign a category: action_required, attention, or insight.
 5. Suggest a clear next action (e.g., "review the request", "contact the licensee").
 6. If a package signal indicates no licence activity for 90+ days, phrase it that way.
@@ -96,6 +97,12 @@ Do not include disclaimers, greetings, or commentary outside the JSON array.`;
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 type Db = ReturnType<typeof drizzle>;
+
+function fmtUSD(cents: number | null): string | null {
+  if (cents === null || cents === undefined) return null;
+  const dollars = cents / 100;
+  return "$" + dollars.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
 
 function getActor(request: Request): Actor | null {
   const userId = request.headers.get("x-ai-user-id");
@@ -251,7 +258,7 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
         count: items.length, oldestDaysAgo: Math.floor((now - oldest) / 86400),
         licences: items.map((i) => ({
           id: i.id, projectName: i.projectName, productionCompany: i.productionCompany,
-          licenceType: i.licenceType, proposedFeeUSD: i.proposedFee ? i.proposedFee / 100 : null,
+          licenceType: i.licenceType, proposedFee: fmtUSD(i.proposedFee),
         })),
       },
     });
@@ -283,7 +290,7 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
           licenceId: e.id, talentId: e.talentId, talentName: nameMap.get(e.talentId) ?? "Unknown",
           projectName: e.projectName, productionCompany: e.productionCompany,
           daysUntilExpiry: Math.floor((e.validTo - now) / 86400),
-          agreedFeeUSD: e.agreedFee ? e.agreedFee / 100 : null, licenseeEmail: lic?.email ?? null, licenseePhone: lic?.phone ?? null,
+          agreedFee: fmtUSD(e.agreedFee), licenseeEmail: lic?.email ?? null, licenseePhone: lic?.phone ?? null,
         },
       });
     }
@@ -323,8 +330,8 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
         type: "revenue_opportunity",
         data: {
           licenceId: p.id, talentId: p.talentId, projectName: p.projectName,
-          licenceType: p.licenceType, proposedFeeUSD: p.proposedFee ? p.proposedFee / 100 : null,
-          averageFeeUSD: avg / 100, percentBelow: Math.round((1 - p.proposedFee! / avg) * 100),
+          licenceType: p.licenceType, proposedFee: fmtUSD(p.proposedFee),
+          averageFee: fmtUSD(avg), percentBelow: Math.round((1 - p.proposedFee! / avg) * 100),
           comparableCount: comps.length,
         },
       });
