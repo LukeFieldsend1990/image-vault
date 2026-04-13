@@ -3,7 +3,7 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { getDb } from "@/lib/db";
-import { talentProfiles } from "@/lib/db/schema";
+import { talentProfiles, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
@@ -55,7 +55,7 @@ async function getSessionData(): Promise<{ userId: string; email: string; role: 
 const ROLE_LABELS: Record<Role, string> = {
   talent: "Talent",
   rep: "Representative / Agency",
-  licensee: "Licensee (Production Co.)",
+  licensee: "Licensee",
   admin: "Platform Admin",
 };
 
@@ -78,23 +78,35 @@ export default async function SettingsPage({
     popularity: number | null;
   } | null = null;
 
-  if (user?.role === "talent" && user.userId) {
+  let inboundEnabled = false;
+
+  if (user?.userId) {
     try {
       const db = getDb();
-      const row = await db
-        .select()
-        .from(talentProfiles)
-        .where(eq(talentProfiles.userId, user.userId))
-        .get();
-      if (row) {
-        identity = {
-          fullName: row.fullName,
-          profileImageUrl: row.profileImageUrl ?? null,
-          tmdbId: row.tmdbId ?? null,
-          knownFor: JSON.parse(row.knownFor ?? "[]") as KnownForEntry[],
-          popularity: row.popularity ?? null,
-        };
+
+      if (user.role === "talent") {
+        const row = await db
+          .select()
+          .from(talentProfiles)
+          .where(eq(talentProfiles.userId, user.userId))
+          .get();
+        if (row) {
+          identity = {
+            fullName: row.fullName,
+            profileImageUrl: row.profileImageUrl ?? null,
+            tmdbId: row.tmdbId ?? null,
+            knownFor: JSON.parse(row.knownFor ?? "[]") as KnownForEntry[],
+            popularity: row.popularity ?? null,
+          };
+        }
       }
+
+      const userRow = await db
+        .select({ inboundEnabled: users.inboundEnabled })
+        .from(users)
+        .where(eq(users.id, user.userId))
+        .get();
+      inboundEnabled = !!userRow?.inboundEnabled;
     } catch {
       // non-fatal
     }
@@ -412,7 +424,8 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* Email Intake */}
+      {/* Email Intake (only if enabled) */}
+      {inboundEnabled && (
       <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Email Intake</h2>
         <Link
@@ -429,6 +442,7 @@ export default async function SettingsPage({
           Generate a CC address to ingest external email conversations with AI triage.
         </p>
       </div>
+      )}
 
       {/* Contact Phone */}
       <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>

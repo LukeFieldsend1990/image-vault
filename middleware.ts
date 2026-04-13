@@ -30,16 +30,30 @@ async function getAuthStatus(req: NextRequest): Promise<AuthStatus> {
   }
 }
 
-function getEmailFromToken(req: NextRequest): string | null {
+function getTokenPayload(req: NextRequest): { email: string | null; role: string | null } {
   try {
     const token = req.cookies.get("session")?.value;
-    if (!token) return null;
-    const payload = JSON.parse(atob(token.split(".")[1])) as { email?: string };
-    return payload.email ?? null;
+    if (!token) return { email: null, role: null };
+    const payload = JSON.parse(atob(token.split(".")[1])) as { email?: string; role?: string };
+    return { email: payload.email ?? null, role: payload.role ?? null };
   } catch {
-    return null;
+    return { email: null, role: null };
   }
 }
+
+// Routes each role is allowed to access
+const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
+  talent: ["/dashboard", "/vault", "/licences", "/settings", "/onboarding", "/inbox", "/bookings"],
+  rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences"],
+  licensee: ["/directory", "/talent", "/licences", "/settings", "/inbox"],
+};
+
+// Default landing page per role (for redirecting on denied access)
+const ROLE_HOME: Record<string, string> = {
+  talent: "/dashboard",
+  rep: "/roster",
+  licensee: "/directory",
+};
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -59,7 +73,7 @@ export async function middleware(req: NextRequest) {
         loginUrl.searchParams.set("next", pathname);
         return NextResponse.redirect(loginUrl);
       }
-      const email = getEmailFromToken(req);
+      const { email } = getTokenPayload(req);
       if (!email || !ADMIN_EMAILS.includes(email)) {
         const dashUrl = req.nextUrl.clone();
         dashUrl.pathname = "/dashboard";
@@ -94,10 +108,25 @@ export async function middleware(req: NextRequest) {
     }
 
     if (isAuthPage && status === "ok") {
+      const { role } = getTokenPayload(req);
       const dashUrl = req.nextUrl.clone();
-      dashUrl.pathname = "/dashboard";
+      dashUrl.pathname = ROLE_HOME[role ?? "talent"] ?? "/dashboard";
       dashUrl.search = "";
       return NextResponse.redirect(dashUrl);
+    }
+
+    // Role-based route protection — redirect to role home if accessing a disallowed route
+    if (isProtected && status === "ok") {
+      const { role } = getTokenPayload(req);
+      if (role && role !== "admin") {
+        const allowed = ROLE_ALLOWED_PREFIXES[role];
+        if (allowed && !allowed.some((prefix) => pathname.startsWith(prefix))) {
+          const homeUrl = req.nextUrl.clone();
+          homeUrl.pathname = ROLE_HOME[role] ?? "/dashboard";
+          homeUrl.search = "";
+          return NextResponse.redirect(homeUrl);
+        }
+      }
     }
   }
 

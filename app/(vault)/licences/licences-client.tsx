@@ -148,8 +148,9 @@ export default function LicencesClient() {
       {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
       {!loading && !error && licences.length === 0 && (
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-          No licences found.{" "}
-          <Link href="/directory" className="underline">Browse the directory</Link> to request one.
+          No licences found.{tab !== "DENIED" && (
+            <>{" "}<Link href="/directory" className="underline">Browse the directory</Link> to request one.</>
+          )}
         </p>
       )}
 

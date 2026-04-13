@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { users, scanPackages } from "@/lib/db/schema";
+import { users, scanPackages, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, sql, and } from "drizzle-orm";
 
@@ -21,9 +21,12 @@ export async function GET(req: NextRequest) {
     .select({
       id: users.id,
       email: users.email,
+      fullName: talentProfiles.fullName,
+      profileImageUrl: talentProfiles.profileImageUrl,
       packageCount: sql<number>`count(${scanPackages.id})`.as("package_count"),
     })
     .from(users)
+    .leftJoin(talentProfiles, eq(talentProfiles.userId, users.id))
     .leftJoin(
       scanPackages,
       and(eq(scanPackages.talentId, users.id), eq(scanPackages.status, "ready"))
