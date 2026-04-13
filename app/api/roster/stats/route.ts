@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { talentReps, scanPackages, licences, downloadEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, and, inArray, gte, lt, count, sum, sql } from "drizzle-orm";
+import { eq, and, inArray, gte, lt, count, sum, sql, isNull } from "drizzle-orm";
 
 /**
  * GET /api/roster/stats
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       db
         .select({ total: count(scanPackages.id) })
         .from(scanPackages)
-        .where(and(inArray(scanPackages.talentId, talentIds), eq(scanPackages.status, "ready")))
+        .where(and(inArray(scanPackages.talentId, talentIds), eq(scanPackages.status, "ready"), isNull(scanPackages.deletedAt)))
         .get(),
 
       // Active licences (APPROVED + validTo > now)
