@@ -172,6 +172,15 @@ export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRun
             onToggle={() => toggleSetting("licence_summary_enabled")}
           />
 
+          {/* Metadata tagging */}
+          <ToggleRow
+            label="Metadata Auto-Tagging"
+            sublabel="Tag packages on upload via AI vision + manifest analysis"
+            checked={settings["metadata_tags_enabled"] === "true"}
+            saving={saving === "metadata_tags_enabled"}
+            onToggle={() => toggleSetting("metadata_tags_enabled")}
+          />
+
           {/* Budget ceiling */}
           <InputRow
             label="Budget Ceiling (USD)"

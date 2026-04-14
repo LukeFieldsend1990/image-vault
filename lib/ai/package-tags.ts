@@ -2,7 +2,7 @@ import type { drizzle } from "drizzle-orm/d1";
 import { scanPackages, scanFiles, talentProfiles, packageTags, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { callAi, callVisionAi } from "./providers";
-import { logAiCost, isAiEnabled, getSettingValue } from "./cost-tracker";
+import { logAiCost, isAiEnabled, isFeatureEnabled, getSettingValue } from "./cost-tracker";
 import { METADATA_TAG_PROMPT, IMAGE_ANALYSIS_PROMPT, ALL_TAGS, TAG_VOCABULARY } from "./constants";
 
 type Db = ReturnType<typeof drizzle>;
@@ -183,8 +183,11 @@ export async function suggestPackageTags(
   db: Db,
   packageId: string
 ): Promise<void> {
-  const enabled = await isAiEnabled(db);
-  if (!enabled) return;
+  const [enabled, featureOn] = await Promise.all([
+    isAiEnabled(db),
+    isFeatureEnabled(db, "metadata_tags"),
+  ]);
+  if (!enabled || !featureOn) return;
 
   // Get package details
   const pkg = await db
