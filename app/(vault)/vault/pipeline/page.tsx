@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { scanPackages, talentSettings } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import PipelineSelectClient from "./pipeline-select-client";
 
 async function getSession(): Promise<{ userId: string; role: string } | null> {
@@ -46,6 +46,7 @@ export default async function PipelinePage() {
     .where(and(
       eq(scanPackages.talentId, session.userId),
       eq(scanPackages.status, "ready"),
+      isNull(scanPackages.deletedAt),
     ))
     .all();
 

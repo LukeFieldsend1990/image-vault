@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { pipelineJobs, pipelineStages, scanPackages, talentSettings } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, isNull } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 
 const STAGE_NAMES = ["validate", "classify", "assemble", "bundle", "notify"] as const;
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   const pkg = await db
     .select({ id: scanPackages.id, talentId: scanPackages.talentId, status: scanPackages.status })
     .from(scanPackages)
-    .where(eq(scanPackages.id, body.packageId))
+    .where(and(eq(scanPackages.id, body.packageId), isNull(scanPackages.deletedAt)))
     .get();
 
   if (!pkg || pkg.status !== "ready") {
