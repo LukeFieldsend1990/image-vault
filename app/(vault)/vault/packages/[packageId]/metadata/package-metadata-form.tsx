@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const SCAN_TYPES = [
   { value: "", label: "Not set" },
@@ -53,10 +53,6 @@ export default function PackageMetadataForm({ metadata }: { metadata: PackageMet
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const labelClass = "block text-xs font-medium mb-1.5";
-  const inputClass = "w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1 transition";
-  const inputStyle = { borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" };
-
   function toggleEngine(engine: string) {
     setEngines((prev) => prev.includes(engine) ? prev.filter((e) => e !== engine) : [...prev, engine]);
   }
@@ -100,6 +96,10 @@ export default function PackageMetadataForm({ metadata }: { metadata: PackageMet
       setSaving(false);
     }
   }
+
+  const labelClass = "block text-xs font-medium mb-1.5";
+  const inputClass = "w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1 transition";
+  const inputStyle = { borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" };
 
   return (
     <div className="space-y-6">
@@ -209,6 +209,9 @@ export default function PackageMetadataForm({ metadata }: { metadata: PackageMet
         </div>
       </div>
 
+      {/* AI & Custom Tags */}
+      <TagEditor packageId={metadata.id} />
+
       {/* Internal Notes */}
       <div>
         <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--color-ink)" }}>Internal Notes</h2>
@@ -237,6 +240,220 @@ export default function PackageMetadataForm({ metadata }: { metadata: PackageMet
         {saved && <span className="text-xs font-medium" style={{ color: "#059669" }}>Saved</span>}
         {error && <span className="text-xs" style={{ color: "var(--color-danger)" }}>{error}</span>}
       </div>
+    </div>
+  );
+}
+
+// ── Tag Editor (AI + custom tags) ──────────────────────────────────────────
+
+interface StructuredTag {
+  id: string;
+  tag: string;
+  category: string;
+  status: string;
+  suggestedBy: string;
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  scan_type: "#6366f1",
+  quality: "#059669",
+  compatibility: "#d97706",
+  completeness: "#8b5cf6",
+  lighting: "#eab308",
+  angle: "#06b6d4",
+  background: "#64748b",
+  body_region: "#ec4899",
+};
+
+function TagEditor({ packageId }: { packageId: string }) {
+  const [tags, setTags] = useState<StructuredTag[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newCategory, setNewCategory] = useState("");
+  const [newTag, setNewTag] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const fetchTags = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/ai/package-tags/${packageId}`);
+      if (res.ok) {
+        const data = await res.json() as { tags: StructuredTag[] };
+        setTags(data.tags);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [packageId]);
+
+  useEffect(() => { void fetchTags(); }, [fetchTags]);
+
+  async function handleAdd() {
+    if (!newCategory.trim() || !newTag.trim()) return;
+    setAdding(true);
+    try {
+      const res = await fetch(`/api/ai/package-tags/${packageId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: newCategory.trim(), tag: newTag.trim() }),
+      });
+      if (res.ok) {
+        setNewCategory("");
+        setNewTag("");
+        await fetchTags();
+      }
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleDelete(tagId: string) {
+    setDeletingId(tagId);
+    try {
+      await fetch(`/api/ai/package-tags/${tagId}`, { method: "DELETE" });
+      setTags((prev) => prev.filter((t) => t.id !== tagId));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleAccept(tagId: string) {
+    await fetch(`/api/ai/package-tags/${tagId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "accepted" }),
+    });
+    setTags((prev) => prev.map((t) => t.id === tagId ? { ...t, status: "accepted" } : t));
+  }
+
+  async function handleDismiss(tagId: string) {
+    await fetch(`/api/ai/package-tags/${tagId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "dismissed" }),
+    });
+    setTags((prev) => prev.map((t) => t.id === tagId ? { ...t, status: "dismissed" } : t));
+  }
+
+  // Group tags by category
+  const grouped = new Map<string, StructuredTag[]>();
+  for (const t of tags) {
+    const arr = grouped.get(t.category) ?? [];
+    arr.push(t);
+    grouped.set(t.category, arr);
+  }
+
+  return (
+    <div>
+      <h2 className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>AI &amp; Custom Tags</h2>
+      <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
+        AI-suggested tags appear automatically. Add your own as category / tag pairs.
+      </p>
+
+      {loading ? (
+        <p className="text-xs" style={{ color: "var(--color-muted)" }}>Loading tags…</p>
+      ) : (
+        <>
+          {/* Existing tags grouped by category */}
+          {grouped.size > 0 && (
+            <div className="space-y-2 mb-4">
+              {[...grouped.entries()].map(([category, catTags]) => (
+                <div key={category}>
+                  <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: CATEGORY_COLORS[category] ?? "var(--color-muted)" }}>
+                    {category.replace(/_/g, " ")}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {catTags.map((t) => (
+                      <span
+                        key={t.id}
+                        className="inline-flex items-center gap-1 text-[11px] pl-2 pr-1 py-0.5 rounded-sm group"
+                        style={{
+                          background: "var(--color-surface)",
+                          border: `1px solid ${t.status === "dismissed" ? "var(--color-border)" : (CATEGORY_COLORS[category] ?? "var(--color-border)")}`,
+                          color: t.status === "dismissed" ? "var(--color-muted)" : "var(--color-text)",
+                          opacity: t.status === "dismissed" ? 0.5 : 1,
+                          textDecoration: t.status === "dismissed" ? "line-through" : "none",
+                        }}
+                      >
+                        {t.tag.replace(/-/g, " ")}
+                        {t.suggestedBy === "ai" && t.status === "suggested" && (
+                          <>
+                            <button
+                              onClick={() => handleAccept(t.id)}
+                              className="ml-0.5 p-0.5 rounded transition hover:bg-green-100"
+                              title="Accept"
+                              style={{ color: "#059669" }}
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </button>
+                            <button
+                              onClick={() => handleDismiss(t.id)}
+                              className="p-0.5 rounded transition hover:bg-red-100"
+                              title="Dismiss"
+                              style={{ color: "#dc2626" }}
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => handleDelete(t.id)}
+                          disabled={deletingId === t.id}
+                          className="p-0.5 rounded opacity-0 group-hover:opacity-60 transition hover:!opacity-100"
+                          title="Remove"
+                          style={{ color: "var(--color-muted)" }}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tags.length === 0 && (
+            <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>No tags yet.</p>
+          )}
+
+          {/* Add custom tag */}
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--color-text)" }}>Category</label>
+              <input
+                type="text"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder="e.g. lighting"
+                className="w-full rounded border px-2.5 py-1.5 text-xs outline-none focus:ring-1 transition"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleAdd(); } }}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--color-text)" }}>Tag</label>
+              <input
+                type="text"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="e.g. studio-neutral"
+                className="w-full rounded border px-2.5 py-1.5 text-xs outline-none focus:ring-1 transition"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleAdd(); } }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={adding || !newCategory.trim() || !newTag.trim()}
+              className="shrink-0 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-40"
+              style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}
+            >
+              {adding ? "…" : "Add"}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

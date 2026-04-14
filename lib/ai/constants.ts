@@ -5,6 +5,10 @@ export const TAG_VOCABULARY = {
   quality: ["vfx-grade", "realtime-grade", "preview-only", "raw-unprocessed"] as const,
   compatibility: ["unreal-ready", "unity-ready", "maya-compatible", "blender-compatible", "usd-format"] as const,
   completeness: ["multi-angle", "single-pose", "expression-set", "full-range-of-motion", "static-only"] as const,
+  lighting: ["studio-neutral", "dramatic", "hdri-environment", "natural", "mixed"] as const,
+  angle: ["frontal", "three-quarter", "profile", "overhead", "low-angle"] as const,
+  background: ["clean-studio", "greenscreen", "on-set", "transparent"] as const,
+  body_region: ["full-body-shot", "bust", "head-closeup", "hands-detail", "feet", "torso"] as const,
 } as const;
 
 export type TagCategory = keyof typeof TAG_VOCABULARY;
@@ -82,6 +86,25 @@ scan_type: full-body, head-only, hands, face-detail, texture-set, partial-body
 quality: vfx-grade, realtime-grade, preview-only, raw-unprocessed
 compatibility: unreal-ready, unity-ready, maya-compatible, blender-compatible, usd-format
 completeness: multi-angle, single-pose, expression-set, full-range-of-motion, static-only
+lighting: studio-neutral, dramatic, hdri-environment, natural, mixed
+angle: frontal, three-quarter, profile, overhead, low-angle
+background: clean-studio, greenscreen, on-set, transparent
+body_region: full-body-shot, bust, head-closeup, hands-detail, feet, torso
+
+Return a JSON array of objects: [{"tag": string, "category": string}]
+
+Only use tags from the vocabulary above. Do not invent new tags.`;
+
+export const IMAGE_ANALYSIS_PROMPT = `You are a visual analysis assistant for 3D likeness scan reference images.
+
+Analyse this image of an actor/performer captured during a 3D scanning session.
+
+From the following controlled vocabulary ONLY, select all tags that apply:
+
+lighting: studio-neutral, dramatic, hdri-environment, natural, mixed
+angle: frontal, three-quarter, profile, overhead, low-angle
+background: clean-studio, greenscreen, on-set, transparent
+body_region: full-body-shot, bust, head-closeup, hands-detail, feet, torso
 
 Return a JSON array of objects: [{"tag": string, "category": string}]
 

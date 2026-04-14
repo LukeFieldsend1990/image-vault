@@ -29,6 +29,7 @@ interface ScanPackage {
   totalSizeBytes: number | null;
   coverImageKey: string | null;
   fileCount: number;
+  aiTags?: { tag: string; category: string; status: string }[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -330,6 +331,16 @@ export default function TalentProfileClient({
                             <span>{formatBytes(pkg.totalSizeBytes)}</span>
                           )}
                         </div>
+                        {(pkg.aiTags ?? []).length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {(pkg.aiTags ?? []).map((at) => (
+                              <span key={`${at.category}:${at.tag}`} className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm"
+                                style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
+                                {at.tag.replace(/-/g, " ")}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">

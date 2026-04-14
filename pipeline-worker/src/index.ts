@@ -30,6 +30,7 @@ interface Env {
   SCANS_BUCKET: R2Bucket;
   PIPELINE_BUCKET: R2Bucket;
   AI: Ai;
+  AI_SERVICE?: Fetcher;
   RESEND_API_KEY?: string;
   MESHY_API_KEY?: string;
   RESEND_FROM_EMAIL: string;
@@ -750,6 +751,21 @@ async function processJob(env: Env, jobId: string) {
     await stage3Assemble(db, env, jobId, job.packageId, manifest, textureManifest, r2Prefix, packageName);
     await stage4Bundle(db, env, jobId, manifest, requestedSkus, r2Prefix, packageName);
     await stage5Notify(db, env, jobId, packageName, talentEmail, initiatorEmail, requestedSkus);
+
+    // Fire AI metadata enrichment (non-blocking — failure must not block pipeline)
+    if (env.AI_SERVICE) {
+      try {
+        await env.AI_SERVICE.fetch(
+          new Request(`https://ai-service/package-tags/auto/${job.packageId}`, {
+            method: "POST",
+            headers: { "x-ai-source": "upload-complete" },
+          })
+        );
+      } catch {
+        // AI tagging is best-effort; log but don't fail the pipeline
+        console.error(`AI tagging failed for package ${job.packageId}`);
+      }
+    }
 
     await db.update(pipelineJobs)
       .set({ status: "complete", completedAt: Math.floor(Date.now() / 1000) })

@@ -2,10 +2,10 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { scanPackages, scanFiles } from "@/lib/db/schema";
+import { scanPackages, scanFiles, packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
-import { eq, desc, sql, and, isNull } from "drizzle-orm";
+import { eq, desc, sql, and, isNull, inArray } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
@@ -56,7 +56,35 @@ export async function GET(req: NextRequest) {
     .orderBy(desc(scanPackages.createdAt))
     .all();
 
-  return NextResponse.json({ packages });
+  // Fetch structured AI tags for all returned packages
+  const packageIds = packages.map((p) => p.id);
+  const aiTags =
+    packageIds.length > 0
+      ? await db
+          .select({
+            packageId: packageTags.packageId,
+            tag: packageTags.tag,
+            category: packageTags.category,
+            status: packageTags.status,
+          })
+          .from(packageTags)
+          .where(inArray(packageTags.packageId, packageIds))
+          .all()
+      : [];
+
+  const tagsByPackage = new Map<string, typeof aiTags>();
+  for (const t of aiTags) {
+    const arr = tagsByPackage.get(t.packageId) ?? [];
+    arr.push(t);
+    tagsByPackage.set(t.packageId, arr);
+  }
+
+  const enriched = packages.map((p) => ({
+    ...p,
+    aiTags: tagsByPackage.get(p.id) ?? [],
+  }));
+
+  return NextResponse.json({ packages: enriched });
 }
 
 export async function POST(req: NextRequest) {

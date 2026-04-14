@@ -187,6 +187,14 @@ export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRun
             saving={saving === "max_security_alerts_per_day"}
             onCommit={(v) => updateSetting("max_security_alerts_per_day", v)}
           />
+
+          {/* Vision images per package */}
+          <InputRow
+            label="Vision Images per Package"
+            value={settings["vision_max_images"] ?? "3"}
+            saving={saving === "vision_max_images"}
+            onCommit={(v) => updateSetting("vision_max_images", v)}
+          />
         </div>
       </div>
 

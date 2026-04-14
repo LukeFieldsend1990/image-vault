@@ -51,3 +51,29 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true });
 }
+
+// DELETE /api/ai/package-tags/:tagId — remove a tag
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ tagId: string }> }
+) {
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+
+  const { tagId } = await params;
+  const db = getDb();
+
+  const existing = await db
+    .select({ id: packageTags.id })
+    .from(packageTags)
+    .where(eq(packageTags.id, tagId))
+    .get();
+
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await db.delete(packageTags).where(eq(packageTags.id, tagId));
+
+  return NextResponse.json({ ok: true });
+}

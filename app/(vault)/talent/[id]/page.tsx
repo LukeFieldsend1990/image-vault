@@ -3,8 +3,8 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, scanFiles, talentProfiles, talentLicencePermissions } from "@/lib/db/schema";
-import { eq, sql, and, desc, isNull } from "drizzle-orm";
+import { users, scanPackages, scanFiles, talentProfiles, talentLicencePermissions, packageTags } from "@/lib/db/schema";
+import { eq, sql, and, desc, isNull, inArray } from "drizzle-orm";
 import TalentProfileClient from "./talent-profile-client";
 
 const LICENCE_TYPES = [
@@ -132,6 +132,30 @@ export default async function TalentProfilePage({
 
   const knownFor = profile?.knownFor ? JSON.parse(profile.knownFor) as { title: string; year?: number; type: string }[] : [];
 
+  // Fetch AI-generated tags for packages
+  const aiTags = packageIds.length > 0
+    ? await db
+        .select({
+          packageId: packageTags.packageId,
+          tag: packageTags.tag,
+          category: packageTags.category,
+          status: packageTags.status,
+        })
+        .from(packageTags)
+        .where(inArray(packageTags.packageId, packageIds))
+        .all()
+    : [];
+
+  const tagsByPackage: Record<string, { tag: string; category: string; status: string }[]> = {};
+  for (const t of aiTags) {
+    (tagsByPackage[t.packageId] ??= []).push(t);
+  }
+
+  const packagesWithTags = packages.map((p) => ({
+    ...p,
+    aiTags: tagsByPackage[p.id] ?? [],
+  }));
+
   // Deepfake Protection (monitoring_reference) is internal — hide from licensees
   const visiblePermissions = session.role === "licensee"
     ? permissions.filter((p) => p.licenceType !== "monitoring_reference")
@@ -144,7 +168,7 @@ export default async function TalentProfilePage({
       profile={profile ? { ...profile, knownFor } : null}
       permissions={visiblePermissions}
       capabilities={capabilities}
-      packages={packages}
+      packages={packagesWithTags}
     />
   );
 }
