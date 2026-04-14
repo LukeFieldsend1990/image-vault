@@ -309,7 +309,7 @@ function TagEditor({ packageId }: { packageId: string }) {
   async function handleDelete(tagId: string) {
     setDeletingId(tagId);
     try {
-      await fetch(`/api/ai/package-tags/${tagId}`, { method: "DELETE" });
+      await fetch(`/api/ai/package-tags/tag/${tagId}`, { method: "DELETE" });
       setTags((prev) => prev.filter((t) => t.id !== tagId));
     } finally {
       setDeletingId(null);
@@ -317,7 +317,7 @@ function TagEditor({ packageId }: { packageId: string }) {
   }
 
   async function handleAccept(tagId: string) {
-    await fetch(`/api/ai/package-tags/${tagId}`, {
+    await fetch(`/api/ai/package-tags/tag/${tagId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "accepted" }),
@@ -326,7 +326,7 @@ function TagEditor({ packageId }: { packageId: string }) {
   }
 
   async function handleDismiss(tagId: string) {
-    await fetch(`/api/ai/package-tags/${tagId}`, {
+    await fetch(`/api/ai/package-tags/tag/${tagId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "dismissed" }),
