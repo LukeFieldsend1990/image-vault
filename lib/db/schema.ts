@@ -66,6 +66,7 @@ export const scanPackages = sqliteTable("scan_packages", {
   updatedAt: integer("updated_at").notNull(), // unix timestamp
   deletedAt: integer("deleted_at"),           // unix timestamp; null = active
   deletedBy: text("deleted_by"),              // user ID who soft-deleted
+  searchIndexedAt: integer("search_indexed_at"), // last Vectorize index timestamp
 });
 
 export const scanFiles = sqliteTable("scan_files", {

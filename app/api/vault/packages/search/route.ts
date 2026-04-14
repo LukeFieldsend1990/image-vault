@@ -157,9 +157,25 @@ export async function GET(req: NextRequest) {
     tagsByPackage.set(t.packageId, arr);
   }
 
+  // Fetch talent names for returned packages
+  const talentIds = [...new Set(packages.map((p) => p.talentId))];
+  const talents =
+    talentIds.length > 0
+      ? await db
+          .select({
+            userId: talentProfiles.userId,
+            fullName: talentProfiles.fullName,
+          })
+          .from(talentProfiles)
+          .where(inArray(talentProfiles.userId, talentIds))
+          .all()
+      : [];
+  const talentNameMap = new Map(talents.map((t) => [t.userId, t.fullName]));
+
   const results = packages.map((p) => ({
     ...p,
     structuredTags: tagsByPackage.get(p.id) ?? [],
+    talentName: talentNameMap.get(p.talentId) ?? null,
   }));
 
   return NextResponse.json({

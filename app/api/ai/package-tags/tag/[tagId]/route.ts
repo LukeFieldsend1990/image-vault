@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { triggerReindex } from "@/lib/search/reindex";
 import { eq } from "drizzle-orm";
 
 // PATCH /api/ai/package-tags/:tagId — accept or dismiss a tag
@@ -31,7 +32,7 @@ export async function PATCH(
   const db = getDb();
 
   const existing = await db
-    .select({ id: packageTags.id })
+    .select({ id: packageTags.id, packageId: packageTags.packageId })
     .from(packageTags)
     .where(eq(packageTags.id, tagId))
     .get();
@@ -49,6 +50,8 @@ export async function PATCH(
     })
     .where(eq(packageTags.id, tagId));
 
+  triggerReindex(existing.packageId);
+
   return NextResponse.json({ ok: true });
 }
 
@@ -64,7 +67,7 @@ export async function DELETE(
   const db = getDb();
 
   const existing = await db
-    .select({ id: packageTags.id })
+    .select({ id: packageTags.id, packageId: packageTags.packageId })
     .from(packageTags)
     .where(eq(packageTags.id, tagId))
     .get();
@@ -74,6 +77,8 @@ export async function DELETE(
   }
 
   await db.delete(packageTags).where(eq(packageTags.id, tagId));
+
+  triggerReindex(existing.packageId);
 
   return NextResponse.json({ ok: true });
 }

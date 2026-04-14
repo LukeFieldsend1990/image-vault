@@ -11,5 +11,6 @@ declare global {
     ENVIRONMENT: string;
     APP_URL: string;
     ANTHROPIC_API_KEY: string;
+    VECTORIZE: VectorizeIndex;
   }
 }

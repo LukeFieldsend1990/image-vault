@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { packageTags, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { callAiService } from "@/lib/ai/service";
+import { triggerReindex } from "@/lib/search/reindex";
 import { eq } from "drizzle-orm";
 
 // GET /api/ai/package-tags/:packageId — return all tags for the package
@@ -93,6 +94,8 @@ export async function POST(
     reviewedAt: now,
     createdAt: now,
   });
+
+  triggerReindex(packageId);
 
   return NextResponse.json({ id, tag, category }, { status: 201 });
 }
