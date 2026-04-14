@@ -41,6 +41,13 @@ preview_bucket_name = "image-vault-pipeline-dev"
 binding = "AI"
 
 # -------------------------------------------------------------------
+# Service bindings (worker-to-worker, zero-latency)
+# -------------------------------------------------------------------
+[[services]]
+binding = "AI_SERVICE"
+service = "image-vault-ai"
+
+# -------------------------------------------------------------------
 # Environment Variables
 # -------------------------------------------------------------------
 [vars]

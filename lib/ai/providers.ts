@@ -38,6 +38,27 @@ export async function callWorkersAi(
   return { text, inputTokens, outputTokens, provider: "workers_ai", model };
 }
 
+// ── Workers AI Vision ────────────────────────────────────────────────────────
+
+export async function callVisionAi(
+  ai: Ai,
+  params: { imageBytes: Uint8Array; prompt: string; maxTokens?: number }
+): Promise<AiResult> {
+  const model = "@cf/llava-hf/llava-1.5-7b-hf";
+
+  const response = await ai.run(model as Parameters<Ai["run"]>[0], {
+    image: [...params.imageBytes],
+    prompt: params.prompt,
+    max_tokens: params.maxTokens ?? 512,
+  }) as { description?: string };
+
+  const text = response?.description ?? "";
+  const inputTokens = Math.ceil(params.prompt.length / 4) + 256; // estimate image tokens
+  const outputTokens = Math.ceil(text.length / 4);
+
+  return { text, inputTokens, outputTokens, provider: "workers_ai", model };
+}
+
 // ── Anthropic (raw fetch) ────────────────────────────────────────────────────
 
 export async function callAnthropic(

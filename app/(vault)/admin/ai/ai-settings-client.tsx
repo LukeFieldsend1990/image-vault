@@ -172,6 +172,15 @@ export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRun
             onToggle={() => toggleSetting("licence_summary_enabled")}
           />
 
+          {/* Metadata tagging */}
+          <ToggleRow
+            label="Metadata Auto-Tagging"
+            sublabel="Tag packages on upload via AI vision + manifest analysis"
+            checked={settings["metadata_tags_enabled"] === "true"}
+            saving={saving === "metadata_tags_enabled"}
+            onToggle={() => toggleSetting("metadata_tags_enabled")}
+          />
+
           {/* Budget ceiling */}
           <InputRow
             label="Budget Ceiling (USD)"
@@ -186,6 +195,14 @@ export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRun
             value={settings["max_security_alerts_per_day"] ?? "10"}
             saving={saving === "max_security_alerts_per_day"}
             onCommit={(v) => updateSetting("max_security_alerts_per_day", v)}
+          />
+
+          {/* Vision images per package */}
+          <InputRow
+            label="Vision Images per Package"
+            value={settings["vision_max_images"] ?? "3"}
+            saving={saving === "vision_max_images"}
+            onCommit={(v) => updateSetting("vision_max_images", v)}
           />
         </div>
       </div>

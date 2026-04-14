@@ -20,6 +20,7 @@ interface ScanPackage {
   coverImageKey: string | null;
   createdAt: number;
   fileCount: number;
+  aiTags?: { tag: string; category: string; status: string }[];
 }
 
 interface ScanFile {
@@ -365,6 +366,16 @@ function PackageCard({ pkg, onDelete, deleting }: { pkg: ScanPackage; onDelete: 
                 </span>
               )}
             </div>
+            {(pkg.aiTags ?? []).length > 0 && (
+              <div className="hidden sm:flex flex-wrap gap-1 mt-1">
+                {(pkg.aiTags ?? []).map((at) => (
+                  <span key={`${at.category}:${at.tag}`} className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm"
+                    style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
+                    {at.tag.replace(/-/g, " ")}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="hidden sm:flex items-center gap-2 shrink-0">
             <div className="text-right mr-2">

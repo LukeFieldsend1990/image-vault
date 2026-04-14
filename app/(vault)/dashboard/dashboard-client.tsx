@@ -5,6 +5,13 @@ import Link from "next/link";
 import UploadModal from "../upload-modal";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 
+interface AiTag {
+  packageId: string;
+  tag: string;
+  category: string;
+  status: string;
+}
+
 interface ScanPackage {
   id: string;
   name: string;
@@ -23,6 +30,7 @@ interface ScanPackage {
   hasHdr: boolean | null;
   hasMotionCapture: boolean | null;
   compatibleEngines: string | null;
+  aiTags?: AiTag[];
 }
 
 interface ScanFile {
@@ -454,7 +462,7 @@ function PackageCard({
               light_stage: "Light Stage", photogrammetry: "Photogrammetry",
               lidar: "LiDAR", structured_light: "Structured Light", other: "Other",
             };
-            const hasAny = pkg.scanType || caps.length > 0 || tags.length > 0;
+            const hasAny = pkg.scanType || caps.length > 0 || tags.length > 0 || (pkg.aiTags ?? []).length > 0;
             if (!hasAny) return null;
             return (
               <div className="hidden sm:flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -474,6 +482,12 @@ function PackageCard({
                   <span key={tag} className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm"
                     style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
                     {tag}
+                  </span>
+                ))}
+                {(pkg.aiTags ?? []).map((at) => (
+                  <span key={`${at.category}:${at.tag}`} className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-sm"
+                    style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)", opacity: at.status === "suggested" ? 0.7 : 1 }}>
+                    {at.tag.replace(/-/g, " ")}
                   </span>
                 ))}
               </div>

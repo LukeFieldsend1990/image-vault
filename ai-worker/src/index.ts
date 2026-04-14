@@ -14,6 +14,7 @@ interface Env {
   DB: D1Database;
   AI?: Ai;
   ANTHROPIC_API_KEY?: string;
+  SCANS_BUCKET?: R2Bucket;
 }
 
 interface Actor {

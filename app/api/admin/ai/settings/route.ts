@@ -13,6 +13,8 @@ const VALID_KEYS = [
   "licence_summary_enabled",
   "budget_ceiling_usd",
   "max_security_alerts_per_day",
+  "vision_max_images",
+  "metadata_tags_enabled",
 ];
 
 /**
