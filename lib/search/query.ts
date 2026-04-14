@@ -32,6 +32,10 @@ const WEIGHTS = {
   popularity: 0.20,
 } as const;
 
+// Minimum cosine similarity to include in results.
+// Below this threshold, the match is too weak to be useful.
+const MIN_COSINE_SCORE = 0.55;
+
 // Normalise a unix timestamp to 0–1 where newer = higher.
 // Uses a 2-year window — packages older than 2 years score 0.
 function recencyScore(createdAt: number): number {
@@ -94,10 +98,10 @@ export async function semanticSearch(
     returnMetadata: "all",
   });
 
-  // Filter out excluded IDs
+  // Filter out excluded IDs and low-relevance matches
   const excludeSet = new Set(excludeIds);
   const filtered = (matches.matches as VectorizeMatch[]).filter(
-    (m) => !excludeSet.has(m.id)
+    (m) => !excludeSet.has(m.id) && m.score >= MIN_COSINE_SCORE
   );
 
   if (filtered.length === 0) return [];
