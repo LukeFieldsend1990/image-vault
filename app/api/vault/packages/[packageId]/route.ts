@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
+import { triggerRemoveIndex } from "@/lib/search/reindex";
 import { eq, asc } from "drizzle-orm";
 
 // GET /api/vault/packages/:packageId/files — list files in a package
@@ -93,6 +94,8 @@ export async function DELETE(
     .update(scanPackages)
     .set({ deletedAt: now, deletedBy: session.sub, updatedAt: now })
     .where(eq(scanPackages.id, packageId));
+
+  triggerRemoveIndex(packageId);
 
   return NextResponse.json({ ok: true });
 }

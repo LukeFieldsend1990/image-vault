@@ -18,6 +18,7 @@
 10. [April 8 Pitch — Agency Feature Sprint](#10-april-8-pitch--agency-feature-sprint)
 11. [In-App Notification Centre](#11-in-app-notification-centre)
 12. [Access Windows — Controlled Temporary Download Access](#12-access-windows--controlled-temporary-download-access)
+13. [Semantic Search — Licensee Package Discovery](#13-semantic-search--licensee-package-discovery)
 
 ---
 
@@ -1827,3 +1828,345 @@ This replaces the old pre-auth option picker that appeared during the talent-2fa
 - 24h expiry warning email
 - `/admin/windows` dashboard
 - Dual-custody upsell prompt
+
+---
+
+## 13. Semantic Search — Licensee Package Discovery
+
+### 13.1 Problem
+
+Licensees need to find scan packages across the entire catalogue using natural language queries like _"high quality full body scan for Unreal Engine"_ or _"head closeup with studio lighting for a period drama"_. Today's search is SQL LIKE-based — it only matches exact substrings in package names, descriptions, and tag text. A query like "photorealistic hero scan" returns nothing because those words don't appear verbatim in any field.
+
+### 13.2 Goals
+
+1. Let licensees search the package catalogue using natural language
+2. Return relevant results even when query terms don't literally match stored tags or metadata
+3. Factor in all available package signals: AI tags, user tags, structured metadata, talent profile
+4. Fast — keyword results appear immediately, semantic results augment progressively
+5. Stay on Cloudflare free tier (Vectorize: 5M vectors / 30M queries; Workers AI embeddings: free)
+
+### 13.3 Non-Goals
+
+- Full-text search of scan file contents (we don't index file bytes)
+- Talent-side or rep-side semantic search (they use their own vault views)
+- Replacing the existing keyword search — it remains the fast primary path
+- Image similarity search (future — requires CLIP embeddings of cover images)
+
+### 13.4 Searchable Data Per Package
+
+Each package produces a **search document** — a combined text blob used for embedding:
+
+| Source | Fields | Example |
+|--------|--------|---------|
+| **Package metadata** | `name`, `description`, `scanType`, `resolution`, `polygonCount`, `colorSpace` | "Hero Head Scan — 8K textures, 2M polys, ACEScg" |
+| **Structured AI tags** | Accepted `package_tags` rows: `tag` + `category` | "scan_type:full-body, quality:vfx-grade, compatibility:unreal-ready" |
+| **User freeform tags** | `scanPackages.tags` JSON array | "action hero, marvel, clean shave" |
+| **Structured metadata flags** | `hasMesh`, `hasTexture`, `hasHdr`, `hasMotionCapture`, `compatibleEngines` | "has mesh, has texture, has HDR, Unreal Engine, Unity" |
+| **Talent profile** | `talentProfiles.fullName`, `knownFor` | "Chris Hemsworth — known for Thor, Extraction, Furiosa" |
+
+The search document is a plaintext concatenation of these fields, structured for embedding quality:
+
+```
+Package: Hero Head Scan
+Description: High-resolution head and shoulders capture for VFX
+Scan type: head-only | Quality: vfx-grade | Compatibility: unreal-ready, maya-compatible
+Tags: full-body, studio-neutral, frontal, head-closeup
+User tags: action hero, marvel, clean shave
+Features: mesh, texture, HDR | Resolution: 8K | Polys: 2M
+Talent: Chris Hemsworth — known for Thor, Extraction, Furiosa
+```
+
+### 13.5 Architecture
+
+#### Two-phase search: keyword-first, semantic-augment
+
+```
+┌─────────────────────────────────────────────────┐
+│  Licensee types: "realistic head for Unreal"    │
+└────────────────────┬────────────────────────────┘
+                     │
+          ┌──────────┴──────────┐
+          ▼                     ▼
+   ┌─────────────┐    ┌──────────────────┐
+   │ Phase 1:    │    │ Phase 2:         │
+   │ Keyword     │    │ Semantic         │
+   │ (SQL LIKE)  │    │ (Vectorize)      │
+   │ ⚡ instant   │    │ ~100ms           │
+   └──────┬──────┘    └────────┬─────────┘
+          │                    │
+          ▼                    ▼
+   ┌─────────────┐    ┌──────────────────┐
+   │ Return      │    │ Embed query via   │
+   │ immediately │    │ Workers AI, then  │
+   │ to client   │    │ Vectorize kNN     │
+   └─────────────┘    └────────┬─────────┘
+                               │
+                               ▼
+                      ┌──────────────────┐
+                      │ Merge & dedupe   │
+                      │ against keyword  │
+                      │ results, return  │
+                      │ new matches only │
+                      └──────────────────┘
+```
+
+The client fires both requests in parallel. Keyword results render first; semantic results patch in additional matches when they arrive.
+
+#### Infrastructure
+
+| Component | Service | Free Tier |
+|-----------|---------|-----------|
+| **Vector store** | Cloudflare Vectorize | 5M stored vectors, 30M queried vectors/month |
+| **Embeddings** | Workers AI — `@cf/baai/bge-base-en-v1.5` (768 dims) | Unlimited (free tier) |
+| **Query API** | Next.js edge API route | Existing Pages deployment |
+| **Index worker** | Triggered on package tag/metadata changes | Existing Queue infra |
+
+### 13.6 Vectorize Index
+
+**Index name:** `package-search`
+**Dimensions:** 768 (bge-base-en-v1.5)
+**Metric:** cosine similarity
+
+Each vector is keyed by `packageId`. Metadata stored alongside the vector for post-filtering:
+
+```json
+{
+  "packageId": "uuid",
+  "talentId": "uuid",
+  "status": "ready",
+  "scanType": "head-only",
+  "hasMesh": true,
+  "hasTexture": true,
+  "categories": ["scan_type:head-only", "quality:vfx-grade"],
+  "updatedAt": 1713100000
+}
+```
+
+This allows Vectorize metadata filtering (e.g. `scanType = "full-body"`) to narrow results before kNN scoring, enabling combined faceted + semantic search.
+
+### 13.7 Indexing Pipeline
+
+#### When to index
+
+| Trigger | Action |
+|---------|--------|
+| Package status → `ready` | Generate embedding, upsert to Vectorize |
+| Tag accepted or dismissed | Re-generate embedding, upsert |
+| User edits freeform tags | Re-generate embedding, upsert |
+| Package metadata updated | Re-generate embedding, upsert |
+| Package soft-deleted | Delete vector from Vectorize |
+
+#### How
+
+1. Change events publish to the existing `pipeline-jobs` queue with type `index-search`
+2. Pipeline worker (or a new consumer) picks up the job:
+   a. Fetch package + tags + talent profile from D1
+   b. Build search document text (§13.4)
+   c. Call Workers AI embedding endpoint → 768-dim vector
+   d. Upsert to Vectorize with metadata
+3. Backfill script for existing packages: iterate all `ready` packages, generate + upsert
+
+#### Backfill
+
+A one-time script (run via `wrangler` or admin API route) to index all existing packages:
+
+```
+GET /api/admin/search/reindex?confirm=true
+```
+
+Iterates all non-deleted, ready packages in batches of 50. Rate-limited to avoid hitting Workers AI limits. Returns count of indexed packages.
+
+### 13.8 Query API
+
+#### `GET /api/vault/packages/search`
+
+Extend the existing route. New query parameters:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `q` | string | Query text (used for both keyword and semantic) |
+| `semantic` | boolean | Default `true`. Set `false` to skip semantic phase |
+| `tag` | string | Existing — filter by exact tag value |
+| `category` | string | Existing — filter by tag category |
+| `limit` | number | Max results (default 50, max 100) |
+| `offset` | number | Pagination offset |
+
+**Response shape** (extended):
+
+```typescript
+{
+  packages: Array<{
+    id: string;
+    name: string;
+    description: string;
+    talentId: string;
+    status: string;
+    coverImageKey: string | null;
+    totalSizeBytes: number | null;
+    createdAt: number;
+    tags: string | null;
+    structuredTags: Array<{ tag: string; category: string; status: string }>;
+    // new fields:
+    matchType: "keyword" | "semantic" | "both";
+    relevanceScore: number | null;  // cosine similarity (0-1), null for keyword-only
+  }>;
+  total: number;
+  semanticCount: number;  // how many results came from semantic phase
+}
+```
+
+#### Parallel execution flow
+
+```typescript
+const [keywordResults, semanticResults] = await Promise.all([
+  keywordSearch(db, q, filters),           // existing LIKE logic
+  semanticSearch(env, q, filters, limit),  // new: embed → Vectorize kNN
+]);
+
+// Merge: keyword results first, then semantic-only results
+// Deduplicate by packageId — if a package appears in both, mark as "both"
+// Semantic results sorted by relevanceScore descending
+```
+
+#### Alternative: streaming endpoint
+
+For the progressive UX (keyword results first, semantic augments later), an alternative is a **separate semantic-only endpoint**:
+
+```
+GET /api/vault/packages/search/semantic?q=...&exclude=id1,id2,id3
+```
+
+The client calls both in parallel. The `exclude` param contains IDs already returned by keyword search, so the semantic endpoint only returns new matches. This avoids blocking keyword results on the embedding call.
+
+**Recommendation:** Use the separate endpoint approach. Simpler client logic, no server-side streaming needed, works with standard fetch.
+
+### 13.9 Result Ranking
+
+Results are ranked by a composite score combining multiple signals:
+
+| Signal | Weight | Source |
+|--------|--------|--------|
+| **Cosine similarity** | 0.50 | Vectorize kNN score (0–1) |
+| **Tag match density** | 0.20 | Fraction of query-relevant tags that are accepted on the package |
+| **Recency** | 0.10 | Normalised `createdAt` (newer = higher) |
+| **Completeness** | 0.10 | Count of metadata fields populated (mesh, texture, HDR, etc.) / total |
+| **Talent popularity** | 0.10 | `talentProfiles.popularity` normalised (0–1) |
+
+Keyword-only results (no cosine score) are ranked by the existing SQL ordering (recency) and placed before semantic results in the response.
+
+### 13.10 LLM Query Expansion (Phase 2)
+
+Phase 1 uses pure vector similarity. Phase 2 adds an **LLM query expansion** step for queries where embeddings alone may miss intent:
+
+1. Send the natural language query + the tag vocabulary to Claude Haiku
+2. LLM returns structured filters: `{ tags: ["full-body", "vfx-grade"], scanType: "full-body", mustHave: ["mesh", "texture"] }`
+3. These filters are applied as Vectorize metadata pre-filters + SQL WHERE clauses
+4. Combined with the embedding kNN for best of both worlds
+
+This is the "both" approach — embeddings for fuzzy matching, LLM for precise intent extraction.
+
+**Cost:** ~$0.001 per query (Haiku). Budget-gated via existing `checkBudget()`.
+
+**Latency:** Adds ~200-400ms. Only triggered when `semantic=true` (default). Can be disabled per-query with `expand=false`.
+
+### 13.11 Database Changes
+
+**New migration:** `0031_semantic_search.sql`
+
+```sql
+-- Track when each package was last indexed for search
+ALTER TABLE scan_packages ADD COLUMN search_indexed_at INTEGER;
+
+-- Index for finding stale/unindexed packages
+CREATE INDEX idx_packages_search_indexed
+  ON scan_packages(search_indexed_at)
+  WHERE deleted_at IS NULL AND status = 'ready';
+```
+
+No new tables needed — Vectorize stores the vectors externally.
+
+### 13.12 Wrangler Config
+
+Add Vectorize binding to `wrangler.toml`:
+
+```toml
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "package-search"
+```
+
+Create the index:
+
+```bash
+wrangler vectorize create package-search \
+  --dimensions=768 \
+  --metric=cosine
+```
+
+### 13.13 UI — Licensee Search
+
+The search experience lives on the existing licensee browse/search page.
+
+#### Search bar
+- Single input field, placeholder: _"Search packages — try 'full body scan for Unreal' or 'studio-lit head closeup'"_
+- Debounced (300ms) — fires keyword search on each keystroke, semantic search on pause
+- Below the input: active filter chips for any `tag` or `category` filters
+
+#### Results layout
+- **Keyword results** appear immediately in the results grid
+- **Semantic results** fade in below/amongst keyword results when they arrive
+- Each result card shows:
+  - Cover image thumbnail
+  - Package name + talent name
+  - Top 3 structured tags as pills
+  - Match indicator: subtle label — "keyword match" / "related" (for semantic-only)
+  - Relevance score as a discrete indicator (high / medium / low) rather than raw number
+
+#### Empty state
+- If no keyword results but semantic results exist: _"No exact matches — showing related packages"_
+- If neither: _"No packages found. Try different search terms or browse by tag."_
+
+#### Faceted filters (sidebar)
+- Tag category accordion (scan_type, quality, compatibility, etc.)
+- Each shows tag values with counts
+- Selecting a filter refines both keyword and semantic results
+- These are SQL-powered (existing tag filter logic), not semantic
+
+### 13.14 Implementation Plan
+
+#### Phase 1 — Vector search (build now)
+
+1. **Migration** `0031_semantic_search.sql` — add `search_indexed_at` column
+2. **Vectorize setup** — create index via wrangler CLI, add binding to `wrangler.toml`
+3. **`lib/search/embed.ts`** — `buildSearchDocument(package, tags, talent)` and `embedText(env, text)` using Workers AI
+4. **`lib/search/index.ts`** — `indexPackage(env, db, packageId)` and `removePackage(env, packageId)` — upsert/delete from Vectorize
+5. **`lib/search/query.ts`** — `semanticSearch(env, query, filters, limit, excludeIds)` — embed query, Vectorize kNN, return ranked results
+6. **Queue integration** — add `index-search` job type to pipeline-worker, trigger on tag/metadata changes
+7. **`GET /api/vault/packages/search/semantic`** — new endpoint, licensee-only
+8. **`GET /api/admin/search/reindex`** — backfill all existing packages
+9. **Client** — update licensee search page to call both endpoints in parallel, merge results
+10. **Ranking** — implement composite score (§13.9)
+
+#### Phase 2 — LLM query expansion (next sprint)
+
+11. **`lib/search/expand.ts`** — `expandQuery(env, db, query)` — Claude Haiku extracts structured filters from natural language
+12. **Integrate with semantic endpoint** — apply extracted filters as Vectorize metadata pre-filters
+13. **Budget gate** — wire through existing `checkBudget()` / `logAiCost()`
+
+#### Phase 3 — Refinements (future)
+
+14. Tag-aware autocomplete (suggest tags as user types)
+15. "More like this" — re-query Vectorize with an existing package's vector
+16. Cover image CLIP embeddings for visual similarity search
+17. Search analytics — log queries + clicks to optimise ranking weights
+
+### 13.15 Costs
+
+| Component | Free Tier Limit | Expected Usage | Cost |
+|-----------|----------------|----------------|------|
+| Vectorize storage | 5M vectors | <10K packages | $0 |
+| Vectorize queries | 30M/month | <100K queries/month | $0 |
+| Workers AI embeddings | Unlimited | ~100K/month (queries + indexing) | $0 |
+| Claude Haiku (Phase 2 expansion) | N/A | ~$0.001/query × 50K = $50/month | Budget-capped at $1/14 days |
+
+Phase 1 is entirely free tier. Phase 2 LLM expansion is gated by the existing AI budget ceiling.

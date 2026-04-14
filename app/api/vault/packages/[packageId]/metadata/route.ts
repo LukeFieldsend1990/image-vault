@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanPackages, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { triggerReindex } from "@/lib/search/reindex";
 import { eq } from "drizzle-orm";
 
 async function canAccessPackage(db: ReturnType<typeof getDb>, packageId: string, session: { sub: string; role: string }) {
@@ -101,6 +102,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pa
   }
 
   await db.update(scanPackages).set(updates).where(eq(scanPackages.id, id));
+
+  triggerReindex(id);
 
   return NextResponse.json({ ok: true });
 }
