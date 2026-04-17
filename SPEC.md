@@ -19,6 +19,7 @@
 11. [In-App Notification Centre](#11-in-app-notification-centre)
 12. [Access Windows — Controlled Temporary Download Access](#12-access-windows--controlled-temporary-download-access)
 13. [Semantic Search — Licensee Package Discovery](#13-semantic-search--licensee-package-discovery)
+14. [Trial Production — End-to-End Proving Ground](#14-trial-production--end-to-end-proving-ground)
 
 ---
 
@@ -2170,3 +2171,709 @@ The search experience lives on the existing licensee browse/search page.
 | Claude Haiku (Phase 2 expansion) | N/A | ~$0.001/query × 50K = $50/month | Budget-capped at $1/14 days |
 
 Phase 1 is entirely free tier. Phase 2 LLM expansion is gated by the existing AI budget ceiling.
+
+---
+
+## 14. Trial Production — End-to-End Proving Ground
+
+### 14.1 Purpose
+
+One real production, start to finish, to prove that Image Vault works under production conditions. This section defines the three phases of a licence lifecycle as experienced by all parties, identifies platform gaps, and specifies the new features required to close them.
+
+The trial validates:
+- Can we stand up a licence and get scans into the vault fast enough for a production timeline?
+- Can a VFX team draw down packages at scale via the CAS Bridge without friction?
+- Can we cleanly wind down a licence with cryptographic proof that data has been scrubbed?
+
+### 14.2 Lifecycle Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        LICENCE LIFECYCLE                                │
+│                                                                         │
+│  Phase 1: CAPTURE          Phase 2: VFX KICKOFF      Phase 3: WIND-DOWN│
+│  ┌───────────────┐         ┌─────────────────┐       ┌────────────────┐│
+│  │ Deal signed    │         │ Access window    │       │ Licence expires ││
+│  │ Contract up    │         │ opened           │       │ or is revoked   ││
+│  │ Licence created│────────▶│ Bridge drawdown  │──────▶│ Scrub deadline  ││
+│  │ (± placeholder)│         │ Status dashboard │       │ Attestation     ││
+│  │ Scans captured │         │ Integrity events │       │ Audit report    ││
+│  └───────────────┘         └─────────────────┘       └────────────────┘│
+│                                                                         │
+│  Actors: talent/rep,        Actors: licensee/VFX,     Actors: licensee, │
+│  licensee, admin            talent/rep, admin         talent/rep, admin │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 14.3 Phase 1 — Capture
+
+The deal is done. A production company has agreed commercial terms with the talent's agency. A contract is signed. But the scans may not exist yet — the actor might walk into the scanning facility during the first week of principal photography. The platform must handle this "deal first, scans later" reality.
+
+#### 14.3.1 Problem: Licence Before Package
+
+Today, a licence requires a `packageId` at creation time. This means you cannot create a licence until scans have been uploaded and a package is `ready`. In practice, deals are struck weeks or months before a scan session, and production may begin before the scans arrive.
+
+**Solution: Placeholder Licences**
+
+A licence can be created with `packageId = null` and a new status `AWAITING_PACKAGE`. The licence holds all deal terms (fee, territory, exclusivity, dates, contract) but is not downloadable until a package is attached.
+
+#### 14.3.2 Licence Status Extension
+
+Add `AWAITING_PACKAGE` to the licence status enum:
+
+```
+AWAITING_PACKAGE ──▶ PENDING ──▶ APPROVED ──▶ REVOKED
+                                     │              │
+                                     ▼              ▼
+                                  EXPIRED        (terminal)
+                                     │
+                              DENIED (terminal)
+```
+
+**`AWAITING_PACKAGE`** — deal terms locked, contract uploaded, but no scan package linked yet. Cannot be approved or downloaded. Visible in admin and rep dashboards as "awaiting capture".
+
+**Transition:** when a package is attached (`PATCH /api/licences/:id/attach-package`), status auto-advances to `PENDING` for talent/rep approval.
+
+#### 14.3.3 New / Changed Endpoints
+
+**`POST /api/licences`** — allow `packageId: null`
+- If `packageId` is null, licence is created with status `AWAITING_PACKAGE` instead of `PENDING`
+- All other fields (projectName, productionCompany, licenceType, territory, fees, dates) required as normal
+- `contractUrl` should be provided at creation (the signed deal)
+- Returns the licence with status `AWAITING_PACKAGE`
+
+**`PATCH /api/licences/:id/attach-package`** — new endpoint
+- Auth: talent, rep (with delegation), or admin
+- Body: `{ packageId: "<uuid>" }`
+- Validates: licence status is `AWAITING_PACKAGE`, package exists and is `ready`, package belongs to the talent on the licence
+- Sets `packageId`, transitions status to `PENDING`
+- Sends notification to licensee: "Scans are now available for review — awaiting talent approval"
+- Sends notification to talent/rep: "Package attached to licence — please review and approve"
+
+**`GET /api/licences`** — filter support
+- Add `status` query param to filter by licence status
+- Admin and rep views should surface `AWAITING_PACKAGE` licences prominently
+
+#### 14.3.4 Contract Upload
+
+Licences need a signed contract document attached. This is a lightweight file (PDF, typically < 10 MB) stored in R2 alongside scan packages but in a separate prefix.
+
+**Storage:** `R2: contracts/{licenceId}/{filename}`
+
+**New endpoint: `POST /api/licences/:id/contract`**
+- Auth: talent, rep, licensee, or admin
+- Accepts: multipart form upload (PDF, max 20 MB)
+- Stores file in R2 at `contracts/{licenceId}/{filename}`
+- Updates licence `contractUrl` field
+- Supports replacing: uploading a new contract overwrites the previous
+- Returns: `{ contractUrl: "contracts/{licenceId}/{filename}" }`
+
+**New endpoint: `GET /api/licences/:id/contract`**
+- Auth: any party on the licence (talent, rep, licensee) or admin
+- Returns: presigned R2 GET URL (1h expiry) for the contract PDF
+- 404 if no contract uploaded
+
+#### 14.3.5 Scan Capture Workflow
+
+During the trial, the physical capture session produces raw scan data that must be ingested into Image Vault. The workflow:
+
+1. **Pre-session** — admin/rep creates the placeholder licence with deal terms
+2. **Scan session** — scanning facility produces raw files (EXR, OBJ, PLY, textures)
+3. **Ingest** — admin or talent uploads files via the existing multipart upload flow, creating a package
+4. **QA** — admin reviews the package (file count, sizes, pipeline status if applicable)
+5. **Attach** — admin or rep attaches the package to the awaiting licence
+6. **Approve** — talent/rep reviews and approves the licence (existing flow)
+
+**Operational checklist for the trial (not product features — manual steps):**
+- [ ] Coordinate scan session date with talent and facility
+- [ ] Verify upload bandwidth at facility (or plan for physical media transfer)
+- [ ] Have admin account ready to create placeholder licence
+- [ ] Pre-fill licence with all known deal terms
+- [ ] Upload scans as soon as available
+- [ ] Verify pipeline processing completes (validate → classify → assemble)
+- [ ] Attach package and notify all parties
+
+#### 14.3.6 Schema Changes
+
+```sql
+-- Migration: 0032_placeholder_licences.sql
+
+-- Allow nullable packageId on licences
+-- (packageId is already TEXT, just need to remove NOT NULL if present
+--  and add AWAITING_PACKAGE to status check)
+
+-- Note: D1 SQLite doesn't support ALTER COLUMN, so we handle this
+-- at the application layer by allowing null packageId inserts
+-- and adding AWAITING_PACKAGE to the status enum in the ORM schema.
+```
+
+Drizzle schema update in `lib/db/schema.ts`:
+- `packageId` — remove `.notNull()` (allow null)
+- `status` enum — add `"AWAITING_PACKAGE"` to the list
+- `contractUrl` — already exists as nullable TEXT, no change needed
+
+---
+
+### 14.4 Phase 2 — VFX Production Kickoff
+
+The licence is approved. An access window is open. The VFX team needs to pull packages onto their servers and distribute files to artist workstations. This is the highest-throughput, most time-sensitive phase.
+
+#### 14.4.1 The Drawdown
+
+A typical VFX kickoff looks like:
+
+1. **IT/pipeline lead** installs the CAS Bridge on the facility's ingest server
+2. **IT/pipeline lead** registers a bridge token and device via the web UI (`/settings/bridge`)
+3. **Talent/rep** opens an access window on the licence (2–4 weeks, covering the kickoff period)
+4. **Bridge** pulls the grant manifest (`POST /api/bridge/packages/:id/open`)
+5. **Bridge** downloads all files from the presigned R2 URLs to local cache
+6. **Files** are distributed from the ingest server to artist workstations (either via facility network or additional bridge instances on each workstation)
+
+#### 14.4.2 Gap: Bridge + Access Windows Integration
+
+**Current state:** The bridge `POST .../open` endpoint checks licence status (`APPROVED`), expiry, vault lock, and tool permissions. It does **not** check access windows.
+
+**Problem:** During an access window, the licensee should be able to draw down via the bridge without triggering the talent-side 2FA of the dual-custody flow. The bridge currently bypasses dual-custody entirely (it uses PAT auth, not the KV-based dual-custody session). This is correct for the bridge use case, but the bridge should still respect access window rules:
+
+- If no access window is active, the bridge open should still work for `APPROVED` licences (the bridge's PAT is the licensee's auth; the manifest issuance is the "download event")
+- If an access window is active, each bridge open should decrement `downloads_used` on the window
+- If the access window is `exhausted` (downloads_used >= max_downloads), bridge open should fail with a clear error
+- All bridge opens during an access window should be logged as `access_window_events` with type `download`
+
+**Changes to `POST /api/bridge/packages/:id/open`:**
+- After licence validation, check for an active access window on this licence
+- If a window exists and has remaining downloads: proceed, increment `downloads_used`, log window event
+- If a window exists but is exhausted: return 403 `{ error: "access_window_exhausted", message: "Download limit reached — ask talent to extend the window" }`
+- If no window exists: proceed as today (bridge access is controlled by licence status + vault lock, not access windows — access windows add download counting, not gating)
+
+#### 14.4.3 Gap: Bulk / Batch Bridge Opens
+
+A large package might contain 50–200 individual scan files. The VFX team needs them all. Today, the bridge must call `POST .../open` once per package, which returns all files in the manifest. This is fine for a single package.
+
+**Problem for trial:** If a licence covers multiple packages (via `fileScope: "all"`) or the VFX team has multiple licences, the pipeline lead needs to pull everything in one session without babysitting the bridge.
+
+**Solution: Bridge batch endpoint**
+
+**`POST /api/bridge/batch-open`** — new endpoint
+- Auth: PAT
+- Body:
+```json
+{
+  "deviceId": "<uuid>",
+  "tool": "nuke",
+  "licences": [
+    { "licenceId": "<uuid>", "packageId": "<uuid>" },
+    { "licenceId": "<uuid>", "packageId": "<uuid>" }
+  ]
+}
+```
+- Validates each licence/package pair independently
+- Returns:
+```json
+{
+  "grants": [
+    { "licenceId": "...", "packageId": "...", "grantId": "...", "manifest": "...", "signature": "...", "keyId": "..." },
+    { "licenceId": "...", "packageId": "...", "error": "licence_expired", "message": "..." }
+  ]
+}
+```
+- Partial success is allowed — some grants may succeed while others fail
+- Each successful grant is independently tracked in `bridge_grants`
+
+#### 14.4.4 Gap: Download Progress Visibility
+
+During drawdown, the talent/rep and admin need to see what is happening in near-real-time.
+
+**Current state:** `bridge_grants` records each open, and `bridge_events` records integrity events. But there is no dashboard view aggregating this into a "what's happening right now on this licence" picture.
+
+**Solution: Licence Activity Feed**
+
+**`GET /api/licences/:id/activity`** — new endpoint
+- Auth: talent (owner), rep (with delegation), licensee (on the licence), admin
+- Returns: reverse-chronological feed of:
+  - Licence state changes (created, approved, revoked, expired)
+  - Access window events (opened, closed, extended, expired, exhausted)
+  - Bridge grant opens (which device, which tool, how many files, timestamp)
+  - Bridge integrity events (tamper, hash mismatch, etc.)
+  - Download events (dual-custody downloads)
+  - Contract uploads
+  - Package attachment (for placeholder licences)
+- Pagination: `?cursor=<timestamp>&limit=50`
+- Each event includes: `type`, `timestamp`, `actor` (user display name + role), `detail` (structured JSON)
+
+This feed powers:
+- A "Licence Activity" tab on the licence detail page (talent/rep/licensee view)
+- An admin "Live Activity" panel during the trial
+- Future: webhook/email notifications on specific event types
+
+#### 14.4.5 Gap: Bridge Health & Connectivity Check
+
+The VFX team needs to know the bridge is properly connected before starting a multi-hour drawdown.
+
+**`GET /api/bridge/health`** — new endpoint
+- Auth: PAT
+- Returns:
+```json
+{
+  "status": "ok",
+  "userId": "<uuid>",
+  "displayName": "Pipeline Lead",
+  "activeLicences": 3,
+  "registeredDevices": 2,
+  "activeGrants": 1,
+  "serverTime": 1713100000
+}
+```
+- Lightweight endpoint for the bridge app to call on startup and periodically to verify connectivity
+
+#### 14.4.6 Operational Checklist — VFX Kickoff
+
+- [ ] VFX facility IT lead has a platform account (licensee role)
+- [ ] Bridge token created and securely delivered to IT lead
+- [ ] Bridge app installed on ingest server, token configured
+- [ ] Device registered successfully (`POST /api/bridge/devices`)
+- [ ] Health check passes (`GET /api/bridge/health`)
+- [ ] Talent/rep opens access window covering the kickoff period
+- [ ] Bridge pulls grant manifest — verify all files present in manifest
+- [ ] Bridge downloads all files — verify hashes match (no `hash_mismatch` events)
+- [ ] VFX team confirms files load correctly in target DCC tools (Nuke, Maya, etc.)
+- [ ] Admin monitors licence activity feed for anomalies during first 24h
+- [ ] Confirm bridge status polling is working (5-min intervals, no `revoked` or `vault_locked`)
+
+---
+
+### 14.5 Phase 3 — Licence Wind-Down & Data Scrub
+
+The licence reaches its `validTo` date (or is revoked early). The scans must be purged from all VFX workstations and servers. The licensee must attest that they have destroyed all copies of the raw scan data, retaining only the output product (the rendered frames, the game asset, etc.).
+
+#### 14.5.1 The Problem
+
+Today, when a licence expires:
+- Status transitions to `EXPIRED`
+- Downloads stop working
+- Bridge status polling returns `expired`, and a well-behaved bridge client purges its local cache
+- But there is **no verification** that the licensee actually deleted the files
+- There is **no deadline** for cleanup
+- There is **no formal attestation** or audit record
+
+For high-value likeness data, "trust but don't verify" is not sufficient. The talent and their agency need a signed statement that data has been scrubbed, and the platform should make that process as frictionless as possible.
+
+#### 14.5.2 Wind-Down Timeline
+
+When a licence transitions to `EXPIRED` or `REVOKED`, three things happen simultaneously at T=0:
+
+```
+                 Licence expires/revoked  (T=0)
+                          │
+         ┌────────────────┼─────────────────┐
+         ▼                ▼                 ▼
+  ┌──────────────┐  ┌───────────────┐  ┌──────────────────┐
+  │ Bridge push  │  │ Attestation   │  │ Licence status   │
+  │ purge NOW    │  │ requested NOW │  │ → SCRUB_PERIOD   │
+  │ (no poll wait│  │ (email+in-app │  │ scrubDeadline    │
+  │  — immediate │  │  prompt the   │  │ = T + 14 days    │
+  │  purge cmd)  │  │  licensee     │  │ Downloads blocked│
+  │              │  │  immediately) │  │                  │
+  └──────┬───────┘  └───────┬───────┘  └──────────────────┘
+         │                  │
+         ▼                  │
+  Bridge attempts           │
+  immediate delete.         │
+  If files locked/in-use:   │
+  → `file_in_use` event     │
+  → `purge_partial` event   │
+  → flagged in activity feed│
+  Bridge retries on loop    │
+  (exponential backoff)     │
+  until all files purged    │
+  or deadline hits.         │
+                            │
+                            ▼
+                ┌─────────────────────────────┐
+                │  SCRUB PERIOD (14 days)     │  Licensee has 14 days to submit
+                │  Bridge: purging / purged   │  the human attestation covering
+                │  Downloads: blocked         │  everything beyond the bridge
+                └─────────────────────────────┘  (backups, copied files, etc.)
+                            │
+                ┌───────────┴───────────┐
+                ▼                       ▼
+         Attestation submitted    Deadline hits, no attestation
+                │                       │
+                ▼                       ▼
+            CLOSED (clean)          OVERDUE ──▶ Admin escalation
+```
+
+The 14-day window is for the **human declaration**, not the bridge purge. The bridge purge starts immediately and should complete within hours (or report why it can't).
+
+#### 14.5.3 Licence Status Extension (Wind-Down)
+
+Add two new terminal-adjacent statuses:
+
+| Status | Meaning |
+|--------|---------|
+| `SCRUB_PERIOD` | Licence has expired/been revoked. Licensee has N days to attest data deletion. No downloads. |
+| `CLOSED` | Attestation received. Licence lifecycle complete. Clean audit trail. |
+| `OVERDUE` | Scrub deadline passed without attestation. Requires admin follow-up. |
+
+**Full status flow with wind-down:**
+
+```
+AWAITING_PACKAGE ──▶ PENDING ──▶ APPROVED ──▶ EXPIRED ──▶ SCRUB_PERIOD ──▶ CLOSED
+                         │                       │              │
+                         ▼                       ▼              ▼
+                       DENIED               REVOKED ─────▶ OVERDUE
+                                               │
+                                               ▼
+                                          SCRUB_PERIOD ──▶ CLOSED
+```
+
+**Auto-transitions:**
+- `APPROVED` → `EXPIRED`: when `validTo` passes (existing)
+- `EXPIRED` or `REVOKED` → `SCRUB_PERIOD`: immediate (new — triggered by the same event)
+- `SCRUB_PERIOD` → `CLOSED`: when attestation is submitted
+- `SCRUB_PERIOD` → `OVERDUE`: when `scrubDeadline` passes without attestation
+
+#### 14.5.4 Scrub Attestation
+
+The attestation is a formal, timestamped declaration by the licensee that all copies of the scan data have been deleted from all systems.
+
+**New table: `scrub_attestations`**
+
+```sql
+CREATE TABLE scrub_attestations (
+  id TEXT PRIMARY KEY,
+  licence_id TEXT NOT NULL REFERENCES licences(id) ON DELETE CASCADE,
+  attested_by TEXT NOT NULL REFERENCES users(id),  -- licensee user
+  attested_at INTEGER NOT NULL,                     -- unix timestamp
+  attestation_text TEXT NOT NULL,                    -- the declaration text (platform-provided template)
+  ip_address TEXT,                                   -- IP at time of submission
+  user_agent TEXT,                                   -- browser/client UA
+  devices_scrubbed TEXT,                             -- JSON array of device descriptions
+  bridge_cache_purged INTEGER NOT NULL DEFAULT 0,    -- 1 if bridge confirmed cache purge
+  additional_notes TEXT,                              -- licensee can add context
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX idx_scrub_attestations_licence ON scrub_attestations(licence_id);
+```
+
+**New fields on `licences` table:**
+
+```sql
+-- Add to licences table
+scrub_deadline INTEGER,       -- unix timestamp: when attestation is due
+scrub_attested_at INTEGER,    -- unix timestamp: when attestation was submitted (denorm for fast queries)
+```
+
+#### 14.5.5 Attestation Flow
+
+At T=0 (expiry or revocation) the platform kicks off three things in parallel — bridge purge, attestation request, and status transition — so there is no gap between licence end and cleanup starting.
+
+1. **Licence expires or is revoked** → status transitions immediately to `SCRUB_PERIOD`, `scrubDeadline` set to `now + 14 days` (configurable per licence)
+2. **Bridge purge triggered immediately** — platform does not wait for the next poll cycle. A push signal (see 14.5.7) tells the bridge to purge now. Bridge attempts delete; if files are locked/in-use, bridge reports `file_in_use` / `purge_partial` events and retries. Platform marks `bridge_cache_purged = 1` on the pending attestation stub only once **all** files are confirmed deleted.
+3. **Attestation requested immediately** — email + in-app notification at T=0: "Your licence for [package] on [production] has ended. Please delete all scan data and submit your attestation. You have 14 days (by [deadline])." The licensee can submit the attestation at any point in the window, including immediately — we do not delay the prompt.
+4. **Licensee submits attestation** via web UI:
+   - Reviews platform-provided declaration text (not editable — legal template)
+   - Lists devices/servers where data was held
+   - Confirms checkbox: "I attest that all copies of the licensed scan data have been permanently deleted"
+   - Completes 2FA to sign the attestation
+   - Optional: add notes (e.g., "Output renders retained per contract clause 7.2")
+5. **Platform records attestation** — creates `scrub_attestation` row, sets `scrub_attested_at` on licence, transitions status to `CLOSED`
+6. **Talent/rep notified** — email: "Attestation received for [production]. All scan data confirmed deleted."
+7. **If deadline passes without attestation** → status transitions to `OVERDUE`, admin alerted
+
+**Important:** the licensee can submit the attestation even if the bridge purge is still showing `purge_partial` (e.g., the VFX lead knows the in-use files are about to close). But the attestation UI warns the licensee that outstanding `file_in_use` events will be recorded on their attestation record as a caveat, and the talent-facing closure report will show them. This incentivises the licensee to resolve in-use warnings before attesting, without blocking them from closing the licence on their own schedule.
+
+**Declaration template:**
+
+> I, [licensee name], on behalf of [production company], hereby attest that all copies of the licensed scan data obtained under licence [licence reference] for production [production name] have been permanently deleted from all systems, servers, workstations, backups, and removable media under my control or the control of [production company]. Only output products (rendered frames, composited shots, game assets) derived from the licensed data have been retained, as permitted under the licence agreement. This attestation is made on [date] and constitutes a binding declaration.
+
+#### 14.5.6 New Endpoints
+
+**`GET /api/licences/:id/scrub`** — get scrub status
+- Auth: any party on licence, or admin
+- Returns: `{ status, scrubDeadline, daysRemaining, attestation: { ... } | null, bridgeCachePurged, overdue }`
+
+**`POST /api/licences/:id/scrub/attest`** — submit attestation
+- Auth: licensee on the licence only
+- Body: `{ devicesScrubbed: ["Ingest server A", "Workstation 12", ...], additionalNotes?: string, totp: "123456" }`
+- Validates: licence is in `SCRUB_PERIOD`, caller is the licensee, 2FA valid
+- Creates attestation, transitions licence to `CLOSED`
+- Sends notifications to talent/rep and admin
+
+**`POST /api/licences/:id/scrub/extend`** — extend scrub deadline
+- Auth: admin only
+- Body: `{ additionalDays: 7, reason: "Licensee requested extension — overseas facility" }`
+- Updates `scrubDeadline`, logs event
+
+**`GET /api/admin/scrub/overdue`** — list overdue attestations
+- Auth: admin
+- Returns all licences in `OVERDUE` status with days overdue, licensee contact info, and last activity
+
+#### 14.5.7 Bridge Integration — Wind-Down
+
+The bridge should attempt to delete files **immediately** on licence expiry — not wait for its next status poll. Polling is the fallback; push-initiated purge is the primary path.
+
+**Push-initiated purge (primary)**
+
+At T=0 (expiry or revocation), the platform pushes a purge command to every active bridge grant for the licence. Two mechanisms to consider:
+
+- **Short-poll window**: immediately after licence transition, the platform sets a `purge_requested_at` timestamp on `bridge_grants` rows. The bridge's status poll (running every 5 min) picks this up. Worst case delay: one poll interval.
+- **Tight-poll mode**: when a bridge grant enters scrub, the bridge is instructed (via its next status response) to switch to a 30-second poll interval until purge is confirmed complete. This gives near-real-time purge without maintaining persistent connections.
+
+Tight-poll mode is the recommended approach — it is stateless, works through NAT/firewalls, and does not require server push infrastructure (which is awkward on Cloudflare edge). The bridge status poll becomes the purge signal channel.
+
+**Status response during scrub:**
+```json
+{
+  "grantId": "<uuid>",
+  "status": "revoked",
+  "purgeRequired": true,
+  "pollIntervalSeconds": 30,
+  "revokedAt": 1713100000
+}
+```
+
+**Bridge purge behaviour:**
+
+1. On first status response with `status = revoked|expired` and `purgeRequired = true`:
+   - Begin deleting locally cached files immediately
+   - Switch to 30-second poll interval until purge is confirmed complete server-side
+   - Report progress via `bridge_events` after each batch of files
+2. If a file cannot be deleted (locked by a running DCC process, open in a viewer, on read-only media):
+   - Report `file_in_use` event with severity `warn` and the specific file/tool/process info
+   - Retry deletion with exponential backoff (30s → 1m → 5m → 15m → 1h)
+   - Continue deleting other files in parallel (partial purge is better than no purge)
+3. When all files deleted: report `cache_purged` event with full summary
+4. If purge stalls (same files stuck `in_use` for > 1 hour): report `purge_stalled` event at severity `critical`
+
+**New / Extended bridge event types:**
+
+Add these `eventType` values to `bridge_events` (extending the existing enum):
+
+| Event type | Severity | When reported | Flagged? |
+|------------|----------|---------------|----------|
+| `purge_started` | info | Bridge begins scrub cleanup | No |
+| `purge_partial` | info | Some files deleted, others still pending | No |
+| `file_in_use` | warn | A file can't be deleted (locked/open) | **Yes — shown on activity feed and closure report** |
+| `purge_stalled` | critical | Same files locked > 1 hour | **Yes — alerts admin + talent/rep** |
+| `cache_purged` | info | All files confirmed deleted (existing event) | No |
+| `purge_failed` | critical | Bridge could not purge (e.g., R/W filesystem issue, permission denied) | **Yes — alerts admin + talent/rep** |
+
+Each `file_in_use` event carries detail:
+```json
+{
+  "eventType": "file_in_use",
+  "severity": "warn",
+  "grantId": "<uuid>",
+  "detail": {
+    "filename": "hero_body_scan_v04.exr",
+    "path": "scans/hero_body_scan_v04.exr",
+    "sizeBytes": 4294967296,
+    "lockingProcess": "Nuke13.2",
+    "lockingPid": 48211,
+    "attemptCount": 3,
+    "nextRetryAt": 1713101800,
+    "reason": "locked_by_process"
+  }
+}
+```
+
+**Platform-side handling of in-use events:**
+
+- `file_in_use` events aggregate into a per-licence "outstanding in-use files" list shown on:
+  - The licence activity feed (14.4.4) — prominent warning state
+  - The admin trial dashboard (14.6.1) scrub tracker
+  - The attestation UI — licensee sees outstanding in-use files before submitting
+  - The licence closure report (14.6.3) — recorded permanently as caveats on the attestation
+- `purge_stalled` and `purge_failed` trigger alerts to admin + talent/rep
+- The pending attestation stub's `bridge_cache_purged` flag flips to `1` only when the final `cache_purged` event arrives (all files confirmed gone). Until then the scrub tracker shows "bridge purge: in progress — N/M files deleted, K in use"
+
+**Grant-level purge confirmation endpoint (new):**
+
+**`POST /api/bridge/grants/:grantId/purge-complete`** — bridge reports all files deleted
+- Auth: PAT
+- Body: `{ filesDeleted: 47, bytesFreed: 214748364800 }`
+- Validates: caller owns the grant
+- Sets `purge_completed_at` on `bridge_grants`, flips `bridge_cache_purged` on the pending attestation stub, emits a `cache_purged` event
+- Returns: `{ ok: true }`
+
+This separates "I purged everything" from the stream of progress events, giving us a clean signal for the attestation stub.
+
+The human attestation still covers everything beyond the bridge's reach (files copied to other servers, backup tapes, removable media) — but the bridge side is now actively and immediately cleaning up the only copies it knows about.
+
+#### 14.5.8 Operational Checklist — Wind-Down
+
+- [ ] Confirm licence `validTo` date is correct before it fires
+- [ ] Verify bridge status polling is running (will receive purge command on next poll)
+- [ ] At T=0: confirm attestation request email and in-app notification fired
+- [ ] At T=0: confirm bridge dropped to 30-second poll (tight-poll mode)
+- [ ] Within 1 hour: check `bridge_events` for `purge_started`
+- [ ] Within 4 hours: check for `cache_purged` event — if absent, review `file_in_use` events
+- [ ] Investigate any `purge_stalled` or `purge_failed` events within the hour
+- [ ] Send reminder email to licensee at T+7 days and T+13 days if no attestation yet
+- [ ] Monitor attestation submission
+- [ ] If licensee submits with outstanding `file_in_use` events: document as caveat on closure report
+- [ ] If overdue (no attestation at T+14 days): admin contacts licensee directly, documents communication
+- [ ] Generate licence closure report (see 14.6.3) for talent/agency records
+
+---
+
+### 14.6 Cross-Functional Requirements
+
+Features and operational tooling needed to run the trial that cut across all three phases.
+
+#### 14.6.1 Admin Operations Dashboard
+
+During the trial, the admin team (us) needs a single view of what's happening. This is not a product feature for v1 agencies — it is an internal tool.
+
+**`/admin/trial`** — trial operations page
+
+Sections:
+- **Active Licences** — all licences in non-terminal states, with status badges, countdown to key dates
+- **Access Windows** — all open windows with remaining downloads, time left, and one-click close
+- **Bridge Activity** — recent grant opens, active grants, integrity events (filterable by severity)
+- **Scrub Tracker** — licences in `SCRUB_PERIOD` or `OVERDUE` with deadlines and attestation status
+- **Event Timeline** — unified feed of all licence, window, bridge, and scrub events across the trial
+
+Data source: existing tables (`licences`, `access_windows`, `bridge_grants`, `bridge_events`, `scrub_attestations`). No new tables needed — this is a read-only aggregation view.
+
+#### 14.6.2 Email Notifications — Trial-Critical
+
+These emails must be working before the trial starts:
+
+| Trigger | Recipient | Template |
+|---------|-----------|----------|
+| Placeholder licence created | Licensee | "Licence confirmed — awaiting scan capture" |
+| Package attached to licence | Licensee + talent/rep | "Scans uploaded — ready for review" |
+| Access window opened | Licensee | "Download window is open — [duration], [max downloads] remaining" |
+| Access window closing soon (24h) | Licensee + talent/rep | "Access window closes in 24 hours" |
+| Bridge grant opened | Talent/rep | "VFX team opened package via CAS Bridge on [device]" |
+| Integrity event (warn/critical) | Admin + talent/rep | "Security alert on [package]" |
+| Licence expired / revoked | Licensee | "Licence ended — data scrub required by [deadline]" |
+| Scrub reminder (T-7, T-1) | Licensee | "Reminder: attestation due in [N] days" |
+| Attestation submitted | Talent/rep + admin | "Data scrub attestation received" |
+| Attestation overdue | Admin | "OVERDUE: No attestation from [licensee] — [N] days past deadline" |
+
+Templates go in `lib/email/templates.ts` following the existing pattern.
+
+#### 14.6.3 Licence Closure Report
+
+When a licence reaches `CLOSED`, generate a PDF-ready summary for the talent/agency records.
+
+**`GET /api/licences/:id/report`**
+- Auth: talent, rep, admin
+- Returns: JSON (UI renders as printable page, like the existing chain-of-custody document)
+- Contents:
+  - Licence terms (type, territory, exclusivity, fees, dates)
+  - Contract reference
+  - Package details (name, file count, total size)
+  - Access timeline (window opens/closes, total downloads)
+  - Bridge activity summary (devices used, tools, integrity events)
+  - Attestation details (who, when, devices listed, declaration text)
+  - Total download count and unique devices
+
+This becomes part of the talent's permanent record — proof that their likeness data was used according to the licence and properly cleaned up.
+
+---
+
+### 14.7 Schema Changes Summary
+
+All changes for the trial production feature set:
+
+#### 14.7.1 Migration: `0032_trial_production.sql`
+
+```sql
+-- 1. Allow placeholder licences (packageId nullable — handled in ORM, not DDL for SQLite)
+
+-- 2. New licence statuses: AWAITING_PACKAGE, SCRUB_PERIOD, CLOSED, OVERDUE
+--    (enforced in ORM enum, not CHECK constraint — SQLite limitation)
+
+-- 3. New columns on licences
+ALTER TABLE licences ADD COLUMN scrub_deadline INTEGER;
+ALTER TABLE licences ADD COLUMN scrub_attested_at INTEGER;
+
+-- 4. Scrub attestations table
+CREATE TABLE scrub_attestations (
+  id TEXT PRIMARY KEY,
+  licence_id TEXT NOT NULL REFERENCES licences(id) ON DELETE CASCADE,
+  attested_by TEXT NOT NULL REFERENCES users(id),
+  attested_at INTEGER NOT NULL,
+  attestation_text TEXT NOT NULL,
+  ip_address TEXT,
+  user_agent TEXT,
+  devices_scrubbed TEXT,
+  bridge_cache_purged INTEGER NOT NULL DEFAULT 0,
+  additional_notes TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX idx_scrub_attestations_licence ON scrub_attestations(licence_id);
+```
+
+#### 14.7.2 Drizzle Schema Updates (`lib/db/schema.ts`)
+
+- `licences.packageId` — remove `.notNull()`
+- `licences.status` — extend enum: add `"AWAITING_PACKAGE"`, `"SCRUB_PERIOD"`, `"CLOSED"`, `"OVERDUE"`
+- `licences.scrubDeadline` — new `integer("scrub_deadline")`
+- `licences.scrubAttestedAt` — new `integer("scrub_attested_at")`
+- New table: `scrubAttestations` (as above)
+
+---
+
+### 14.8 New Endpoints Summary
+
+| Endpoint | Method | Auth | Phase | Purpose |
+|----------|--------|------|-------|---------|
+| `/api/licences/:id/attach-package` | PATCH | Session (talent/rep/admin) | 1 | Attach package to placeholder licence |
+| `/api/licences/:id/contract` | POST | Session (any party) | 1 | Upload contract PDF |
+| `/api/licences/:id/contract` | GET | Session (any party) | 1 | Download contract PDF (presigned URL) |
+| `/api/bridge/batch-open` | POST | PAT | 2 | Batch grant manifests for multiple packages |
+| `/api/bridge/health` | GET | PAT | 2 | Bridge connectivity check |
+| `/api/licences/:id/activity` | GET | Session (any party) | 2 | Licence activity feed |
+| `/api/licences/:id/scrub` | GET | Session (any party) | 3 | Scrub status and attestation |
+| `/api/licences/:id/scrub/attest` | POST | Session (licensee) | 3 | Submit scrub attestation |
+| `/api/licences/:id/scrub/extend` | POST | Session (admin) | 3 | Extend scrub deadline |
+| `/api/bridge/grants/:grantId/purge-complete` | POST | PAT | 3 | Bridge confirms all files deleted |
+| `/api/admin/scrub/overdue` | GET | Session (admin) | 3 | List overdue attestations |
+| `/api/licences/:id/report` | GET | Session (talent/rep/admin) | 3 | Licence closure report |
+| `/admin/trial` | Page | Session (admin) | All | Trial operations dashboard |
+
+---
+
+### 14.9 Implementation Priority
+
+Ordered by what blocks the trial from starting:
+
+**P0 — Must have before trial begins**
+1. Placeholder licences (`AWAITING_PACKAGE` status, nullable `packageId`, attach-package endpoint)
+2. Contract upload/download endpoints
+3. Bridge + access window integration (download counting, exhaustion check)
+4. Trial-critical email notifications (at minimum: licence created, package attached, window opened, licence ended **at T=0 with attestation prompt**)
+5. Scrub attestation flow (schema, endpoints, basic UI)
+6. Immediate bridge purge on licence end (tight-poll mode, `purge_required` flag on status, `file_in_use` / `purge_partial` / `cache_purged` event types, `purge-complete` endpoint)
+
+**P1 — Must have during trial**
+6. Bridge health endpoint
+7. Bridge batch-open endpoint
+8. Licence activity feed
+9. Admin trial operations dashboard
+10. Scrub reminder emails (T-7, T-1)
+
+**P2 — Should have for trial completeness**
+11. Licence closure report
+12. Overdue attestation admin view and escalation alerts
+13. Access window closing-soon notification (T-24h)
+14. Bridge integrity event alerts to admin/talent
+
+### 14.10 Success Criteria
+
+The trial is successful if:
+
+1. **Capture** — Licence created with deal terms before scans exist. Scans uploaded and attached within 48h of capture session. Talent approves within 24h of attachment.
+2. **Kickoff** — VFX team pulls all package files via CAS Bridge in a single session with zero failed downloads and zero integrity alerts. Time from "access window opened" to "all files on workstation" < 4 hours for a typical package.
+3. **Wind-down** — Bridge auto-purges on licence expiry. Licensee submits attestation within the scrub period. Licence reaches `CLOSED` with a complete audit trail.
+4. **No manual intervention** — the platform handles state transitions, notifications, and access control without us needing to run SQL or manually edit records.
+5. **Audit confidence** — at the end, we can generate a licence closure report that a talent agent would trust as proof their client's data was handled correctly.

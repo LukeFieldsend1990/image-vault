@@ -148,6 +148,57 @@ export function licenceRequestedEmail(p: LicenceRequestedParams): { subject: str
   };
 }
 
+export interface PlaceholderLicenceCreatedParams {
+  licenseeEmail: string;
+  projectName: string;
+  productionCompany: string;
+  validFrom: number;
+  validTo: number;
+  viewUrl: string;
+}
+
+export function placeholderLicenceCreatedEmail(p: PlaceholderLicenceCreatedParams): { subject: string; html: string } {
+  return {
+    subject: `Licence confirmed — ${p.projectName}`,
+    html: layout(`
+      <p>A licence has been set up for your production. Scans are not yet available and will be attached once the capture session is complete.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.productionCompany}</span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val">Awaiting scan capture</span></div>
+        <div class="kv-row"><span class="kv-key">Valid period</span><span class="kv-val">${formatDate(p.validFrom)} – ${formatDate(p.validTo)}</span></div>
+      </div>
+      <p>You will receive a further notification once the scan package has been uploaded and the licence is ready for talent approval.</p>
+      <a class="btn" href="${p.viewUrl}">View licence</a>
+    `),
+  };
+}
+
+export interface PackageAttachedParams {
+  recipientEmail: string;
+  projectName: string;
+  packageName: string;
+  role: "licensee" | "talent";
+  viewUrl: string;
+}
+
+export function packageAttachedEmail(p: PackageAttachedParams): { subject: string; html: string } {
+  const body = p.role === "licensee"
+    ? `<p>The scan package for your licence has been uploaded and attached. The licence is now awaiting talent approval.</p>`
+    : `<p>A scan package has been attached to an awaiting licence. Please review and approve when ready.</p>`;
+  return {
+    subject: `Scans uploaded — ${p.projectName}`,
+    html: layout(`
+      ${body}
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+      </div>
+      <a class="btn" href="${p.viewUrl}">Open in Image Vault</a>
+    `),
+  };
+}
+
 export interface LicenceApprovedParams {
   licenseeEmail: string;
   projectName: string;

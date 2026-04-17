@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type LicenceStatus = "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
+type LicenceStatus = "AWAITING_PACKAGE" | "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
 
 interface Licence {
   id: string;
@@ -44,6 +44,7 @@ const TABS: { label: string; value: LicenceStatus | "ALL" }[] = [
 ];
 
 const STATUS_COLOURS: Record<LicenceStatus, string> = {
+  AWAITING_PACKAGE: "#7c3aed",
   PENDING: "#b45309",
   APPROVED: "#166534",
   DENIED: "#991b1b",

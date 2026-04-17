@@ -58,6 +58,9 @@ export async function POST(
   if (licence.status !== "APPROVED") {
     return NextResponse.json({ error: "Licence is not approved" }, { status: 409 });
   }
+  if (!licence.packageId) {
+    return NextResponse.json({ error: "Licence has no package attached" }, { status: 409 });
+  }
 
   const now = Math.floor(Date.now() / 1000);
   // validTo is stored as midnight of the expiry date — licence is valid through end of that day
