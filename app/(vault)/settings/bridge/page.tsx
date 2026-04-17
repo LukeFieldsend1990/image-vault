@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { bridgeTokens, bridgeDevices, bridgeGrants, licences } from "@/lib/db/schema";
-import { eq, isNull, isNotNull, and } from "drizzle-orm";
+import { eq, isNull, and, gt } from "drizzle-orm";
 import BridgeSettingsClient from "./bridge-client";
 
 async function getSessionData() {
@@ -57,10 +57,10 @@ export default async function BridgeSettingsPage() {
     .where(eq(bridgeDevices.userId, user.userId))
     .all();
 
-  // For talent/rep: count active grants per licence (those they have authority over)
+  // One "session" = one live (licenceId, deviceId). Each DCC open inserts a new grant,
+  // so without dedup a single bridge reopening a package N times counts as N sessions.
   let activeGrantsByLicence: { licenceId: string; count: number }[] = [];
   if (user.role === "talent" || user.role === "rep") {
-    // Fetch all licences for this talent (or rep's roster — simplified: just check talentId)
     const userLicences = await db
       .select({ id: licences.id })
       .from(licences)
@@ -68,23 +68,31 @@ export default async function BridgeSettingsPage() {
       .all();
 
     if (userLicences.length > 0) {
-      const licenceIds = userLicences.map((l) => l.id);
+      const licenceIds = new Set(userLicences.map((l) => l.id));
+      const now = Math.floor(Date.now() / 1000);
       const grants = await db
-        .select({ licenceId: bridgeGrants.licenceId })
+        .select({
+          licenceId: bridgeGrants.licenceId,
+          deviceId: bridgeGrants.deviceId,
+        })
         .from(bridgeGrants)
-        .where(isNull(bridgeGrants.revokedAt))
+        .where(
+          and(isNull(bridgeGrants.revokedAt), gt(bridgeGrants.expiresAt, now))
+        )
         .all();
 
+      const seen = new Set<string>();
       const countMap = new Map<string, number>();
       for (const g of grants) {
-        if (licenceIds.includes(g.licenceId)) {
-          countMap.set(g.licenceId, (countMap.get(g.licenceId) ?? 0) + 1);
-        }
+        if (!licenceIds.has(g.licenceId)) continue;
+        const key = `${g.licenceId}:${g.deviceId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        countMap.set(g.licenceId, (countMap.get(g.licenceId) ?? 0) + 1);
       }
-      activeGrantsByLicence = Array.from(countMap.entries()).map(([licenceId, count]) => ({
-        licenceId,
-        count,
-      }));
+      activeGrantsByLicence = Array.from(countMap.entries()).map(
+        ([licenceId, count]) => ({ licenceId, count })
+      );
     }
   }
 

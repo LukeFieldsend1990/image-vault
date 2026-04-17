@@ -5,7 +5,7 @@ import { AwsClient } from "aws4fetch";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { licences, scanFiles, users, bridgeGrants, bridgeDevices } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   requireBridgeToken,
   isBridgeTokenError,
@@ -287,6 +287,19 @@ export async function POST(
   }
 
   const keyId = "bridge-signing-key-1";
+
+  // Supersede any prior grant on the same bridge so active-session counts don't pile up.
+  await db
+    .update(bridgeGrants)
+    .set({ revokedAt: now })
+    .where(
+      and(
+        eq(bridgeGrants.licenceId, licenceId),
+        eq(bridgeGrants.deviceId, deviceId),
+        eq(bridgeGrants.userId, auth.userId),
+        isNull(bridgeGrants.revokedAt)
+      )
+    );
 
   // ── 8. Record the grant + bump licence download counter ──────────────────
   await db.insert(bridgeGrants).values({
