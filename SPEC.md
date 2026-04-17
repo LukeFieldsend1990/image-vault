@@ -2262,17 +2262,20 @@ Licences need a signed contract document attached. This is a lightweight file (P
 
 **Storage:** `R2: contracts/{licenceId}/{filename}`
 
-**New endpoint: `POST /api/licences/:id/contract`**
-- Auth: talent, rep, licensee, or admin
-- Accepts: multipart form upload (PDF, max 20 MB)
-- Stores file in R2 at `contracts/{licenceId}/{filename}`
-- Updates licence `contractUrl` field
-- Supports replacing: uploading a new contract overwrites the previous
-- Returns: `{ contractUrl: "contracts/{licenceId}/{filename}" }`
+The existing `GET /api/licences/:id/contract` returns the platform's auto-generated HTML preview (used by the "Contract" button in both talent and licensee views) and is kept as-is. The signed-PDF endpoints live at a sibling path to avoid conflict:
 
-**New endpoint: `GET /api/licences/:id/contract`**
+**New endpoint: `POST /api/licences/:id/contract/file`**
+- Auth: talent, rep, licensee, or admin (any party on the licence)
+- Accepts: multipart form upload, field name `file` (PDF, max 20 MB)
+- Stores file in R2 at `contracts/{licenceId}/{filename}` in the scans bucket
+- Updates licence `contract_url`, `contract_uploaded_at`, `contract_uploaded_by`
+- Supports replacing: uploading a new contract overwrites the previous
+- Returns: `{ contractUrl, filename, uploadedAt }`
+
+**New endpoint: `GET /api/licences/:id/contract/file`**
 - Auth: any party on the licence (talent, rep, licensee) or admin
-- Returns: presigned R2 GET URL (1h expiry) for the contract PDF
+- Default: 302 redirect to a presigned R2 GET URL (1h expiry)
+- Send `Accept: application/json` or `?format=json` to receive `{ url, expiresIn, filename }` instead
 - 404 if no contract uploaded
 
 #### 14.3.5 Scan Capture Workflow
@@ -2312,7 +2315,7 @@ During the trial, the physical capture session produces raw scan data that must 
 Drizzle schema update in `lib/db/schema.ts`:
 - `packageId` — remove `.notNull()` (allow null)
 - `status` enum — add `"AWAITING_PACKAGE"` to the list
-- `contractUrl` — already exists as nullable TEXT, no change needed
+- `contractUrl` — added in migration `0034_licence_contract_url.sql` alongside `contractUploadedAt` and `contractUploadedBy`
 
 ---
 
@@ -2828,8 +2831,8 @@ CREATE INDEX idx_scrub_attestations_licence ON scrub_attestations(licence_id);
 | Endpoint | Method | Auth | Phase | Purpose |
 |----------|--------|------|-------|---------|
 | `/api/licences/:id/attach-package` | PATCH | Session (talent/rep/admin) | 1 | Attach package to placeholder licence |
-| `/api/licences/:id/contract` | POST | Session (any party) | 1 | Upload contract PDF |
-| `/api/licences/:id/contract` | GET | Session (any party) | 1 | Download contract PDF (presigned URL) |
+| `/api/licences/:id/contract/file` | POST | Session (any party) | 1 | Upload signed contract PDF |
+| `/api/licences/:id/contract/file` | GET | Session (any party) | 1 | Download signed contract PDF (302 → presigned URL) |
 | `/api/bridge/batch-open` | POST | PAT | 2 | Batch grant manifests for multiple packages |
 | `/api/bridge/health` | GET | PAT | 2 | Bridge connectivity check |
 | `/api/licences/:id/activity` | GET | Session (any party) | 2 | Licence activity feed |
