@@ -59,6 +59,7 @@ export async function POST(
   if (licence.status !== "PENDING") {
     return NextResponse.json({ error: "Licence is not in PENDING state" }, { status: 409 });
   }
+  const licencePackageId = licence.packageId;
 
   await db
     .update(licences)
@@ -69,13 +70,15 @@ export async function POST(
   void (async () => {
     const [licenseeUser, pkg] = await Promise.all([
       db.select({ email: users.email }).from(users).where(eq(users.id, licence.licenseeId)).get(),
-      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licence.packageId)).get(),
+      licencePackageId
+        ? db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licencePackageId)).get()
+        : Promise.resolve(null),
     ]);
     if (!licenseeUser?.email) return;
     const { subject, html } = licenceDeniedEmail({
       licenseeEmail: licenseeUser.email,
       projectName: licence.projectName,
-      packageName: pkg?.name ?? licence.packageId,
+      packageName: pkg?.name ?? licencePackageId ?? "Placeholder",
       reason: body.reason ?? null,
     });
     await sendEmail({ to: licenseeUser.email, subject, html });

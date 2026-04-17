@@ -95,7 +95,7 @@ export const uploadSessions = sqliteTable("upload_sessions", {
 export const licences = sqliteTable("licences", {
   id: text("id").primaryKey(), // UUID
   talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  packageId: text("package_id").references(() => scanPackages.id, { onDelete: "cascade" }),
   licenseeId: text("licensee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   projectName: text("project_name").notNull(),
   productionCompany: text("production_company").notNull(),
@@ -103,7 +103,7 @@ export const licences = sqliteTable("licences", {
   validFrom: integer("valid_from").notNull(), // unix timestamp
   validTo: integer("valid_to").notNull(),     // unix timestamp
   fileScope: text("file_scope").notNull().default("all"), // 'all' or JSON array of file IDs
-  status: text("status", { enum: ["PENDING", "APPROVED", "DENIED", "REVOKED", "EXPIRED"] })
+  status: text("status", { enum: ["AWAITING_PACKAGE", "PENDING", "APPROVED", "DENIED", "REVOKED", "EXPIRED"] })
     .notNull()
     .default("PENDING"),
   approvedBy: text("approved_by").references(() => users.id),

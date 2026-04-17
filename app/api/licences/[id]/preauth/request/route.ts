@@ -80,7 +80,9 @@ export async function POST(
 
   if (!row) return NextResponse.json({ error: "Licence not found" }, { status: 404 });
   if (row.status !== "APPROVED") return NextResponse.json({ error: "Licence is not approved" }, { status: 409 });
+  if (!row.packageId) return NextResponse.json({ error: "Licence has no package attached" }, { status: 409 });
   if (row.permitAiTraining) return NextResponse.json({ error: "Pre-auth cannot be requested for AI training licences" }, { status: 409 });
+  const rowPackageId = row.packageId;
 
   const repLink = await db
     .select({ id: talentReps.id })
@@ -106,7 +108,7 @@ export async function POST(
   void (async () => {
     const [talentUser, pkg] = await Promise.all([
       db.select({ email: users.email }).from(users).where(eq(users.id, row.talentId)).get(),
-      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, row.packageId)).get(),
+      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, rowPackageId)).get(),
     ]);
     if (!talentUser?.email) return;
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
@@ -115,7 +117,7 @@ export async function POST(
       to: talentUser.email,
       subject: `Pre-auth request for ${row.projectName}`,
       html: `
-        <p>Your rep (${repUser?.email ?? "your rep"}) has requested pre-authorisation for <strong>${row.projectName}</strong> (${pkg?.name ?? row.packageId}).</p>
+        <p>Your rep (${repUser?.email ?? "your rep"}) has requested pre-authorisation for <strong>${row.projectName}</strong> (${pkg?.name ?? rowPackageId}).</p>
         <p>This would allow the licensee to download your scan package for <strong>${periodLabel}</strong> without requiring your 2FA code each time.</p>
         <p><a href="${baseUrl}/vault/authorise/${id}?confirm_preauth=1">Review and confirm</a></p>
         <p>If you did not expect this request, you can ignore it — it will expire in 24 hours.</p>

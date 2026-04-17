@@ -48,6 +48,10 @@ export async function POST(
   if (licence.status !== "APPROVED") {
     return NextResponse.json({ error: "Only APPROVED licences can be revoked" }, { status: 409 });
   }
+  if (!licence.packageId) {
+    return NextResponse.json({ error: "Licence has no package attached" }, { status: 409 });
+  }
+  const licencePackageId = licence.packageId;
 
   // Kill any active dual-custody session in KV
   await kv.delete(`dual_custody:${id}`);
@@ -61,13 +65,13 @@ export async function POST(
   void (async () => {
     const [licenseeUser, pkg] = await Promise.all([
       db.select({ email: users.email }).from(users).where(eq(users.id, licence.licenseeId)).get(),
-      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licence.packageId)).get(),
+      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licencePackageId)).get(),
     ]);
     if (!licenseeUser?.email) return;
     const { subject, html } = licenceRevokedEmail({
       licenseeEmail: licenseeUser.email,
       projectName: licence.projectName,
-      packageName: pkg?.name ?? licence.packageId,
+      packageName: pkg?.name ?? licencePackageId,
     });
     await sendEmail({ to: licenseeUser.email, subject, html });
   })();

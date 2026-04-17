@@ -71,14 +71,19 @@ export async function GET(
   const admin = isAdmin(session.email);
   if (!isOwner && !admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  if (!lic.packageId) {
+    return NextResponse.json({ error: "Licence has no package attached" }, { status: 409 });
+  }
+  const licPackageId = lic.packageId;
+
   // Fetch related records in parallel
   const [pkg, talentUser, talentProfile, licenseeUser, fileCount] = await Promise.all([
-    db.select().from(scanPackages).where(eq(scanPackages.id, lic.packageId)).get(),
+    db.select().from(scanPackages).where(eq(scanPackages.id, licPackageId)).get(),
     db.select({ email: users.email }).from(users).where(eq(users.id, lic.talentId)).get(),
     db.select({ fullName: talentProfiles.fullName }).from(talentProfiles).where(eq(talentProfiles.userId, lic.talentId)).get(),
     db.select({ email: users.email }).from(users).where(eq(users.id, lic.licenseeId)).get(),
     db.select({ count: count() }).from(scanFiles)
-      .where(and(eq(scanFiles.packageId, lic.packageId), eq(scanFiles.uploadStatus, "complete")))
+      .where(and(eq(scanFiles.packageId, licPackageId), eq(scanFiles.uploadStatus, "complete")))
       .get(),
   ]);
 
@@ -774,7 +779,7 @@ export async function GET(
     <tr><td>Capture Date</td><td>${fmtDate(pkg?.captureDate ?? null)}</td></tr>
     <tr><td>File Count</td><td>${fileCountNum} file${fileCountNum !== 1 ? "s" : ""} (completed uploads)</td></tr>
     <tr><td>Archive Format</td><td>Delivered as individual files via Changling Image Vault secure download. A ZIP archive is available for all files.</td></tr>
-    <tr><td>Platform Reference</td><td>Package ID: ${lic.packageId}</td></tr>
+    <tr><td>Platform Reference</td><td>Package ID: ${licPackageId}</td></tr>
     <tr><td>Technician Notes</td><td>${pkg?.technicianNotes ?? "None recorded"}</td></tr>
   </table>
 </div>

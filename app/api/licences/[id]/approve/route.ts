@@ -57,6 +57,10 @@ export async function POST(
   if (licence.status !== "PENDING") {
     return NextResponse.json({ error: "Licence is not in PENDING state" }, { status: 409 });
   }
+  if (!licence.packageId) {
+    return NextResponse.json({ error: "Licence has no package attached" }, { status: 409 });
+  }
+  const licencePackageId = licence.packageId;
 
   // Compute agreed/platform fees from proposedFee (15% platform commission)
   const agreedFee = licence.proposedFee ?? null;
@@ -71,14 +75,14 @@ export async function POST(
   void (async () => {
     const [licenseeUser, pkg] = await Promise.all([
       db.select({ email: users.email }).from(users).where(eq(users.id, licence.licenseeId)).get(),
-      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licence.packageId)).get(),
+      db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licencePackageId)).get(),
     ]);
     if (!licenseeUser?.email) return;
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
     const { subject, html } = licenceApprovedEmail({
       licenseeEmail: licenseeUser.email,
       projectName: licence.projectName,
-      packageName: pkg?.name ?? licence.packageId,
+      packageName: pkg?.name ?? licencePackageId,
       validFrom: licence.validFrom,
       validTo: licence.validTo,
       downloadUrl: `${baseUrl}/licences`,

@@ -12,6 +12,7 @@ function ts(unix: number): string {
 }
 
 const STATUS_COLOR: Record<string, string> = {
+  AWAITING_PACKAGE: "#7c3aed",
   PENDING: "#d97706",
   APPROVED: "#166534",
   DENIED: "#991b1b",
@@ -43,7 +44,7 @@ export default async function AdminLicencesPage() {
       packageName: scanPackages.name,
     })
     .from(licences)
-    .innerJoin(scanPackages, eq(scanPackages.id, licences.packageId))
+    .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
     .orderBy(sql`${licences.createdAt} desc`)
     .all();
 
@@ -124,7 +125,7 @@ export default async function AdminLicencesPage() {
 
             {/* Package */}
             <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
-              {r.packageName}
+              {r.packageName ?? <span style={{ fontStyle: "italic" }}>awaiting capture</span>}
             </span>
 
             {/* Status */}
