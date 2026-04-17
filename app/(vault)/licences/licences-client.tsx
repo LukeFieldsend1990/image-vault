@@ -34,6 +34,8 @@ interface Licence {
   permitAiTraining: boolean;
   proposedFee: number | null;
   agreedFee: number | null;
+  contractUrl: string | null;
+  contractUploadedAt: number | null;
 }
 
 const TABS: { label: string; value: LicenceStatus | "ALL" }[] = [
@@ -90,6 +92,29 @@ export default function LicencesClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
+
+  async function reload() {
+    const url = tab === "ALL" ? "/api/licences" : `/api/licences?status=${tab}`;
+    const d = await fetch(url).then((r) => r.json() as Promise<{ licences?: Licence[] }>);
+    setLicences(d.licences ?? []);
+  }
+
+  async function uploadContract(id: string, file: File) {
+    if (file.size > 20 * 1024 * 1024) { alert("File exceeds 20 MB limit."); return; }
+    if (file.type && file.type !== "application/pdf") { alert("PDF only."); return; }
+    setUploadingContractId(id);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/licences/${id}/contract/file`, { method: "POST", body: fd });
+    setUploadingContractId(null);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Upload failed" })) as { error?: string };
+      alert(body.error ?? "Upload failed");
+      return;
+    }
+    await reload();
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -275,6 +300,40 @@ export default function LicencesClient() {
                       >
                         Contract
                       </a>
+                    )}
+                    {l.contractUrl ? (
+                      <a
+                        href={`/api/licences/${l.id}/contract/file`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded border px-3 py-1.5 text-xs font-medium transition"
+                        style={{ borderColor: "var(--color-border)", color: "var(--color-ink)", background: "var(--color-bg)" }}
+                      >
+                        Signed PDF
+                      </a>
+                    ) : (l.status === "PENDING" || l.status === "APPROVED" || l.status === "AWAITING_PACKAGE") && (
+                      <label
+                        className="rounded border px-3 py-1.5 text-xs font-medium transition cursor-pointer"
+                        style={{
+                          borderColor: "var(--color-border)",
+                          color: "var(--color-muted)",
+                          background: "var(--color-bg)",
+                          opacity: uploadingContractId === l.id ? 0.6 : 1,
+                        }}
+                      >
+                        {uploadingContractId === l.id ? "Uploading…" : "Upload signed"}
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) void uploadContract(l.id, f);
+                          }}
+                          disabled={uploadingContractId === l.id}
+                        />
+                      </label>
                     )}
                     {l.status === "APPROVED" && (
                       <Link

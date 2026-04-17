@@ -128,6 +128,9 @@ export const licences = sqliteTable("licences", {
   preauthSetBy: text("preauth_set_by").references(() => users.id), // who set it
   productionId: text("production_id").references(() => productions.id),
   productionCompanyId: text("production_company_id").references(() => productionCompanies.id),
+  contractUrl: text("contract_url"), // R2 object key: contracts/{licenceId}/{filename}
+  contractUploadedAt: integer("contract_uploaded_at"),
+  contractUploadedBy: text("contract_uploaded_by").references(() => users.id),
   createdAt: integer("created_at").notNull(),
 });
 

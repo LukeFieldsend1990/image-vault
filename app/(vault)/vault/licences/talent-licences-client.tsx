@@ -33,6 +33,8 @@ interface Licence {
   deliveryMode: "standard" | "bridge_only" | null;
   preauthUntil: number | null;
   preauthSetBy: string | null;
+  contractUrl: string | null;
+  contractUploadedAt: number | null;
 }
 
 interface PendingDownload {
@@ -82,6 +84,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [togglingDeliveryId, setTogglingDeliveryId] = useState<string | null>(null);
   const [cancellingPreauthId, setCancellingPreauthId] = useState<string | null>(null);
+  const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LicenceTab>("active");
 
   // Download Requests tab state
@@ -145,6 +148,22 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
     await fetch(`/api/licences/${id}/revoke`, { method: "POST" });
     await load();
     setRevokingId(null);
+  }
+
+  async function uploadContract(id: string, file: File) {
+    if (file.size > 20 * 1024 * 1024) { alert("File exceeds 20 MB limit."); return; }
+    if (file.type && file.type !== "application/pdf") { alert("PDF only."); return; }
+    setUploadingContractId(id);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/licences/${id}/contract/file`, { method: "POST", body: fd });
+    setUploadingContractId(null);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Upload failed" })) as { error?: string };
+      alert(body.error ?? "Upload failed");
+      return;
+    }
+    await load();
   }
 
   async function cancelPreauth(id: string) {
@@ -328,6 +347,25 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                           style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}>
                           Contract
                         </a>
+                        {l.contractUrl ? (
+                          <a href={`/api/licences/${l.id}/contract/file`} target="_blank" rel="noopener noreferrer"
+                            className="rounded border px-2.5 py-1.5 text-xs transition"
+                            style={{ borderColor: "var(--color-border)", color: "var(--color-ink)", background: "var(--color-bg)" }}>
+                            Signed PDF
+                          </a>
+                        ) : (
+                          <label className="rounded border px-2.5 py-1.5 text-xs transition cursor-pointer"
+                            style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)", opacity: uploadingContractId === l.id ? 0.6 : 1 }}>
+                            {uploadingContractId === l.id ? "Uploading…" : "Upload signed"}
+                            <input type="file" accept="application/pdf" className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = "";
+                                if (f) void uploadContract(l.id, f);
+                              }}
+                              disabled={uploadingContractId === l.id} />
+                          </label>
+                        )}
                         {l.status === "APPROVED" && !isExpired && (
                           <button onClick={() => revoke(l.id)} disabled={revokingId === l.id}
                             className="rounded border px-3 py-1.5 text-xs transition disabled:opacity-60"

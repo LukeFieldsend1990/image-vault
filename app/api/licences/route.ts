@@ -60,6 +60,8 @@ export async function GET(req: NextRequest) {
       deliveryMode: licences.deliveryMode,
       preauthUntil: licences.preauthUntil,
       preauthSetBy: licences.preauthSetBy,
+      contractUrl: licences.contractUrl,
+      contractUploadedAt: licences.contractUploadedAt,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
