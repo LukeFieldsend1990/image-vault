@@ -365,6 +365,8 @@ export const bridgeGrants = sqliteTable("bridge_grants", {
   offlineUntil: integer("offline_until").notNull(), // expiresAt + 48h grace
   createdAt: integer("created_at").notNull(),
   revokedAt: integer("revoked_at"),
+  purgeRequestedAt: integer("purge_requested_at"),
+  purgeCompletedAt: integer("purge_completed_at"),
 });
 
 // ── AI tables ────────────────────────────────────────────────────────────────
@@ -444,7 +446,7 @@ export const bridgeEvents = sqliteTable("bridge_events", {
   packageId: text("package_id").notNull(),
   deviceId: text("device_id").notNull(),
   userId: text("user_id"),
-  eventType: text("event_type").notNull(), // tamper_detected|unexpected_copy|hash_mismatch|lease_expired|cache_purged|open_denied
+  eventType: text("event_type").notNull(), // tamper_detected|unexpected_copy|hash_mismatch|lease_expired|cache_purged|open_denied|purge_started|purge_partial|file_in_use|purge_stalled|purge_failed
   severity: text("severity").notNull().default("warn"), // info|warn|critical
   detail: text("detail"), // JSON blob
   createdAt: integer("created_at").notNull(),

@@ -18,6 +18,11 @@ const ALLOWED_EVENT_TYPES = new Set([
   "lease_expired",
   "cache_purged",
   "open_denied",
+  "purge_started",
+  "purge_partial",
+  "file_in_use",
+  "purge_stalled",
+  "purge_failed",
 ]);
 
 const ALLOWED_SEVERITIES = new Set(["info", "warn", "critical"]);
