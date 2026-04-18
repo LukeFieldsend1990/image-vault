@@ -11,7 +11,10 @@
 -- When a package is later attached, the licence auto-transitions to PENDING
 -- and the normal approval flow resumes.
 
-PRAGMA foreign_keys=OFF;
+-- D1 ignores statement-level `PRAGMA foreign_keys = OFF`, so we use the
+-- transaction-scoped defer variant. FKs are still checked at COMMIT, but
+-- the rename completes first so the referring tables resolve cleanly.
+PRAGMA defer_foreign_keys = TRUE;
 
 CREATE TABLE licences_new (
   id TEXT PRIMARY KEY,
@@ -72,5 +75,3 @@ CREATE INDEX IF NOT EXISTS idx_licences_talent   ON licences(talent_id);
 CREATE INDEX IF NOT EXISTS idx_licences_licensee ON licences(licensee_id);
 CREATE INDEX IF NOT EXISTS idx_licences_package  ON licences(package_id);
 CREATE INDEX IF NOT EXISTS idx_licences_status   ON licences(status);
-
-PRAGMA foreign_keys=ON;
