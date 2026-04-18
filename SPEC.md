@@ -2593,25 +2593,30 @@ At T=0 (expiry or revocation) the platform kicks off three things in parallel �
 
 #### 14.5.6 New Endpoints
 
+**✅ Shipped for trial (P0.4 + P0.5):**
+
 **`GET /api/licences/:id/scrub`** — get scrub status
 - Auth: any party on licence, or admin
-- Returns: `{ status, scrubDeadline, daysRemaining, attestation: { ... } | null, bridgeCachePurged, overdue }`
+- Returns: `{ licenceId, status, projectName, scrubDeadline, daysRemaining, overdue, scrubAttestedAt, attestation: { attestedBy, attestedAt, attestationText, devicesScrubbed, bridgeCachePurged, additionalNotes, ipAddress } | null }`
 
 **`POST /api/licences/:id/scrub/attest`** — submit attestation
 - Auth: licensee on the licence only
-- Body: `{ devicesScrubbed: ["Ingest server A", "Workstation 12", ...], additionalNotes?: string, totp: "123456" }`
-- Validates: licence is in `SCRUB_PERIOD`, caller is the licensee, 2FA valid
-- Creates attestation, transitions licence to `CLOSED`
-- Sends notifications to talent/rep and admin
+- Body: `{ devicesScrubbed: ["Ingest server A", "Workstation 12", ...], additionalNotes?: string, bridgeCachePurged?: boolean, totp: "123456" }`
+- Validates: licence is in `SCRUB_PERIOD` or `OVERDUE`, caller is the licensee, 2FA valid, at least one device listed
+- Creates attestation, sets `scrubAttestedAt`, transitions licence to `CLOSED`
+- Emails talent + any reps + admins
 
 **`POST /api/licences/:id/scrub/extend`** — extend scrub deadline
 - Auth: admin only
-- Body: `{ additionalDays: 7, reason: "Licensee requested extension — overseas facility" }`
-- Updates `scrubDeadline`, logs event
+- Body: `{ additionalDays: 1–30, reason: "Licensee requested extension — overseas facility" }`
+- Updates `scrubDeadline`, pulls `OVERDUE` back to `SCRUB_PERIOD`, emails licensee
+
+**Deferred:**
 
 **`GET /api/admin/scrub/overdue`** — list overdue attestations
 - Auth: admin
 - Returns all licences in `OVERDUE` status with days overdue, licensee contact info, and last activity
+- Not blocking for trial — admin can filter `/admin/licences` by status manually. Build alongside cron-based auto-expiry in P1.
 
 #### 14.5.7 Bridge Integration — Wind-Down
 
@@ -2745,20 +2750,23 @@ Data source: existing tables (`licences`, `access_windows`, `bridge_grants`, `br
 
 These emails must be working before the trial starts:
 
-| Trigger | Recipient | Template |
-|---------|-----------|----------|
-| Placeholder licence created | Licensee | "Licence confirmed — awaiting scan capture" |
-| Package attached to licence | Licensee + talent/rep | "Scans uploaded — ready for review" |
-| Access window opened | Licensee | "Download window is open — [duration], [max downloads] remaining" |
-| Access window closing soon (24h) | Licensee + talent/rep | "Access window closes in 24 hours" |
-| Bridge grant opened | Talent/rep | "VFX team opened package via CAS Bridge on [device]" |
-| Integrity event (warn/critical) | Admin + talent/rep | "Security alert on [package]" |
-| Licence expired / revoked | Licensee | "Licence ended — data scrub required by [deadline]" |
-| Scrub reminder (T-7, T-1) | Licensee | "Reminder: attestation due in [N] days" |
-| Attestation submitted | Talent/rep + admin | "Data scrub attestation received" |
-| Attestation overdue | Admin | "OVERDUE: No attestation from [licensee] — [N] days past deadline" |
+| Trigger | Recipient | Template | Status |
+|---------|-----------|----------|--------|
+| Placeholder licence created | Licensee | `placeholderLicenceCreatedEmail` | ✅ Live |
+| Package attached to licence | Licensee + talent/rep | "Scans uploaded — ready for review" | Deferred — covered by dashboard refresh during trial |
+| Access window opened | Licensee | "Download window is open — [duration], [max downloads] remaining" | Deferred — no opener endpoint yet |
+| Access window closing soon (24h) | Licensee + talent/rep | "Access window closes in 24 hours" | Deferred — needs cron |
+| Bridge grant opened | Talent/rep | "VFX team opened package via CAS Bridge on [device]" | Deferred |
+| Integrity event (warn/critical) | Admin + talent/rep | "Security alert on [package]" | Deferred |
+| Licence expired / revoked | Licensee | `licenceEndedAttestationEmail` | ✅ Live (revoke path) |
+| Scrub reminder (T-7, T-1) | Licensee | "Reminder: attestation due in [N] days" | Deferred — needs cron |
+| Attestation submitted | Talent/rep + admin | `attestationSubmittedEmail` | ✅ Live |
+| Attestation extended | Licensee | `attestationExtendedEmail` | ✅ Live |
+| Attestation overdue | Admin | "OVERDUE: No attestation from [licensee] — [N] days past deadline" | Deferred — needs cron |
 
 Templates go in `lib/email/templates.ts` following the existing pattern.
+
+For the trial, the cron-driven reminders and the auto-expiry path can be run manually (admin triggers revoke → licensee gets the attestation email; admin monitors the `/admin/licences` dashboard for OVERDUE rows).
 
 #### 14.6.3 Licence Closure Report
 
@@ -2849,11 +2857,11 @@ CREATE INDEX idx_scrub_attestations_licence ON scrub_attestations(licence_id);
 Ordered by what blocks the trial from starting:
 
 **P0 — Must have before trial begins**
-1. Placeholder licences (`AWAITING_PACKAGE` status, nullable `packageId`, attach-package endpoint)
-2. Contract upload/download endpoints
-3. Bridge + access window integration (download counting, exhaustion check)
-4. Trial-critical email notifications (at minimum: licence created, package attached, window opened, licence ended **at T=0 with attestation prompt**)
-5. Scrub attestation flow (schema, endpoints, basic UI)
+1. ✅ Placeholder licences (`AWAITING_PACKAGE` status, nullable `packageId`, attach-package endpoint)
+2. ✅ Contract upload/download endpoints
+3. ✅ Bridge + access window integration (download counting, exhaustion check)
+4. ✅ Trial-critical email notifications (at minimum: licence created, licence ended **at T=0 with attestation prompt**, attestation submitted)
+5. ✅ Scrub attestation flow (schema, endpoints, basic UI)
 6. Immediate bridge purge on licence end (tight-poll mode, `purge_required` flag on status, `file_in_use` / `purge_partial` / `cache_purged` event types, `purge-complete` endpoint)
 
 **P1 — Must have during trial**

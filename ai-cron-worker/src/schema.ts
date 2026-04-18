@@ -65,7 +65,7 @@ export const licences = sqliteTable("licences", {
   agreedFee: integer("agreed_fee"),
   downloadCount: integer("download_count").notNull().default(0),
   validTo: integer("valid_to").notNull(),
-  status: text("status", { enum: ["PENDING", "APPROVED", "DENIED", "REVOKED", "EXPIRED"] }).notNull().default("PENDING"),
+  status: text("status", { enum: ["AWAITING_PACKAGE", "PENDING", "APPROVED", "DENIED", "REVOKED", "EXPIRED", "SCRUB_PERIOD", "CLOSED", "OVERDUE"] }).notNull().default("PENDING"),
   createdAt: integer("created_at").notNull(),
 });
 

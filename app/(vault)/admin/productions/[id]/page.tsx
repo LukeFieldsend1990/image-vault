@@ -61,11 +61,15 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
   }
 
   const STATUS_COLOR: Record<string, string> = {
+    AWAITING_PACKAGE: "#7c3aed",
     PENDING: "#d97706",
     APPROVED: "#059669",
     DENIED: "#dc2626",
     REVOKED: "#6b7280",
     EXPIRED: "#6b7280",
+    SCRUB_PERIOD: "#c0392b",
+    CLOSED: "#374151",
+    OVERDUE: "#991b1b",
   };
 
   return (

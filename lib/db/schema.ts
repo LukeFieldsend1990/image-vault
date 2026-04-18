@@ -103,7 +103,19 @@ export const licences = sqliteTable("licences", {
   validFrom: integer("valid_from").notNull(), // unix timestamp
   validTo: integer("valid_to").notNull(),     // unix timestamp
   fileScope: text("file_scope").notNull().default("all"), // 'all' or JSON array of file IDs
-  status: text("status", { enum: ["AWAITING_PACKAGE", "PENDING", "APPROVED", "DENIED", "REVOKED", "EXPIRED"] })
+  status: text("status", {
+    enum: [
+      "AWAITING_PACKAGE",
+      "PENDING",
+      "APPROVED",
+      "DENIED",
+      "REVOKED",
+      "EXPIRED",
+      "SCRUB_PERIOD",
+      "CLOSED",
+      "OVERDUE",
+    ],
+  })
     .notNull()
     .default("PENDING"),
   approvedBy: text("approved_by").references(() => users.id),
@@ -131,6 +143,22 @@ export const licences = sqliteTable("licences", {
   contractUrl: text("contract_url"), // R2 object key: contracts/{licenceId}/{filename}
   contractUploadedAt: integer("contract_uploaded_at"),
   contractUploadedBy: text("contract_uploaded_by").references(() => users.id),
+  scrubDeadline: integer("scrub_deadline"),
+  scrubAttestedAt: integer("scrub_attested_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const scrubAttestations = sqliteTable("scrub_attestations", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  attestedBy: text("attested_by").notNull().references(() => users.id),
+  attestedAt: integer("attested_at").notNull(),
+  attestationText: text("attestation_text").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  devicesScrubbed: text("devices_scrubbed"), // JSON array of device descriptors
+  bridgeCachePurged: integer("bridge_cache_purged", { mode: "boolean" }).notNull().default(false),
+  additionalNotes: text("additional_notes"),
   createdAt: integer("created_at").notNull(),
 });
 

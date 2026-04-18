@@ -8,7 +8,16 @@ import { eq, desc, and, inArray, like } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceRequestedEmail, placeholderLicenceCreatedEmail } from "@/lib/email/templates";
 
-type LicenceStatus = "AWAITING_PACKAGE" | "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
+type LicenceStatus =
+  | "AWAITING_PACKAGE"
+  | "PENDING"
+  | "APPROVED"
+  | "DENIED"
+  | "REVOKED"
+  | "EXPIRED"
+  | "SCRUB_PERIOD"
+  | "CLOSED"
+  | "OVERDUE";
 
 // GET /api/licences — list licences scoped to the caller's role
 export async function GET(req: NextRequest) {
