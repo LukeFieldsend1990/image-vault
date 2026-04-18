@@ -2,9 +2,9 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, users, scanPackages } from "@/lib/db/schema";
+import { licences, users, scanPackages, bridgeGrants } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceEndedAttestationEmail } from "@/lib/email/templates";
 
@@ -65,6 +65,20 @@ export async function POST(
     .update(licences)
     .set({ status: "SCRUB_PERIOD", revokedAt: now, scrubDeadline })
     .where(eq(licences.id, id));
+
+  // Signal every live bridge grant to purge its local cache. The bridge
+  // picks this up on its next status poll (tight-poll mode kicks in until
+  // purge-complete lands).
+  await db
+    .update(bridgeGrants)
+    .set({ purgeRequestedAt: now })
+    .where(
+      and(
+        eq(bridgeGrants.licenceId, id),
+        isNull(bridgeGrants.revokedAt),
+        isNull(bridgeGrants.purgeRequestedAt),
+      ),
+    );
 
   // Notify licensee (fire-and-forget)
   void (async () => {

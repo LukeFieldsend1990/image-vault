@@ -2876,7 +2876,7 @@ Ordered by what blocks the trial from starting:
 3. ✅ Bridge + access window integration (download counting, exhaustion check)
 4. ✅ Trial-critical email notifications (at minimum: licence created, licence ended **at T=0 with attestation prompt**, attestation submitted)
 5. ✅ Scrub attestation flow (schema, endpoints, basic UI)
-6. Immediate bridge purge on licence end (tight-poll mode, `purge_required` flag on status, `file_in_use` / `purge_partial` / `cache_purged` event types, `purge-complete` endpoint)
+6. ✅ Immediate bridge purge on licence end (tight-poll mode, `purgeRequired` flag on status, `file_in_use` / `purge_partial` / `cache_purged` / `purge_started` / `purge_stalled` / `purge_failed` event types, `purge-complete` endpoint)
 
 **P1 — Must have during trial**
 6. Bridge health endpoint
@@ -2899,6 +2899,22 @@ The web app changes in P0.3 require matching behaviour on the bridge side (`chan
 - **403 with `error: "access_window_expired"`** from `POST /api/bridge/packages/:id/open` is the only window-related hard block. Treat as terminal for that licence until the talent opens a new window; surface the message to the operator.
 - On a successful open, the response may contain `accessWindow: { remaining, exceeded, thresholdCrossed }`. `remaining` can be negative once the count runs past `max_downloads`. `exceeded` is a steady-state flag (remains true on every subsequent open). `thresholdCrossed` is a one-shot signal (true only on the single open that first crosses the cap) — use this to fire a one-time "you've passed the download cap" toast/email rather than spamming on every subsequent open.
 - No changes required for opens against licences with no active window — the response shape is backwards compatible.
+
+**Immediate-purge contract (P0.6, shipped):**
+
+- `GET /api/bridge/packages/:packageId/status` responses now include three new fields per grant:
+  - `purgeRequired: boolean` — true when the platform has signalled immediate purge and the bridge has not yet confirmed completion.
+  - `purgeRequestedAt: number | null` — unix seconds stamped on licence end.
+  - `purgeCompletedAt: number | null` — unix seconds stamped when the bridge posts purge-complete.
+- The top-level status response (single grant and multi-grant) also includes `pollIntervalSeconds`. It is `30` when any grant for the caller is mid-purge, otherwise `300` (5 min default). The bridge should honour whichever interval the server returns.
+- On first observing `purgeRequired: true` for a grant: begin deleting cached files immediately, emit `purge_started` via `POST /api/bridge/events`, and stay in tight-poll mode until confirmed.
+- During purge, emit progress events:
+  - `purge_partial` (info) — batch deleted, more to go.
+  - `file_in_use` (warn) — a file is locked by a running DCC. Include `{ filename, path, sizeBytes?, lockingProcess?, lockingPid?, attemptCount, nextRetryAt, reason }` in `detail`. Retry with exponential backoff (30s → 1m → 5m → 15m → 1h). Keep deleting other files in parallel.
+  - `purge_stalled` (critical) — same files stuck `in_use` > 1 hour. Alerts admin + talent/rep.
+  - `purge_failed` (critical) — unrecoverable filesystem / permission failure.
+- When every file for the grant is gone: `POST /api/bridge/grants/:grantId/purge-complete` with body `{ filesDeleted, bytesFreed }`. The endpoint is idempotent (second call returns `alreadyComplete: true`). On success the platform stamps `purge_completed_at`, emits a server-side `cache_purged` event, and — if all grants for the licence are purged — flips `bridge_cache_purged` on the scrub attestation (if already submitted).
+- The existing `/api/bridge/events` endpoint accepts the five new event types above in addition to the prior set.
 
 ### 14.11 Success Criteria
 

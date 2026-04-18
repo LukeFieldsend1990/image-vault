@@ -11,6 +11,9 @@ import {
 
 type GrantStatus = "active" | "revoked" | "expired" | "vault_locked";
 
+const TIGHT_POLL_INTERVAL_SECS = 30;
+const DEFAULT_POLL_INTERVAL_SECS = 300;
+
 function resolveStatus(
   revokedAt: number | null,
   offlineUntil: number,
@@ -21,6 +24,13 @@ function resolveStatus(
   if (revokedAt) return "revoked";
   if (offlineUntil < now) return "expired";
   return "active";
+}
+
+function purgeRequired(
+  purgeRequestedAt: number | null,
+  purgeCompletedAt: number | null,
+): boolean {
+  return purgeRequestedAt !== null && purgeCompletedAt === null;
 }
 
 /**
@@ -60,6 +70,8 @@ export async function GET(
         offlineUntil: bridgeGrants.offlineUntil,
         revokedAt: bridgeGrants.revokedAt,
         createdAt: bridgeGrants.createdAt,
+        purgeRequestedAt: bridgeGrants.purgeRequestedAt,
+        purgeCompletedAt: bridgeGrants.purgeCompletedAt,
       })
       .from(bridgeGrants)
       .where(
@@ -89,6 +101,7 @@ export async function GET(
     }
 
     const status = resolveStatus(grant.revokedAt, grant.offlineUntil, vaultLocked, now);
+    const purgeNeeded = purgeRequired(grant.purgeRequestedAt, grant.purgeCompletedAt);
 
     return NextResponse.json({
       grantId: grant.id,
@@ -99,6 +112,10 @@ export async function GET(
       offlineUntil: grant.offlineUntil,
       revokedAt: grant.revokedAt ?? null,
       createdAt: grant.createdAt,
+      purgeRequired: purgeNeeded,
+      purgeRequestedAt: grant.purgeRequestedAt ?? null,
+      purgeCompletedAt: grant.purgeCompletedAt ?? null,
+      pollIntervalSeconds: purgeNeeded ? TIGHT_POLL_INTERVAL_SECS : DEFAULT_POLL_INTERVAL_SECS,
     });
   }
 
@@ -113,6 +130,8 @@ export async function GET(
       offlineUntil: bridgeGrants.offlineUntil,
       revokedAt: bridgeGrants.revokedAt,
       createdAt: bridgeGrants.createdAt,
+      purgeRequestedAt: bridgeGrants.purgeRequestedAt,
+      purgeCompletedAt: bridgeGrants.purgeCompletedAt,
     })
     .from(bridgeGrants)
     .where(
@@ -124,15 +143,26 @@ export async function GET(
     )
     .all();
 
+  const anyPurgeRequired = grants.some((g) =>
+    purgeRequired(g.purgeRequestedAt, g.purgeCompletedAt),
+  );
+
   return NextResponse.json({
-    grants: grants.map((g) => ({
-      grantId: g.id,
-      status: resolveStatus(null, g.offlineUntil, false, now),
-      tool: g.tool,
-      deviceId: g.deviceId,
-      expiresAt: g.expiresAt,
-      offlineUntil: g.offlineUntil,
-      createdAt: g.createdAt,
-    })),
+    grants: grants.map((g) => {
+      const purgeNeeded = purgeRequired(g.purgeRequestedAt, g.purgeCompletedAt);
+      return {
+        grantId: g.id,
+        status: resolveStatus(null, g.offlineUntil, false, now),
+        tool: g.tool,
+        deviceId: g.deviceId,
+        expiresAt: g.expiresAt,
+        offlineUntil: g.offlineUntil,
+        createdAt: g.createdAt,
+        purgeRequired: purgeNeeded,
+        purgeRequestedAt: g.purgeRequestedAt ?? null,
+        purgeCompletedAt: g.purgeCompletedAt ?? null,
+      };
+    }),
+    pollIntervalSeconds: anyPurgeRequired ? TIGHT_POLL_INTERVAL_SECS : DEFAULT_POLL_INTERVAL_SECS,
   });
 }
