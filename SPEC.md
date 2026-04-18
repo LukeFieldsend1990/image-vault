@@ -2334,22 +2334,20 @@ A typical VFX kickoff looks like:
 5. **Bridge** downloads all files from the presigned R2 URLs to local cache
 6. **Files** are distributed from the ingest server to artist workstations (either via facility network or additional bridge instances on each workstation)
 
-#### 14.4.2 Gap: Bridge + Access Windows Integration
+#### 14.4.2 Bridge + Access Windows Integration — **implemented (P0.3)**
 
-**Current state:** The bridge `POST .../open` endpoint checks licence status (`APPROVED`), expiry, vault lock, and tool permissions. It does **not** check access windows.
+`POST /api/bridge/packages/:packageId/open` now respects the licence's active access window:
 
-**Problem:** During an access window, the licensee should be able to draw down via the bridge without triggering the talent-side 2FA of the dual-custody flow. The bridge currently bypasses dual-custody entirely (it uses PAT auth, not the KV-based dual-custody session). This is correct for the bridge use case, but the bridge should still respect access window rules:
+- **No active window** → bridge open proceeds as before. Access windows add download counting, not gating.
+- **Active window with remaining downloads** → bridge open proceeds; `access_windows.downloads_used` is incremented by 1 and an `access_window_events` row of type `download` is written (metadata: `{ grantId, packageId, tool, deviceId }`). If this increment exhausts the window, an `exhausted` event is also written and the window's status flips to `exhausted` in the same call.
+- **Window exhausted** → 403 `{ error: "access_window_exhausted", message: "Download limit reached on this access window — ask the talent to extend or re-open." }`
+- **Window expired** (`expires_at` in the past) → 403 `{ error: "access_window_expired", ... }`. Status transition to `expired` is left to a separate cleanup path.
 
-- If no access window is active, the bridge open should still work for `APPROVED` licences (the bridge's PAT is the licensee's auth; the manifest issuance is the "download event")
-- If an access window is active, each bridge open should decrement `downloads_used` on the window
-- If the access window is `exhausted` (downloads_used >= max_downloads), bridge open should fail with a clear error
-- All bridge opens during an access window should be logged as `access_window_events` with type `download`
+The response shape for successful bridge opens gains a new `accessWindow` key only when a window was consumed: `{ accessWindow: { remaining, exhausted } }`. Bridge clients can use this to surface a warning as the window runs down.
 
-**Changes to `POST /api/bridge/packages/:id/open`:**
-- After licence validation, check for an active access window on this licence
-- If a window exists and has remaining downloads: proceed, increment `downloads_used`, log window event
-- If a window exists but is exhausted: return 403 `{ error: "access_window_exhausted", message: "Download limit reached — ask talent to extend the window" }`
-- If no window exists: proceed as today (bridge access is controlled by licence status + vault lock, not access windows — access windows add download counting, not gating)
+Dual-custody flow (`licensee-2fa`) does **not** yet decrement the window — that integration is tracked separately (spec §1577-area) and is out of scope for P0.3.
+
+Helper module: `lib/bridge/accessWindows.ts` — `resolveAccessWindow(db, licenceId, now)` + `recordAccessWindowDownload(db, {...})`.
 
 #### 14.4.3 Gap: Bulk / Batch Bridge Opens
 
@@ -2871,7 +2869,16 @@ Ordered by what blocks the trial from starting:
 13. Access window closing-soon notification (T-24h)
 14. Bridge integrity event alerts to admin/talent
 
-### 14.10 Success Criteria
+### 14.10 Bridge (kyoto) Integration Notes
+
+The web app changes in P0.3 require matching behaviour on the bridge side (`changling-vault-bridge`):
+
+- The bridge should treat a **403 with `error: "access_window_exhausted"`** from `POST /api/bridge/packages/:id/open` as a terminal error for that licence until the talent opens a new window (do not retry on a schedule). Surface the message to the operator.
+- The bridge should treat **403 with `error: "access_window_expired"`** the same way.
+- On a successful open, the response may now contain an `accessWindow: { remaining, exhausted }` object. The bridge should log/display this so the VFX team knows how many opens remain before the window blocks further drawdowns.
+- No changes required for opens against licences with no active window — the response shape is backwards compatible.
+
+### 14.11 Success Criteria
 
 The trial is successful if:
 
