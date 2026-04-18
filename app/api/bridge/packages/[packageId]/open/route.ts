@@ -10,6 +10,10 @@ import {
   requireBridgeToken,
   isBridgeTokenError,
 } from "@/lib/auth/requireBridgeToken";
+import {
+  resolveAccessWindow,
+  recordAccessWindowDownload,
+} from "@/lib/bridge/accessWindows";
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -186,7 +190,31 @@ export async function POST(
     );
   }
 
-  // ── 4. Update device last-seen (log unknown devices, don't block) ─────────
+  // ── 4. Access window gating ───────────────────────────────────────────────
+  // If an active window exists on this licence, it must have remaining
+  // downloads. No active window = bridge access governed only by licence
+  // status + vault lock (windows add counting, not gating).
+  const windowState = await resolveAccessWindow(db, licenceId, now);
+  if (windowState.kind === "exhausted") {
+    return NextResponse.json(
+      {
+        error: "access_window_exhausted",
+        message: "Download limit reached on this access window — ask the talent to extend or re-open.",
+      },
+      { status: 403 }
+    );
+  }
+  if (windowState.kind === "expired") {
+    return NextResponse.json(
+      {
+        error: "access_window_expired",
+        message: "The access window for this licence has expired — ask the talent to open a new one.",
+      },
+      { status: 403 }
+    );
+  }
+
+  // ── 5. Update device last-seen (log unknown devices, don't block) ─────────
   const device = await db
     .select({ id: bridgeDevices.id, userId: bridgeDevices.userId })
     .from(bridgeDevices)
@@ -202,7 +230,7 @@ export async function POST(
   }
   // Unknown device is allowed through — recorded in the grant for audit
 
-  // ── 5. Fetch files in scope ────────────────────────────────────────────────
+  // ── 6. Fetch files in scope ────────────────────────────────────────────────
   const allFiles = await db
     .select({
       id: scanFiles.id,
@@ -235,7 +263,7 @@ export async function POST(
     );
   }
 
-  // ── 6. Build per-file entries with presigned source URLs ──────────────────
+  // ── 7. Build per-file entries with presigned source URLs ──────────────────
   const fileEntries = await Promise.all(
     scopedFiles.map(async (f) => {
       const sourceUrl = await presignGet(f.r2Key, PRESIGN_TTL_SECS);
@@ -250,7 +278,7 @@ export async function POST(
     })
   );
 
-  // ── 7. Build and sign the manifest ────────────────────────────────────────
+  // ── 8. Build and sign the manifest ────────────────────────────────────────
   const signingKeyJwk = cfEnv("BRIDGE_SIGNING_KEY_JWK");
   if (!signingKeyJwk) {
     return NextResponse.json(
@@ -301,7 +329,7 @@ export async function POST(
       )
     );
 
-  // ── 8. Record the grant + bump licence download counter ──────────────────
+  // ── 9. Record the grant, bump counters, log window download ──────────────
   await db.insert(bridgeGrants).values({
     id: grantId,
     licenceId,
@@ -326,10 +354,26 @@ export async function POST(
     })
     .where(eq(licences.id, licenceId));
 
+  let windowExhausted = false;
+  let windowRemaining: number | undefined;
+  if (windowState.kind === "active") {
+    const result = await recordAccessWindowDownload(db, {
+      window: windowState.window,
+      actorId: auth.userId,
+      metadata: { grantId, packageId, tool, deviceId },
+      now,
+    });
+    windowExhausted = result.nowExhausted;
+    windowRemaining = windowState.window.maxDownloads - result.newDownloadsUsed;
+  }
+
   return NextResponse.json({
     manifest: manifestJson,
     signature,
     keyId,
     grantId,
+    ...(windowState.kind === "active"
+      ? { accessWindow: { remaining: windowRemaining, exhausted: windowExhausted } }
+      : {}),
   });
 }

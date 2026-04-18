@@ -422,6 +422,36 @@ export const bridgeEvents = sqliteTable("bridge_events", {
   createdAt: integer("created_at").notNull(),
 });
 
+// ── Access windows — time-boxed download access ─────────────────────────────
+
+export const accessWindows = sqliteTable("access_windows", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").notNull().references(() => users.id),
+  licenseeId: text("licensee_id").notNull().references(() => users.id),
+  openedBy: text("opened_by").notNull().references(() => users.id),
+  openedAt: integer("opened_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  maxDownloads: integer("max_downloads").notNull().default(50),
+  downloadsUsed: integer("downloads_used").notNull().default(0),
+  status: text("status", { enum: ["active", "closed", "expired", "exhausted"] }).notNull().default("active"),
+  closedBy: text("closed_by").references(() => users.id),
+  closedAt: integer("closed_at"),
+  closeReason: text("close_reason"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const accessWindowEvents = sqliteTable("access_window_events", {
+  id: text("id").primaryKey(),
+  windowId: text("window_id").notNull().references(() => accessWindows.id, { onDelete: "cascade" }),
+  eventType: text("event_type", {
+    enum: ["opened", "download", "extended", "closed", "expired", "exhausted"],
+  }).notNull(),
+  actorId: text("actor_id").references(() => users.id),
+  metadata: text("metadata"), // JSON blob
+  createdAt: integer("created_at").notNull(),
+});
+
 // ── Inbound email intake ─────────────────────────────────────────────────────
 
 export const inboundAliases = sqliteTable("inbound_aliases", {
