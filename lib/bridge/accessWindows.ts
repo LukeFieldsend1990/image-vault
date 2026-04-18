@@ -4,10 +4,18 @@ import { and, eq } from "drizzle-orm";
 
 type Db = ReturnType<typeof getDb>;
 
+// Soft-count model: a window tracks and caps via signal, not by blocking.
+// Hitting `maxDownloads` logs a one-time `exhausted` event for audit and
+// surfaces `exceeded: true` to the bridge, but the download is still allowed.
+// Time-based `expired` remains the only hard gate.
 export type WindowState =
   | { kind: "none" }
-  | { kind: "active"; window: AccessWindowRow; remaining: number }
-  | { kind: "exhausted"; window: AccessWindowRow }
+  | {
+      kind: "active";
+      window: AccessWindowRow;
+      remaining: number; // may be negative once the count runs past maxDownloads
+      exceeded: boolean;
+    }
   | { kind: "expired"; window: AccessWindowRow };
 
 export type AccessWindowRow = {
@@ -21,9 +29,6 @@ export type AccessWindowRow = {
   status: "active" | "closed" | "expired" | "exhausted";
 };
 
-// Returns the current state of the access window for a licence.
-// Does NOT mutate status on expiry — expiry transitions happen elsewhere (cron/
-// on next interaction). Callers should treat `expired` + `exhausted` as blocking.
 export async function resolveAccessWindow(
   db: Db,
   licenceId: string,
@@ -47,14 +52,21 @@ export async function resolveAccessWindow(
   if (!row) return { kind: "none" };
 
   if (row.expiresAt < now) return { kind: "expired", window: row };
-  if (row.downloadsUsed >= row.maxDownloads) return { kind: "exhausted", window: row };
-  return { kind: "active", window: row, remaining: row.maxDownloads - row.downloadsUsed };
+
+  const remaining = row.maxDownloads - row.downloadsUsed;
+  return {
+    kind: "active",
+    window: row,
+    remaining,
+    exceeded: remaining <= 0,
+  };
 }
 
 // Record a download against an active access window.
-// Increments downloads_used, logs a `download` event, and — if this consumes
-// the last permitted download — transitions the window to `exhausted` and
-// logs an `exhausted` event in the same call.
+// Always increments `downloads_used` and logs a `download` event. Does NOT
+// block or flip status when the count crosses `maxDownloads` — the count is
+// an audit signal, not a DRM cap. The first crossing still emits a one-time
+// `exhausted` event so operators can be alerted.
 export async function recordAccessWindowDownload(
   db: Db,
   params: {
@@ -63,17 +75,16 @@ export async function recordAccessWindowDownload(
     metadata?: Record<string, unknown>;
     now: number;
   },
-): Promise<{ newDownloadsUsed: number; nowExhausted: boolean }> {
+): Promise<{ newDownloadsUsed: number; crossedThreshold: boolean; exceeded: boolean }> {
   const { window, actorId, metadata, now } = params;
   const newUsed = window.downloadsUsed + 1;
-  const nowExhausted = newUsed >= window.maxDownloads;
+  const crossedThreshold =
+    window.downloadsUsed < window.maxDownloads && newUsed >= window.maxDownloads;
+  const exceeded = newUsed > window.maxDownloads;
 
   await db
     .update(accessWindows)
-    .set({
-      downloadsUsed: newUsed,
-      status: nowExhausted ? "exhausted" : "active",
-    })
+    .set({ downloadsUsed: newUsed })
     .where(eq(accessWindows.id, window.id));
 
   await db.insert(accessWindowEvents).values({
@@ -85,16 +96,16 @@ export async function recordAccessWindowDownload(
     createdAt: now,
   });
 
-  if (nowExhausted) {
+  if (crossedThreshold) {
     await db.insert(accessWindowEvents).values({
       id: crypto.randomUUID(),
       windowId: window.id,
       eventType: "exhausted",
       actorId,
-      metadata: null,
+      metadata: JSON.stringify({ softCrossing: true, maxDownloads: window.maxDownloads }),
       createdAt: now,
     });
   }
 
-  return { newDownloadsUsed: newUsed, nowExhausted };
+  return { newDownloadsUsed: newUsed, crossedThreshold, exceeded };
 }
