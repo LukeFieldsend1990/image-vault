@@ -69,6 +69,8 @@ export default async function BridgeSettingsPage() {
 
     if (userLicences.length > 0) {
       const licenceIds = new Set(userLicences.map((l) => l.id));
+      // Server component — runs once per request, not per render.
+      // eslint-disable-next-line react-hooks/purity
       const now = Math.floor(Date.now() / 1000);
       const grants = await db
         .select({
