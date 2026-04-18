@@ -191,19 +191,10 @@ export async function POST(
   }
 
   // ── 4. Access window gating ───────────────────────────────────────────────
-  // If an active window exists on this licence, it must have remaining
-  // downloads. No active window = bridge access governed only by licence
-  // status + vault lock (windows add counting, not gating).
+  // Time-based expiry is a hard block. Download count is a soft signal: we
+  // count past the threshold and surface `exceeded` in the response so the
+  // Bridge can warn, but we don't refuse the open.
   const windowState = await resolveAccessWindow(db, licenceId, now);
-  if (windowState.kind === "exhausted") {
-    return NextResponse.json(
-      {
-        error: "access_window_exhausted",
-        message: "Download limit reached on this access window — ask the talent to extend or re-open.",
-      },
-      { status: 403 }
-    );
-  }
   if (windowState.kind === "expired") {
     return NextResponse.json(
       {
@@ -354,7 +345,8 @@ export async function POST(
     })
     .where(eq(licences.id, licenceId));
 
-  let windowExhausted = false;
+  let windowExceeded = false;
+  let windowCrossed = false;
   let windowRemaining: number | undefined;
   if (windowState.kind === "active") {
     const result = await recordAccessWindowDownload(db, {
@@ -363,7 +355,8 @@ export async function POST(
       metadata: { grantId, packageId, tool, deviceId },
       now,
     });
-    windowExhausted = result.nowExhausted;
+    windowExceeded = result.exceeded;
+    windowCrossed = result.crossedThreshold;
     windowRemaining = windowState.window.maxDownloads - result.newDownloadsUsed;
   }
 
@@ -373,7 +366,13 @@ export async function POST(
     keyId,
     grantId,
     ...(windowState.kind === "active"
-      ? { accessWindow: { remaining: windowRemaining, exhausted: windowExhausted } }
+      ? {
+          accessWindow: {
+            remaining: windowRemaining,
+            exceeded: windowExceeded,
+            thresholdCrossed: windowCrossed,
+          },
+        }
       : {}),
   });
 }

@@ -2334,16 +2334,30 @@ A typical VFX kickoff looks like:
 5. **Bridge** downloads all files from the presigned R2 URLs to local cache
 6. **Files** are distributed from the ingest server to artist workstations (either via facility network or additional bridge instances on each workstation)
 
-#### 14.4.2 Bridge + Access Windows Integration — **implemented (P0.3)**
+#### 14.4.2 Bridge + Access Windows Integration — **implemented (P0.3, soft-count)**
 
-`POST /api/bridge/packages/:packageId/open` now respects the licence's active access window:
+`POST /api/bridge/packages/:packageId/open` records activity against the licence's active access window but **does not block** on count. The access window is an audit signal, not DRM — only time expiry is a hard gate.
 
-- **No active window** → bridge open proceeds as before. Access windows add download counting, not gating.
-- **Active window with remaining downloads** → bridge open proceeds; `access_windows.downloads_used` is incremented by 1 and an `access_window_events` row of type `download` is written (metadata: `{ grantId, packageId, tool, deviceId }`). If this increment exhausts the window, an `exhausted` event is also written and the window's status flips to `exhausted` in the same call.
-- **Window exhausted** → 403 `{ error: "access_window_exhausted", message: "Download limit reached on this access window — ask the talent to extend or re-open." }`
-- **Window expired** (`expires_at` in the past) → 403 `{ error: "access_window_expired", ... }`. Status transition to `expired` is left to a separate cleanup path.
+- **No active window** → bridge open proceeds as before. Windows are optional.
+- **Active window** → bridge open proceeds; `access_windows.downloads_used` is incremented by 1 and an `access_window_events` row of type `download` is written (metadata: `{ grantId, packageId, tool, deviceId }`). The `downloads_used` count continues past `max_downloads` — it is never clamped.
+- **Threshold crossed** (first download that takes the count to `max_downloads` or beyond) → an additional `exhausted` event is logged for audit, and the response carries `thresholdCrossed: true` so the bridge/UI can surface a one-time warning. The window's DB status stays `active` — operators decide whether to extend or close it.
+- **Window expired** (`expires_at < now`) → 403 `{ error: "access_window_expired", ... }`. This is the only count/time-related hard block.
 
-The response shape for successful bridge opens gains a new `accessWindow` key only when a window was consumed: `{ accessWindow: { remaining, exhausted } }`. Bridge clients can use this to surface a warning as the window runs down.
+The response shape for successful bridge opens gains an `accessWindow` key only when a window was consumed:
+
+```json
+{
+  "manifest": "...",
+  "signature": "...",
+  "keyId": "bridge-signing-key-1",
+  "grantId": "...",
+  "accessWindow": {
+    "remaining": 12,          // may be negative once past the soft threshold
+    "exceeded": false,        // true when downloads_used > max_downloads
+    "thresholdCrossed": false // true only on the single open that first crosses the cap
+  }
+}
+```
 
 Dual-custody flow (`licensee-2fa`) does **not** yet decrement the window — that integration is tracked separately (spec §1577-area) and is out of scope for P0.3.
 
@@ -2881,9 +2895,9 @@ Ordered by what blocks the trial from starting:
 
 The web app changes in P0.3 require matching behaviour on the bridge side (`changling-vault-bridge`):
 
-- The bridge should treat a **403 with `error: "access_window_exhausted"`** from `POST /api/bridge/packages/:id/open` as a terminal error for that licence until the talent opens a new window (do not retry on a schedule). Surface the message to the operator.
-- The bridge should treat **403 with `error: "access_window_expired"`** the same way.
-- On a successful open, the response may now contain an `accessWindow: { remaining, exhausted }` object. The bridge should log/display this so the VFX team knows how many opens remain before the window blocks further drawdowns.
+- **Soft counting**: `access_window_exhausted` is **no longer returned**. The platform counts past the threshold and surfaces a warning flag — it does not block. Remove any terminal-error handling the bridge has for that code.
+- **403 with `error: "access_window_expired"`** from `POST /api/bridge/packages/:id/open` is the only window-related hard block. Treat as terminal for that licence until the talent opens a new window; surface the message to the operator.
+- On a successful open, the response may contain `accessWindow: { remaining, exceeded, thresholdCrossed }`. `remaining` can be negative once the count runs past `max_downloads`. `exceeded` is a steady-state flag (remains true on every subsequent open). `thresholdCrossed` is a one-shot signal (true only on the single open that first crosses the cap) — use this to fire a one-time "you've passed the download cap" toast/email rather than spamming on every subsequent open.
 - No changes required for opens against licences with no active window — the response shape is backwards compatible.
 
 ### 14.11 Success Criteria
