@@ -24,11 +24,15 @@ function ts(unix: number): string {
 }
 
 const STATUS_COLOR: Record<string, string> = {
+  AWAITING_PACKAGE: "#7c3aed",
   PENDING: "#d97706",
   APPROVED: "#166534",
   DENIED: "#991b1b",
   REVOKED: "#6b7280",
   EXPIRED: "#9ca3af",
+  SCRUB_PERIOD: "#c0392b",
+  CLOSED: "#374151",
+  OVERDUE: "#991b1b",
 };
 
 export default async function AdminOverviewPage() {

@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type LicenceStatus = "AWAITING_PACKAGE" | "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
+type LicenceStatus =
+  | "AWAITING_PACKAGE"
+  | "PENDING"
+  | "APPROVED"
+  | "DENIED"
+  | "REVOKED"
+  | "EXPIRED"
+  | "SCRUB_PERIOD"
+  | "CLOSED"
+  | "OVERDUE";
 type LicenceTab = "active" | "requests" | "expired" | "history";
 
 interface Licence {
@@ -51,6 +60,9 @@ const STATUS_COLOURS: Record<LicenceStatus, string> = {
   DENIED: "#991b1b",
   REVOKED: "#6b7280",
   EXPIRED: "#6b7280",
+  SCRUB_PERIOD: "#c0392b",
+  CLOSED: "#374151",
+  OVERDUE: "#991b1b",
 };
 
 const LICENCE_TYPE_LABELS: Record<string, string> = {
@@ -178,7 +190,14 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   // validTo is stored as midnight of the expiry date — licence is valid through end of that day
   const activeLicences = licences.filter((l) => l.status === "APPROVED" && l.validTo + 86400 > now);
   const expiredLicences = licences.filter((l) => l.status === "EXPIRED" || (l.status === "APPROVED" && l.validTo + 86400 <= now));
-  const historyLicences = licences.filter((l) => l.status === "DENIED" || l.status === "REVOKED");
+  const historyLicences = licences.filter(
+    (l) =>
+      l.status === "DENIED" ||
+      l.status === "REVOKED" ||
+      l.status === "SCRUB_PERIOD" ||
+      l.status === "OVERDUE" ||
+      l.status === "CLOSED",
+  );
 
   const visibleLicences = activeTab === "active" ? activeLicences
     : activeTab === "expired" ? expiredLicences
@@ -199,7 +218,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
           { id: "active" as LicenceTab, label: "Active", count: activeLicences.length },
           { id: "requests" as LicenceTab, label: "Download Requests", count: pendingDownloads.length, pulse: pendingDownloads.length > 0 },
           { id: "expired" as LicenceTab, label: "Expired", count: expiredLicences.length },
-          { id: "history" as LicenceTab, label: "Denied / Revoked", count: historyLicences.length },
+          { id: "history" as LicenceTab, label: "Ended", count: historyLicences.length },
         ]).map((tab) => (
           <button
             key={tab.id}

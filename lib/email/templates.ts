@@ -414,3 +414,91 @@ export function downloadCompleteEmail(p: DownloadCompleteParams): { subject: str
     `),
   };
 }
+
+// ── Scrub attestation (P0.4 / P0.5) ──────────────────────────────────────────
+
+export interface LicenceEndedAttestationParams {
+  licenseeEmail: string;
+  projectName: string;
+  packageName: string;
+  endReason: "expired" | "revoked";
+  scrubDeadline: number; // unix timestamp
+  attestUrl: string;
+}
+
+export function licenceEndedAttestationEmail(
+  p: LicenceEndedAttestationParams,
+): { subject: string; html: string } {
+  const reasonLabel = p.endReason === "revoked" ? "Revoked" : "Expired";
+  return {
+    subject: `Action required: confirm data deletion — ${p.projectName}`,
+    html: layout(`
+      <p>A licence you held has ended. Under the terms of the licence you must delete all copies of the scan data from your systems and confirm that deletion here.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-revoked">${reasonLabel}</span></span></div>
+        <div class="kv-row"><span class="kv-key">Confirm by</span><span class="kv-val">${formatDate(p.scrubDeadline)}</span></div>
+      </div>
+      <p>Submitting the attestation requires 2FA and lists the devices that held copies. Failure to respond by the deadline is recorded and escalated to the rights holder.</p>
+      <a class="btn" href="${p.attestUrl}">Confirm deletion</a>
+    `),
+  };
+}
+
+export interface AttestationSubmittedParams {
+  recipientEmail: string;
+  projectName: string;
+  packageName: string;
+  licenseeEmail: string;
+  attestedAt: number;
+  devicesCount: number;
+}
+
+export function attestationSubmittedEmail(
+  p: AttestationSubmittedParams,
+): { subject: string; html: string } {
+  return {
+    subject: `Deletion attestation received — ${p.projectName}`,
+    html: layout(`
+      <p>The licensee has attested that all copies of the scan data have been deleted from their systems.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Licensee</span><span class="kv-val">${p.licenseeEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Attested at</span><span class="kv-val">${formatDate(p.attestedAt)}</span></div>
+        <div class="kv-row"><span class="kv-key">Devices</span><span class="kv-val">${p.devicesCount} device${p.devicesCount !== 1 ? "s" : ""} listed</span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-approved">Closed</span></span></div>
+      </div>
+      <p class="muted">The full attestation record is retained as part of the chain of custody for this package.</p>
+    `),
+  };
+}
+
+export interface AttestationExtendedParams {
+  licenseeEmail: string;
+  projectName: string;
+  packageName: string;
+  newDeadline: number;
+  additionalDays: number;
+  reason: string;
+}
+
+export function attestationExtendedEmail(
+  p: AttestationExtendedParams,
+): { subject: string; html: string } {
+  return {
+    subject: `Attestation deadline extended — ${p.projectName}`,
+    html: layout(`
+      <p>An administrator has extended the deadline for your deletion attestation.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Extended by</span><span class="kv-val">${p.additionalDays} day${p.additionalDays !== 1 ? "s" : ""}</span></div>
+        <div class="kv-row"><span class="kv-key">New deadline</span><span class="kv-val">${formatDate(p.newDeadline)}</span></div>
+        <div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val">${p.reason}</span></div>
+      </div>
+      <p class="muted">You still need to submit the attestation before the new deadline to close this licence cleanly.</p>
+    `),
+  };
+}

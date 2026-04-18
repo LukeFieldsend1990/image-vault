@@ -526,7 +526,16 @@ const PERMISSION_OPTIONS: { value: Permission["permission"]; label: string; colo
 
 // ── Licences tab ──────────────────────────────────────────────────────────────
 
-type LicenceStatus = "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
+type LicenceStatus =
+  | "AWAITING_PACKAGE"
+  | "PENDING"
+  | "APPROVED"
+  | "DENIED"
+  | "REVOKED"
+  | "EXPIRED"
+  | "SCRUB_PERIOD"
+  | "CLOSED"
+  | "OVERDUE";
 
 interface LicenceItem {
   id: string;
@@ -544,11 +553,15 @@ interface LicenceItem {
 }
 
 const STATUS_COLOURS: Record<LicenceStatus, string> = {
+  AWAITING_PACKAGE: "#7c3aed",
   PENDING: "#b45309",
   APPROVED: "#166534",
   DENIED: "#991b1b",
   REVOKED: "#6b7280",
   EXPIRED: "#6b7280",
+  SCRUB_PERIOD: "#c0392b",
+  CLOSED: "#374151",
+  OVERDUE: "#991b1b",
 };
 
 const LICENCE_TABS: { label: string; value: LicenceStatus | "ALL" }[] = [
@@ -825,11 +838,15 @@ function PermissionsTab({ talentId }: { talentId: string }) {
 // ── Revenue tab ────────────────────────────────────────────────────────────────
 
 const LICENCE_STATUS_COLOR: Record<string, { bg: string; text: string }> = {
+  AWAITING_PACKAGE: { bg: "#7c3aed18", text: "#7c3aed" },
   APPROVED: { bg: "#16653418", text: "#166534" },
   PENDING: { bg: "#92400e18", text: "#92400e" },
   DENIED: { bg: "#99161618", text: "#991b1b" },
   REVOKED: { bg: "#99161618", text: "#991b1b" },
   EXPIRED: { bg: "#6b728018", text: "#6b7280" },
+  SCRUB_PERIOD: { bg: "#c0392b18", text: "#c0392b" },
+  CLOSED: { bg: "#37415118", text: "#374151" },
+  OVERDUE: { bg: "#99161618", text: "#991b1b" },
 };
 
 function RevenueSummaryCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {

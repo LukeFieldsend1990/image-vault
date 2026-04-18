@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type LicenceStatus = "AWAITING_PACKAGE" | "PENDING" | "APPROVED" | "DENIED" | "REVOKED" | "EXPIRED";
+type LicenceStatus =
+  | "AWAITING_PACKAGE"
+  | "PENDING"
+  | "APPROVED"
+  | "DENIED"
+  | "REVOKED"
+  | "EXPIRED"
+  | "SCRUB_PERIOD"
+  | "CLOSED"
+  | "OVERDUE";
 
 interface Licence {
   id: string;
@@ -52,6 +61,9 @@ const STATUS_COLOURS: Record<LicenceStatus, string> = {
   DENIED: "#991b1b",
   REVOKED: "#6b7280",
   EXPIRED: "#6b7280",
+  SCRUB_PERIOD: "#c0392b",
+  CLOSED: "#374151",
+  OVERDUE: "#991b1b",
 };
 
 const LICENCE_TYPE_LABELS: Record<string, string> = {
@@ -342,6 +354,15 @@ export default function LicencesClient() {
                         style={{ background: "var(--color-accent)" }}
                       >
                         Download
+                      </Link>
+                    )}
+                    {(l.status === "SCRUB_PERIOD" || l.status === "OVERDUE") && (
+                      <Link
+                        href={`/licences/${l.id}/scrub`}
+                        className="rounded px-4 py-2 text-xs font-medium text-white transition"
+                        style={{ background: "#c0392b" }}
+                      >
+                        Confirm deletion
                       </Link>
                     )}
                   </div>

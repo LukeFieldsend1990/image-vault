@@ -73,7 +73,19 @@ export const licences = sqliteTable("licences", {
   validFrom: integer("valid_from").notNull(), // unix timestamp
   validTo: integer("valid_to").notNull(),     // unix timestamp
   fileScope: text("file_scope").notNull().default("all"), // 'all' or JSON array of file IDs
-  status: text("status", { enum: ["PENDING", "APPROVED", "DENIED", "REVOKED", "EXPIRED"] })
+  status: text("status", {
+    enum: [
+      "AWAITING_PACKAGE",
+      "PENDING",
+      "APPROVED",
+      "DENIED",
+      "REVOKED",
+      "EXPIRED",
+      "SCRUB_PERIOD",
+      "CLOSED",
+      "OVERDUE",
+    ],
+  })
     .notNull()
     .default("PENDING"),
   approvedBy: text("approved_by").references(() => users.id),

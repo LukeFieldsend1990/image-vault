@@ -6,7 +6,10 @@ import { licences, users, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
-import { licenceRevokedEmail } from "@/lib/email/templates";
+import { licenceEndedAttestationEmail } from "@/lib/email/templates";
+
+// Licensee gets this many days to attest deletion after licence ends.
+const SCRUB_WINDOW_DAYS = 14;
 
 // POST /api/licences/[id]/revoke — talent/rep revokes an approved licence
 export async function POST(
@@ -56,9 +59,11 @@ export async function POST(
   // Kill any active dual-custody session in KV
   await kv.delete(`dual_custody:${id}`);
 
+  const scrubDeadline = now + SCRUB_WINDOW_DAYS * 86400;
+
   await db
     .update(licences)
-    .set({ status: "REVOKED", revokedAt: now })
+    .set({ status: "SCRUB_PERIOD", revokedAt: now, scrubDeadline })
     .where(eq(licences.id, id));
 
   // Notify licensee (fire-and-forget)
@@ -68,13 +73,17 @@ export async function POST(
       db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licencePackageId)).get(),
     ]);
     if (!licenseeUser?.email) return;
-    const { subject, html } = licenceRevokedEmail({
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const { subject, html } = licenceEndedAttestationEmail({
       licenseeEmail: licenseeUser.email,
       projectName: licence.projectName,
       packageName: pkg?.name ?? licencePackageId,
+      endReason: "revoked",
+      scrubDeadline,
+      attestUrl: `${baseUrl}/licences/${id}/scrub`,
     });
     await sendEmail({ to: licenseeUser.email, subject, html });
   })();
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, scrubDeadline });
 }
