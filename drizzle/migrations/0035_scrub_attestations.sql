@@ -11,7 +11,10 @@
 --
 -- Existing columns preserved through 0034 (contract_url et al.).
 
-PRAGMA foreign_keys=OFF;
+-- D1 ignores statement-level `PRAGMA foreign_keys = OFF`, so we use the
+-- transaction-scoped defer variant. FKs are still checked at COMMIT, but
+-- the rename completes first so the referring tables resolve cleanly.
+PRAGMA defer_foreign_keys = TRUE;
 
 CREATE TABLE licences_new (
   id TEXT PRIMARY KEY,
@@ -96,5 +99,3 @@ CREATE TABLE scrub_attestations (
 );
 
 CREATE INDEX idx_scrub_attestations_licence ON scrub_attestations(licence_id);
-
-PRAGMA foreign_keys=ON;
