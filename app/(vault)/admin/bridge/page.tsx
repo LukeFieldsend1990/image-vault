@@ -38,12 +38,18 @@ const SEVERITY_COLOR: Record<string, { bg: string; text: string }> = {
 };
 
 const EVENT_LABELS: Record<string, string> = {
-  tamper_detected:  "Tamper detected",
-  unexpected_copy:  "Unexpected copy",
-  hash_mismatch:    "Hash mismatch",
-  lease_expired:    "Lease expired",
-  cache_purged:     "Cache purged",
-  open_denied:      "Open denied",
+  tamper_detected:         "Tamper detected",
+  unexpected_copy:         "Unexpected copy",
+  hash_mismatch:           "Hash mismatch",
+  lease_expired:           "Lease expired",
+  cache_purged:             "Cache purged",
+  open_denied:             "Open denied",
+  purge_started:           "Purge started",
+  purge_partial:           "Purge partial",
+  purge_stalled:           "Purge stalled",
+  purge_failed:            "Purge failed",
+  file_in_use:             "File in use",
+  file_removed_from_cache: "File removed from cache",
 };
 
 export default async function AdminBridgePage() {
