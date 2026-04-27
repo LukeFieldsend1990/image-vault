@@ -213,7 +213,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
       </div>
 
       {/* Tab bar */}
-      <div className="flex border-b mb-6" style={{ borderColor: "var(--color-border)" }}>
+      <div className="flex overflow-x-auto border-b mb-6" style={{ borderColor: "var(--color-border)" }}>
         {([
           { id: "active" as LicenceTab, label: "Active", count: activeLicences.length },
           { id: "requests" as LicenceTab, label: "Download Requests", count: pendingDownloads.length, pulse: pendingDownloads.length > 0 },
@@ -223,7 +223,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className="relative py-2.5 px-1 mr-6 text-sm font-medium transition"
+            className="relative py-2.5 px-1 mr-6 text-sm font-medium transition whitespace-nowrap flex-shrink-0"
             style={{ color: activeTab === tab.id ? "var(--color-ink)" : "var(--color-muted)" }}
           >
             {tab.label}
@@ -309,7 +309,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                 <div key={l.id} className="rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
                   <div className="p-5">
                     {/* ── Summary row ─────────────────────────────────────── */}
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-sm" style={{ color: "var(--color-ink)" }}>{l.projectName}</p>
@@ -337,9 +337,14 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                           Period: {formatDate(l.validFrom)} – {formatDate(l.validTo)}
                         </p>
                         {netEarnings !== null && feeRef !== null && (
-                          <p className="mt-1 text-xs font-medium" style={{ color: "var(--color-accent)" }}>
-                            {l.agreedFee ? "Agreed fee" : "Proposed fee"}: {fmtGBP(feeRef)} · Your earnings: {fmtGBP(netEarnings)}
-                          </p>
+                          <>
+                            <p className="mt-1 text-xs font-medium" style={{ color: "var(--color-accent)" }}>
+                              {l.agreedFee ? "Agreed fee" : "Proposed fee"}: {fmtGBP(feeRef)}
+                            </p>
+                            <p className="mt-0.5 text-xs font-medium" style={{ color: "var(--color-accent)" }}>
+                              Your earnings: {fmtGBP(netEarnings)}
+                            </p>
+                          </>
                         )}
                         {l.downloadCount > 0 && (
                           <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
@@ -348,7 +353,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                         )}
                       </div>
 
-                      <div className="flex flex-shrink-0 items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
                           onClick={() => setExpandedId(expanded ? null : l.id)}

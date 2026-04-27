@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     const whereClause = statusFilter
       ? and(eq(licences.talentId, session.sub), eq(licences.status, statusFilter as LicenceStatus))
       : eq(licences.talentId, session.sub);
-    rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).all();
+    rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
   } else if (session.role === "rep") {
     const talentRows = await db
       .select({ talentId: talentReps.talentId })
@@ -97,14 +97,14 @@ export async function GET(req: NextRequest) {
     const whereClause = statusFilter
       ? and(inArray(licences.talentId, scopeIds), eq(licences.status, statusFilter as LicenceStatus))
       : inArray(licences.talentId, scopeIds);
-    rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).all();
+    rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
   } else if (session.role === "licensee") {
     const whereClause = statusFilter
       ? and(eq(licences.licenseeId, session.sub), eq(licences.status, statusFilter as LicenceStatus))
       : eq(licences.licenseeId, session.sub);
-    rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).all();
+    rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
   } else if (session.role === "admin") {
-    rows = await base.orderBy(desc(licences.createdAt)).all();
+    rows = await base.orderBy(desc(licences.createdAt)).limit(100).all();
   } else {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -214,17 +214,23 @@ export async function POST(req: NextRequest) {
   const now = Math.floor(Date.now() / 1000);
   const licenceId = crypto.randomUUID();
 
-  // Resolve or create production company entity
+  // Resolve or create production company and production entities.
+  // Run both lookups in parallel; inserts are sequential (production needs companyId).
   let resolvedCompanyId = body.productionCompanyId ?? null;
+  let resolvedProductionId = body.productionId ?? null;
+
+  const [existingCompany, existingProduction] = await Promise.all([
+    resolvedCompanyId || !productionCompany
+      ? Promise.resolve(null)
+      : db.select({ id: productionCompanies.id }).from(productionCompanies).where(like(productionCompanies.name, productionCompany.trim())).limit(1).get(),
+    resolvedProductionId || !projectName
+      ? Promise.resolve(null)
+      : db.select({ id: productions.id }).from(productions).where(like(productions.name, projectName.trim())).limit(1).get(),
+  ]);
+
   if (!resolvedCompanyId && productionCompany) {
-    const [existing] = await db
-      .select({ id: productionCompanies.id })
-      .from(productionCompanies)
-      .where(like(productionCompanies.name, productionCompany.trim()))
-      .limit(1)
-      .all();
-    if (existing) {
-      resolvedCompanyId = existing.id;
+    if (existingCompany) {
+      resolvedCompanyId = existingCompany.id;
     } else {
       resolvedCompanyId = crypto.randomUUID();
       await db.insert(productionCompanies).values({
@@ -236,17 +242,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Resolve or create production entity
-  let resolvedProductionId = body.productionId ?? null;
   if (!resolvedProductionId && projectName) {
-    const [existing] = await db
-      .select({ id: productions.id })
-      .from(productions)
-      .where(like(productions.name, projectName.trim()))
-      .limit(1)
-      .all();
-    if (existing) {
-      resolvedProductionId = existing.id;
+    if (existingProduction) {
+      resolvedProductionId = existingProduction.id;
     } else {
       resolvedProductionId = crypto.randomUUID();
       await db.insert(productions).values({
