@@ -216,6 +216,127 @@ function ConfirmPreauthView({
   );
 }
 
+// ── Talent: set pre-auth proactively (no active download session required) ────
+function TalentPreauthSetView({ licenceId, licence }: { licenceId: string; licence: LicenceData | null }) {
+  const [selected, setSelected] = useState<PreauthOption>("7d");
+  const [code, setCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function submit() {
+    if (code.length < 6) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/licences/${licenceId}/preauth/set`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.replace(/\s/g, ""), option: selected }),
+      });
+      const d = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(d.error ?? "Failed");
+      setDone(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed");
+      setCode("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="p-8 max-w-lg">
+        <div className="rounded border p-6 text-center" style={{ borderColor: "var(--color-border)", background: "#f0fdf4" }}>
+          <svg className="mx-auto mb-3" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <p className="text-sm font-medium" style={{ color: "#166534" }}>Pre-authorisation set</p>
+          <p className="mt-1 text-xs" style={{ color: "#166534" }}>The licensee can download without your 2FA code for the selected period.</p>
+        </div>
+        <Link href="/vault/licences" className="mt-4 block text-center text-xs underline" style={{ color: "var(--color-muted)" }}>
+          Back to licences
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 max-w-xl">
+      <Link href="/vault/licences" className="mb-6 inline-flex items-center gap-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        Back to licences
+      </Link>
+
+      <h1 className="text-xl font-semibold mb-2" style={{ color: "var(--color-ink)" }}>Set Pre-Authorisation</h1>
+      <p className="text-sm mb-6" style={{ color: "var(--color-muted)" }}>
+        Pre-authorise this licence so the production company can download without your 2FA code for a set period. You can revoke this at any time from the licence page.
+      </p>
+
+      {licence && <LicenceSummary licence={licence} />}
+
+      <div className="mb-6 space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--color-muted)" }}>Pre-auth duration</p>
+        {REP_PREAUTH_OPTIONS.map((opt) => (
+          <label
+            key={opt.value}
+            className="flex items-start gap-3 rounded border px-4 py-3 cursor-pointer transition"
+            style={{
+              borderColor: selected === opt.value ? "var(--color-ink)" : "var(--color-border)",
+              background: selected === opt.value ? "rgba(0,0,0,0.02)" : "transparent",
+            }}
+          >
+            <input
+              type="radio"
+              name="preauth-set"
+              value={opt.value}
+              checked={selected === opt.value}
+              onChange={() => setSelected(opt.value)}
+              className="mt-0.5 shrink-0"
+            />
+            <div>
+              <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{opt.label}</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{opt.desc}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      <div className="rounded border p-5" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <p className="text-sm font-medium mb-1" style={{ color: "var(--color-ink)" }}>Enter your authenticator code to confirm</p>
+        <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
+          Open your authenticator app and enter the 6-digit code for Image Vault.
+        </p>
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          value={code}
+          onChange={(e) => { setCode(e.target.value.replace(/\D/g, "")); setError(null); }}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="000 000"
+          className="w-full rounded border px-3 py-2.5 text-center text-xl font-mono tracking-[0.3em] outline-none"
+          style={{ borderColor: error ? "var(--color-danger)" : "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+        />
+        {error && (
+          <div className="mt-2 rounded px-3 py-2 text-xs font-medium" style={{ background: "rgba(192,57,43,0.08)", color: "var(--color-danger)" }}>
+            {error} — please wait for a new code and try again.
+          </div>
+        )}
+        <button
+          onClick={submit}
+          disabled={submitting || code.length < 6}
+          className="mt-4 w-full rounded py-2.5 text-sm font-medium text-white transition disabled:opacity-60"
+          style={{ background: "var(--color-accent)" }}
+        >
+          {submitting ? "Setting pre-auth…" : "Set Pre-Authorisation"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Rep: request preauth on talent's behalf ───────────────────────────────────
 function RepRequestView({ licenceId, licence }: { licenceId: string; licence: LicenceData | null }) {
   const [selected, setSelected] = useState<PreauthOption>("7d");
@@ -385,6 +506,9 @@ export default function TalentAuthoriseClient({
   }
 
   if (status.step === null || status.step === "expired") {
+    if (role === "talent") {
+      return <TalentPreauthSetView licenceId={licenceId} licence={licence} />;
+    }
     return (
       <div className="p-8 max-w-lg">
         <Link href="/vault/licences" className="mb-6 inline-flex items-center gap-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
