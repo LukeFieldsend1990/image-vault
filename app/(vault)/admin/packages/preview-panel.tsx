@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
+import { FadeImage } from "@/app/(vault)/fade-image";
 
 function fmt(n: number): string {
   if (n >= 1e9) return (n / 1e9).toFixed(1) + " GB";
@@ -116,8 +117,7 @@ function Panel({ packageId }: { packageId: string }) {
                 <button key={i} type="button" onClick={() => setLightbox(img)}
                   className="relative overflow-hidden rounded cursor-pointer transition hover:opacity-90 active:scale-95"
                   style={{ aspectRatio: "3/4", background: "var(--color-border)", outline: isCover ? "2px solid var(--color-accent)" : "none", outlineOffset: "1px" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt={img.filename} loading="lazy" className="h-full w-full object-cover"
+                  <FadeImage src={img.url} alt={img.filename} loading="lazy" className="h-full w-full object-cover"
                     onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }} />
                   {isCover && (
                     <div className="absolute bottom-0 inset-x-0 text-center text-[9px] font-bold py-0.5" style={{ background: "var(--color-accent)", color: "#fff" }}>Cover</div>

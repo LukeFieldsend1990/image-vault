@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import UploadModal from "../upload-modal";
+import { FadeImage } from "@/app/(vault)/fade-image";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 
 interface AiTag {
@@ -403,13 +404,13 @@ function PackageCard({
 
         {/* Cover thumbnail */}
         {pkg.coverImageKey && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/api/vault/packages/${pkg.id}/cover`}
-            alt="Cover"
-            className="shrink-0 rounded object-cover"
-            style={{ width: 88, height: 116, background: "var(--color-border)" }}
-          />
+          <div className="shrink-0 rounded overflow-hidden" style={{ width: 88, height: 116, background: "var(--color-border)" }}>
+            <FadeImage
+              src={`/api/vault/packages/${pkg.id}/cover`}
+              alt="Cover"
+              className="h-full w-full object-cover"
+            />
+          </div>
         )}
 
         {/* Meta */}
