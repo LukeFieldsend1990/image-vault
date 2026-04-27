@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
-import { licences, scanFiles, users, bridgeGrants, bridgeDevices } from "@/lib/db/schema";
+import { licences, scanFiles, users, bridgeGrants, bridgeDevices, bridgeEvents } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import {
   requireBridgeToken,
@@ -154,9 +154,31 @@ export async function POST(
     return NextResponse.json({ error: "Package does not match licence" }, { status: 400 });
   }
   if (licence.status !== "APPROVED") {
+    void db.insert(bridgeEvents).values({
+      id: crypto.randomUUID(),
+      grantId: null,
+      packageId,
+      deviceId,
+      userId: auth.userId,
+      eventType: "re_access_denied",
+      severity: "warn",
+      detail: JSON.stringify({ reason: "licence_not_approved", licenceId, status: licence.status }),
+      createdAt: now,
+    });
     return NextResponse.json({ error: "Licence is not approved" }, { status: 409 });
   }
   if (licence.validTo < now) {
+    void db.insert(bridgeEvents).values({
+      id: crypto.randomUUID(),
+      grantId: null,
+      packageId,
+      deviceId,
+      userId: auth.userId,
+      eventType: "re_access_denied",
+      severity: "critical",
+      detail: JSON.stringify({ reason: "licence_expired", licenceId, expiredAt: licence.validTo }),
+      createdAt: now,
+    });
     return NextResponse.json({ error: "Licence has expired" }, { status: 409 });
   }
 
