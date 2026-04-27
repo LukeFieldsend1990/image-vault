@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import SuggestionsPanel from "./suggestions-panel";
+import { FadeImage } from "@/app/(vault)/fade-image";
 
 interface TalentRow {
   talentId: string;
@@ -153,8 +154,7 @@ function TalentCard({ talent }: { talent: TalentRow }) {
           style={{ aspectRatio: "3/4", background: "var(--color-border)" }}
         >
           {talent.profileImageUrl && !imgError ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <FadeImage
               src={talent.profileImageUrl}
               alt={displayName}
               className="w-full h-full object-cover"

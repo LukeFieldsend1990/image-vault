@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
+import { FadeImage } from "@/app/(vault)/fade-image";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -99,8 +100,7 @@ function PackagePreview({ packageId }: { packageId: string }) {
           <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))" }}>
             {data.images.map((img, i) => (
               <div key={i} className="overflow-hidden rounded" style={{ aspectRatio: "3/4", background: "var(--color-border)" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.url} alt={img.filename} loading="lazy" className="h-full w-full object-cover"
+                <FadeImage src={img.url} alt={img.filename} loading="lazy" className="h-full w-full object-cover"
                   onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }} />
               </div>
             ))}
