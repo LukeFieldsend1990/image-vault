@@ -13,6 +13,7 @@ import {
   passwordResetTokens,
 } from "@/lib/db/schema";
 import { desc, sql } from "drizzle-orm";
+import AuditExportButton from "./export-button";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -466,6 +467,8 @@ export default async function AdminAuditPage() {
         <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
           {display.length} events across the platform.
         </p>
+
+        <AuditExportButton showCategoryFilter />
 
         {/* Category summary pills */}
         <div className="flex flex-wrap gap-2 mt-3">

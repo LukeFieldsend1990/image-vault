@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import { downloadEvents, users, scanFiles, licences } from "@/lib/db/schema";
 import { sql, inArray } from "drizzle-orm";
+import AuditExportButton from "../audit/export-button";
 
 type DownloadStatus = "streamed" | "pending" | "failed";
 
@@ -101,6 +102,8 @@ export default async function AdminDownloadsPage() {
           {failed > 0 && <>, <span style={{ color: STATUS_COLOR.failed }}>{failed} failed</span></>}
         </p>
       </div>
+
+      <AuditExportButton endpoint="/api/admin/audit/export" />
 
       <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
       <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
