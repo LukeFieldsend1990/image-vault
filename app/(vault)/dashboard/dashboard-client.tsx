@@ -377,22 +377,28 @@ function PackageCard({
         {/* Expand toggle */}
         <button
           onClick={toggleExpand}
-          className="shrink-0 p-1 rounded transition opacity-40 hover:opacity-100"
+          className={`shrink-0 p-1 rounded transition ${filesLoading || expanded ? "opacity-100" : "opacity-40 hover:opacity-100"}`}
           style={{ color: "var(--color-ink)" }}
           aria-label={expanded ? "Collapse" : "Expand"}
         >
-          <svg
-            width="12" height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          {filesLoading ? (
+            <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+          ) : (
+            <svg
+              width="12" height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          )}
         </button>
 
         {/* Cover thumbnail */}
@@ -510,7 +516,7 @@ function PackageCard({
           {pkg.status === "ready" && (
             <button
               onClick={() => setPreviewOpen((v) => !v)}
-              className="flex items-center gap-1 p-1.5 rounded transition opacity-40 hover:opacity-100"
+              className={`flex items-center gap-1 p-1.5 rounded transition ${previewOpen ? "opacity-100" : "opacity-40 hover:opacity-100"}`}
               style={{ color: "var(--color-ink)" }}
               title="Preview scan"
               aria-label="Preview scan"
@@ -592,7 +598,7 @@ function PackageCard({
             {pkg.status === "ready" && (
               <button
                 onClick={() => setPreviewOpen((v) => !v)}
-                className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+                className={`p-1.5 rounded transition ${previewOpen ? "opacity-100" : "opacity-40 hover:opacity-100"}`}
                 style={{ color: "var(--color-ink)" }}
                 title="Preview scan"
                 aria-label="Preview scan"
@@ -676,9 +682,20 @@ function PackageCard({
           style={{ borderColor: "var(--color-border)" }}
         >
           {filesLoading ? (
-            <p className="px-14 py-3 text-xs" style={{ color: "var(--color-muted)" }}>
-              Loading files…
-            </p>
+            <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="px-14 py-3 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-3 w-3 rounded-sm animate-pulse flex-shrink-0" style={{ background: "var(--color-border)" }} />
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-48 rounded animate-pulse" style={{ background: "var(--color-border)" }} />
+                      <div className="h-2.5 w-16 rounded animate-pulse" style={{ background: "var(--color-border)" }} />
+                    </div>
+                  </div>
+                  <div className="h-6 w-16 rounded-sm animate-pulse flex-shrink-0" style={{ background: "var(--color-border)" }} />
+                </div>
+              ))}
+            </div>
           ) : files.length === 0 ? (
             <p className="px-14 py-3 text-xs" style={{ color: "var(--color-muted)" }}>
               No files in this package.
