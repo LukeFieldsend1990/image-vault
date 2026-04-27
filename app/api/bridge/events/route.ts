@@ -24,6 +24,7 @@ const ALLOWED_EVENT_TYPES = new Set([
   "purge_stalled",
   "purge_failed",
   "file_removed_from_cache",
+  "re_access_denied",
 ]);
 
 const ALLOWED_SEVERITIES = new Set(["info", "warn", "critical"]);
