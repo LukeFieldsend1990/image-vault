@@ -6,8 +6,8 @@ import { isAdmin, ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 import { sendEmail } from "@/lib/email/send";
 import { clonePackagesEmail } from "@/lib/email/templates";
 import { getRequestContext } from "@cloudflare/next-on-pages";
-import type { CloneRunRecord } from "../route";
-import { todayKey } from "../route";
+import type { CloneRunRecord } from "../shared";
+import { todayKey } from "../shared";
 
 // POST /api/admin/clone-packages/finalize
 // Called by the client after all per-package clone calls succeed.
