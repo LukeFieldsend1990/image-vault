@@ -1,7 +1,6 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { users, scanPackages, scanFiles, packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
@@ -22,34 +21,14 @@ export interface ClonePackageItem {
   name: string;
 }
 
-function cfEnv(key: string): string | undefined {
-  try {
-    return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
-  } catch {
-    return process.env[key];
-  }
+export interface FileToCopy {
+  fileId: string;      // new scan_file ID already inserted in DB
+  sourceKey: string;   // source R2 key
+  destKey: string;     // destination R2 key
 }
 
 export function todayKey(): string {
   return `clone_packages:daily:${new Date().toISOString().slice(0, 10)}`;
-}
-
-async function copyR2Object(
-  r2: AwsClient,
-  endpoint: string,
-  bucket: string,
-  sourceKey: string,
-  destKey: string,
-): Promise<boolean> {
-  const url = `${endpoint}/${bucket}/${destKey}`;
-  const signed = await r2.sign(
-    new Request(url, {
-      method: "PUT",
-      headers: { "x-amz-copy-source": `/${bucket}/${encodeURIComponent(sourceKey)}` },
-    }),
-  );
-  const res = await fetch(signed);
-  return res.ok;
 }
 
 // DELETE /api/admin/clone-packages — clears today's rate-limit record, allowing a same-day retry.
@@ -104,8 +83,9 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/admin/clone-packages
-// Clones ONE package from source to target. Safe to call multiple times — skips
-// if a package with the same name already exists on the target account (dedup).
+// Prepares a single package clone: creates the package + pending file records + tags in DB,
+// then returns the list of R2 copy tasks for the client to process file-by-file.
+// No R2 operations happen here, so this always completes well within the 30s Worker limit.
 // Body: { sourceEmail, targetEmail, packageId }
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
@@ -159,58 +139,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ skipped: true, reason: "Package with this name already exists on target" });
   }
 
-  const accountId = cfEnv("CF_ACCOUNT_ID")!;
-  const bucket = cfEnv("R2_BUCKET_NAME") ?? "image-vault-scans";
-  const r2Endpoint = `https://${accountId}.r2.cloudflarestorage.com`;
-  const r2 = new AwsClient({
-    accessKeyId: cfEnv("R2_ACCESS_KEY_ID")!,
-    secretAccessKey: cfEnv("R2_SECRET_ACCESS_KEY")!,
-    region: "auto",
-    service: "s3",
-  });
-
   const now = Math.floor(Date.now() / 1000);
   const newPkgId = crypto.randomUUID();
 
+  // Only prepare copy tasks for completed files
   const sourceFileRows = await db
     .select()
     .from(scanFiles)
     .where(and(eq(scanFiles.packageId, pkg.id), eq(scanFiles.uploadStatus, "complete")))
     .all();
 
-  // Copy all files in parallel — each R2 CopyObject is a server-side op but latency
-  // stacks up when done sequentially on packages with many files (e.g. 50 GB / 30+ files).
-  const copyResults = await Promise.all(
-    sourceFileRows.map(async (f) => {
-      const newFileId = crypto.randomUUID();
-      const filename = f.r2Key.split("/").pop() ?? f.filename;
-      const newR2Key = `scans/${targetUser.id}/${newPkgId}/${newFileId}/${filename}`;
-      const ok = await copyR2Object(r2, r2Endpoint, bucket, f.r2Key, newR2Key);
-      return { f, newFileId, newR2Key, ok };
-    }),
-  );
+  // Build key mapping and insert file records as "pending" — R2 copy happens separately
+  const filesToCopy: FileToCopy[] = [];
+  const keyMap = new Map<string, string>(); // sourceR2Key → destR2Key
 
-  const keyMap = new Map<string, string>();
-  const newFileRows: (typeof scanFiles.$inferInsert)[] = [];
-  let filesFailed = 0;
+  for (const f of sourceFileRows) {
+    const newFileId = crypto.randomUUID();
+    const filename = f.r2Key.split("/").pop() ?? f.filename;
+    const newR2Key = `scans/${targetUser.id}/${newPkgId}/${newFileId}/${filename}`;
 
-  for (const { f, newFileId, newR2Key, ok } of copyResults) {
-    if (!ok) {
-      filesFailed++;
-      continue;
-    }
     keyMap.set(f.r2Key, newR2Key);
-    newFileRows.push({
+    filesToCopy.push({ fileId: newFileId, sourceKey: f.r2Key, destKey: newR2Key });
+
+    await db.insert(scanFiles).values({
       id: newFileId,
       packageId: newPkgId,
       filename: f.filename,
       sizeBytes: f.sizeBytes,
       r2Key: newR2Key,
-      contentType: f.contentType,
-      uploadStatus: "complete",
+      contentType: f.contentType ?? null,
+      uploadStatus: "pending", // will be set to "complete" by copy-file endpoint
       sha256: f.sha256 ?? null,
       createdAt: now,
-      completedAt: now,
+      completedAt: null,
     });
   }
 
@@ -225,7 +186,7 @@ export async function POST(req: NextRequest) {
     studioName: pkg.studioName ?? null,
     technicianNotes: pkg.technicianNotes ?? null,
     totalSizeBytes: pkg.totalSizeBytes ?? null,
-    status: pkg.status,
+    status: "uploading", // will become "ready" once all files are copied
     coverImageKey: newCoverKey,
     scanType: pkg.scanType ?? null,
     resolution: pkg.resolution ?? null,
@@ -245,10 +206,7 @@ export async function POST(req: NextRequest) {
     searchIndexedAt: null,
   });
 
-  for (const f of newFileRows) {
-    await db.insert(scanFiles).values(f);
-  }
-
+  // Copy tags immediately — no R2 involved
   const sourceTagRows = await db
     .select()
     .from(packageTags)
@@ -271,8 +229,8 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     skipped: false,
-    files: newFileRows.length,
-    filesFailed,
+    newPackageId: newPkgId,
+    filesToCopy,
     tags: sourceTagRows.length,
   });
 }

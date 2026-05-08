@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CloneRunRecord, ClonePackageItem } from "@/app/api/admin/clone-packages/route";
+import type { CloneRunRecord, ClonePackageItem, FileToCopy } from "@/app/api/admin/clone-packages/route";
 
 interface Props {
   todayRecord: CloneRunRecord | null;
@@ -10,9 +10,11 @@ interface Props {
 interface PackageStat {
   id: string;
   name: string;
-  status: "pending" | "cloning" | "done" | "skipped" | "error";
-  files?: number;
-  filesFailed?: number;
+  status: "pending" | "preparing" | "copying" | "done" | "skipped" | "error";
+  errorMsg?: string;
+  totalFiles?: number;
+  copiedFiles?: number;
+  failedFiles?: number;
 }
 
 function ts(unix: number) {
@@ -30,14 +32,18 @@ export default function CloneClient({ todayRecord }: Props) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [packages, setPackages] = useState<PackageStat[]>([]);
   const [totals, setTotals] = useState({ packages: 0, files: 0, tags: 0, filesFailed: 0, skipped: 0 });
-
   const [runRecord, setRunRecord] = useState<CloneRunRecord | null>(todayRecord);
+
   const alreadyRan = runRecord !== null;
   const canStart = confirmed && !alreadyRan && phase === "idle";
 
   async function clearBlock() {
     await fetch("/api/admin/clone-packages", { method: "DELETE" });
     setRunRecord(null);
+  }
+
+  function updatePkg(id: string, patch: Partial<PackageStat>) {
+    setPackages((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -76,20 +82,19 @@ export default function CloneClient({ todayRecord }: Props) {
       return;
     }
 
-    // Initialise per-package status rows
     setPackages(pkgList.map((p) => ({ id: p.id, name: p.name, status: "pending" })));
     setPhase("cloning");
 
     const acc = { packages: 0, files: 0, tags: 0, filesFailed: 0, skipped: 0, errors: 0 };
 
-    // Step 2: clone each package sequentially
-    for (let i = 0; i < pkgList.length; i++) {
-      const pkg = pkgList[i];
+    // Step 2: for each package — prepare (DB records) then copy files one-by-one
+    for (const pkg of pkgList) {
+      updatePkg(pkg.id, { status: "preparing" });
 
-      setPackages((prev) =>
-        prev.map((p) => (p.id === pkg.id ? { ...p, status: "cloning" } : p)),
-      );
+      let filesToCopy: FileToCopy[];
+      let pkgTags = 0;
 
+      // Prepare: creates DB records, returns file copy tasks
       try {
         const res = await fetch("/api/admin/clone-packages", {
           method: "POST",
@@ -109,41 +114,67 @@ export default function CloneClient({ todayRecord }: Props) {
         const d = await res.json() as {
           skipped: boolean;
           reason?: string;
-          files?: number;
-          filesFailed?: number;
+          newPackageId?: string;
+          filesToCopy?: FileToCopy[];
           tags?: number;
         };
 
         if (d.skipped) {
           acc.skipped++;
-          setPackages((prev) =>
-            prev.map((p) => (p.id === pkg.id ? { ...p, status: "skipped" } : p)),
-          );
-        } else {
-          acc.packages++;
-          acc.files += d.files ?? 0;
-          acc.filesFailed += d.filesFailed ?? 0;
-          acc.tags += d.tags ?? 0;
-          setPackages((prev) =>
-            prev.map((p) =>
-              p.id === pkg.id
-                ? { ...p, status: "done", files: d.files, filesFailed: d.filesFailed }
-                : p,
-            ),
-          );
+          updatePkg(pkg.id, { status: "skipped" });
+          setTotals({ ...acc });
+          continue;
         }
+
+        filesToCopy = d.filesToCopy ?? [];
+        pkgTags = d.tags ?? 0;
+        acc.tags += pkgTags;
       } catch (err) {
         acc.errors++;
-        setPackages((prev) =>
-          prev.map((p) => (p.id === pkg.id ? { ...p, status: "error" } : p)),
-        );
-        // Non-fatal — continue with remaining packages
+        updatePkg(pkg.id, { status: "error", errorMsg: err instanceof Error ? err.message : "Prepare failed" });
+        setTotals({ ...acc });
+        continue;
       }
 
+      // Copy files one at a time
+      updatePkg(pkg.id, { status: "copying", totalFiles: filesToCopy.length, copiedFiles: 0, failedFiles: 0 });
+      let copied = 0;
+      let failed = 0;
+
+      for (const f of filesToCopy) {
+        try {
+          const res = await fetch("/api/admin/clone-packages/copy-file", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fileId: f.fileId, sourceKey: f.sourceKey, destKey: f.destKey }),
+          });
+
+          if (!res.ok) {
+            const d = await res.json() as { error?: string };
+            throw new Error(d.error ?? `HTTP ${res.status}`);
+          }
+
+          copied++;
+          acc.files++;
+        } catch {
+          failed++;
+          acc.filesFailed++;
+        }
+
+        updatePkg(pkg.id, { copiedFiles: copied, failedFiles: failed });
+        setTotals({ ...acc });
+      }
+
+      acc.packages++;
+      updatePkg(pkg.id, {
+        status: failed > 0 && copied === 0 ? "error" : "done",
+        copiedFiles: copied,
+        failedFiles: failed,
+      });
       setTotals({ ...acc });
     }
 
-    // Step 3: finalize — write KV record and send admin email
+    // Step 3: finalize
     try {
       await fetch("/api/admin/clone-packages/finalize", {
         method: "POST",
@@ -156,7 +187,7 @@ export default function CloneClient({ todayRecord }: Props) {
         }),
       });
     } catch {
-      // Non-fatal: record may not be written but clone data is safe
+      // Non-fatal
     }
 
     setPhase("done");
@@ -274,10 +305,7 @@ export default function CloneClient({ todayRecord }: Props) {
 
       {/* Per-package progress */}
       {packages.length > 0 && (
-        <div
-          className="rounded border mt-6"
-          style={{ borderColor: "var(--color-border)" }}
-        >
+        <div className="rounded border mt-6" style={{ borderColor: "var(--color-border)" }}>
           <div
             className="px-4 py-3 border-b flex items-center justify-between"
             style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
@@ -286,18 +314,29 @@ export default function CloneClient({ todayRecord }: Props) {
               Progress
             </p>
             <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-              {packages.filter((p) => p.status === "done" || p.status === "skipped" || p.status === "error").length} / {packages.length}
+              {packages.filter((p) => ["done", "skipped", "error"].includes(p.status)).length} / {packages.length}
             </p>
           </div>
           <div>
             {packages.map((pkg) => (
               <div
                 key={pkg.id}
-                className="px-4 py-2.5 border-b last:border-0 flex items-center justify-between gap-3"
+                className="px-4 py-3 border-b last:border-0"
                 style={{ borderColor: "var(--color-border)" }}
               >
-                <p className="text-sm truncate" style={{ color: "var(--color-ink)" }}>{pkg.name}</p>
-                <StatusBadge status={pkg.status} />
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm truncate" style={{ color: "var(--color-ink)" }}>{pkg.name}</p>
+                  <StatusBadge pkg={pkg} />
+                </div>
+                {pkg.status === "copying" && pkg.totalFiles !== undefined && (
+                  <p className="text-xs mt-1" style={{ color: "var(--color-muted)" }}>
+                    {pkg.copiedFiles ?? 0} / {pkg.totalFiles} files copied
+                    {(pkg.failedFiles ?? 0) > 0 && ` · ${pkg.failedFiles} failed`}
+                  </p>
+                )}
+                {pkg.errorMsg && (
+                  <p className="text-xs mt-1" style={{ color: "#c0392b" }}>{pkg.errorMsg}</p>
+                )}
               </div>
             ))}
           </div>
@@ -326,7 +365,6 @@ export default function CloneClient({ todayRecord }: Props) {
         </div>
       )}
 
-      {/* Error */}
       {phase === "error" && errorMsg && (
         <div
           className="rounded border p-4 mt-5"
@@ -340,15 +378,27 @@ export default function CloneClient({ todayRecord }: Props) {
   );
 }
 
-function StatusBadge({ status }: { status: PackageStat["status"] }) {
+function StatusBadge({ pkg }: { pkg: PackageStat }) {
+  if (pkg.status === "copying" && pkg.totalFiles !== undefined) {
+    return (
+      <span
+        className="shrink-0 text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
+        style={{ color: "#d97706", background: "rgba(217,119,6,0.1)" }}
+      >
+        {pkg.copiedFiles ?? 0}/{pkg.totalFiles} files
+      </span>
+    );
+  }
+
   const map: Record<PackageStat["status"], { label: string; color: string; bg: string }> = {
-    pending:  { label: "Pending",  color: "#6b7280", bg: "rgba(107,114,128,0.1)" },
-    cloning:  { label: "Cloning…", color: "#d97706", bg: "rgba(217,119,6,0.1)" },
-    done:     { label: "Done",     color: "#166534", bg: "rgba(22,101,52,0.1)" },
-    skipped:  { label: "Skipped",  color: "#6b7280", bg: "rgba(107,114,128,0.1)" },
-    error:    { label: "Error",    color: "#c0392b", bg: "rgba(192,57,43,0.1)" },
+    pending:   { label: "Pending",    color: "#6b7280", bg: "rgba(107,114,128,0.1)" },
+    preparing: { label: "Preparing…", color: "#d97706", bg: "rgba(217,119,6,0.1)" },
+    copying:   { label: "Copying…",   color: "#d97706", bg: "rgba(217,119,6,0.1)" },
+    done:      { label: "Done",       color: "#166534", bg: "rgba(22,101,52,0.1)" },
+    skipped:   { label: "Skipped",    color: "#6b7280", bg: "rgba(107,114,128,0.1)" },
+    error:     { label: "Error",      color: "#c0392b", bg: "rgba(192,57,43,0.1)" },
   };
-  const s = map[status];
+  const s = map[pkg.status];
   return (
     <span
       className="shrink-0 text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
