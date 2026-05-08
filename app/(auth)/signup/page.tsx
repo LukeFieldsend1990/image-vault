@@ -208,7 +208,7 @@ function SignupForm() {
                 required
                 readOnly={emailLocked}
                 defaultValue={inviteInfo?.email ?? ""}
-                placeholder="you@unitedagents.co.uk"
+                placeholder="you@gmail.com"
                 className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent] read-only:opacity-60 read-only:cursor-not-allowed"
                 style={{ borderRadius: "var(--radius)" }}
               />
