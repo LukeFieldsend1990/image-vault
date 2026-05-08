@@ -311,7 +311,7 @@ export default function CustodyClient({ packageId }: { packageId: string }) {
           <div className="flex items-start justify-between gap-4 mb-6">
             <div>
               <p className="text-[9px] tracking-[0.25em] uppercase font-bold mb-1" style={{ color: "#888888", fontFamily: "ui-sans-serif, system-ui, sans-serif" }}>
-                United Agents · Image Vault
+                {data.package.talentName ?? data.package.talentEmail} · Image Vault
               </p>
               <h1 className="text-xl font-bold tracking-tight" style={{ color: "#000000" }}>
                 Chain of Custody Record

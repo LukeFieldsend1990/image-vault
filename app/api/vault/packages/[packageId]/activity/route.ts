@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { scanPackages, scanFiles, licences, downloadEvents, users } from "@/lib/db/schema";
+import { scanPackages, scanFiles, licences, downloadEvents, users, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { hasRepAccess } from "@/lib/auth/repAccess";
@@ -49,6 +49,7 @@ export interface CustodyPackage {
   captureDate: number | null;
   studioName: string | null;
   talentEmail: string;
+  talentName: string | null;
   createdAt: number;
 }
 
@@ -95,8 +96,9 @@ export async function GET(
 
   // ── Fetch all raw data ──────────────────────────────────────────────────────
 
-  const [talentUser, files, licenceRows] = await Promise.all([
+  const [talentUser, talentProfile, files, licenceRows] = await Promise.all([
     db.select({ email: users.email }).from(users).where(eq(users.id, pkg.talentId)).get(),
+    db.select({ fullName: talentProfiles.fullName }).from(talentProfiles).where(eq(talentProfiles.userId, pkg.talentId)).get(),
     db.select({
       id: scanFiles.id,
       packageId: scanFiles.packageId,
@@ -293,6 +295,7 @@ export async function GET(
       captureDate: pkg.captureDate ?? null,
       studioName: pkg.studioName ?? null,
       talentEmail: talentUser?.email ?? "Unknown",
+      talentName: talentProfile?.fullName ?? null,
       createdAt: pkg.createdAt,
     },
     events,

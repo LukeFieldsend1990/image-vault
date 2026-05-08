@@ -117,10 +117,7 @@ export default async function VaultLayout({
         <div className="flex flex-col justify-between h-full py-8">
           <div>
             <a href={homeHref} className="block px-6 mb-10">
-              <div className="text-[10px] font-semibold tracking-[0.2em] uppercase" style={{ color: "var(--color-sidebar-muted)" }}>
-                United Agents
-              </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5">
                 <div className="text-sm font-medium tracking-wide">
                   Image Vault
                 </div>
