@@ -32,6 +32,7 @@ interface PackageMetadata {
 }
 
 export default function PackageMetadataForm({ metadata }: { metadata: PackageMetadata }) {
+  const [name, setName] = useState(metadata.name);
   const [scanType, setScanType] = useState(metadata.scanType ?? "");
   const [resolution, setResolution] = useState(metadata.resolution ?? "");
   const [polygonCount, setPolygonCount] = useState(metadata.polygonCount?.toString() ?? "");
@@ -62,6 +63,10 @@ export default function PackageMetadataForm({ metadata }: { metadata: PackageMet
   }
 
   async function handleSave() {
+    if (!name.trim()) {
+      setError("Package name cannot be empty");
+      return;
+    }
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -71,6 +76,7 @@ export default function PackageMetadataForm({ metadata }: { metadata: PackageMet
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          name: name.trim(),
           scanType: scanType || null,
           resolution: resolution.trim() || null,
           polygonCount: polygonCount ? parseInt(polygonCount) : null,
@@ -103,6 +109,19 @@ export default function PackageMetadataForm({ metadata }: { metadata: PackageMet
 
   return (
     <div className="space-y-6">
+      {/* Package Name */}
+      <div>
+        <label className={labelClass} style={{ color: "var(--color-text)" }}>Package Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className={inputClass}
+          style={inputStyle}
+          placeholder="Package name"
+        />
+      </div>
+
       {/* Scan Details */}
       <div>
         <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--color-ink)" }}>Scan Details</h2>
