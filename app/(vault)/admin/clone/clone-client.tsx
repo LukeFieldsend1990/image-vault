@@ -31,12 +31,13 @@ export default function CloneClient({ todayRecord }: Props) {
   const [packages, setPackages] = useState<PackageStat[]>([]);
   const [totals, setTotals] = useState({ packages: 0, files: 0, tags: 0, filesFailed: 0, skipped: 0 });
 
-  const [alreadyRan, setAlreadyRan] = useState(todayRecord !== null);
+  const [runRecord, setRunRecord] = useState<CloneRunRecord | null>(todayRecord);
+  const alreadyRan = runRecord !== null;
   const canStart = confirmed && !alreadyRan && phase === "idle";
 
   async function clearBlock() {
     await fetch("/api/admin/clone-packages", { method: "DELETE" });
-    setAlreadyRan(false);
+    setRunRecord(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -164,7 +165,7 @@ export default function CloneClient({ todayRecord }: Props) {
   return (
     <div>
       {/* Already-ran banner */}
-      {alreadyRan && (
+      {runRecord && (
         <div
           className="rounded border p-4 mb-6"
           style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
@@ -173,17 +174,17 @@ export default function CloneClient({ todayRecord }: Props) {
             Already run today
           </p>
           <div className="space-y-1">
-            <Row label="Triggered by" value={todayRecord.triggeredBy} />
-            <Row label="Source" value={todayRecord.sourceEmail} />
-            <Row label="Target" value={todayRecord.targetEmail} />
-            <Row label="Ran at" value={ts(todayRecord.runAt)} />
-            <Row label="Packages" value={String(todayRecord.summary.packages)} />
-            <Row label="Files" value={String(todayRecord.summary.files)} />
-            {todayRecord.summary.skipped > 0 && (
-              <Row label="Skipped" value={String(todayRecord.summary.skipped)} />
+            <Row label="Triggered by" value={runRecord.triggeredBy} />
+            <Row label="Source" value={runRecord.sourceEmail} />
+            <Row label="Target" value={runRecord.targetEmail} />
+            <Row label="Ran at" value={ts(runRecord.runAt)} />
+            <Row label="Packages" value={String(runRecord.summary.packages)} />
+            <Row label="Files" value={String(runRecord.summary.files)} />
+            {runRecord.summary.skipped > 0 && (
+              <Row label="Skipped" value={String(runRecord.summary.skipped)} />
             )}
-            {todayRecord.summary.filesFailed > 0 && (
-              <Row label="Files failed" value={String(todayRecord.summary.filesFailed)} accent />
+            {runRecord.summary.filesFailed > 0 && (
+              <Row label="Files failed" value={String(runRecord.summary.filesFailed)} accent />
             )}
           </div>
           <div className="mt-3 flex items-center gap-3">
