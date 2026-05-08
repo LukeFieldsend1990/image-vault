@@ -186,9 +186,10 @@ export async function POST(req: NextRequest) {
     searchIndexedAt: null,
   });
 
-  // Batch-insert all file records in one statement
-  if (newFileRows.length > 0) {
-    await db.insert(scanFiles).values(newFileRows);
+  // D1 limit: 100 bound parameters per statement.
+  // scanFiles has 10 columns → max 9 rows per chunk (90 params).
+  for (let i = 0; i < newFileRows.length; i += 9) {
+    await db.insert(scanFiles).values(newFileRows.slice(i, i + 9));
   }
 
   // Copy tags — batch insert
@@ -199,19 +200,21 @@ export async function POST(req: NextRequest) {
     .all();
 
   if (sourceTagRows.length > 0) {
-    await db.insert(packageTags).values(
-      sourceTagRows.map((t) => ({
-        id: crypto.randomUUID(),
-        packageId: newPkgId,
-        tag: t.tag,
-        category: t.category,
-        status: t.status,
-        suggestedBy: t.suggestedBy,
-        reviewedBy: null,
-        reviewedAt: null,
-        createdAt: now,
-      })),
-    );
+    const newTagRows = sourceTagRows.map((t) => ({
+      id: crypto.randomUUID(),
+      packageId: newPkgId,
+      tag: t.tag,
+      category: t.category,
+      status: t.status,
+      suggestedBy: t.suggestedBy,
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt: now,
+    }));
+    // packageTags has 9 columns → max 11 rows per chunk; use 10 for safety (90 params).
+    for (let i = 0; i < newTagRows.length; i += 10) {
+      await db.insert(packageTags).values(newTagRows.slice(i, i + 10));
+    }
   }
 
   return NextResponse.json({
