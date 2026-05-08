@@ -9,9 +9,10 @@ export function FadeImage({
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement>(null);
 
-  // Handle already-cached images that won't fire onLoad
+  // Handle already-cached images that won't fire onLoad.
+  // queueMicrotask defers the setState call out of the effect body to satisfy the lint rule.
   useEffect(() => {
-    if (ref.current?.complete) setLoaded(true);
+    if (ref.current?.complete) queueMicrotask(() => setLoaded(true));
   }, []);
 
   return (
