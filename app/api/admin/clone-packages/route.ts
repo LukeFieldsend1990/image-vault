@@ -52,6 +52,18 @@ async function copyR2Object(
   return res.ok;
 }
 
+// DELETE /api/admin/clone-packages — clears today's rate-limit record, allowing a same-day retry.
+export async function DELETE(req: NextRequest) {
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+  if (!isAdmin(session.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const kv = getRequestContext().env.SESSIONS_KV;
+  await kv.delete(todayKey());
+  return NextResponse.json({ ok: true });
+}
+
 // GET /api/admin/clone-packages
 // Returns today's completed run record.
 // Pass ?sourceEmail=X to also get the list of non-deleted packages on that account.
