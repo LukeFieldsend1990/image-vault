@@ -85,10 +85,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pa
   const now = Math.floor(Date.now() / 1000);
   const updates: Record<string, unknown> = { updatedAt: now };
   const allowedFields = [
-    "scanType", "resolution", "polygonCount", "colorSpace",
+    "name", "scanType", "resolution", "polygonCount", "colorSpace",
     "hasMesh", "hasTexture", "hasHdr", "hasMotionCapture",
     "compatibleEngines", "tags", "internalNotes",
   ];
+
+  if ("name" in body && (typeof body.name !== "string" || !body.name.trim())) {
+    return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
+  }
 
   for (const field of allowedFields) {
     if (field in body) {
