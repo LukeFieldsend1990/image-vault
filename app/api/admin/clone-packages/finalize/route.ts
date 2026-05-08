@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     filesFailed?: number;
     tags?: number;
     skipped?: number;
+    hasErrors?: boolean;
   };
   try {
     body = await req.json() as typeof body;
@@ -65,7 +66,11 @@ export async function POST(req: NextRequest) {
     summary,
   };
 
-  await kv.put(todayKey(), JSON.stringify(record), { expirationTtl: 172800 });
+  // Only write the daily block if everything succeeded — failures allow same-day retries.
+  // Dedup on the per-package POST means already-cloned packages are safely skipped on retry.
+  if (!body.hasErrors) {
+    await kv.put(todayKey(), JSON.stringify(record), { expirationTtl: 172800 });
+  }
 
   void (async () => {
     const { subject, html } = clonePackagesEmail({

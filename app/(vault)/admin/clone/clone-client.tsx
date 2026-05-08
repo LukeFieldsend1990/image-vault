@@ -74,7 +74,7 @@ export default function CloneClient({ todayRecord }: Props) {
     setPackages(pkgList.map((p) => ({ id: p.id, name: p.name, status: "pending" })));
     setPhase("cloning");
 
-    const acc = { packages: 0, files: 0, tags: 0, filesFailed: 0, skipped: 0 };
+    const acc = { packages: 0, files: 0, tags: 0, filesFailed: 0, skipped: 0, errors: 0 };
 
     // Step 2: clone each package sequentially
     for (let i = 0; i < pkgList.length; i++) {
@@ -127,6 +127,7 @@ export default function CloneClient({ todayRecord }: Props) {
           );
         }
       } catch (err) {
+        acc.errors++;
         setPackages((prev) =>
           prev.map((p) => (p.id === pkg.id ? { ...p, status: "error" } : p)),
         );
@@ -145,6 +146,7 @@ export default function CloneClient({ todayRecord }: Props) {
           sourceEmail: sourceEmail.trim(),
           targetEmail: targetEmail.trim(),
           ...acc,
+          hasErrors: acc.errors > 0 || acc.filesFailed > 0,
         }),
       });
     } catch {

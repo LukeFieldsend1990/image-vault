@@ -166,21 +166,27 @@ export async function POST(req: NextRequest) {
     .where(and(eq(scanFiles.packageId, pkg.id), eq(scanFiles.uploadStatus, "complete")))
     .all();
 
+  // Copy all files in parallel — each R2 CopyObject is a server-side op but latency
+  // stacks up when done sequentially on packages with many files (e.g. 50 GB / 30+ files).
+  const copyResults = await Promise.all(
+    sourceFileRows.map(async (f) => {
+      const newFileId = crypto.randomUUID();
+      const filename = f.r2Key.split("/").pop() ?? f.filename;
+      const newR2Key = `scans/${targetUser.id}/${newPkgId}/${newFileId}/${filename}`;
+      const ok = await copyR2Object(r2, r2Endpoint, bucket, f.r2Key, newR2Key);
+      return { f, newFileId, newR2Key, ok };
+    }),
+  );
+
   const keyMap = new Map<string, string>();
   const newFileRows: (typeof scanFiles.$inferInsert)[] = [];
   let filesFailed = 0;
 
-  for (const f of sourceFileRows) {
-    const newFileId = crypto.randomUUID();
-    const filename = f.r2Key.split("/").pop() ?? f.filename;
-    const newR2Key = `scans/${targetUser.id}/${newPkgId}/${newFileId}/${filename}`;
-
-    const ok = await copyR2Object(r2, r2Endpoint, bucket, f.r2Key, newR2Key);
+  for (const { f, newFileId, newR2Key, ok } of copyResults) {
     if (!ok) {
       filesFailed++;
       continue;
     }
-
     keyMap.set(f.r2Key, newR2Key);
     newFileRows.push({
       id: newFileId,
