@@ -8,6 +8,7 @@ import { isAdmin } from "@/lib/auth/adminEmails";
 import { and, eq, isNull } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { todayKey } from "./shared";
+import type { CloneRunRecord, ClonePackageItem, FileToCopy } from "./shared";
 export type { CloneRunRecord, ClonePackageItem, FileToCopy } from "./shared";
 
 // DELETE /api/admin/clone-packages — clears today's rate-limit record, allowing a same-day retry.
