@@ -501,3 +501,40 @@ export function attestationExtendedEmail(
     `),
   };
 }
+
+// ── Clone packages admin notification ────────────────────────────────────────
+
+export interface ClonePackagesEmailParams {
+  triggeredBy: string;
+  sourceEmail: string;
+  targetEmail: string;
+  ranAt: number;
+  packages: number;
+  files: number;
+  tags: number;
+  filesFailed: number;
+}
+
+export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: string; html: string } {
+  const dt = new Date(p.ranAt * 1000).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+  });
+  return {
+    subject: `[Admin] Clone packages operation ran — ${p.sourceEmail} → ${p.targetEmail}`,
+    html: layout(`
+      <p>A clone packages operation was triggered by an administrator. Review the details below.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Triggered by</span><span class="kv-val">${p.triggeredBy}</span></div>
+        <div class="kv-row"><span class="kv-key">Source</span><span class="kv-val">${p.sourceEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Target</span><span class="kv-val">${p.targetEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Ran at</span><span class="kv-val">${dt}</span></div>
+        <div class="kv-row"><span class="kv-key">Packages</span><span class="kv-val">${p.packages}</span></div>
+        <div class="kv-row"><span class="kv-key">Files copied</span><span class="kv-val">${p.files}</span></div>
+        <div class="kv-row"><span class="kv-key">Tags copied</span><span class="kv-val">${p.tags}</span></div>
+        ${p.filesFailed > 0 ? `<div class="kv-row"><span class="kv-key">Files failed</span><span class="kv-val"><span class="badge badge-denied">${p.filesFailed} failed</span></span></div>` : ""}
+      </div>
+      <p class="muted">This operation is rate-limited to once per UTC day. R2 objects were physically copied — both accounts are now independent.</p>
+    `),
+  };
+}

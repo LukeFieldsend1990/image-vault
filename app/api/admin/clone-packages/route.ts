@@ -5,9 +5,19 @@ import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { users, scanPackages, scanFiles, packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { isAdmin } from "@/lib/auth/adminEmails";
+import { isAdmin, ADMIN_EMAILS } from "@/lib/auth/adminEmails";
+import { sendEmail } from "@/lib/email/send";
+import { clonePackagesEmail } from "@/lib/email/templates";
 import { and, eq, isNull } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
+
+export interface CloneRunRecord {
+  runAt: number;
+  triggeredBy: string;
+  sourceEmail: string;
+  targetEmail: string;
+  summary: { packages: number; files: number; filesFailed: number; tags: number; failedFiles: string[] };
+}
 
 function cfEnv(key: string): string | undefined {
   try {
@@ -15,6 +25,10 @@ function cfEnv(key: string): string | undefined {
   } catch {
     return process.env[key];
   }
+}
+
+function todayKey(): string {
+  return `clone_packages:daily:${new Date().toISOString().slice(0, 10)}`;
 }
 
 async function copyR2Object(
@@ -35,15 +49,39 @@ async function copyR2Object(
   return res.ok;
 }
 
+// GET /api/admin/clone-packages — returns today's run record (or null)
+export async function GET(req: NextRequest) {
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+  if (!isAdmin(session.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const kv = getRequestContext().env.SESSIONS_KV;
+  const raw = await kv.get(todayKey());
+  const record: CloneRunRecord | null = raw ? (JSON.parse(raw) as CloneRunRecord) : null;
+  return NextResponse.json({ record });
+}
+
 // POST /api/admin/clone-packages
 // Body: { sourceEmail: string; targetEmail: string }
-// Clones all non-deleted packages (files + tags) from one talent account to another.
-// R2 objects are physically copied to new keys under the target user's ID.
+// Rate-limited to 1 run per UTC calendar day. Sends admin email on completion.
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
   if (!isAdmin(session.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Daily rate limit — one run per UTC day, global (not per-IP)
+  const kv = getRequestContext().env.SESSIONS_KV;
+  const existing = await kv.get(todayKey());
+  if (existing) {
+    const prev = JSON.parse(existing) as CloneRunRecord;
+    return NextResponse.json(
+      { error: "Already run today", record: prev },
+      { status: 429 },
+    );
   }
 
   let body: { sourceEmail?: string; targetEmail?: string };
@@ -105,7 +143,7 @@ export async function POST(req: NextRequest) {
   for (const pkg of sourcePkgs) {
     const newPkgId = crypto.randomUUID();
 
-    // Only copy files that completed uploading — pending/error files have no usable R2 object
+    // Only copy completed files — pending/error have no usable R2 object
     const sourceFileRows = await db
       .select()
       .from(scanFiles)
@@ -117,7 +155,6 @@ export async function POST(req: NextRequest) {
 
     for (const f of sourceFileRows) {
       const newFileId = crypto.randomUUID();
-      // r2Key format: scans/{userId}/{packageId}/{fileId}/{filename}
       const filename = f.r2Key.split("/").pop() ?? f.filename;
       const newR2Key = `scans/${targetUser.id}/${newPkgId}/${newFileId}/${filename}`;
 
@@ -201,6 +238,28 @@ export async function POST(req: NextRequest) {
       summary.tags++;
     }
   }
+
+  // Record the run in KV — expires after 48h (well past midnight UTC)
+  const record: CloneRunRecord = {
+    runAt: now,
+    triggeredBy: session.email,
+    sourceEmail,
+    targetEmail,
+    summary,
+  };
+  await kv.put(todayKey(), JSON.stringify(record), { expirationTtl: 172800 });
+
+  // Notify all admins
+  void (async () => {
+    const { subject, html } = clonePackagesEmail({
+      triggeredBy: session.email,
+      sourceEmail,
+      targetEmail,
+      ranAt: now,
+      ...summary,
+    });
+    await sendEmail({ to: [...ADMIN_EMAILS], subject, html });
+  })();
 
   return NextResponse.json({ ok: true, summary });
 }
