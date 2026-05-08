@@ -109,14 +109,26 @@ export async function POST(req: NextRequest) {
     .get();
   if (!pkg) return NextResponse.json({ error: "Package not found" }, { status: 404 });
 
-  // Dedup: skip if target already has a non-deleted package with this name
+  // Dedup: skip if target already has a non-deleted package with this name that has complete files.
+  // If the package exists but has 0 complete files it's a failed partial clone — clean it up and re-clone.
   const dupe = await db
     .select({ id: scanPackages.id })
     .from(scanPackages)
     .where(and(eq(scanPackages.talentId, targetUser.id), eq(scanPackages.name, pkg.name), isNull(scanPackages.deletedAt)))
     .get();
   if (dupe) {
-    return NextResponse.json({ skipped: true, reason: "Package with this name already exists on target" });
+    const completeFile = await db
+      .select({ id: scanFiles.id })
+      .from(scanFiles)
+      .where(and(eq(scanFiles.packageId, dupe.id), eq(scanFiles.uploadStatus, "complete")))
+      .get();
+    if (completeFile) {
+      return NextResponse.json({ skipped: true, reason: "Package with this name already exists on target" });
+    }
+    // Partial/empty clone — delete orphaned records so we can retry cleanly
+    await db.delete(packageTags).where(eq(packageTags.packageId, dupe.id));
+    await db.delete(scanFiles).where(eq(scanFiles.packageId, dupe.id));
+    await db.delete(scanPackages).where(eq(scanPackages.id, dupe.id));
   }
 
   const now = Math.floor(Date.now() / 1000);
