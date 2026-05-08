@@ -93,7 +93,7 @@ export default function ForgotPasswordPage() {
                     type="email"
                     autoComplete="email"
                     required
-                    placeholder="you@unitedagents.co.uk"
+                    placeholder="you@gmail.com"
                     className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent]"
                     style={{ borderRadius: "var(--radius)" }}
                   />
