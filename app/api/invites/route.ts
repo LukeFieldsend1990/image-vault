@@ -71,14 +71,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { email?: string; role?: string; message?: string };
+  let body: { email?: string; role?: string; message?: string; skipEmail?: boolean };
   try {
     body = JSON.parse(await req.text());
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { email, role, message } = body;
+  const { email, role, message, skipEmail } = body;
 
   if (!email || !role) {
     return NextResponse.json({ error: "email and role are required" }, { status: 400 });
@@ -140,17 +140,18 @@ export async function POST(req: NextRequest) {
     createdAt: now,
   });
 
-  // Send invite email
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
-  const { subject, html } = inviteEmail({
-    to: normalEmail,
-    inviterEmail: session.email,
-    role: role as "talent" | "rep" | "licensee",
-    message: message?.trim() ?? null,
-    signupUrl: `${baseUrl}/signup?invite=${inviteId}`,
-    expiresAt,
-  });
-  await sendEmail({ to: normalEmail, subject, html });
+  if (!skipEmail) {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const { subject, html } = inviteEmail({
+      to: normalEmail,
+      inviterEmail: session.email,
+      role: role as "talent" | "rep" | "licensee",
+      message: message?.trim() ?? null,
+      signupUrl: `${baseUrl}/signup?invite=${inviteId}`,
+      expiresAt,
+    });
+    await sendEmail({ to: normalEmail, subject, html });
+  }
 
   return NextResponse.json({ inviteId }, { status: 201 });
 }

@@ -36,6 +36,7 @@ export default function InviteManager() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"talent" | "rep" | "licensee">("talent");
   const [message, setMessage] = useState("");
+  const [skipEmail, setSkipEmail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
@@ -67,14 +68,14 @@ export default function InviteManager() {
       const res = await fetch("/api/invites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), role, message: message.trim() || undefined }),
+        body: JSON.stringify({ email: email.trim(), role, message: message.trim() || undefined, skipEmail }),
       });
       const d = await res.json() as { error?: string; inviteId?: string };
       if (!res.ok) {
         setFormError(d.error ?? "Failed to send invite");
         return;
       }
-      setFormSuccess(`Invite sent to ${email.trim()}`);
+      setFormSuccess(skipEmail ? `Invite created for ${email.trim()} (no email sent)` : `Invite sent to ${email.trim()}`);
       setInviteLink(`${window.location.origin}/signup?invite=${d.inviteId}`);
       setEmail("");
       setMessage("");
@@ -158,6 +159,18 @@ export default function InviteManager() {
               style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
             />
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              checked={skipEmail}
+              onChange={(e) => setSkipEmail(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+              Skip email notification <span style={{ color: "var(--color-border)" }}>(generate link only)</span>
+            </span>
+          </label>
 
           {formError && <p className="text-xs" style={{ color: "var(--color-danger)" }}>{formError}</p>}
           {formSuccess && <p className="text-xs" style={{ color: "#166534" }}>{formSuccess}</p>}
