@@ -31,8 +31,13 @@ export default function CloneClient({ todayRecord }: Props) {
   const [packages, setPackages] = useState<PackageStat[]>([]);
   const [totals, setTotals] = useState({ packages: 0, files: 0, tags: 0, filesFailed: 0, skipped: 0 });
 
-  const alreadyRan = todayRecord !== null;
+  const [alreadyRan, setAlreadyRan] = useState(todayRecord !== null);
   const canStart = confirmed && !alreadyRan && phase === "idle";
+
+  async function clearBlock() {
+    await fetch("/api/admin/clone-packages", { method: "DELETE" });
+    setAlreadyRan(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -181,9 +186,16 @@ export default function CloneClient({ todayRecord }: Props) {
               <Row label="Files failed" value={String(todayRecord.summary.filesFailed)} accent />
             )}
           </div>
-          <p className="text-xs mt-3" style={{ color: "var(--color-muted)" }}>
-            Resets at midnight UTC.
-          </p>
+          <div className="mt-3 flex items-center gap-3">
+            <p className="text-xs" style={{ color: "var(--color-muted)" }}>Resets at midnight UTC.</p>
+            <button
+              onClick={clearBlock}
+              className="text-xs underline"
+              style={{ color: "#c0392b", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            >
+              Clear block and retry
+            </button>
+          </div>
         </div>
       )}
 
