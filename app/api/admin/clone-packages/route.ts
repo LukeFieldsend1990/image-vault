@@ -129,9 +129,10 @@ export async function POST(req: NextRequest) {
     .where(and(eq(scanFiles.packageId, pkg.id), eq(scanFiles.uploadStatus, "complete")))
     .all();
 
-  // Build key mapping and insert file records as "pending" — R2 copy happens separately
+  // Build key mapping — collect all file rows first, then batch-insert in one statement
   const filesToCopy: FileToCopy[] = [];
   const keyMap = new Map<string, string>(); // sourceR2Key → destR2Key
+  const newFileRows: (typeof scanFiles.$inferInsert)[] = [];
 
   for (const f of sourceFileRows) {
     const newFileId = crypto.randomUUID();
@@ -140,15 +141,14 @@ export async function POST(req: NextRequest) {
 
     keyMap.set(f.r2Key, newR2Key);
     filesToCopy.push({ fileId: newFileId, sourceKey: f.r2Key, destKey: newR2Key });
-
-    await db.insert(scanFiles).values({
+    newFileRows.push({
       id: newFileId,
       packageId: newPkgId,
       filename: f.filename,
       sizeBytes: f.sizeBytes,
       r2Key: newR2Key,
       contentType: f.contentType ?? null,
-      uploadStatus: "pending", // will be set to "complete" by copy-file endpoint
+      uploadStatus: "pending",
       sha256: f.sha256 ?? null,
       createdAt: now,
       completedAt: null,
@@ -186,25 +186,32 @@ export async function POST(req: NextRequest) {
     searchIndexedAt: null,
   });
 
-  // Copy tags immediately — no R2 involved
+  // Batch-insert all file records in one statement
+  if (newFileRows.length > 0) {
+    await db.insert(scanFiles).values(newFileRows);
+  }
+
+  // Copy tags — batch insert
   const sourceTagRows = await db
     .select()
     .from(packageTags)
     .where(eq(packageTags.packageId, pkg.id))
     .all();
 
-  for (const t of sourceTagRows) {
-    await db.insert(packageTags).values({
-      id: crypto.randomUUID(),
-      packageId: newPkgId,
-      tag: t.tag,
-      category: t.category,
-      status: t.status,
-      suggestedBy: t.suggestedBy,
-      reviewedBy: null,
-      reviewedAt: null,
-      createdAt: now,
-    });
+  if (sourceTagRows.length > 0) {
+    await db.insert(packageTags).values(
+      sourceTagRows.map((t) => ({
+        id: crypto.randomUUID(),
+        packageId: newPkgId,
+        tag: t.tag,
+        category: t.category,
+        status: t.status,
+        suggestedBy: t.suggestedBy,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: now,
+      })),
+    );
   }
 
   return NextResponse.json({

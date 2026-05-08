@@ -107,8 +107,10 @@ export default function CloneClient({ todayRecord }: Props) {
         });
 
         if (!res.ok) {
-          const d = await res.json() as { error?: string };
-          throw new Error(d.error ?? `HTTP ${res.status}`);
+          const text = await res.text();
+          let msg = `HTTP ${res.status}`;
+          try { msg = (JSON.parse(text) as { error?: string }).error ?? msg; } catch { msg = text.slice(0, 120) || msg; }
+          throw new Error(msg);
         }
 
         const d = await res.json() as {
