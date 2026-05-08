@@ -109,10 +109,6 @@ function SignupForm() {
       <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
         {/* Wordmark */}
         <div>
-          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-muted]">
-            United Agents
-          </span>
-          <span className="mx-2 text-xs" style={{ color: "var(--color-accent)" }}>/</span>
           <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-ink]">
             Image Vault
           </span>
@@ -283,7 +279,7 @@ function SignupForm() {
 
         {/* Footer */}
         <p className="text-xs text-[--color-muted]">
-          &copy; {new Date().getFullYear()} United Agents. All rights reserved.
+          &copy; {new Date().getFullYear()} Image Vault. All rights reserved.
         </p>
       </div>
 

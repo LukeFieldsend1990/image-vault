@@ -1,6 +1,6 @@
 /**
  * Email HTML templates for Image Vault transactional emails.
- * United Agents aesthetic: minimal, black/white, typography-led, red accent.
+ * Minimal, black/white, typography-led, red accent.
  */
 
 function formatDate(unix: number): string {
@@ -47,7 +47,6 @@ function layout(content: string): string {
 <body>
 <div class="wrap">
   <div class="header">
-    <p class="header-label">United Agents</p>
     <p class="header-title">Image Vault</p>
     <div class="accent"></div>
   </div>
