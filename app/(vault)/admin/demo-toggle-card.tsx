@@ -11,7 +11,7 @@ export default function DemoToggleCard({ initialEnabled }: { initialEnabled: boo
     setEnabled(next);
     setSaving(true);
     try {
-      await fetch("/api/admin/ai/settings", {
+      await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: "demo_enabled", value: String(next) }),

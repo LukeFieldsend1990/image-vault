@@ -3,7 +3,7 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, licences, downloadEvents, scanFiles, aiSettings } from "@/lib/db/schema";
+import { users, scanPackages, licences, downloadEvents, scanFiles, siteSettings } from "@/lib/db/schema";
 import { sql, inArray, eq } from "drizzle-orm";
 import DemoToggleCard from "./demo-toggle-card";
 import { getAllSkills } from "@/lib/skills/registry";
@@ -41,9 +41,9 @@ export default async function AdminOverviewPage() {
   const db = getDb();
 
   const demoSetting = await db
-    .select({ value: aiSettings.value })
-    .from(aiSettings)
-    .where(eq(aiSettings.key, "demo_enabled"))
+    .select({ value: siteSettings.value })
+    .from(siteSettings)
+    .where(eq(siteSettings.key, "demo_enabled"))
     .get();
   const demoEnabled = demoSetting?.value === "true";
 

@@ -15,7 +15,6 @@ const VALID_KEYS = [
   "max_security_alerts_per_day",
   "vision_max_images",
   "metadata_tags_enabled",
-  "demo_enabled",
 ];
 
 /**
