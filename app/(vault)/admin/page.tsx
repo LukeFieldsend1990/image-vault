@@ -258,16 +258,16 @@ export default async function AdminOverviewPage() {
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
           Danger Zone
         </h2>
-        <Link
-          href="/admin/clone"
-          className="flex items-start gap-4 rounded border p-5 transition hover:opacity-80"
-          style={{ borderColor: "#c0392b", background: "rgba(192,57,43,0.04)" }}
+        <div
+          className="flex items-start gap-4 rounded border p-5 cursor-not-allowed opacity-40"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+          title="Clone Packages is temporarily disabled"
         >
           <div
             className="mt-0.5 w-8 h-8 rounded flex items-center justify-center shrink-0"
-            style={{ background: "rgba(192,57,43,0.12)" }}
+            style={{ background: "rgba(128,128,128,0.12)" }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
               <polyline points="16 3 21 3 21 8" />
               <line x1="4" y1="20" x2="21" y2="3" />
               <polyline points="21 16 21 21 16 21" />
@@ -275,12 +275,15 @@ export default async function AdminOverviewPage() {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Clone Packages</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Clone Packages</p>
+              <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: "var(--color-border)", color: "var(--color-muted)" }}>Disabled</span>
+            </div>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
               Copy all scan packages and R2 files from one talent account to another. Rate-limited to once per day. Notifies all admins.
             </p>
           </div>
-        </Link>
+        </div>
       </div>
     </div>
   );

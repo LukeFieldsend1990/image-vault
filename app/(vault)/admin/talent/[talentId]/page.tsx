@@ -28,9 +28,9 @@ export default async function AdminTalentDetailPage({
 
   const initialSettings = {
     pipelineEnabled: settings?.pipelineEnabled ?? true,
-    talentSharePct: settings?.talentSharePct ?? 65,
-    agencySharePct: settings?.agencySharePct ?? 20,
-    platformSharePct: settings?.platformSharePct ?? 15,
+    talentSharePct: settings?.talentSharePct ?? 80,
+    agencySharePct: settings?.agencySharePct ?? 10,
+    platformSharePct: settings?.platformSharePct ?? 10,
   };
 
   const displayName = profile?.fullName ?? talent.email;
