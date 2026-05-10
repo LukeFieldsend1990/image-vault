@@ -70,7 +70,7 @@ export default async function AdminUsersPage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-full">
       <div className="mb-6">
         <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>Admin</p>
         <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>Users</h1>
@@ -79,13 +79,13 @@ export default async function AdminUsersPage() {
         </p>
       </div>
 
-      <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
       <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         {/* Header */}
         <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
+          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3"
           style={{
-            gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.6fr",
+            gridTemplateColumns: "minmax(220px, 2.5fr) 100px 160px 100px 160px minmax(320px, 2fr)",
+            minWidth: 1060,
             color: "var(--color-muted)",
             background: "var(--color-surface)",
             borderBottom: "1px solid var(--color-border)",
@@ -112,15 +112,16 @@ export default async function AdminUsersPage() {
           return (
             <div
               key={u.id}
-              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[800px]"
+              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm"
               style={{
-                gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.6fr",
+                gridTemplateColumns: "minmax(220px, 2.5fr) 100px 160px 100px 160px minmax(320px, 2fr)",
+                minWidth: 1060,
                 borderColor: "var(--color-border)",
                 opacity: u.suspendedAt ? 0.6 : 1,
               }}
             >
               {/* Email + avatar */}
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-3 pr-4">
                 {profile?.profileImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -137,58 +138,62 @@ export default async function AdminUsersPage() {
                     {u.email[0]?.toUpperCase() ?? "?"}
                   </div>
                 )}
-                <span className="truncate" style={{ color: "var(--color-text)" }}>{u.email}</span>
+                <span className="text-sm break-all leading-snug" style={{ color: "var(--color-text)" }}>{u.email}</span>
               </div>
 
               {/* Role badge */}
-              <span
-                className="inline-flex items-center text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded w-fit"
-                style={{ background: `${ROLE_COLOR[role]}18`, color: ROLE_COLOR[role] }}
-              >
-                {ROLE_LABEL[role]}
-              </span>
+              <div>
+                <span
+                  className="inline-flex items-center text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded"
+                  style={{ background: `${ROLE_COLOR[role]}18`, color: ROLE_COLOR[role] }}
+                >
+                  {ROLE_LABEL[role]}
+                </span>
+              </div>
 
               {/* Identity / name */}
-              <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
-                {profile?.fullName ?? (role === "talent" ? "—" : "—")}
+              <span className="text-xs pr-2" style={{ color: "var(--color-muted)" }}>
+                {profile?.fullName ?? "—"}
               </span>
 
               {/* Packages or roster count */}
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                {role === "talent" && pkgCount > 0 && pkgCount}
-                {role === "rep" && repTalents > 0 && `${repTalents} talent`}
-                {(pkgCount === 0 && repTalents === 0) && "—"}
+                {role === "talent" && pkgCount > 0 ? pkgCount : null}
+                {role === "rep" && repTalents > 0 ? `${repTalents} talent` : null}
+                {pkgCount === 0 && repTalents === 0 ? "—" : null}
               </span>
 
-              {/* Joined date */}
-              <div>
+              {/* Joined date + status flags */}
+              <div className="flex flex-col gap-1">
                 <span className="text-xs" style={{ color: "var(--color-muted)" }}>
                   {ts(u.createdAt)}
                 </span>
-                {u.suspendedAt && (
-                  <span
-                    className="ml-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
-                    style={{ background: "rgba(107,114,128,0.12)", color: "#6b7280" }}
-                  >
-                    Suspended
-                  </span>
-                )}
-                {u.aiDisabled && (
-                  <span
-                    className="ml-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
-                    style={{ background: "rgba(139,92,246,0.12)", color: "#8b5cf6" }}
-                  >
-                    AI Off
-                  </span>
-                )}
-                {u.inboundEnabled && (
-                  <span
-                    className="ml-2 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
-                    style={{ background: "rgba(37,99,235,0.12)", color: "#2563eb" }}
-                  >
-                    Inbox
-                  </span>
-                )}
+                <div className="flex flex-wrap gap-1">
+                  {u.suspendedAt && (
+                    <span
+                      className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(107,114,128,0.12)", color: "#6b7280" }}
+                    >
+                      Suspended
+                    </span>
+                  )}
+                  {u.aiDisabled && (
+                    <span
+                      className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(139,92,246,0.12)", color: "#8b5cf6" }}
+                    >
+                      AI Off
+                    </span>
+                  )}
+                  {u.inboundEnabled && (
+                    <span
+                      className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(37,99,235,0.12)", color: "#2563eb" }}
+                    >
+                      Inbox
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Actions */}
