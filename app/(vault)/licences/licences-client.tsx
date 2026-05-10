@@ -48,10 +48,10 @@ interface Licence {
 }
 
 const TABS: { label: string; value: LicenceStatus | "ALL" }[] = [
-  { label: "All", value: "ALL" },
   { label: "Pending", value: "PENDING" },
   { label: "Approved", value: "APPROVED" },
   { label: "Denied", value: "DENIED" },
+  { label: "All", value: "ALL" },
 ];
 
 const STATUS_COLOURS: Record<LicenceStatus, string> = {
@@ -100,13 +100,14 @@ function fmtGBP(pence: number) {
 
 export default function LicencesClient() {
   const [licences, setLicences] = useState<Licence[]>([]);
-  const [tab, setTab] = useState<LicenceStatus | "ALL">("ALL");
+  const [tab, setTab] = useState<LicenceStatus | "ALL" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
 
   async function reload() {
+    if (tab === null) return;
     const url = tab === "ALL" ? "/api/licences" : `/api/licences?status=${tab}`;
     const d = await fetch(url).then((r) => r.json() as Promise<{ licences?: Licence[] }>);
     setLicences(d.licences ?? []);
@@ -128,7 +129,19 @@ export default function LicencesClient() {
     await reload();
   }
 
+  // Determine the default tab on mount: PENDING if any exist, else APPROVED
   useEffect(() => {
+    fetch("/api/licences")
+      .then((r) => r.json() as Promise<{ licences?: Licence[] }>)
+      .then((d) => {
+        const all = d.licences ?? [];
+        setTab(all.some((l) => l.status === "PENDING") ? "PENDING" : "APPROVED");
+      })
+      .catch(() => setTab("PENDING"));
+  }, []);
+
+  useEffect(() => {
+    if (tab === null) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     const url = tab === "ALL" ? "/api/licences" : `/api/licences?status=${tab}`;
@@ -161,32 +174,35 @@ export default function LicencesClient() {
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 border-b" style={{ borderColor: "var(--color-border)" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.value}
-            onClick={() => setTab(t.value)}
-            className="px-4 py-2 text-sm transition relative"
-            style={{
-              color: tab === t.value ? "var(--color-ink)" : "var(--color-muted)",
-              fontWeight: tab === t.value ? 600 : 400,
-            }}
-          >
-            {t.label}
-            {tab === t.value && (
-              <span
-                className="absolute bottom-0 left-0 right-0 h-0.5"
-                style={{ background: "var(--color-accent)" }}
-              />
-            )}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const active = tab === t.value;
+          return (
+            <button
+              key={t.value}
+              onClick={() => setTab(t.value)}
+              className="px-4 py-2 text-sm transition relative"
+              style={{
+                color: active ? "var(--color-ink)" : "var(--color-muted)",
+                fontWeight: active ? 600 : 400,
+              }}
+            >
+              {t.label}
+              {active && (
+                <span
+                  className="absolute bottom-0 left-0 right-0 h-0.5"
+                  style={{ background: "var(--color-accent)" }}
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {loading && <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>}
       {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
       {!loading && !error && licences.length === 0 && (
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-          No licences found.{tab !== "DENIED" && (
+          No licences found.{tab !== "DENIED" && tab !== null && (
             <>{" "}<Link href="/directory" className="underline">Browse the directory</Link> to request one.</>
           )}
         </p>
