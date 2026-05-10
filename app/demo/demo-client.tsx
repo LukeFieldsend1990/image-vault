@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type LicenceStatus = "APPROVED" | "PENDING" | "DENIED";
+type LicenceStatus = "APPROVED" | "PENDING";
+type ViewType = "vault" | "licences" | "download";
 
 interface FakePkg {
   id: string;
@@ -55,12 +56,12 @@ interface FakeLicence {
 
 interface Scene {
   id: string;
-  view: "vault" | "licences";
-  expandedPkg: string | null;
+  view: ViewType;
   expandedLic: string | null;
+  sidebarRole: "talent" | "licensee";
+  licences?: FakeLicence[];
   headline: string;
   body: string;
-  highlightDownload?: boolean;
 }
 
 // ─── Fake data ────────────────────────────────────────────────────────────────
@@ -118,33 +119,45 @@ const PKG1_FILES: FakeFile[] = [
   { id: "f5", filename: "raw_plates_cam01-16.zip", sizeBytes: 34359738368 },
 ];
 
-const LICENCES: FakeLicence[] = [
-  {
-    id: "lic-1",
-    projectName: "Blade Runner 3",
-    status: "APPROVED",
-    licenceType: "film_double",
-    productionCompany: "Warner Bros. Pictures",
-    packageName: "Full Body — Framestore London",
-    packageScanType: "light_stage",
-    packageHasMesh: true,
-    packageHasTexture: true,
-    packageHasHdr: true,
-    packageHasMotionCapture: false,
-    packageTags: ["4K plates", "per-light EXR"],
-    validFrom: 1704067200,
-    validTo: 1767139200,
-    territory: "Worldwide",
-    exclusivity: "non_exclusive",
-    permitAiTraining: false,
-    agreedFee: 8500000,
-    proposedFee: null,
-    intendedUse:
-      "Digital double for principal photography sequences and VFX work on Blade Runner 3, including close-up facial replacement and full-body simulation.",
-    approvedAt: 1714521600,
-    downloadCount: 3,
-    lastDownloadAt: 1719792000,
-  },
+const BR3_PENDING: FakeLicence = {
+  id: "lic-1",
+  projectName: "Blade Runner 3",
+  status: "PENDING",
+  licenceType: "film_double",
+  productionCompany: "Warner Bros. Pictures",
+  packageName: "Full Body — Framestore London",
+  packageScanType: "light_stage",
+  packageHasMesh: true,
+  packageHasTexture: true,
+  packageHasHdr: true,
+  packageHasMotionCapture: false,
+  packageTags: ["4K plates", "per-light EXR"],
+  validFrom: 1704067200,
+  validTo: 1767139200,
+  territory: "Worldwide",
+  exclusivity: "non_exclusive",
+  permitAiTraining: false,
+  agreedFee: null,
+  proposedFee: 8500000,
+  intendedUse:
+    "Digital double for principal photography sequences and VFX work on Blade Runner 3, including close-up facial replacement and full-body simulation.",
+  approvedAt: null,
+  downloadCount: 0,
+  lastDownloadAt: null,
+};
+
+const BR3_APPROVED: FakeLicence = {
+  ...BR3_PENDING,
+  status: "APPROVED",
+  agreedFee: 8500000,
+  proposedFee: null,
+  approvedAt: 1714521600,
+  downloadCount: 3,
+  lastDownloadAt: 1719792000,
+};
+
+const ALL_LICENCES: FakeLicence[] = [
+  BR3_APPROVED,
   {
     id: "lic-2",
     projectName: "EA Sports FC 2026",
@@ -205,47 +218,40 @@ const SCENES: Scene[] = [
   {
     id: "vault-overview",
     view: "vault",
-    expandedPkg: null,
     expandedLic: null,
-    headline: "Your secure, encrypted vault",
-    body: "Every scan package is encrypted in the browser before upload. Not even we can access your files.",
+    sidebarRole: "talent",
+    headline: "Secure, encrypted vault",
+    body: "Emma Richardson stores her scan packages — encrypted in the browser before upload. Not even the platform can access the files.",
   },
   {
-    id: "vault-files",
-    view: "vault",
-    expandedPkg: "pkg-1",
-    expandedLic: null,
-    headline: "Complete scan archive",
-    body: "Packages bundle raw plates, EXRs, meshes, textures, and HDR maps — with a full chain-of-custody audit log.",
-  },
-  {
-    id: "licences-overview",
+    id: "licence-request",
     view: "licences",
-    expandedPkg: null,
     expandedLic: null,
-    headline: "Formal licensing workflow",
-    body: "Production companies request access by project, usage type, territory, and term. You approve or deny every request.",
+    sidebarRole: "licensee",
+    licences: [BR3_PENDING],
+    headline: "Licence request submitted",
+    body: "Warner Bros. requests access to the Framestore full-body scan for Blade Runner 3 — specifying usage type, territory, exclusivity, and proposed fee.",
   },
   {
-    id: "licence-detail",
+    id: "licence-approved",
     view: "licences",
-    expandedPkg: null,
     expandedLic: "lic-1",
-    headline: "Scoped, time-limited access",
-    body: "Each licence locks in exact usage rights — film double, game character, or commercial — with an agreed fee and hard expiry.",
+    sidebarRole: "talent",
+    licences: ALL_LICENCES,
+    headline: "Talent reviews and approves",
+    body: "Emma reviews the project, territory, intended use, and agrees the $85,000 fee. She approves — the licence is now active.",
   },
   {
-    id: "download",
-    view: "licences",
-    expandedPkg: null,
-    expandedLic: "lic-1",
+    id: "dual-custody-download",
+    view: "download",
+    expandedLic: null,
+    sidebarRole: "licensee",
     headline: "Dual-custody download",
-    body: "Both parties authenticate with 2FA before any file can leave the vault. You stay in control of every access event.",
-    highlightDownload: true,
+    body: "Both parties authenticate separately with 2FA. Neither the licensee, nor the platform, can release files without the talent's explicit approval.",
   },
 ];
 
-const AUTO_MS = 5500;
+const AUTO_MS = 6000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -281,8 +287,6 @@ const LICENCE_TYPE_LABEL: Record<string, string> = {
   game_character: "Game Character",
   commercial: "Commercial",
   ai_avatar: "AI Avatar",
-  training_data: "AI Training Data",
-  monitoring_reference: "Identity Reference",
 };
 
 const EXCLUSIVITY_LABEL: Record<string, string> = {
@@ -301,9 +305,9 @@ const SCAN_TYPE_LABEL: Record<string, string> = {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
+const TALENT_NAV = [
   {
-    id: "vault",
+    id: "vault" as const,
     label: "Dashboard",
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -313,7 +317,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    id: "licences",
+    id: "licences" as const,
     label: "Licences",
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -325,7 +329,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    id: "settings",
+    id: "settings" as const,
     label: "Settings",
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -334,9 +338,58 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-] as const;
+];
 
-function DemoSidebar({ activeView }: { activeView: "vault" | "licences" }) {
+const LICENSEE_NAV = [
+  {
+    id: "directory" as const,
+    label: "Directory",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+    ),
+  },
+  {
+    id: "licences" as const,
+    label: "Licences",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+    ),
+  },
+  {
+    id: "settings" as const,
+    label: "Settings",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    ),
+  },
+];
+
+type NavId = "vault" | "licences" | "directory" | "settings";
+
+function DemoSidebar({
+  role,
+  activeNavId,
+}: {
+  role: "talent" | "licensee";
+  activeNavId: NavId;
+}) {
+  const nav = role === "talent" ? TALENT_NAV : LICENSEE_NAV;
+  const user =
+    role === "talent"
+      ? { initials: "ER", name: "Emma Richardson", subtitle: "Talent" }
+      : { initials: "WB", name: "Warner Bros.", subtitle: "Licensee" };
+
   return (
     <aside
       style={{
@@ -351,7 +404,6 @@ function DemoSidebar({ activeView }: { activeView: "vault" | "licences" }) {
     >
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%", padding: "2rem 0" }}>
         <div>
-          {/* Logo */}
           <a href="/demo" style={{ display: "block", padding: "0 1.5rem", marginBottom: "2.5rem", textDecoration: "none" }}>
             <div style={{ fontSize: "0.875rem", fontWeight: 500, letterSpacing: "0.05em", color: "#fff" }}>
               Image Vault
@@ -359,10 +411,9 @@ function DemoSidebar({ activeView }: { activeView: "vault" | "licences" }) {
             <div style={{ marginTop: "0.375rem", height: "1px", width: "1.5rem", background: "#c0392b" }} />
           </a>
 
-          {/* Nav */}
           <nav style={{ padding: "0 0.75rem" }}>
-            {NAV_ITEMS.map((item) => {
-              const active = item.id === activeView;
+            {nav.map((item) => {
+              const active = item.id === activeNavId;
               return (
                 <div
                   key={item.id}
@@ -390,7 +441,6 @@ function DemoSidebar({ activeView }: { activeView: "vault" | "licences" }) {
           </nav>
         </div>
 
-        {/* User + demo badge */}
         <div style={{ padding: "0 1.5rem" }}>
           <div
             style={{
@@ -425,12 +475,12 @@ function DemoSidebar({ activeView }: { activeView: "vault" | "licences" }) {
                 letterSpacing: "0.05em",
               }}
             >
-              ER
+              {user.initials}
             </div>
             <div>
-              <div style={{ fontSize: "0.75rem", fontWeight: 500, color: "#fff" }}>Emma Richardson</div>
+              <div style={{ fontSize: "0.75rem", fontWeight: 500, color: "#fff" }}>{user.name}</div>
               <div style={{ fontSize: "0.625rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.04em" }}>
-                Talent
+                {user.subtitle}
               </div>
             </div>
           </div>
@@ -442,7 +492,7 @@ function DemoSidebar({ activeView }: { activeView: "vault" | "licences" }) {
 
 // ─── Vault view ───────────────────────────────────────────────────────────────
 
-function PkgCard({ pkg, expanded }: { pkg: FakePkg; expanded: boolean }) {
+function PkgCard({ pkg }: { pkg: FakePkg }) {
   const caps = [
     pkg.hasMesh && "Mesh",
     pkg.hasTexture && "Textures",
@@ -450,49 +500,25 @@ function PkgCard({ pkg, expanded }: { pkg: FakePkg; expanded: boolean }) {
     pkg.hasMotionCapture && "MoCap",
   ].filter(Boolean) as string[];
 
-  const files = pkg.id === "pkg-1" ? PKG1_FILES : [];
-
   return (
     <div
       style={{
         border: "1px solid var(--color-border)",
         borderRadius: "2px",
         background: "var(--color-surface)",
-        overflow: "hidden",
       }}
     >
       <div style={{ padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-        {/* Chevron */}
-        <div style={{ flexShrink: 0, color: "var(--color-ink)", opacity: expanded ? 1 : 0.35 }}>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.2s ease" }}
-          >
+        <div style={{ flexShrink: 0, color: "var(--color-ink)", opacity: 0.35 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </div>
 
-        {/* Metadata */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.2rem" }}>
             <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{pkg.name}</span>
-            <span
-              style={{
-                fontSize: "0.625rem",
-                fontWeight: 600,
-                padding: "0.1rem 0.4rem",
-                borderRadius: "9999px",
-                background: "#dcfce7",
-                color: "#166534",
-              }}
-            >
+            <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.1rem 0.4rem", borderRadius: "9999px", background: "#dcfce7", color: "#166534" }}>
               Ready
             </span>
           </div>
@@ -500,70 +526,32 @@ function PkgCard({ pkg, expanded }: { pkg: FakePkg; expanded: boolean }) {
             {pkg.studioName} · {formatDate(pkg.captureDate)}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem" }}>
-            <span
-              style={{
-                fontSize: "0.625rem",
-                fontWeight: 600,
-                padding: "0.15rem 0.4rem",
-                borderRadius: "2px",
-                background: "var(--color-accent)",
-                color: "#fff",
-                opacity: 0.85,
-              }}
-            >
+            <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.15rem 0.4rem", borderRadius: "2px", background: "var(--color-accent)", color: "#fff", opacity: 0.85 }}>
               {SCAN_TYPE_LABEL[pkg.scanType] ?? pkg.scanType}
             </span>
             {caps.map((c) => (
-              <span
-                key={c}
-                style={{
-                  fontSize: "0.625rem",
-                  fontWeight: 500,
-                  padding: "0.15rem 0.4rem",
-                  borderRadius: "2px",
-                  background: "var(--color-surface)",
-                  color: "var(--color-text)",
-                  border: "1px solid var(--color-border)",
-                }}
-              >
+              <span key={c} style={{ fontSize: "0.625rem", fontWeight: 500, padding: "0.15rem 0.4rem", borderRadius: "2px", background: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}>
                 {c}
               </span>
             ))}
             {pkg.tags.map((t) => (
-              <span
-                key={t}
-                style={{
-                  fontSize: "0.625rem",
-                  padding: "0.15rem 0.4rem",
-                  borderRadius: "2px",
-                  background: "var(--color-surface)",
-                  color: "var(--color-muted)",
-                  border: "1px solid var(--color-border)",
-                }}
-              >
+              <span key={t} style={{ fontSize: "0.625rem", padding: "0.15rem 0.4rem", borderRadius: "2px", background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
                 {t}
               </span>
             ))}
           </div>
         </div>
 
-        {/* File count */}
         <div style={{ flexShrink: 0, textAlign: "right", marginRight: "0.5rem" }}>
-          <div style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--color-ink)" }}>
-            {pkg.fileCount} files
-          </div>
-          <div style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>
-            {formatBytes(pkg.totalSizeBytes)}
-          </div>
+          <div style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--color-ink)" }}>{pkg.fileCount} files</div>
+          <div style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>{formatBytes(pkg.totalSizeBytes)}</div>
         </div>
 
-        {/* Action icons */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.125rem", flexShrink: 0 }}>
           {[
             <svg key="eye" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
             <svg key="plus" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
             <svg key="shield" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
-            <svg key="list" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="10" y2="18" /><polyline points="16 16 19 19 22 16" /><line x1="19" y1="10" x2="19" y2="19" /></svg>,
           ].map((icon, i) => (
             <div key={i} style={{ padding: "0.375rem", color: "var(--color-ink)", opacity: 0.3, cursor: "default" }}>
               {icon}
@@ -571,171 +559,35 @@ function PkgCard({ pkg, expanded }: { pkg: FakePkg; expanded: boolean }) {
           ))}
         </div>
       </div>
-
-      {/* Expanded file list */}
-      {expanded && files.length > 0 && (
-        <div style={{ borderTop: "1px solid var(--color-border)" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              padding: "0.625rem 1.25rem",
-              background: "var(--color-surface)",
-              borderBottom: "1px solid var(--color-border)",
-            }}
-          >
-            <button
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.375rem",
-                fontSize: "0.6875rem",
-                fontWeight: 500,
-                padding: "0.375rem 0.75rem",
-                borderRadius: "2px",
-                background: "var(--color-accent)",
-                color: "#fff",
-                border: "none",
-                cursor: "default",
-              }}
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Download all as .zip
-            </button>
-          </div>
-          {files.map((file) => (
-            <div
-              key={file.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0.75rem 1.25rem 0.75rem 3.25rem",
-                borderBottom: "1px solid var(--color-border)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ color: "var(--color-muted)", flexShrink: 0 }}
-                >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-                <div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--color-ink)" }}>{file.filename}</div>
-                  <div style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>{formatBytes(file.sizeBytes)}</div>
-                </div>
-              </div>
-              <button
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.375rem",
-                  fontSize: "0.6875rem",
-                  fontWeight: 500,
-                  padding: "0.375rem 0.75rem",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "2px",
-                  background: "var(--color-bg)",
-                  color: "var(--color-ink)",
-                  cursor: "default",
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="8 17 12 21 16 17" />
-                  <line x1="12" y1="12" x2="12" y2="21" />
-                  <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.36" />
-                </svg>
-                Download
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
-function VaultView({ expandedId }: { expandedId: string | null }) {
+function VaultView() {
   const totalSize = PACKAGES.reduce((s, p) => s + p.totalSizeBytes, 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Header */}
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderBottom: "1px solid var(--color-border)",
-          padding: "1.25rem 3rem",
-          flexShrink: 0,
-        }}
-      >
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--color-border)", padding: "1.25rem 3rem", flexShrink: 0 }}>
         <div>
-          <h1 style={{ fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>
-            Your Vault
-          </h1>
-          <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.25rem 0 0" }}>
-            {PACKAGES.length} scan packages
-          </p>
+          <h1 style={{ fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>Your Vault</h1>
+          <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.25rem 0 0" }}>{PACKAGES.length} scan packages</p>
         </div>
-        <button
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            padding: "0.625rem 1rem",
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            letterSpacing: "0.02em",
-            color: "#fff",
-            background: "var(--color-ink)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            cursor: "default",
-          }}
-        >
+        <button style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.625rem 1rem", fontSize: "0.75rem", fontWeight: 500, color: "#fff", background: "var(--color-ink)", border: "none", borderRadius: "var(--radius)", cursor: "default" }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
           New Scan Package
         </button>
       </header>
 
-      {/* Package list */}
       <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 3rem", paddingBottom: "11rem" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {PACKAGES.map((pkg) => (
-            <PkgCard key={pkg.id} pkg={pkg} expanded={expandedId === pkg.id} />
-          ))}
+          {PACKAGES.map((pkg) => <PkgCard key={pkg.id} pkg={pkg} />)}
         </div>
       </div>
 
-      {/* Stats footer */}
-      <footer
-        style={{
-          borderTop: "1px solid var(--color-border)",
-          padding: "1rem 3rem",
-          display: "flex",
-          alignItems: "center",
-          gap: "2rem",
-          flexShrink: 0,
-        }}
-      >
+      <footer style={{ borderTop: "1px solid var(--color-border)", padding: "1rem 3rem", display: "flex", alignItems: "center", gap: "2rem", flexShrink: 0 }}>
         {[
           { label: "Total scans", value: String(PACKAGES.length) },
           { label: "Storage used", value: formatBytes(totalSize) },
@@ -743,20 +595,8 @@ function VaultView({ expandedId }: { expandedId: string | null }) {
           { label: "Pending requests", value: "1" },
         ].map((s) => (
           <div key={s.label}>
-            <p
-              style={{
-                fontSize: "0.6875rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                color: "var(--color-muted)",
-                margin: 0,
-              }}
-            >
-              {s.label}
-            </p>
-            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-ink)", margin: "0.25rem 0 0" }}>
-              {s.value}
-            </p>
+            <p style={{ fontSize: "0.6875rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-muted)", margin: 0 }}>{s.label}</p>
+            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-ink)", margin: "0.25rem 0 0" }}>{s.value}</p>
           </div>
         ))}
       </footer>
@@ -766,15 +606,7 @@ function VaultView({ expandedId }: { expandedId: string | null }) {
 
 // ─── Licences view ────────────────────────────────────────────────────────────
 
-function LicCard({
-  lic,
-  expanded,
-  highlightDownload,
-}: {
-  lic: FakeLicence;
-  expanded: boolean;
-  highlightDownload?: boolean;
-}) {
+function LicCard({ lic, expanded }: { lic: FakeLicence; expanded: boolean }) {
   const feeRef = lic.agreedFee ?? lic.proposedFee;
   const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
   const caps = [
@@ -793,100 +625,33 @@ function LicCard({
   ];
 
   return (
-    <div
-      style={{
-        border: "1px solid var(--color-border)",
-        borderRadius: "var(--radius)",
-        background: "var(--color-surface)",
-      }}
-    >
+    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)" }}>
       <div style={{ padding: "1.25rem" }}>
-        {/* Summary row */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.125rem" }}>
-              <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>
-                {lic.projectName}
-              </span>
-              <span
-                style={{
-                  fontSize: "0.625rem",
-                  fontWeight: 600,
-                  padding: "0.1rem 0.5rem",
-                  borderRadius: "9999px",
-                  background: `${colour}18`,
-                  color: colour,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                }}
-              >
+              <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{lic.projectName}</span>
+              <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.1rem 0.5rem", borderRadius: "9999px", background: `${colour}18`, color: colour, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 {lic.status}
               </span>
-              <span
-                style={{
-                  fontSize: "0.625rem",
-                  fontWeight: 600,
-                  padding: "0.1rem 0.5rem",
-                  borderRadius: "9999px",
-                  background: "var(--color-border)",
-                  color: "var(--color-muted)",
-                }}
-              >
+              <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.1rem 0.5rem", borderRadius: "9999px", background: "var(--color-border)", color: "var(--color-muted)" }}>
                 {LICENCE_TYPE_LABEL[lic.licenceType] ?? lic.licenceType}
               </span>
             </div>
-
             <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.125rem 0 0.375rem" }}>
               Emma Richardson · {lic.productionCompany} · {lic.packageName}
             </p>
-
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem", marginBottom: "0.375rem" }}>
-              <span
-                style={{
-                  fontSize: "0.625rem",
-                  fontWeight: 600,
-                  padding: "0.15rem 0.4rem",
-                  borderRadius: "2px",
-                  background: "var(--color-accent)",
-                  color: "#fff",
-                  opacity: 0.85,
-                }}
-              >
+              <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.15rem 0.4rem", borderRadius: "2px", background: "var(--color-accent)", color: "#fff", opacity: 0.85 }}>
                 {SCAN_TYPE_LABEL[lic.packageScanType] ?? lic.packageScanType}
               </span>
               {caps.map((c) => (
-                <span
-                  key={c}
-                  style={{
-                    fontSize: "0.625rem",
-                    fontWeight: 500,
-                    padding: "0.15rem 0.4rem",
-                    borderRadius: "2px",
-                    border: "1px solid var(--color-border)",
-                    color: "var(--color-text)",
-                    background: "var(--color-surface)",
-                  }}
-                >
-                  {c}
-                </span>
+                <span key={c} style={{ fontSize: "0.625rem", fontWeight: 500, padding: "0.15rem 0.4rem", borderRadius: "2px", border: "1px solid var(--color-border)", color: "var(--color-text)", background: "var(--color-surface)" }}>{c}</span>
               ))}
               {lic.packageTags.map((t) => (
-                <span
-                  key={t}
-                  style={{
-                    fontSize: "0.625rem",
-                    padding: "0.15rem 0.4rem",
-                    borderRadius: "2px",
-                    border: "1px solid var(--color-border)",
-                    color: "var(--color-muted)",
-                    background: "var(--color-surface)",
-                  }}
-                >
-                  {t}
-                </span>
+                <span key={t} style={{ fontSize: "0.625rem", padding: "0.15rem 0.4rem", borderRadius: "2px", border: "1px solid var(--color-border)", color: "var(--color-muted)", background: "var(--color-surface)" }}>{t}</span>
               ))}
             </div>
-
             <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.25rem 0 0" }}>
               Licence period: {formatDate(lic.validFrom)} – {formatDate(lic.validTo)}
             </p>
@@ -897,114 +662,37 @@ function LicCard({
             )}
             {lic.downloadCount > 0 && (
               <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.125rem 0 0" }}>
-                {lic.downloadCount} download{lic.downloadCount !== 1 ? "s" : ""} · Last:{" "}
-                {formatDate(lic.lastDownloadAt!)}
+                {lic.downloadCount} download{lic.downloadCount !== 1 ? "s" : ""} · Last: {formatDate(lic.lastDownloadAt!)}
               </p>
             )}
           </div>
 
-          {/* Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-            <button
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.25rem",
-                padding: "0.375rem 0.625rem",
-                fontSize: "0.75rem",
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius)",
-                background: "var(--color-bg)",
-                color: "var(--color-muted)",
-                cursor: "default",
-              }}
-            >
+            <button style={{ display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.375rem 0.625rem", fontSize: "0.75rem", border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-bg)", color: "var(--color-muted)", cursor: "default" }}>
               Details
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}
-              >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}>
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
-
             {lic.status === "PENDING" && (
-              <button
-                style={{
-                  padding: "0.375rem 0.75rem",
-                  fontSize: "0.75rem",
-                  fontWeight: 500,
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "var(--radius)",
-                  background: "var(--color-bg)",
-                  color: "var(--color-muted)",
-                  cursor: "default",
-                }}
-              >
+              <button style={{ padding: "0.375rem 0.75rem", fontSize: "0.75rem", fontWeight: 500, border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-bg)", color: "var(--color-muted)", cursor: "default" }}>
                 Upload signed
               </button>
             )}
-
             {lic.status === "APPROVED" && (
-              <button
-                className={highlightDownload ? "demo-btn-pulse" : undefined}
-                style={{
-                  padding: "0.5rem 1rem",
-                  fontSize: "0.75rem",
-                  fontWeight: 500,
-                  color: "#fff",
-                  background: "var(--color-accent)",
-                  border: "none",
-                  borderRadius: "var(--radius)",
-                  cursor: "default",
-                }}
-              >
+              <button style={{ padding: "0.5rem 1rem", fontSize: "0.75rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", borderRadius: "var(--radius)", cursor: "default" }}>
                 Download
               </button>
             )}
           </div>
         </div>
 
-        {/* Expanded details */}
         {expanded && (
-          <div
-            style={{
-              marginTop: "1rem",
-              borderRadius: "var(--radius)",
-              border: "1px solid var(--color-border)",
-              overflow: "hidden",
-              fontSize: "0.75rem",
-            }}
-          >
+          <div style={{ marginTop: "1rem", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", overflow: "hidden", fontSize: "0.75rem" }}>
             {detailRows.map(([key, val], i) => (
-              <div
-                key={key}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "1rem",
-                  padding: "0.5rem 0.75rem",
-                  borderBottom: i < detailRows.length - 1 ? "1px solid var(--color-border)" : "none",
-                }}
-              >
+              <div key={key} style={{ display: "flex", justifyContent: "space-between", gap: "1rem", padding: "0.5rem 0.75rem", borderBottom: i < detailRows.length - 1 ? "1px solid var(--color-border)" : "none" }}>
                 <span style={{ color: "var(--color-muted)" }}>{key}</span>
-                <span
-                  style={{
-                    fontWeight: 500,
-                    color:
-                      key === "AI processing" && lic.permitAiTraining ? "#b45309" : "var(--color-ink)",
-                    textAlign: "right",
-                  }}
-                >
-                  {val}
-                </span>
+                <span style={{ fontWeight: 500, color: "var(--color-ink)", textAlign: "right" }}>{val}</span>
               </div>
             ))}
             <div style={{ padding: "0.75rem", borderTop: "1px solid var(--color-border)" }}>
@@ -1012,13 +700,9 @@ function LicCard({
               <p style={{ color: "var(--color-ink)", margin: 0, lineHeight: 1.6 }}>{lic.intendedUse}</p>
             </div>
             {feeRef && (
-              <div style={{ padding: "0.75rem", borderTop: "1px solid var(--color-border)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "var(--color-muted)" }}>
-                    {lic.agreedFee ? "Agreed fee" : "Proposed fee"}
-                  </span>
-                  <span style={{ color: "var(--color-ink)", fontWeight: 500 }}>{fmtUSD(feeRef)}</span>
-                </div>
+              <div style={{ padding: "0.75rem", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "var(--color-muted)" }}>{lic.agreedFee ? "Agreed fee" : "Proposed fee"}</span>
+                <span style={{ color: "var(--color-ink)", fontWeight: 500 }}>{fmtUSD(feeRef)}</span>
               </div>
             )}
           </div>
@@ -1028,96 +712,150 @@ function LicCard({
   );
 }
 
-function LicencesView({
-  expandedId,
-  highlightDownload,
-}: {
-  expandedId: string | null;
-  highlightDownload?: boolean;
-}) {
+function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expandedId: string | null }) {
   return (
     <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "11rem" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
         <div>
-          <h1
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-              color: "var(--color-ink)",
-              margin: 0,
-            }}
-          >
+          <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>
             My Licences
           </h1>
           <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: "0.25rem 0 0" }}>
             Track your licence requests and download approved scan packages.
           </p>
         </div>
-        <button
-          style={{
-            padding: "0.5rem 1rem",
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            color: "#fff",
-            background: "var(--color-accent)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            cursor: "default",
-            flexShrink: 0,
-          }}
-        >
+        <button style={{ padding: "0.5rem 1rem", fontSize: "0.75rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", borderRadius: "var(--radius)", cursor: "default", flexShrink: 0 }}>
           Browse Directory
         </button>
       </div>
 
-      {/* Tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: "0.25rem",
-          borderBottom: "1px solid var(--color-border)",
-          marginBottom: "1.5rem",
-        }}
-      >
+      <div style={{ display: "flex", gap: "0.25rem", borderBottom: "1px solid var(--color-border)", marginBottom: "1.5rem" }}>
         {["All", "Pending", "Approved", "Denied"].map((tab) => (
-          <div
-            key={tab}
-            style={{
-              padding: "0.5rem 1rem",
-              fontSize: "0.875rem",
-              color: tab === "All" ? "var(--color-ink)" : "var(--color-muted)",
-              fontWeight: tab === "All" ? 600 : 400,
-              position: "relative",
-              cursor: "default",
-            }}
-          >
+          <div key={tab} style={{ padding: "0.5rem 1rem", fontSize: "0.875rem", color: tab === "All" ? "var(--color-ink)" : "var(--color-muted)", fontWeight: tab === "All" ? 600 : 400, position: "relative", cursor: "default" }}>
             {tab}
-            {tab === "All" && (
-              <span
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: "2px",
-                  background: "var(--color-accent)",
-                }}
-              />
+            {tab === "All" && <span style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", background: "var(--color-accent)" }} />}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {licences.map((lic) => (
+          <LicCard key={lic.id} lic={lic} expanded={expandedId === lic.id} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Dual-custody download view ───────────────────────────────────────────────
+
+function DualCustodyDownloadView() {
+  const steps = ["Verify identity", "Talent approval", "Download"];
+  const currentStep = 2; // complete — all steps done
+
+  return (
+    <div style={{ padding: "2rem 3rem", overflowY: "auto", height: "100%", paddingBottom: "11rem", maxWidth: "42rem" }}>
+      {/* Back link */}
+      <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.75rem", color: "var(--color-muted)", cursor: "default" }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        My Licences
+      </div>
+
+      <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.5rem" }}>
+        Dual-Custody Download
+      </h1>
+      <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: "0 0 2rem" }}>
+        Both you and the talent must complete identity verification before files can be downloaded.
+      </p>
+
+      {/* Step indicator */}
+      <div style={{ marginBottom: "2rem", display: "flex", alignItems: "flex-start", gap: "0" }}>
+        {steps.map((label, i) => (
+          <div key={label} style={{ display: "flex", alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{
+                width: "1.75rem",
+                height: "1.75rem",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                background: i <= currentStep ? "var(--color-accent)" : "var(--color-border)",
+                color: i <= currentStep ? "#fff" : "var(--color-muted)",
+              }}>
+                {i < currentStep ? "✓" : i + 1}
+              </div>
+              <span style={{ marginTop: "0.3rem", fontSize: "0.6rem", textAlign: "center", width: "3.5rem", lineHeight: 1.3, color: i === currentStep ? "var(--color-ink)" : "var(--color-muted)", fontWeight: i === currentStep ? 500 : 400 }}>
+                {label}
+              </span>
+            </div>
+            {i < steps.length - 1 && (
+              <div style={{ width: "2.5rem", height: "1px", background: i < currentStep ? "var(--color-accent)" : "var(--color-border)", marginBottom: "1.25rem", flexShrink: 0 }} />
             )}
           </div>
         ))}
       </div>
 
-      {/* Cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        {LICENCES.map((lic) => (
-          <LicCard
-            key={lic.id}
-            lic={lic}
-            expanded={expandedId === lic.id}
-            highlightDownload={highlightDownload && expandedId === lic.id}
-          />
+      {/* Success banner */}
+      <div style={{ marginBottom: "1.25rem", borderRadius: "var(--radius)", padding: "0.75rem 1rem", border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#166534", fontSize: "0.875rem" }}>
+        Both verifications complete — download links are valid for 48 hours.
+      </div>
+
+      {/* Verification summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+        {[
+          { label: "Licensee", name: "Warner Bros. Pictures", icon: "WB" },
+          { label: "Talent", name: "Emma Richardson", icon: "ER" },
+        ].map((party) => (
+          <div key={party.label} style={{ borderRadius: "var(--radius)", border: "1px solid #bbf7d0", padding: "0.875rem 1rem", background: "#f0fdf4" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.375rem" }}>
+              <div style={{ width: "1.5rem", height: "1.5rem", borderRadius: "50%", background: "#166534", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.45rem", fontWeight: 700, color: "#fff", letterSpacing: "0.05em", flexShrink: 0 }}>
+                {party.icon}
+              </div>
+              <span style={{ fontSize: "0.6875rem", fontWeight: 600, color: "#166534", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {party.label}
+              </span>
+            </div>
+            <p style={{ fontSize: "0.75rem", fontWeight: 500, color: "#14532d", margin: "0 0 0.25rem" }}>{party.name}</p>
+            <p style={{ fontSize: "0.6875rem", color: "#166534", margin: 0, display: "flex", alignItems: "center", gap: "0.3rem" }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              2FA verified
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Bundle download */}
+      <button style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: "0.5rem", borderRadius: "var(--radius)", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", cursor: "default", marginBottom: "0.75rem" }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        Download all {PKG1_FILES.length} files as .zip
+      </button>
+
+      {/* Individual files */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {PKG1_FILES.map((f) => (
+          <div key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", padding: "0.75rem 1rem", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-ink)", cursor: "default" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", minWidth: 0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", flexShrink: 0 }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.8125rem" }}>{f.filename}</span>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-accent)", flexShrink: 0, marginLeft: "0.75rem" }}>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </div>
         ))}
       </div>
     </div>
@@ -1165,15 +903,7 @@ function TourCard({
         zIndex: 40,
       }}
     >
-      {/* Progress dots */}
-      <div
-        style={{
-          display: "flex",
-          gap: "0.375rem",
-          marginBottom: "0.875rem",
-          justifyContent: "center",
-        }}
-      >
+      <div style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem", justifyContent: "center" }}>
         {Array.from({ length: total }).map((_, i) => (
           <div
             key={i}
@@ -1188,79 +918,26 @@ function TourCard({
         ))}
       </div>
 
-      {/* Text */}
-      <h3
-        style={{
-          fontSize: "0.9375rem",
-          fontWeight: 600,
-          margin: "0 0 0.375rem",
-          letterSpacing: "-0.01em",
-        }}
-      >
+      <h3 style={{ fontSize: "0.9375rem", fontWeight: 600, margin: "0 0 0.375rem", letterSpacing: "-0.01em" }}>
         {scene.headline}
       </h3>
-      <p
-        style={{
-          fontSize: "0.8125rem",
-          color: "rgba(255,255,255,0.6)",
-          margin: "0 0 1rem",
-          lineHeight: 1.65,
-        }}
-      >
+      <p style={{ fontSize: "0.8125rem", color: "rgba(255,255,255,0.6)", margin: "0 0 1rem", lineHeight: 1.65 }}>
         {scene.body}
       </p>
 
-      {/* Controls */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <button
-          onClick={onPrev}
-          style={{
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            padding: "0.375rem 0.875rem",
-            border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: "4px",
-            background: "transparent",
-            color: "rgba(255,255,255,0.65)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.375rem",
-          }}
-        >
+        <button onClick={onPrev} style={{ fontSize: "0.75rem", fontWeight: 500, padding: "0.375rem 0.875rem", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", background: "transparent", color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.375rem" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
           Prev
         </button>
 
-        <span
-          style={{
-            fontSize: "0.6875rem",
-            color: "rgba(255,255,255,0.3)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-          }}
-        >
+        <span style={{ fontSize: "0.6875rem", color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
           {paused ? "Paused" : "Auto-playing"} · {sceneIndex + 1} / {total}
         </span>
 
-        <button
-          onClick={onNext}
-          style={{
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            padding: "0.375rem 0.875rem",
-            border: "none",
-            borderRadius: "4px",
-            background: "#c0392b",
-            color: "#fff",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.375rem",
-          }}
-        >
+        <button onClick={onNext} style={{ fontSize: "0.75rem", fontWeight: 500, padding: "0.375rem 0.875rem", border: "none", borderRadius: "4px", background: "#c0392b", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.375rem" }}>
           Next
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 18 15 12 9 6" />
@@ -1269,6 +946,14 @@ function TourCard({
       </div>
     </div>
   );
+}
+
+// ─── Active nav ID per scene ──────────────────────────────────────────────────
+
+function activeNavId(scene: Scene): NavId {
+  if (scene.view === "vault") return "vault";
+  if (scene.view === "download") return "licences";
+  return "licences";
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -1290,13 +975,6 @@ export default function DemoClient() {
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <style>{`
-        @keyframes demo-ring {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(192,57,43,0.65); }
-          50%       { box-shadow: 0 0 0 8px rgba(192,57,43,0); }
-        }
-        .demo-btn-pulse {
-          animation: demo-ring 1.4s ease-in-out infinite;
-        }
         @keyframes demo-fade-in {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -1306,28 +984,15 @@ export default function DemoClient() {
         }
       `}</style>
 
-      <DemoSidebar activeView={scene.view} />
+      <DemoSidebar role={scene.sidebarRole} activeNavId={activeNavId(scene)} />
 
-      <main
-        style={{
-          flex: 1,
-          overflow: "hidden",
-          background: "var(--color-bg)",
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div
-          key={scene.id}
-          className="demo-view-enter"
-          style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}
-        >
-          {scene.view === "vault" ? (
-            <VaultView expandedId={scene.expandedPkg} />
-          ) : (
-            <LicencesView expandedId={scene.expandedLic} highlightDownload={scene.highlightDownload} />
+      <main style={{ flex: 1, overflow: "hidden", background: "var(--color-bg)", position: "relative", display: "flex", flexDirection: "column" }}>
+        <div key={scene.id} className="demo-view-enter" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {scene.view === "vault" && <VaultView />}
+          {scene.view === "licences" && (
+            <LicencesView licences={scene.licences ?? ALL_LICENCES} expandedId={scene.expandedLic} />
           )}
+          {scene.view === "download" && <DualCustodyDownloadView />}
         </div>
 
         <TourCard
