@@ -120,12 +120,12 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       {!isCurrentUser && (
         <button
           onClick={handleSuspend}
           disabled={loading !== null}
-          className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+          className="text-[10px] font-semibold px-2.5 py-1 rounded border transition disabled:opacity-40 whitespace-nowrap"
           style={isSuspended
             ? { borderColor: "rgba(22,101,52,0.3)", color: "#166534", background: "rgba(22,101,52,0.06)" }
             : { borderColor: "rgba(217,119,6,0.3)", color: "#d97706", background: "rgba(217,119,6,0.06)" }
@@ -137,7 +137,7 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
       <button
         onClick={handleEmailToggle}
         disabled={loading !== null}
-        className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+        className="text-[10px] font-semibold px-2.5 py-1 rounded border transition disabled:opacity-40 whitespace-nowrap"
         style={emailMuted
           ? { borderColor: "rgba(22,101,52,0.3)", color: "#166534", background: "rgba(22,101,52,0.06)" }
           : { borderColor: "rgba(107,114,128,0.3)", color: "#6b7280", background: "rgba(107,114,128,0.06)" }
@@ -148,7 +148,7 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
       <button
         onClick={handleAiToggle}
         disabled={loading !== null}
-        className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+        className="text-[10px] font-semibold px-2.5 py-1 rounded border transition disabled:opacity-40 whitespace-nowrap"
         style={aiDisabled
           ? { borderColor: "rgba(22,101,52,0.3)", color: "#166534", background: "rgba(22,101,52,0.06)" }
           : { borderColor: "rgba(139,92,246,0.3)", color: "#8b5cf6", background: "rgba(139,92,246,0.06)" }
@@ -159,7 +159,7 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
       <button
         onClick={handleInboundToggle}
         disabled={loading !== null}
-        className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+        className="text-[10px] font-semibold px-2.5 py-1 rounded border transition disabled:opacity-40 whitespace-nowrap"
         style={inboundEnabled
           ? { borderColor: "rgba(22,101,52,0.3)", color: "#166534", background: "rgba(22,101,52,0.06)" }
           : { borderColor: "rgba(37,99,235,0.3)", color: "#2563eb", background: "rgba(37,99,235,0.06)" }
@@ -171,7 +171,7 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
         <button
           onClick={handleDelete}
           disabled={loading !== null}
-          className="text-[10px] font-semibold px-2 py-0.5 rounded border transition disabled:opacity-40"
+          className="text-[10px] font-semibold px-2.5 py-1 rounded border transition disabled:opacity-40 whitespace-nowrap"
           style={{ borderColor: "rgba(192,57,43,0.3)", color: "#c0392b", background: "rgba(192,57,43,0.06)" }}
         >
           {loading === "delete" ? "…" : "Delete"}
