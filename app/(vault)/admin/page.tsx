@@ -3,8 +3,9 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, licences, downloadEvents, scanFiles } from "@/lib/db/schema";
-import { sql, inArray } from "drizzle-orm";
+import { users, scanPackages, licences, downloadEvents, scanFiles, siteSettings } from "@/lib/db/schema";
+import { sql, inArray, eq } from "drizzle-orm";
+import DemoToggleCard from "./demo-toggle-card";
 import { getAllSkills } from "@/lib/skills/registry";
 import "@/lib/skills/definitions";
 
@@ -38,6 +39,13 @@ const STATUS_COLOR: Record<string, string> = {
 export default async function AdminOverviewPage() {
   await requireAdmin();
   const db = getDb();
+
+  const demoSetting = await db
+    .select({ value: siteSettings.value })
+    .from(siteSettings)
+    .where(eq(siteSettings.key, "demo_enabled"))
+    .get();
+  const demoEnabled = demoSetting?.value === "true";
 
   const [
     userCount,
@@ -158,6 +166,11 @@ export default async function AdminOverviewPage() {
             <p className="text-xs mt-1" style={{ color: "var(--color-muted)" }}>{c.sub}</p>
           </Link>
         ))}
+      </div>
+
+      {/* Platform settings */}
+      <div className="mb-8 max-w-sm">
+        <DemoToggleCard initialEnabled={demoEnabled} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -371,6 +371,15 @@ export const bridgeGrants = sqliteTable("bridge_grants", {
   purgeCompletedAt: integer("purge_completed_at"),
 });
 
+// ── Site-wide settings ────────────────────────────────────────────────────────
+
+export const siteSettings = sqliteTable("site_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedBy: text("updated_by").references(() => users.id),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 // ── AI tables ────────────────────────────────────────────────────────────────
 
 export const aiSettings = sqliteTable("ai_settings", {
