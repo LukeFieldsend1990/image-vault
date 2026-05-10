@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { productions, productionCompanies, licences } from "@/lib/db/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import Link from "next/link";
+import NewCompanyButton from "./new-company-button";
 
 const TYPE_LABEL: Record<string, string> = {
   film: "Film",
@@ -160,7 +161,10 @@ export default async function AdminProductionsPage() {
       </div>
 
       {/* Companies table */}
-      <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--color-ink)" }}>Production Companies</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Production Companies</h2>
+        <NewCompanyButton />
+      </div>
       <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         <div
           className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[500px]"
@@ -184,9 +188,10 @@ export default async function AdminProductionsPage() {
         {allCompanies.map((c) => {
           const prodCount = prodCountMap.get(c.id) ?? 0;
           return (
-            <div
+            <Link
               key={c.id}
-              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[500px]"
+              href={`/admin/productions/companies/${c.id}`}
+              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[500px] transition hover:bg-[var(--color-surface)]"
               style={{
                 gridTemplateColumns: "2fr 1.5fr 1fr 1fr",
                 borderColor: "var(--color-border)",
@@ -196,7 +201,7 @@ export default async function AdminProductionsPage() {
               <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{c.website ?? "—"}</span>
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>{prodCount > 0 ? prodCount : "—"}</span>
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>{ts(c.createdAt)}</span>
-            </div>
+            </Link>
           );
         })}
       </div>
