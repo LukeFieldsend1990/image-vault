@@ -2,9 +2,9 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users, talentReps, talentSettings, talentProfiles, productions, productionCompanies } from "@/lib/db/schema";
+import { licences, scanPackages, users, talentReps, talentSettings, talentProfiles, productions, productionCompanies, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, desc, and, inArray, like } from "drizzle-orm";
+import { eq, desc, and, inArray, like, or } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceRequestedEmail, placeholderLicenceCreatedEmail } from "@/lib/email/templates";
 
@@ -71,6 +71,7 @@ export async function GET(req: NextRequest) {
       preauthSetBy: licences.preauthSetBy,
       contractUrl: licences.contractUrl,
       contractUploadedAt: licences.contractUploadedAt,
+      organisationId: licences.organisationId,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
@@ -99,9 +100,22 @@ export async function GET(req: NextRequest) {
       : inArray(licences.talentId, scopeIds);
     rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
   } else if (session.role === "licensee") {
-    const whereClause = statusFilter
-      ? and(eq(licences.licenseeId, session.sub), eq(licences.status, statusFilter as LicenceStatus))
+    // Include licences owned directly + licences owned by any org the user belongs to
+    const userOrgRows = await db
+      .select({ organisationId: organisationMembers.organisationId })
+      .from(organisationMembers)
+      .where(eq(organisationMembers.userId, session.sub))
+      .all();
+    const orgIds = userOrgRows.map(r => r.organisationId);
+
+    const ownershipClause = orgIds.length > 0
+      ? or(eq(licences.licenseeId, session.sub), inArray(licences.organisationId, orgIds))
       : eq(licences.licenseeId, session.sub);
+
+    const whereClause = statusFilter
+      ? and(ownershipClause, eq(licences.status, statusFilter as LicenceStatus))
+      : ownershipClause;
+
     rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
   } else if (session.role === "admin") {
     rows = await base.orderBy(desc(licences.createdAt)).limit(100).all();
@@ -136,6 +150,7 @@ export async function POST(req: NextRequest) {
     agreedFee?: number;       // placeholder only — deal may already be signed
     productionId?: string;
     productionCompanyId?: string;
+    organisationId?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -209,6 +224,22 @@ export async function POST(req: NextRequest) {
 
     resolvedTalentId = pkg.talentId;
     resolvedLicenseeId = session.sub;
+
+    // Validate org membership if submitting on behalf of an org
+    if (body.organisationId) {
+      const [membership] = await db
+        .select({ userId: organisationMembers.userId })
+        .from(organisationMembers)
+        .where(and(
+          eq(organisationMembers.organisationId, body.organisationId),
+          eq(organisationMembers.userId, session.sub)
+        ))
+        .limit(1)
+        .all();
+      if (!membership) {
+        return NextResponse.json({ error: "You are not a member of this organisation" }, { status: 403 });
+      }
+    }
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -278,6 +309,7 @@ export async function POST(req: NextRequest) {
     platformFee: isPlaceholder && body.agreedFee ? Math.round(body.agreedFee * 0.15) : null,
     productionId: resolvedProductionId,
     productionCompanyId: resolvedCompanyId,
+    organisationId: body.organisationId ?? null,
     downloadCount: 0,
     createdAt: now,
   });

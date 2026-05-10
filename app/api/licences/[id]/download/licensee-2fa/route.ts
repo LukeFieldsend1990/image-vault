@@ -2,10 +2,10 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { totpCredentials, users, licences, scanPackages, scanFiles, downloadEvents } from "@/lib/db/schema";
+import { totpCredentials, users, licences, scanPackages, scanFiles, downloadEvents, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { verifyTotpCode } from "@/lib/auth/totp";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { downloadRequestEmail } from "@/lib/email/templates";
 import type { DualCustodySession } from "../initiate/route";
@@ -33,6 +33,7 @@ export async function POST(
     return NextResponse.json({ error: "code is required" }, { status: 400 });
   }
 
+  const db = getDb();
   const kv = getKv();
   const now = Math.floor(Date.now() / 1000);
 
@@ -40,15 +41,30 @@ export async function POST(
   if (!dcSession || dcSession.expiresAt < now) {
     return NextResponse.json({ error: "No active download session — please initiate again" }, { status: 409 });
   }
+  // Allow initiator OR any member of the org on the licence
   if (dcSession.licenseeId !== session.sub) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    let authorised = false;
+    if (dcSession.organisationId) {
+      const [membership] = await db
+        .select({ userId: organisationMembers.userId })
+        .from(organisationMembers)
+        .where(and(
+          eq(organisationMembers.organisationId, dcSession.organisationId),
+          eq(organisationMembers.userId, session.sub)
+        ))
+        .limit(1)
+        .all();
+      authorised = !!membership;
+    }
+    if (!authorised) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
   if (dcSession.step !== "awaiting_licensee") {
     return NextResponse.json({ step: dcSession.step });
   }
 
   // Verify licensee TOTP
-  const db = getDb();
   const [totp] = await db
     .select({ secret: totpCredentials.secret })
     .from(totpCredentials)
@@ -98,7 +114,7 @@ export async function POST(
       downloadTokens.push({ fileId: file.id, filename: file.filename, token });
     }
 
-    const completed: DualCustodySession = { ...dcSession, step: "complete", downloadTokens };
+    const completed: DualCustodySession = { ...dcSession, step: "complete", completedByLicenseeId: session.sub, downloadTokens };
     const ttl = dcSession.expiresAt - now;
     await kv.put(`dual_custody:${id}`, JSON.stringify(completed), { expirationTtl: ttl });
 
@@ -107,13 +123,13 @@ export async function POST(
     const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
     const userAgent = req.headers.get("user-agent") ?? null;
     for (const file of scopedFiles) {
-      await db.insert(downloadEvents).values({ id: crypto.randomUUID(), licenceId: id, licenseeId: dcSession.licenseeId, fileId: file.id, ip, userAgent, startedAt: now });
+      await db.insert(downloadEvents).values({ id: crypto.randomUUID(), licenceId: id, licenseeId: session.sub, fileId: file.id, ip, userAgent, startedAt: now });
     }
 
     return NextResponse.json({ step: "complete", downloadTokens });
   }
 
-  const updated: DualCustodySession = { ...dcSession, step: "awaiting_talent" };
+  const updated: DualCustodySession = { ...dcSession, step: "awaiting_talent", completedByLicenseeId: session.sub };
   const ttl = dcSession.expiresAt - now;
   await kv.put(`dual_custody:${id}`, JSON.stringify(updated), { expirationTtl: ttl });
 

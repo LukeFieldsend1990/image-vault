@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Autocomplete, type AutocompleteOption } from "@/components/autocomplete";
@@ -188,6 +188,21 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
   const [productionId, setProductionId] = useState<string | null>(null);
   const [productionCompanyId, setProductionCompanyId] = useState<string | null>(null);
 
+  // Organisation
+  const [userOrgs, setUserOrgs] = useState<Array<{ id: string; name: string }>>([]);
+  const [organisationId, setOrganisationId] = useState<string | "individual" | "">("");
+
+  useEffect(() => {
+    void fetch("/api/organisations")
+      .then(async r => {
+        const d = await r.json() as { organisations?: Array<{ id: string; name: string }> };
+        const orgs = d.organisations ?? [];
+        setUserOrgs(orgs);
+        if (orgs.length === 1) setOrganisationId(orgs[0].id);
+      })
+      .catch(() => { /* ignore */ });
+  }, []);
+
   const fetchProductions = useCallback(async (q: string): Promise<AutocompleteOption[]> => {
     const res = await fetch(`/api/productions?q=${encodeURIComponent(q)}`);
     if (!res.ok) return [];
@@ -282,6 +297,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
           proposedFee: proposedFeePence,
           productionId: productionId ?? undefined,
           productionCompanyId: productionCompanyId ?? undefined,
+          organisationId: (organisationId && organisationId !== "individual") ? organisationId : undefined,
         }),
       });
       const data = await res.json() as { error?: string };
@@ -369,6 +385,33 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
             required
             createLabel="Create new company"
           />
+
+          {/* Organisation selector — only shown if user has orgs */}
+          {(userOrgs.length > 0 || organisationId === "individual") && (
+            <div>
+              <label className={labelClass} style={{ color: "var(--color-text)" }}>
+                Submitting on behalf of
+              </label>
+              <select
+                value={organisationId}
+                onChange={e => setOrganisationId(e.target.value)}
+                className={inputClass}
+                style={inputStyle}
+              >
+                <option value="">Select…</option>
+                {userOrgs.map(o => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+                <option value="individual">Myself (individual)</option>
+              </select>
+              {organisationId === "individual" && (
+                <p style={{ fontSize: "0.72rem", color: "#b45309", marginTop: "0.35rem" }}>
+                  Warning: submitting as an individual means your organisation will not have visibility of this licence.
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <label className={labelClass} style={{ color: "var(--color-text)" }}>Intended use — describe specifically *</label>
             <textarea
