@@ -142,15 +142,16 @@ export async function POST(
     })
     .where(eq(licences.id, id));
 
-  // Log download events
+  // Log download events — use completedByLicenseeId when an org member (not the initiator) did the licensee 2FA
   const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
   const userAgent = req.headers.get("user-agent") ?? null;
+  const auditLicenseeId = dcSession.completedByLicenseeId ?? dcSession.licenseeId;
 
   for (const file of scopedFiles) {
     await db.insert(downloadEvents).values({
       id: crypto.randomUUID(),
       licenceId: id,
-      licenseeId: dcSession.licenseeId,
+      licenseeId: auditLicenseeId,
       fileId: file.id,
       ip,
       userAgent,

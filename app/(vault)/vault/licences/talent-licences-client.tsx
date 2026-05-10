@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import OrgMembersPanel from "./org-members-panel";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -44,6 +45,8 @@ interface Licence {
   preauthSetBy: string | null;
   contractUrl: string | null;
   contractUploadedAt: number | null;
+  organisationId: string | null;
+  licenseeId: string;
 }
 
 interface PendingDownload {
@@ -331,8 +334,11 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                           )}
                         </div>
                         <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
-                          {l.productionCompany} · {l.packageName ?? "—"}
+                          {l.productionCompany}{l.organisationId ? "" : ""} · {l.packageName ?? "—"}
                         </p>
+                        {l.organisationId && (
+                          <OrgMembersPanel organisationId={l.organisationId} submittedByUserId={l.licenseeId} />
+                        )}
                         <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
                           Period: {formatDate(l.validFrom)} – {formatDate(l.validTo)}
                         </p>

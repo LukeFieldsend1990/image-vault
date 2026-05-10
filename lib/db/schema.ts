@@ -140,6 +140,7 @@ export const licences = sqliteTable("licences", {
   preauthSetBy: text("preauth_set_by").references(() => users.id), // who set it
   productionId: text("production_id").references(() => productions.id),
   productionCompanyId: text("production_company_id").references(() => productionCompanies.id),
+  organisationId: text("organisation_id").references(() => organisations.id),
   contractUrl: text("contract_url"), // R2 object key: contracts/{licenceId}/{filename}
   contractUploadedAt: integer("contract_uploaded_at"),
   contractUploadedBy: text("contract_uploaded_by").references(() => users.id),
@@ -315,6 +316,7 @@ export const productions = sqliteTable("productions", {
   notes: text("notes"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
+  organisationId: text("organisation_id").references(() => organisations.id),
 });
 
 export const downloadEvents = sqliteTable("download_events", {
@@ -586,4 +588,35 @@ export const emailThreadLinks = sqliteTable("email_thread_links", {
   latestEmailId: text("latest_email_id").references(() => receivedEmails.id, { onDelete: "set null" }),
   emailCount: integer("email_count").notNull().default(1),
   updatedAt: integer("updated_at").notNull(),
+});
+
+// ── Production organisations (auth-connected) ────────────────────────────────
+
+export const organisations = sqliteTable("organisations", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  website: text("website"),
+  billingEmail: text("billing_email"),
+  productionCompanyId: text("production_company_id").references(() => productionCompanies.id),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const organisationMembers = sqliteTable("organisation_members", {
+  organisationId: text("organisation_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  memberRole: text("member_role", { enum: ["owner", "admin", "member"] }).notNull().default("member"),
+  invitedBy: text("invited_by").references(() => users.id),
+  joinedAt: integer("joined_at").notNull(),
+});
+
+export const organisationInvites = sqliteTable("organisation_invites", {
+  id: text("id").primaryKey(),
+  organisationId: text("organisation_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  invitedEmail: text("invited_email").notNull(),
+  invitedBy: text("invited_by").notNull().references(() => users.id),
+  expiresAt: integer("expires_at").notNull(),
+  acceptedAt: integer("accepted_at"),
+  createdAt: integer("created_at").notNull(),
 });

@@ -2,14 +2,16 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, users } from "@/lib/db/schema";
+import { licences, users, organisationMembers } from "@/lib/db/schema";
 // deliveryMode is read below to block standard download for bridge_only licences
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export interface DualCustodySession {
   licenceId: string;
-  licenseeId: string;
+  licenseeId: string;          // user who initiated
+  completedByLicenseeId?: string; // org member who completed the licensee 2FA (may differ from initiator)
+  organisationId: string | null;
   talentId: string;
   packageId: string;
   step: "awaiting_licensee" | "awaiting_talent" | "complete";
@@ -40,6 +42,7 @@ export async function POST(
       talentId: licences.talentId,
       packageId: licences.packageId,
       licenseeId: licences.licenseeId,
+      organisationId: licences.organisationId,
       status: licences.status,
       validTo: licences.validTo,
       deliveryMode: licences.deliveryMode,
@@ -52,8 +55,26 @@ export async function POST(
   if (!licence) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  // Allow the named licensee OR any member of the org the licence belongs to
   if (licence.licenseeId !== session.sub) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    let authorised = false;
+    if (licence.organisationId) {
+      const db = getDb();
+      const [membership] = await db
+        .select({ userId: organisationMembers.userId })
+        .from(organisationMembers)
+        .where(and(
+          eq(organisationMembers.organisationId, licence.organisationId),
+          eq(organisationMembers.userId, session.sub)
+        ))
+        .limit(1)
+        .all();
+      authorised = !!membership;
+    }
+    if (!authorised) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
   if (licence.status !== "APPROVED") {
     return NextResponse.json({ error: "Licence is not approved" }, { status: 409 });
@@ -97,6 +118,7 @@ export async function POST(
   const session_data: DualCustodySession = {
     licenceId: id,
     licenseeId: session.sub,
+    organisationId: licence.organisationId ?? null,
     talentId: licence.talentId,
     packageId: licence.packageId,
     step: "awaiting_licensee",
