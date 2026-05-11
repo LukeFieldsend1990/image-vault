@@ -1160,10 +1160,15 @@ function RosterView() {
         {ROSTER.map((talent, i) => (
           <div key={talent.id} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", overflow: "hidden" }}>
             {/* Photo area */}
-            <div style={{ position: "relative", aspectRatio: "3/4", background: i === 0 ? "linear-gradient(160deg, #2a2a2a 0%, #1a1a1a 100%)" : "linear-gradient(160deg, #e5e7eb 0%, #d1d5db 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: "2.5rem", fontWeight: 700, color: i === 0 ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)", letterSpacing: "-0.04em", userSelect: "none" }}>
-                {talent.initials}
-              </span>
+            <div style={{ position: "relative", aspectRatio: "3/4", background: "linear-gradient(160deg, #e5e7eb 0%, #d1d5db 100%)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              {i === 0 ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src="/demo-ct.jpg" alt="Channing Tatum" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
+              ) : (
+                <span style={{ fontSize: "2.5rem", fontWeight: 700, color: "rgba(0,0,0,0.12)", letterSpacing: "-0.04em", userSelect: "none" }}>
+                  {talent.initials}
+                </span>
+              )}
               {/* Pending badge */}
               {talent.pendingLicences > 0 && (
                 <span style={{ position: "absolute", top: "0.5rem", right: "0.5rem", fontSize: "0.6rem", fontWeight: 700, padding: "0.2rem 0.4rem", borderRadius: "9999px", background: "#c0392b", color: "#fff", letterSpacing: "0.04em" }}>
@@ -1345,15 +1350,15 @@ function fmtUSDk(cents: number): string {
 function RepRevenueTab() {
   const approvedLicences = CT_LICENCES.filter((l) => l.status === "APPROVED");
   const gross = approvedLicences.reduce((s, l) => s + (l.agreedFee ?? 0), 0);
-  const talentCut = Math.round(gross * 0.65);
-  const agencyCut = Math.round(gross * 0.20);
-  const platformCut = Math.round(gross * 0.15);
+  const talentCut = Math.round(gross * 0.80);
+  const agencyCut = Math.round(gross * 0.10);
+  const platformCut = Math.round(gross * 0.10);
 
   const statCards = [
     { label: "Gross Licence Value", pct: null, value: gross, sub: `${approvedLicences.length} approved licence${approvedLicences.length !== 1 ? "s" : ""}`, accent: true },
-    { label: "Talent Share", pct: "65%", value: talentCut, sub: null, accent: false },
-    { label: "Agency Commission", pct: "20%", value: agencyCut, sub: null, accent: false },
-    { label: "Platform Fee", pct: "15%", value: platformCut, sub: null, accent: false },
+    { label: "Talent Share", pct: "80%", value: talentCut, sub: null, accent: false },
+    { label: "Agency Commission", pct: "10%", value: agencyCut, sub: null, accent: false },
+    { label: "Platform Fee", pct: "10%", value: platformCut, sub: null, accent: false },
   ];
 
   return (
@@ -1390,8 +1395,8 @@ function RepRevenueTab() {
           const fee = lic.agreedFee ?? lic.proposedFee ?? 0;
           const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
           const expanded = i === 0;
-          const platform = Math.round(fee * 0.15);
-          const agency = Math.round(fee * 0.20);
+          const platform = Math.round(fee * 0.10);
+          const agency = Math.round(fee * 0.10);
           const talent = fee - platform - agency;
 
           return (
@@ -1433,8 +1438,8 @@ function RepRevenueTab() {
                   </div>
                   {[
                     { label: `Proposed fee`, value: fmtUSDk(fee), muted: false, accent: false },
-                    { label: `Platform (15%)`, value: `~${fmtUSDk(platform)}`, muted: true, accent: false },
-                    { label: `Agency (20%)`, value: `~${fmtUSDk(agency)}`, muted: true, accent: false },
+                    { label: `Platform (10%)`, value: `~${fmtUSDk(platform)}`, muted: true, accent: false },
+                    { label: `Agency (10%)`, value: `~${fmtUSDk(agency)}`, muted: true, accent: false },
                     { label: `Talent earnings`, value: fmtUSDk(talent), muted: false, accent: true },
                   ].map((row) => (
                     <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "0.25rem 0" }}>
