@@ -30,7 +30,6 @@ interface Props {
   invites: Invite[];
 }
 
-const ROLE_LABELS: Record<string, string> = { owner: "Owner", admin: "Admin", member: "Member" };
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   owner: { bg: "rgba(192,57,43,0.10)", color: "var(--color-accent)" },
   admin: { bg: "rgba(234,179,8,0.12)", color: "#92400e" },
@@ -222,7 +221,7 @@ export default function OrgAdminClient({ orgId, members, invites }: Props) {
                 className="flex-1 flex items-center gap-2 px-3 py-2 rounded border text-sm min-w-0"
                 style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", shrink: 0 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", flexShrink: 0 }}>
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
                 </svg>
                 <span className="truncate" style={{ color: "var(--color-ink)" }}>{selectedUser.email}</span>
