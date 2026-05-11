@@ -3,7 +3,7 @@ export const runtime = "edge";
 import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
-import { scanPackages, scanFiles, uploadSessions, users } from "@/lib/db/schema";
+import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, sql, and } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
@@ -15,9 +15,7 @@ function cfEnv(key: string): string | undefined {
     return process.env[key];
   }
 }
-import { sendEmail } from "@/lib/email/send";
-import { uploadCompleteEmail } from "@/lib/email/templates";
-import { triggerAiService } from "@/lib/ai/service";
+
 
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
@@ -154,38 +152,6 @@ export async function POST(req: NextRequest) {
       })
       .where(eq(scanPackages.id, packageId));
 
-    // When all files are done, notify the talent
-    if (allComplete) {
-      void (async () => {
-        const [pkg, talentUser] = await Promise.all([
-          db.select({ name: scanPackages.name, talentId: scanPackages.talentId, fileCount: sql<number>`(SELECT count(*) FROM scan_files WHERE package_id = ${packageId} AND upload_status = 'complete')` })
-            .from(scanPackages).where(eq(scanPackages.id, packageId)).get(),
-          db.select({ email: users.email }).from(users).where(eq(users.id, session.sub)).get(),
-        ]);
-        if (!talentUser?.email || !pkg) return;
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
-        const { subject, html } = uploadCompleteEmail({
-          talentEmail: talentUser.email,
-          packageName: pkg.name,
-          fileCount: pkg.fileCount,
-          totalSizeBytes: totalBytes,
-          vaultUrl: `${baseUrl}/dashboard`,
-        });
-        await sendEmail({ to: talentUser.email, subject, html });
-      })();
-
-      const { ctx } = getRequestContext();
-      ctx.waitUntil(
-        triggerAiService(req, `/package-tags/auto/${packageId}`, {
-          method: "POST",
-          headers: {
-            "x-ai-source": "upload-complete",
-          },
-        }).catch(() => {
-          // non-fatal
-        })
-      );
-    }
   }
 
   return NextResponse.json({ ok: true });
