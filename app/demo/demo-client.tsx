@@ -5,7 +5,12 @@ import { useState, useEffect } from "react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LicenceStatus = "APPROVED" | "PENDING";
-type ViewType = "vault" | "licences" | "download";
+type ViewType = "vault" | "licences" | "download" | "rep-roster" | "rep-detail";
+type RepTab = "vault" | "licences" | "permissions" | "revenue" | "deepscan";
+type SidebarRole = "talent" | "licensee" | "rep";
+type DemoMode = "talent" | "rep";
+type NavId = "vault" | "licences" | "directory" | "settings" | "roster";
+type PermissionStatus = "allowed" | "approval_required" | "blocked";
 
 interface FakePkg {
   id: string;
@@ -54,17 +59,32 @@ interface FakeLicence {
   lastDownloadAt: number | null;
 }
 
+interface RosterEntry {
+  id: string;
+  name: string;
+  initials: string;
+  packages: number;
+  pendingLicences: number;
+}
+
+interface Permission {
+  label: string;
+  subtitle: string;
+  status: PermissionStatus;
+}
+
 interface Scene {
   id: string;
   view: ViewType;
   expandedLic: string | null;
-  sidebarRole: "talent" | "licensee";
+  sidebarRole: SidebarRole;
   licences?: FakeLicence[];
+  repTab?: RepTab;
   headline: string;
   body: string;
 }
 
-// ─── Fake data ────────────────────────────────────────────────────────────────
+// ─── Talent fake data ─────────────────────────────────────────────────────────
 
 const PACKAGES: FakePkg[] = [
   {
@@ -212,6 +232,121 @@ const ALL_LICENCES: FakeLicence[] = [
   },
 ];
 
+// ─── Rep fake data ────────────────────────────────────────────────────────────
+
+const ROSTER: RosterEntry[] = [
+  { id: "4c6dd0ee-6c2f-4aac-b837-ebc03da698d9", name: "Channing Tatum", initials: "CT", packages: 3, pendingLicences: 1 },
+  { id: "talent-sofia", name: "Sofia Esposito", initials: "SE", packages: 2, pendingLicences: 0 },
+  { id: "talent-marcus", name: "Marcus Webb", initials: "MW", packages: 1, pendingLicences: 0 },
+];
+
+const CT_PACKAGES: FakePkg[] = [
+  {
+    id: "ct-pkg-1",
+    name: "Gambit",
+    studioName: "Framestore",
+    captureDate: 1746057600,
+    fileCount: 412,
+    totalSizeBytes: 214748364800,
+    scanType: "photogrammetry",
+    hasMesh: true,
+    hasTexture: true,
+    hasHdr: false,
+    hasMotionCapture: false,
+    tags: ["full body", "neutral", "hi-res"],
+  },
+  {
+    id: "ct-pkg-2",
+    name: "Facial Performance — Weta Digital",
+    studioName: "Weta Digital",
+    captureDate: 1738368000,
+    fileCount: 198,
+    totalSizeBytes: 78643200000,
+    scanType: "light_stage",
+    hasMesh: true,
+    hasTexture: true,
+    hasHdr: true,
+    hasMotionCapture: false,
+    tags: ["blendshapes", "per-light EXR"],
+  },
+  {
+    id: "ct-pkg-3",
+    name: "Stunt Reference — ILM",
+    studioName: "Industrial Light & Magic",
+    captureDate: 1743465600,
+    fileCount: 87,
+    totalSizeBytes: 12884901888,
+    scanType: "other",
+    hasMesh: false,
+    hasTexture: false,
+    hasHdr: false,
+    hasMotionCapture: true,
+    tags: ["BVH", "action sequences"],
+  },
+];
+
+const CT_LICENCES: FakeLicence[] = [
+  {
+    id: "ct-lic-1",
+    projectName: "Calamity Hustle",
+    status: "PENDING",
+    licenceType: "film_double",
+    productionCompany: "Warner Bros. Pictures",
+    packageName: "Gambit",
+    packageScanType: "photogrammetry",
+    packageHasMesh: true,
+    packageHasTexture: true,
+    packageHasHdr: false,
+    packageHasMotionCapture: false,
+    packageTags: ["full body", "neutral"],
+    validFrom: 1746835200,
+    validTo: 1766707200,
+    territory: "Worldwide",
+    exclusivity: "non_exclusive",
+    permitAiTraining: false,
+    agreedFee: null,
+    proposedFee: 20000000,
+    intendedUse: "Digital double for principal photography and VFX work on Calamity Hustle.",
+    approvedAt: null,
+    downloadCount: 0,
+    lastDownloadAt: null,
+  },
+  {
+    id: "ct-lic-2",
+    projectName: "G.I. Joe: Origins",
+    status: "APPROVED",
+    licenceType: "film_double",
+    productionCompany: "Paramount Pictures",
+    packageName: "Gambit",
+    packageScanType: "photogrammetry",
+    packageHasMesh: true,
+    packageHasTexture: true,
+    packageHasHdr: false,
+    packageHasMotionCapture: false,
+    packageTags: ["full body"],
+    validFrom: 1741996800,
+    validTo: 1764547200,
+    territory: "Worldwide",
+    exclusivity: "exclusive",
+    permitAiTraining: false,
+    agreedFee: 15000000,
+    proposedFee: null,
+    intendedUse: "Digital double for principal photography and action sequences in G.I. Joe: Origins.",
+    approvedAt: 1742256000,
+    downloadCount: 2,
+    lastDownloadAt: 1745452800,
+  },
+];
+
+const CT_PERMISSIONS: Permission[] = [
+  { label: "Commercial Ads", subtitle: "TV, digital & out-of-home advertising", status: "approval_required" },
+  { label: "Digital Stunt Double", subtitle: "De-aging, stunt replacement in film", status: "approval_required" },
+  { label: "Video Game Character", subtitle: "In-engine game character or NPC", status: "approval_required" },
+  { label: "AI Avatar", subtitle: "Real-time synthetic likeness use", status: "approval_required" },
+  { label: "Training Datasets", subtitle: "AI model training data inclusion", status: "blocked" },
+  { label: "Deepfake Protection", subtitle: "Monitoring / reference use only", status: "allowed" },
+];
+
 // ─── Tour scenes ──────────────────────────────────────────────────────────────
 
 const SCENES: Scene[] = [
@@ -248,6 +383,53 @@ const SCENES: Scene[] = [
     sidebarRole: "licensee",
     headline: "Dual-custody download",
     body: "Both parties authenticate separately with 2FA. Neither the licensee, nor the platform, can release files without the talent's explicit approval.",
+  },
+];
+
+const REP_SCENES: Scene[] = [
+  {
+    id: "rep-roster",
+    view: "rep-roster",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Talent roster",
+    body: "Richard Robinson manages Channing Tatum across all licence requests, approvals and downloads. One view for every active deal.",
+  },
+  {
+    id: "rep-vault",
+    view: "rep-detail",
+    repTab: "vault",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Vault access",
+    body: "Reps have direct access to all of a talent's scan packages — upload, manage metadata, and track storage on their behalf.",
+  },
+  {
+    id: "rep-licences",
+    view: "rep-detail",
+    repTab: "licences",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Approve on behalf of talent",
+    body: "Calamity Hustle is awaiting approval. Richard can approve or deny licence requests directly on Channing's behalf.",
+  },
+  {
+    id: "rep-permissions",
+    view: "rep-detail",
+    repTab: "permissions",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Usage permissions",
+    body: "AI avatars are blocked, commercial requires approval. Richard sets usage rules to protect Channing's likeness across all future requests.",
+  },
+  {
+    id: "rep-revenue",
+    view: "rep-detail",
+    repTab: "revenue",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Revenue tracking",
+    body: "$350K across 2 active licences. The split is 65% to Channing, 20% to United Talent Agency, 15% to Image Vault.",
   },
 ];
 
@@ -301,6 +483,24 @@ const SCAN_TYPE_LABEL: Record<string, string> = {
   lidar: "LiDAR",
   structured_light: "Structured Light",
   other: "Other",
+};
+
+const PERM_COLOUR: Record<PermissionStatus, string> = {
+  allowed: "#166534",
+  approval_required: "#b45309",
+  blocked: "#991b1b",
+};
+
+const PERM_BG: Record<PermissionStatus, string> = {
+  allowed: "#f0fdf4",
+  approval_required: "#fffbeb",
+  blocked: "#fef2f2",
+};
+
+const PERM_LABEL: Record<PermissionStatus, string> = {
+  allowed: "Allowed",
+  approval_required: "Approval Required",
+  blocked: "Blocked",
 };
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -375,19 +575,56 @@ const LICENSEE_NAV = [
   },
 ];
 
-type NavId = "vault" | "licences" | "directory" | "settings";
+const REP_NAV = [
+  {
+    id: "roster" as const,
+    label: "Roster",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
+    id: "licences" as const,
+    label: "Licences",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+    ),
+  },
+  {
+    id: "settings" as const,
+    label: "Settings",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    ),
+  },
+];
 
 function DemoSidebar({
   role,
   activeNavId,
 }: {
-  role: "talent" | "licensee";
+  role: SidebarRole;
   activeNavId: NavId;
 }) {
-  const nav = role === "talent" ? TALENT_NAV : LICENSEE_NAV;
+  const nav = role === "talent" ? TALENT_NAV : role === "rep" ? REP_NAV : LICENSEE_NAV;
   const user =
     role === "talent"
       ? { initials: "ER", name: "Emma Richardson", subtitle: "Talent" }
+      : role === "rep"
+      ? { initials: "RR", name: "RR", subtitle: "Representative" }
       : { initials: "WB", name: "Warner Bros.", subtitle: "Licensee" };
 
   return (
@@ -581,7 +818,7 @@ function VaultView() {
         </button>
       </header>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 3rem", paddingBottom: "11rem" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 3rem", paddingBottom: "13rem" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {PACKAGES.map((pkg) => <PkgCard key={pkg.id} pkg={pkg} />)}
         </div>
@@ -714,7 +951,7 @@ function LicCard({ lic, expanded }: { lic: FakeLicence; expanded: boolean }) {
 
 function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expandedId: string | null }) {
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "11rem" }}>
+    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
         <div>
           <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>
@@ -751,11 +988,10 @@ function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expan
 
 function DualCustodyDownloadView() {
   const steps = ["Verify identity", "Talent approval", "Download"];
-  const currentStep = 2; // complete — all steps done
+  const currentStep = 2;
 
   return (
-    <div style={{ padding: "2rem 3rem", overflowY: "auto", height: "100%", paddingBottom: "11rem", maxWidth: "42rem" }}>
-      {/* Back link */}
+    <div style={{ padding: "2rem 3rem", overflowY: "auto", height: "100%", paddingBottom: "13rem", maxWidth: "42rem" }}>
       <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.75rem", color: "var(--color-muted)", cursor: "default" }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
@@ -770,7 +1006,6 @@ function DualCustodyDownloadView() {
         Both you and the talent must complete identity verification before files can be downloaded.
       </p>
 
-      {/* Step indicator */}
       <div style={{ marginBottom: "2rem", display: "flex", alignItems: "flex-start", gap: "0" }}>
         {steps.map((label, i) => (
           <div key={label} style={{ display: "flex", alignItems: "center" }}>
@@ -800,12 +1035,10 @@ function DualCustodyDownloadView() {
         ))}
       </div>
 
-      {/* Success banner */}
       <div style={{ marginBottom: "1.25rem", borderRadius: "var(--radius)", padding: "0.75rem 1rem", border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#166534", fontSize: "0.875rem" }}>
         Both verifications complete — download links are valid for 48 hours.
       </div>
 
-      {/* Verification summary */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
         {[
           { label: "Licensee", name: "Warner Bros. Pictures", icon: "WB" },
@@ -829,7 +1062,6 @@ function DualCustodyDownloadView() {
         ))}
       </div>
 
-      {/* Bundle download */}
       <button style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: "0.5rem", borderRadius: "var(--radius)", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", cursor: "default", marginBottom: "0.75rem" }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -839,7 +1071,6 @@ function DualCustodyDownloadView() {
         Download all {PKG1_FILES.length} files as .zip
       </button>
 
-      {/* Individual files */}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {PKG1_FILES.map((f) => (
           <div key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", padding: "0.75rem 1rem", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-ink)", cursor: "default" }}>
@@ -862,6 +1093,454 @@ function DualCustodyDownloadView() {
   );
 }
 
+// ─── Rep: Roster view ─────────────────────────────────────────────────────────
+
+function RosterView() {
+  const ctSizeGB = CT_PACKAGES.reduce((s, p) => s + p.totalSizeBytes, 0) / (1024 ** 3);
+
+  return (
+    <div style={{ overflowY: "auto", height: "100%", paddingBottom: "13rem" }}>
+      {/* Page header */}
+      <div style={{ padding: "2rem 2.5rem 0" }}>
+        <p style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--color-accent)", margin: "0 0 0.375rem" }}>
+          Representative
+        </p>
+        <h1 style={{ fontSize: "1.375rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.25rem" }}>My Roster</h1>
+        <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0 0 1.5rem" }}>1 talent</p>
+
+        {/* Stat cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.25rem" }}>
+          {[
+            { label: "Active Licences", value: "1", sub: null },
+            { label: "Revenue This Quarter", value: "$0", sub: "$150,000 lifetime", accent: true },
+            { label: "Pending Requests", value: "1", sub: "awaiting approval" },
+            { label: "Ready Scans", value: "3", sub: null },
+          ].map((c) => (
+            <div key={c.label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", padding: "0.875rem 1rem", background: "var(--color-surface)" }}>
+              <p style={{ fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>{c.label}</p>
+              <p style={{ fontSize: "1.25rem", fontWeight: 700, color: c.accent ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem" }}>{c.value}</p>
+              {c.sub && <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: 0 }}>{c.sub}</p>}
+            </div>
+          ))}
+        </div>
+
+        {/* Alert */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", padding: "0.625rem 0.875rem", border: "1px solid rgba(192,57,43,0.3)", borderRadius: "var(--radius)", background: "rgba(192,57,43,0.04)", marginBottom: "1.25rem" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <p style={{ fontSize: "0.8125rem", color: "var(--color-ink)", margin: 0 }}>
+            <strong>1 licence request</strong> awaiting approval across your roster.
+          </p>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: "1.25rem" }}>
+          {["Roster", "Revenue"].map((t) => (
+            <div key={t} style={{ padding: "0.5rem 1rem", fontSize: "0.875rem", fontWeight: t === "Roster" ? 600 : 400, color: t === "Roster" ? "var(--color-ink)" : "var(--color-muted)", position: "relative", cursor: "default" }}>
+              {t}
+              {t === "Roster" && <span style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", background: "var(--color-accent)" }} />}
+            </div>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div style={{ position: "relative", marginBottom: "1.25rem" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--color-muted)" }}>
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <div style={{ width: "100%", padding: "0.5rem 0.75rem 0.5rem 2.25rem", fontSize: "0.875rem", border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", color: "var(--color-muted)" }}>
+            Search by name or email...
+          </div>
+        </div>
+      </div>
+
+      {/* Talent grid */}
+      <div style={{ padding: "0 2.5rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "1rem" }}>
+        {ROSTER.map((talent, i) => (
+          <div key={talent.id} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", overflow: "hidden" }}>
+            {/* Photo area */}
+            <div style={{ position: "relative", aspectRatio: "3/4", background: "linear-gradient(160deg, #e5e7eb 0%, #d1d5db 100%)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              {i === 0 ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src="/demo-ct.jpg" alt="Channing Tatum" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
+              ) : (
+                <span style={{ fontSize: "2.5rem", fontWeight: 700, color: "rgba(0,0,0,0.12)", letterSpacing: "-0.04em", userSelect: "none" }}>
+                  {talent.initials}
+                </span>
+              )}
+              {/* Pending badge */}
+              {talent.pendingLicences > 0 && (
+                <span style={{ position: "absolute", top: "0.5rem", right: "0.5rem", fontSize: "0.6rem", fontWeight: 700, padding: "0.2rem 0.4rem", borderRadius: "9999px", background: "#c0392b", color: "#fff", letterSpacing: "0.04em" }}>
+                  {talent.pendingLicences} pending
+                </span>
+              )}
+              {/* Verified badge */}
+              {i === 0 && (
+                <span style={{ position: "absolute", bottom: "0.5rem", left: "0.5rem", fontSize: "0.55rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "2px", background: "#166534", color: "#fff", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  Verified
+                </span>
+              )}
+            </div>
+            {/* Info */}
+            <div style={{ padding: "0.75rem" }}>
+              <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink)", margin: "0 0 0.125rem" }}>{talent.name}</p>
+              <p style={{ fontSize: "0.6rem", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>
+                {talent.packages} package{talent.packages !== 1 ? "s" : ""}{i === 0 ? ` · ${ctSizeGB.toFixed(1)} GB` : ""}
+              </p>
+              <div style={{ display: "flex", gap: "0.375rem" }}>
+                <button style={{ flex: 1, padding: "0.3rem 0", fontSize: "0.6875rem", fontWeight: 500, border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-bg)", color: "var(--color-muted)", cursor: "default" }}>
+                  View Profile
+                </button>
+                <button style={{ flex: 1, padding: "0.3rem 0", fontSize: "0.6875rem", fontWeight: 500, border: "none", borderRadius: "var(--radius)", background: "var(--color-ink)", color: "#fff", cursor: "default" }}>
+                  Manage
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Rep: detail tab components ───────────────────────────────────────────────
+
+function RepVaultTab() {
+  return (
+    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {CT_PACKAGES.map((pkg) => <PkgCard key={pkg.id} pkg={pkg} />)}
+      </div>
+    </div>
+  );
+}
+
+function RepLicCard({ lic }: { lic: FakeLicence }) {
+  const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
+  const feeRef = lic.agreedFee ?? lic.proposedFee;
+
+  return (
+    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", padding: "1rem 1.25rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.125rem" }}>
+            <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{lic.projectName}</span>
+            <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.1rem 0.5rem", borderRadius: "9999px", background: `${colour}18`, color: colour, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {lic.status}
+            </span>
+          </div>
+          <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.125rem 0 0.25rem" }}>
+            {lic.productionCompany} · {lic.packageName}
+          </p>
+          <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>
+            {formatDate(lic.validFrom)} – {formatDate(lic.validTo)}
+            {feeRef != null && <> · {fmtUSD(feeRef)}</>}
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, alignItems: "center" }}>
+          {lic.status === "PENDING" && (
+            <>
+              <button style={{ padding: "0.375rem 0.875rem", fontSize: "0.75rem", fontWeight: 500, border: "1px solid #bbf7d0", borderRadius: "var(--radius)", background: "#f0fdf4", color: "#166534", cursor: "default" }}>
+                Approve
+              </button>
+              <button style={{ padding: "0.375rem 0.875rem", fontSize: "0.75rem", fontWeight: 500, border: "1px solid #fecaca", borderRadius: "var(--radius)", background: "#fef2f2", color: "#991b1b", cursor: "default" }}>
+                Deny
+              </button>
+            </>
+          )}
+          {lic.status === "APPROVED" && (
+            <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "#166534", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              Active
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RepLicencesTab() {
+  return (
+    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {CT_LICENCES.map((lic) => (
+          <RepLicCard key={lic.id} lic={lic} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RepPermissionsTab() {
+  const TOGGLE_OPTIONS: { value: PermissionStatus; label: string }[] = [
+    { value: "allowed", label: "Allowed" },
+    { value: "approval_required", label: "Approval Required" },
+    { value: "blocked", label: "Blocked" },
+  ];
+
+  const activeStyle = (opt: PermissionStatus, current: PermissionStatus) => {
+    if (opt !== current) {
+      return { background: "transparent", color: "var(--color-muted)", border: "1px solid var(--color-border)" };
+    }
+    if (opt === "allowed") return { background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", fontWeight: 600 };
+    if (opt === "approval_required") return { background: "rgba(192,57,43,0.1)", color: "#c0392b", border: "1px solid rgba(192,57,43,0.3)", fontWeight: 600 };
+    return { background: "#1a1a1a", color: "#fff", border: "1px solid #1a1a1a", fontWeight: 600 };
+  };
+
+  return (
+    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+      <p style={{ fontSize: "0.8125rem", color: "var(--color-muted)", margin: "0 0 1.25rem", lineHeight: 1.6 }}>
+        Control which licence types can be used for this talent. Reps can set defaults on their behalf — talent can always override in their own settings.
+      </p>
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        {CT_PERMISSIONS.map((p, i) => (
+          <div
+            key={p.label}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+              padding: "0.875rem 1rem",
+              borderBottom: i < CT_PERMISSIONS.length - 1 ? "1px solid var(--color-border)" : "none",
+              background: "var(--color-surface)",
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)", margin: "0 0 0.2rem" }}>{p.label}</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0 0 0.4rem" }}>{p.subtitle}</p>
+              <span style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.05em" }}>
+                <span style={{ color: PERM_COLOUR[p.status] }}>● </span>
+                <span style={{ color: "var(--color-muted)" }}>{PERM_LABEL[p.status]}</span>
+              </span>
+            </div>
+            <div style={{ display: "flex", borderRadius: "var(--radius)", overflow: "hidden", flexShrink: 0, border: "1px solid var(--color-border)" }}>
+              {TOGGLE_OPTIONS.map((opt) => (
+                <div
+                  key={opt.value}
+                  style={{
+                    padding: "0.3rem 0.625rem",
+                    fontSize: "0.6875rem",
+                    cursor: "default",
+                    whiteSpace: "nowrap",
+                    ...activeStyle(opt.value, p.status),
+                    border: "none",
+                    borderRight: opt.value !== "blocked" ? "1px solid var(--color-border)" : "none",
+                  }}
+                >
+                  {opt.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function fmtUSDk(cents: number): string {
+  const k = cents / 100 / 1000;
+  return `$${k % 1 === 0 ? k.toFixed(1) : k.toFixed(1)}K`;
+}
+
+function RepRevenueTab() {
+  const approvedLicences = CT_LICENCES.filter((l) => l.status === "APPROVED");
+  const gross = approvedLicences.reduce((s, l) => s + (l.agreedFee ?? 0), 0);
+  const talentCut = Math.round(gross * 0.80);
+  const agencyCut = Math.round(gross * 0.10);
+  const platformCut = Math.round(gross * 0.10);
+
+  const statCards = [
+    { label: "Gross Licence Value", pct: null, value: gross, sub: `${approvedLicences.length} approved licence${approvedLicences.length !== 1 ? "s" : ""}`, accent: true },
+    { label: "Talent Share", pct: "80%", value: talentCut, sub: null, accent: false },
+    { label: "Agency Commission", pct: "10%", value: agencyCut, sub: null, accent: false },
+    { label: "Platform Fee", pct: "10%", value: platformCut, sub: null, accent: false },
+  ];
+
+  return (
+    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+      {/* Stat cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "2rem" }}>
+        {statCards.map((c) => (
+          <div key={c.label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", padding: "0.875rem 1rem", background: "var(--color-surface)" }}>
+            <p style={{ fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>
+              {c.label}{c.pct ? ` (${c.pct})` : ""}
+            </p>
+            <p style={{ fontSize: "1.25rem", fontWeight: 700, color: c.accent ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem" }}>
+              {fmtUSD(c.value)}
+            </p>
+            {c.sub && <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: 0 }}>{c.sub}</p>}
+          </div>
+        ))}
+      </div>
+
+      {/* Licence history */}
+      <p style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.75rem" }}>
+        Licence History
+      </p>
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        {/* Table header */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "1rem", padding: "0.5rem 1rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          {["Project", "Type", "Fee", "Status"].map((h) => (
+            <p key={h} style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>{h}</p>
+          ))}
+        </div>
+
+        {/* Rows — first row (Calamity Hustle) shown expanded */}
+        {CT_LICENCES.map((lic, i) => {
+          const fee = lic.agreedFee ?? lic.proposedFee ?? 0;
+          const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
+          const expanded = i === 0;
+          const platform = Math.round(fee * 0.10);
+          const agency = Math.round(fee * 0.10);
+          const talent = fee - platform - agency;
+
+          return (
+            <div key={lic.id} style={{ borderBottom: i < CT_LICENCES.length - 1 ? "1px solid var(--color-border)" : "none" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "1rem", alignItems: "center", padding: "0.875rem 1rem", background: "var(--color-surface)", cursor: "default" }}>
+                <div>
+                  <p style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)", margin: "0 0 0.125rem" }}>{lic.projectName}</p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>{lic.productionCompany.replace(" Pictures", "").replace(" Entertainment", "")}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: "0.875rem", color: "var(--color-ink)", margin: "0 0 0.125rem" }}>{LICENCE_TYPE_LABEL[lic.licenceType] ?? lic.licenceType}</p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>{lic.territory}</p>
+                </div>
+                <p style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)", margin: 0, whiteSpace: "nowrap" }}>{fmtUSDk(fee)}</p>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.15rem 0.5rem", borderRadius: "9999px", background: `${colour}18`, color: colour, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {lic.status}
+                  </span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", transform: expanded ? "rotate(180deg)" : "none" }}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </div>
+              </div>
+
+              {expanded && (
+                <div style={{ padding: "0 1rem 1rem", background: "var(--color-bg)", borderTop: "1px solid var(--color-border)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem 2rem", padding: "0.875rem 0", borderBottom: "1px solid var(--color-border)", marginBottom: "0.75rem" }}>
+                    {[
+                      { label: "Licensee", value: "lukefieldsend+licensee@googlemail.com" },
+                      { label: "Valid period", value: `${formatDate(lic.validFrom)} – ${formatDate(lic.validTo)}` },
+                      { label: "Approved", value: lic.approvedAt ? formatDate(lic.approvedAt) : "—" },
+                      { label: "Downloads", value: String(lic.downloadCount) },
+                    ].map((row) => (
+                      <div key={row.label}>
+                        <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: "0 0 0.125rem" }}>{row.label}</p>
+                        <p style={{ fontSize: "0.8125rem", color: "var(--color-ink)", margin: 0 }}>{row.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {[
+                    { label: `Proposed fee`, value: fmtUSDk(fee), muted: false, accent: false },
+                    { label: `Platform (10%)`, value: `~${fmtUSDk(platform)}`, muted: true, accent: false },
+                    { label: `Agency (10%)`, value: `~${fmtUSDk(agency)}`, muted: true, accent: false },
+                    { label: `Talent earnings`, value: fmtUSDk(talent), muted: false, accent: true },
+                  ].map((row) => (
+                    <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "0.25rem 0" }}>
+                      <span style={{ fontSize: "0.8125rem", color: row.accent ? "var(--color-accent)" : row.muted ? "var(--color-muted)" : "var(--color-ink)", fontWeight: row.accent ? 600 : 400 }}>{row.label}</span>
+                      <span style={{ fontSize: "0.8125rem", color: row.accent ? "var(--color-accent)" : row.muted ? "var(--color-muted)" : "var(--color-ink)", fontWeight: row.accent ? 600 : 500 }}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Rep: detail layout ───────────────────────────────────────────────────────
+
+function RepDetailLayout({ tab }: { tab: RepTab }) {
+  const TABS: { id: RepTab; label: string }[] = [
+    { id: "vault", label: "Vault" },
+    { id: "licences", label: "Licences" },
+    { id: "permissions", label: "Permissions" },
+    { id: "revenue", label: "Revenue" },
+    { id: "deepscan", label: "DeepScan" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Acting-as banner */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0.4rem 2rem",
+        background: "rgba(192,57,43,0.04)",
+        borderBottom: "1px solid rgba(192,57,43,0.1)",
+        flexShrink: 0,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.6875rem", color: "#c0392b" }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+          </svg>
+          Acting on behalf of <strong style={{ marginLeft: "0.2rem" }}>Channing Tatum</strong>
+        </div>
+        <span style={{ fontSize: "0.6875rem", color: "#c0392b", cursor: "default" }}>Back to roster</span>
+      </div>
+
+      {/* Talent header + tab bar */}
+      <div style={{ padding: "1.25rem 2rem 0", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
+          <div style={{ width: "2.75rem", height: "2.75rem", borderRadius: "50%", background: "#2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+            CT
+          </div>
+          <div>
+            <h1 style={{ fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>
+              Channing Tatum
+            </h1>
+            <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.1rem 0 0.1rem" }}>
+              channing@gmail.com
+            </p>
+            <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>
+              3 scan packages
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "0" }}>
+          {TABS.map((t) => (
+            <div key={t.id} style={{
+              padding: "0.625rem 1rem",
+              fontSize: "0.875rem",
+              fontWeight: tab === t.id ? 600 : 400,
+              color: tab === t.id ? "var(--color-ink)" : "var(--color-muted)",
+              position: "relative",
+              cursor: "default",
+            }}>
+              {t.label}
+              {tab === t.id && (
+                <span style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", background: "var(--color-accent)" }} />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab content */}
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {tab === "vault" && <RepVaultTab />}
+        {tab === "licences" && <RepLicencesTab />}
+        {tab === "permissions" && <RepPermissionsTab />}
+        {tab === "revenue" && <RepRevenueTab />}
+        {tab === "deepscan" && (
+          <div style={{ padding: "2rem", color: "var(--color-muted)", fontSize: "0.875rem" }}>DeepScan coming soon.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tour card ────────────────────────────────────────────────────────────────
 
 function TourCard({
@@ -869,6 +1548,8 @@ function TourCard({
   sceneIndex,
   total,
   paused,
+  mode,
+  onModeChange,
   onPrev,
   onNext,
   onMouseEnter,
@@ -878,6 +1559,8 @@ function TourCard({
   sceneIndex: number;
   total: number;
   paused: boolean;
+  mode: DemoMode;
+  onModeChange: (m: DemoMode) => void;
   onPrev: () => void;
   onNext: () => void;
   onMouseEnter: () => void;
@@ -903,6 +1586,33 @@ function TourCard({
         zIndex: 40,
       }}
     >
+      {/* Mode switcher */}
+      <div style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem", justifyContent: "center" }}>
+        {(["talent", "rep"] as DemoMode[]).map((m) => (
+          <button
+            key={m}
+            onClick={() => onModeChange(m)}
+            style={{
+              padding: "0.3rem 1rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              borderRadius: "4px",
+              border: "1px solid",
+              borderColor: mode === m ? "#c0392b" : "rgba(255,255,255,0.12)",
+              background: mode === m ? "#c0392b" : "transparent",
+              color: mode === m ? "#fff" : "rgba(255,255,255,0.45)",
+              cursor: "pointer",
+              letterSpacing: "0.04em",
+              textTransform: "capitalize",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {m === "talent" ? "Talent" : "Rep"}
+          </button>
+        ))}
+      </div>
+
+      {/* Progress dots */}
       <div style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem", justifyContent: "center" }}>
         {Array.from({ length: total }).map((_, i) => (
           <div
@@ -948,29 +1658,84 @@ function TourCard({
   );
 }
 
+// ─── Mobile gate ─────────────────────────────────────────────────────────────
+
+function MobileGate() {
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100vh",
+      padding: "2.5rem 2rem",
+      background: "var(--color-bg)",
+      textAlign: "center",
+    }}>
+      <div style={{ marginBottom: "2.5rem" }}>
+        <div style={{ fontSize: "0.9375rem", fontWeight: 500, letterSpacing: "0.05em", color: "var(--color-ink)" }}>
+          Image Vault
+        </div>
+        <div style={{ marginTop: "0.375rem", height: "1px", width: "1.5rem", background: "#c0392b", margin: "0.375rem auto 0" }} />
+      </div>
+
+      <div style={{ marginBottom: "1.75rem", color: "var(--color-muted)" }}>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      </div>
+
+      <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.75rem" }}>
+        Best viewed on desktop
+      </h1>
+      <p style={{ fontSize: "0.9375rem", color: "var(--color-muted)", margin: 0, lineHeight: 1.65, maxWidth: "22rem" }}>
+        This product tour is designed for larger screens. Open this link on a laptop or desktop for the full experience.
+      </p>
+    </div>
+  );
+}
+
 // ─── Active nav ID per scene ──────────────────────────────────────────────────
 
 function activeNavId(scene: Scene): NavId {
+  if (scene.view === "rep-roster" || scene.view === "rep-detail") return "roster";
   if (scene.view === "vault") return "vault";
-  if (scene.view === "download") return "licences";
   return "licences";
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function DemoClient() {
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
+  const [mode, setMode] = useState<DemoMode>("talent");
   const [sceneIndex, setSceneIndex] = useState(0);
   const [paused, setPaused] = useState(false);
 
-  const scene = SCENES[sceneIndex];
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 1024);
+  }, []);
+
+  if (isMobile === null) return null;
+  if (isMobile) return <MobileGate />;
+
+  const scenes = mode === "talent" ? SCENES : REP_SCENES;
+  const scene = scenes[sceneIndex];
+
+  const handleModeChange = (m: DemoMode) => {
+    setMode(m);
+    setSceneIndex(0);
+  };
 
   useEffect(() => {
     if (paused) return;
+    const currentScenes = mode === "talent" ? SCENES : REP_SCENES;
     const t = setTimeout(() => {
-      setSceneIndex((i) => (i + 1) % SCENES.length);
+      setSceneIndex((i) => (i + 1) % currentScenes.length);
     }, AUTO_MS);
     return () => clearTimeout(t);
-  }, [sceneIndex, paused]);
+  }, [sceneIndex, paused, mode]);
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
@@ -993,15 +1758,19 @@ export default function DemoClient() {
             <LicencesView licences={scene.licences ?? ALL_LICENCES} expandedId={scene.expandedLic} />
           )}
           {scene.view === "download" && <DualCustodyDownloadView />}
+          {scene.view === "rep-roster" && <RosterView />}
+          {scene.view === "rep-detail" && <RepDetailLayout tab={scene.repTab ?? "vault"} />}
         </div>
 
         <TourCard
           scene={scene}
           sceneIndex={sceneIndex}
-          total={SCENES.length}
+          total={scenes.length}
           paused={paused}
-          onPrev={() => setSceneIndex((i) => (i - 1 + SCENES.length) % SCENES.length)}
-          onNext={() => setSceneIndex((i) => (i + 1) % SCENES.length)}
+          mode={mode}
+          onModeChange={handleModeChange}
+          onPrev={() => setSceneIndex((i) => (i - 1 + scenes.length) % scenes.length)}
+          onNext={() => setSceneIndex((i) => (i + 1) % scenes.length)}
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
         />
