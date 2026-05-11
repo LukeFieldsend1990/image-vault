@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 interface Member {
@@ -16,6 +16,12 @@ interface Invite {
   expiresAt: number;
   acceptedAt: number | null;
   createdAt: number;
+}
+
+interface UserResult {
+  id: string;
+  email: string;
+  role: string;
 }
 
 interface Props {
@@ -44,6 +50,65 @@ export default function OrgAdminClient({ orgId, members, invites }: Props) {
   const [removing, setRemoving] = useState<string | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // Add member state
+  const [searchEmail, setSearchEmail] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<UserResult[] | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserResult | null>(null);
+  const [addRole, setAddRole] = useState<"owner" | "admin" | "member">("member");
+  const [adding, setAdding] = useState(false);
+  const [addErr, setAddErr] = useState<string | null>(null);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function onSearchInput(val: string) {
+    setSearchEmail(val);
+    setSelectedUser(null);
+    setAddErr(null);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (val.trim().length < 2) { setSearchResults(null); return; }
+    searchTimeout.current = setTimeout(() => void doSearch(val.trim()), 300);
+  }
+
+  async function doSearch(q: string) {
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/admin/users/search?email=${encodeURIComponent(q)}&role=licensee`);
+      const d = await res.json() as { users?: UserResult[] };
+      setSearchResults(d.users ?? []);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function addMember() {
+    if (!selectedUser) return;
+    setAdding(true);
+    setAddErr(null);
+    try {
+      const res = await fetch(`/api/admin/organisations/${orgId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUser.id, memberRole: addRole }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        setAddErr(d.error ?? "Failed to add member.");
+      } else {
+        setSearchEmail("");
+        setSearchResults(null);
+        setSelectedUser(null);
+        setAddRole("member");
+        router.refresh();
+      }
+    } catch {
+      setAddErr("Failed to add member.");
+    } finally {
+      setAdding(false);
+    }
+  }
 
   async function removeMember(userId: string) {
     setRemoving(userId);
@@ -92,8 +157,110 @@ export default function OrgAdminClient({ orgId, members, invites }: Props) {
   const pendingInvites = invites.filter((i) => !i.acceptedAt && !isExpired(i.expiresAt));
   const pastInvites = invites.filter((i) => i.acceptedAt || isExpired(i.expiresAt));
 
+  const alreadyMemberIds = new Set(members.map((m) => m.userId));
+
   return (
     <div className="space-y-8">
+      {/* Add Member */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
+          Add Member
+        </h2>
+        <div className="rounded border p-4 space-y-3" style={{ borderColor: "var(--color-border)" }}>
+          {/* Email search input */}
+          <div className="relative">
+            <input
+              type="text"
+              value={searchEmail}
+              onChange={(e) => onSearchInput(e.target.value)}
+              placeholder="Search by email (licensee users only)…"
+              className="w-full text-sm px-3 py-2 rounded border outline-none"
+              style={{
+                borderColor: "var(--color-border)",
+                background: "var(--color-bg)",
+                color: "var(--color-ink)",
+              }}
+            />
+            {searching && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: "var(--color-muted)" }}>
+                Searching…
+              </span>
+            )}
+          </div>
+
+          {/* Search results dropdown */}
+          {searchResults !== null && !selectedUser && (
+            <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+              {searchResults.length === 0 ? (
+                <p className="px-4 py-3 text-xs" style={{ color: "var(--color-muted)" }}>No licensee users found.</p>
+              ) : (
+                searchResults.map((u) => {
+                  const alreadyIn = alreadyMemberIds.has(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      disabled={alreadyIn}
+                      onClick={() => { setSelectedUser(u); setSearchResults(null); setSearchEmail(u.email); }}
+                      className="w-full flex items-center justify-between px-4 py-2.5 text-left border-b last:border-0 transition hover:bg-[var(--color-surface)] disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ borderColor: "var(--color-border)" }}
+                    >
+                      <span className="text-sm" style={{ color: "var(--color-ink)" }}>{u.email}</span>
+                      {alreadyIn && (
+                        <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>Already a member</span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* Selected user + role + confirm */}
+          {selectedUser && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <div
+                className="flex-1 flex items-center gap-2 px-3 py-2 rounded border text-sm min-w-0"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", shrink: 0 }}>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                </svg>
+                <span className="truncate" style={{ color: "var(--color-ink)" }}>{selectedUser.email}</span>
+                <button
+                  onClick={() => { setSelectedUser(null); setSearchEmail(""); setSearchResults(null); }}
+                  className="ml-auto shrink-0 text-[10px] transition hover:opacity-70"
+                  style={{ color: "var(--color-muted)" }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <select
+                value={addRole}
+                onChange={(e) => setAddRole(e.target.value as "owner" | "admin" | "member")}
+                className="text-xs px-2 py-2 rounded border appearance-none cursor-pointer shrink-0"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-ink)" }}
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+                <option value="owner">Owner</option>
+              </select>
+
+              <button
+                onClick={() => void addMember()}
+                disabled={adding}
+                className="text-xs font-medium px-4 py-2 rounded transition hover:opacity-80 disabled:opacity-40 shrink-0"
+                style={{ background: "var(--color-ink)", color: "var(--color-bg)" }}
+              >
+                {adding ? "Adding…" : "Add to org"}
+              </button>
+            </div>
+          )}
+
+          {addErr && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{addErr}</p>}
+        </div>
+      </section>
+
       {/* Members */}
       <section>
         <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
