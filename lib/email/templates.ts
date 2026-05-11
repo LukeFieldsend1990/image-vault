@@ -65,6 +65,7 @@ export interface UploadCompleteParams {
   talentEmail: string;
   packageName: string;
   fileCount: number;
+  failedCount?: number;
   totalSizeBytes: number;
   vaultUrl: string;
 }
@@ -76,15 +77,29 @@ export function uploadCompleteEmail(p: UploadCompleteParams): { subject: string;
     : b >= 1e6 ? (b / 1e6).toFixed(1) + " MB"
     : (b / 1e3).toFixed(1) + " KB";
 
+  const hasFailures = (p.failedCount ?? 0) > 0;
+  const statusBadge = hasFailures
+    ? `<span class="badge badge-pending">Partial</span>`
+    : `<span class="badge badge-approved">Ready</span>`;
+  const failureRow = hasFailures
+    ? `<div class="kv-row"><span class="kv-key">Failed</span><span class="kv-val" style="color:#c0392b">${p.failedCount} file${p.failedCount !== 1 ? "s" : ""} failed — retry from the vault</span></div>`
+    : "";
+  const intro = hasFailures
+    ? `<p>Your scan package upload has finished. ${p.fileCount} file${p.fileCount !== 1 ? "s" : ""} uploaded successfully; ${p.failedCount} failed.</p>`
+    : `<p>Your scan package has finished uploading and is now ready.</p>`;
+
   return {
-    subject: `Upload complete — ${p.packageName}`,
+    subject: hasFailures
+      ? `Upload finished with errors — ${p.packageName}`
+      : `Upload complete — ${p.packageName}`,
     html: layout(`
-      <p>Your scan package has finished uploading and is now ready.</p>
+      ${intro}
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
         <div class="kv-row"><span class="kv-key">Files</span><span class="kv-val">${p.fileCount} file${p.fileCount !== 1 ? "s" : ""}</span></div>
+        ${failureRow}
         <div class="kv-row"><span class="kv-key">Total size</span><span class="kv-val">${fmt(p.totalSizeBytes)}</span></div>
-        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-approved">Ready</span></span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val">${statusBadge}</span></div>
       </div>
       <a class="btn" href="${p.vaultUrl}">View vault</a>
     `),

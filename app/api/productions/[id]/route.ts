@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { productions, productionCompanies, licences } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, count } from "drizzle-orm";
 
 // GET /api/productions/[id] — get production detail
@@ -54,7 +55,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "admin" && session.role !== "rep") {
+  if (!isAdmin(session.email) && session.role !== "rep") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

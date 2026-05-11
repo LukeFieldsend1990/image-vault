@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { TalentIdentity } from "./layout";
 
@@ -16,7 +15,6 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const router = useRouter();
 
   // Close on outside click
   useEffect(() => {
@@ -34,7 +32,7 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
-      router.push("/login");
+      window.location.href = "/login";
     }
   }
 
