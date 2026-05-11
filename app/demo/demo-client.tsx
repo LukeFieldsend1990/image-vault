@@ -1241,7 +1241,7 @@ function RepPermissionsTab() {
   return (
     <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
       <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0 0 1rem" }}>
-        Controls how Channing's likeness may be used across any licence request.
+        Controls how Channing&apos;s likeness may be used across any licence request.
       </p>
       <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
         {CT_PERMISSIONS.map((p, i) => (
