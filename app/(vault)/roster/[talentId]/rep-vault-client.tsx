@@ -268,7 +268,7 @@ const STATUS_COLOR: Record<string, string> = {
   error: "#991b1b",
 };
 
-function PackageCard({ pkg, onDelete, deleting }: { pkg: ScanPackage; onDelete: (id: string) => void; deleting: boolean }) {
+function PackageCard({ pkg, onDelete, onAddFiles, deleting }: { pkg: ScanPackage; onDelete: (id: string) => void; onAddFiles: (id: string) => void; deleting: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [files, setFiles] = useState<ScanFile[]>([]);
@@ -396,11 +396,30 @@ function PackageCard({ pkg, onDelete, deleting }: { pkg: ScanPackage; onDelete: 
                 </svg>
               </button>
             )}
+            <button onClick={() => onAddFiles(pkg.id)}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }} title="Add files to package">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
             <Link href={`/vault/packages/${pkg.id}/chain-of-custody`}
               className="p-1.5 rounded transition opacity-40 hover:opacity-100"
               style={{ color: "var(--color-ink)" }} title="Chain of custody">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </Link>
+            <Link href={`/vault/packages/${pkg.id}/metadata`}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }} title="Edit metadata">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6" />
+                <line x1="4" y1="12" x2="14" y2="12" />
+                <line x1="4" y1="18" x2="10" y2="18" />
+                <polyline points="16 16 19 19 22 16" />
+                <line x1="19" y1="10" x2="19" y2="19" />
               </svg>
             </Link>
             <button onClick={() => onDelete(pkg.id)} disabled={deleting}
@@ -431,11 +450,30 @@ function PackageCard({ pkg, onDelete, deleting }: { pkg: ScanPackage; onDelete: 
                 </svg>
               </button>
             )}
+            <button onClick={() => onAddFiles(pkg.id)}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }} title="Add files to package">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
             <Link href={`/vault/packages/${pkg.id}/chain-of-custody`}
               className="p-1.5 rounded transition opacity-40 hover:opacity-100"
               style={{ color: "var(--color-ink)" }} title="Chain of custody">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </Link>
+            <Link href={`/vault/packages/${pkg.id}/metadata`}
+              className="p-1.5 rounded transition opacity-40 hover:opacity-100"
+              style={{ color: "var(--color-ink)" }} title="Edit metadata">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6" />
+                <line x1="4" y1="12" x2="14" y2="12" />
+                <line x1="4" y1="18" x2="10" y2="18" />
+                <polyline points="16 16 19 19 22 16" />
+                <line x1="19" y1="10" x2="19" y2="19" />
               </svg>
             </Link>
             <button onClick={() => onDelete(pkg.id)} disabled={deleting}
@@ -1123,6 +1161,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [loading, setLoading] = useState(true);
   const [talent, setTalent] = useState<TalentInfo | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [addFilesPackageId, setAddFilesPackageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notAllowed, setNotAllowed] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("vault");
@@ -1309,6 +1348,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
                     key={pkg.id}
                     pkg={pkg}
                     onDelete={handleDelete}
+                    onAddFiles={setAddFilesPackageId}
                     deleting={deletingId === pkg.id}
                   />
                 ))}
@@ -1352,6 +1392,14 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
           onClose={() => setModalOpen(false)}
           onComplete={() => { setModalOpen(false); void fetchPackages(); }}
           forTalentId={talentId}
+        />
+      )}
+      {addFilesPackageId && (
+        <UploadModal
+          onClose={() => setAddFilesPackageId(null)}
+          onComplete={() => { setAddFilesPackageId(null); void fetchPackages(); }}
+          forTalentId={talentId}
+          addToPackageId={addFilesPackageId}
         />
       )}
     </div>
