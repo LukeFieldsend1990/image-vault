@@ -1,12 +1,11 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 type Step = "credentials" | "totp";
 
 function LoginInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") ?? "/dashboard";
 
@@ -38,7 +37,7 @@ function LoginInner() {
       }
 
       if (data.redirect) {
-        router.push(data.redirect);
+        window.location.href = data.redirect;
         return;
       }
 
@@ -68,7 +67,7 @@ function LoginInner() {
         return;
       }
 
-      router.push(nextPath);
+      window.location.href = nextPath;
     } catch {
       setError("Network error. Please try again.");
     } finally {
