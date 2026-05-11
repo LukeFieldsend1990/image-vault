@@ -412,6 +412,15 @@ export default function UploadModal({
       }
     }
 
+    // Fire one summary email (successes + failures) after the whole batch
+    if (packageId && done > 0) {
+      void fetchWithRefresh("/api/vault/upload/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packageId }),
+      }).catch(() => {});
+    }
+
     setUploading(false);
     if (done > 0) onComplete();
   }
