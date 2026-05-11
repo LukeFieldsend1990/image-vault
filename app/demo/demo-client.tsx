@@ -5,7 +5,12 @@ import { useState, useEffect } from "react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LicenceStatus = "APPROVED" | "PENDING";
-type ViewType = "vault" | "licences" | "download";
+type ViewType = "vault" | "licences" | "download" | "rep-roster" | "rep-detail";
+type RepTab = "vault" | "licences" | "permissions" | "revenue";
+type SidebarRole = "talent" | "licensee" | "rep";
+type DemoMode = "talent" | "rep";
+type NavId = "vault" | "licences" | "directory" | "settings" | "roster";
+type PermissionStatus = "allowed" | "approval_required" | "blocked";
 
 interface FakePkg {
   id: string;
@@ -54,17 +59,31 @@ interface FakeLicence {
   lastDownloadAt: number | null;
 }
 
+interface RosterEntry {
+  id: string;
+  name: string;
+  initials: string;
+  packages: number;
+  pendingLicences: number;
+}
+
+interface Permission {
+  label: string;
+  status: PermissionStatus;
+}
+
 interface Scene {
   id: string;
   view: ViewType;
   expandedLic: string | null;
-  sidebarRole: "talent" | "licensee";
+  sidebarRole: SidebarRole;
   licences?: FakeLicence[];
+  repTab?: RepTab;
   headline: string;
   body: string;
 }
 
-// ─── Fake data ────────────────────────────────────────────────────────────────
+// ─── Talent fake data ─────────────────────────────────────────────────────────
 
 const PACKAGES: FakePkg[] = [
   {
@@ -212,6 +231,121 @@ const ALL_LICENCES: FakeLicence[] = [
   },
 ];
 
+// ─── Rep fake data ────────────────────────────────────────────────────────────
+
+const ROSTER: RosterEntry[] = [
+  { id: "4c6dd0ee-6c2f-4aac-b837-ebc03da698d9", name: "Channing Tatum", initials: "CT", packages: 3, pendingLicences: 1 },
+  { id: "talent-sofia", name: "Sofia Esposito", initials: "SE", packages: 2, pendingLicences: 0 },
+  { id: "talent-marcus", name: "Marcus Webb", initials: "MW", packages: 1, pendingLicences: 0 },
+];
+
+const CT_PACKAGES: FakePkg[] = [
+  {
+    id: "ct-pkg-1",
+    name: "Base_Scan_26",
+    studioName: "Framestore",
+    captureDate: 1746057600,
+    fileCount: 412,
+    totalSizeBytes: 214748364800,
+    scanType: "photogrammetry",
+    hasMesh: true,
+    hasTexture: true,
+    hasHdr: false,
+    hasMotionCapture: false,
+    tags: ["full body", "neutral", "hi-res"],
+  },
+  {
+    id: "ct-pkg-2",
+    name: "Facial Performance — Weta Digital",
+    studioName: "Weta Digital",
+    captureDate: 1738368000,
+    fileCount: 198,
+    totalSizeBytes: 78643200000,
+    scanType: "light_stage",
+    hasMesh: true,
+    hasTexture: true,
+    hasHdr: true,
+    hasMotionCapture: false,
+    tags: ["blendshapes", "per-light EXR"],
+  },
+  {
+    id: "ct-pkg-3",
+    name: "Stunt Reference — ILM",
+    studioName: "Industrial Light & Magic",
+    captureDate: 1743465600,
+    fileCount: 87,
+    totalSizeBytes: 12884901888,
+    scanType: "other",
+    hasMesh: false,
+    hasTexture: false,
+    hasHdr: false,
+    hasMotionCapture: true,
+    tags: ["BVH", "action sequences"],
+  },
+];
+
+const CT_LICENCES: FakeLicence[] = [
+  {
+    id: "ct-lic-1",
+    projectName: "Calamity Hustle",
+    status: "PENDING",
+    licenceType: "film_double",
+    productionCompany: "Warner Bros. Pictures",
+    packageName: "Base_Scan_26",
+    packageScanType: "photogrammetry",
+    packageHasMesh: true,
+    packageHasTexture: true,
+    packageHasHdr: false,
+    packageHasMotionCapture: false,
+    packageTags: ["full body", "neutral"],
+    validFrom: 1746835200,
+    validTo: 1766707200,
+    territory: "Worldwide",
+    exclusivity: "non_exclusive",
+    permitAiTraining: false,
+    agreedFee: null,
+    proposedFee: 20000000,
+    intendedUse: "Digital double for principal photography and VFX work on Calamity Hustle.",
+    approvedAt: null,
+    downloadCount: 0,
+    lastDownloadAt: null,
+  },
+  {
+    id: "ct-lic-2",
+    projectName: "G.I. Joe: Origins",
+    status: "APPROVED",
+    licenceType: "film_double",
+    productionCompany: "Paramount Pictures",
+    packageName: "Base_Scan_26",
+    packageScanType: "photogrammetry",
+    packageHasMesh: true,
+    packageHasTexture: true,
+    packageHasHdr: false,
+    packageHasMotionCapture: false,
+    packageTags: ["full body"],
+    validFrom: 1741996800,
+    validTo: 1764547200,
+    territory: "Worldwide",
+    exclusivity: "exclusive",
+    permitAiTraining: false,
+    agreedFee: 15000000,
+    proposedFee: null,
+    intendedUse: "Digital double for principal photography and action sequences in G.I. Joe: Origins.",
+    approvedAt: 1742256000,
+    downloadCount: 2,
+    lastDownloadAt: 1745452800,
+  },
+];
+
+const CT_PERMISSIONS: Permission[] = [
+  { label: "Commercial", status: "approval_required" },
+  { label: "Film / Double", status: "allowed" },
+  { label: "Game Character", status: "approval_required" },
+  { label: "AI Avatar", status: "blocked" },
+  { label: "AI Training Data", status: "blocked" },
+  { label: "Monitoring Reference", status: "allowed" },
+];
+
 // ─── Tour scenes ──────────────────────────────────────────────────────────────
 
 const SCENES: Scene[] = [
@@ -248,6 +382,53 @@ const SCENES: Scene[] = [
     sidebarRole: "licensee",
     headline: "Dual-custody download",
     body: "Both parties authenticate separately with 2FA. Neither the licensee, nor the platform, can release files without the talent's explicit approval.",
+  },
+];
+
+const REP_SCENES: Scene[] = [
+  {
+    id: "rep-roster",
+    view: "rep-roster",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Talent roster",
+    body: "Richard Robinson manages Channing Tatum across all licence requests, approvals and downloads. One view for every active deal.",
+  },
+  {
+    id: "rep-vault",
+    view: "rep-detail",
+    repTab: "vault",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Vault access",
+    body: "Reps have direct access to all of a talent's scan packages — upload, manage metadata, and track storage on their behalf.",
+  },
+  {
+    id: "rep-licences",
+    view: "rep-detail",
+    repTab: "licences",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Approve on behalf of talent",
+    body: "Calamity Hustle is awaiting approval. Richard can approve or deny licence requests directly on Channing's behalf.",
+  },
+  {
+    id: "rep-permissions",
+    view: "rep-detail",
+    repTab: "permissions",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Usage permissions",
+    body: "AI avatars are blocked, commercial requires approval. Richard sets usage rules to protect Channing's likeness across all future requests.",
+  },
+  {
+    id: "rep-revenue",
+    view: "rep-detail",
+    repTab: "revenue",
+    expandedLic: null,
+    sidebarRole: "rep",
+    headline: "Revenue tracking",
+    body: "$350K across 2 active licences. The split is 65% to Channing, 20% to United Talent Agency, 15% to Image Vault.",
   },
 ];
 
@@ -301,6 +482,24 @@ const SCAN_TYPE_LABEL: Record<string, string> = {
   lidar: "LiDAR",
   structured_light: "Structured Light",
   other: "Other",
+};
+
+const PERM_COLOUR: Record<PermissionStatus, string> = {
+  allowed: "#166534",
+  approval_required: "#b45309",
+  blocked: "#991b1b",
+};
+
+const PERM_BG: Record<PermissionStatus, string> = {
+  allowed: "#f0fdf4",
+  approval_required: "#fffbeb",
+  blocked: "#fef2f2",
+};
+
+const PERM_LABEL: Record<PermissionStatus, string> = {
+  allowed: "Allowed",
+  approval_required: "Approval Required",
+  blocked: "Blocked",
 };
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -375,19 +574,56 @@ const LICENSEE_NAV = [
   },
 ];
 
-type NavId = "vault" | "licences" | "directory" | "settings";
+const REP_NAV = [
+  {
+    id: "roster" as const,
+    label: "Roster",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
+    id: "licences" as const,
+    label: "Licences",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+    ),
+  },
+  {
+    id: "settings" as const,
+    label: "Settings",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    ),
+  },
+];
 
 function DemoSidebar({
   role,
   activeNavId,
 }: {
-  role: "talent" | "licensee";
+  role: SidebarRole;
   activeNavId: NavId;
 }) {
-  const nav = role === "talent" ? TALENT_NAV : LICENSEE_NAV;
+  const nav = role === "talent" ? TALENT_NAV : role === "rep" ? REP_NAV : LICENSEE_NAV;
   const user =
     role === "talent"
       ? { initials: "ER", name: "Emma Richardson", subtitle: "Talent" }
+      : role === "rep"
+      ? { initials: "RR", name: "Richard Robinson", subtitle: "United Talent · Rep" }
       : { initials: "WB", name: "Warner Bros.", subtitle: "Licensee" };
 
   return (
@@ -581,7 +817,7 @@ function VaultView() {
         </button>
       </header>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 3rem", paddingBottom: "11rem" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 3rem", paddingBottom: "13rem" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {PACKAGES.map((pkg) => <PkgCard key={pkg.id} pkg={pkg} />)}
         </div>
@@ -714,7 +950,7 @@ function LicCard({ lic, expanded }: { lic: FakeLicence; expanded: boolean }) {
 
 function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expandedId: string | null }) {
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "11rem" }}>
+    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
         <div>
           <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>
@@ -751,11 +987,10 @@ function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expan
 
 function DualCustodyDownloadView() {
   const steps = ["Verify identity", "Talent approval", "Download"];
-  const currentStep = 2; // complete — all steps done
+  const currentStep = 2;
 
   return (
-    <div style={{ padding: "2rem 3rem", overflowY: "auto", height: "100%", paddingBottom: "11rem", maxWidth: "42rem" }}>
-      {/* Back link */}
+    <div style={{ padding: "2rem 3rem", overflowY: "auto", height: "100%", paddingBottom: "13rem", maxWidth: "42rem" }}>
       <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.75rem", color: "var(--color-muted)", cursor: "default" }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
@@ -770,7 +1005,6 @@ function DualCustodyDownloadView() {
         Both you and the talent must complete identity verification before files can be downloaded.
       </p>
 
-      {/* Step indicator */}
       <div style={{ marginBottom: "2rem", display: "flex", alignItems: "flex-start", gap: "0" }}>
         {steps.map((label, i) => (
           <div key={label} style={{ display: "flex", alignItems: "center" }}>
@@ -800,12 +1034,10 @@ function DualCustodyDownloadView() {
         ))}
       </div>
 
-      {/* Success banner */}
       <div style={{ marginBottom: "1.25rem", borderRadius: "var(--radius)", padding: "0.75rem 1rem", border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#166534", fontSize: "0.875rem" }}>
         Both verifications complete — download links are valid for 48 hours.
       </div>
 
-      {/* Verification summary */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
         {[
           { label: "Licensee", name: "Warner Bros. Pictures", icon: "WB" },
@@ -829,7 +1061,6 @@ function DualCustodyDownloadView() {
         ))}
       </div>
 
-      {/* Bundle download */}
       <button style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: "0.5rem", borderRadius: "var(--radius)", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", cursor: "default", marginBottom: "0.75rem" }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -839,7 +1070,6 @@ function DualCustodyDownloadView() {
         Download all {PKG1_FILES.length} files as .zip
       </button>
 
-      {/* Individual files */}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {PKG1_FILES.map((f) => (
           <div key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", padding: "0.75rem 1rem", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-ink)", cursor: "default" }}>
@@ -862,6 +1092,333 @@ function DualCustodyDownloadView() {
   );
 }
 
+// ─── Rep: Roster view ─────────────────────────────────────────────────────────
+
+function RosterView() {
+  return (
+    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+        <div>
+          <h1 style={{ fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>
+            Talent Roster
+          </h1>
+          <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.25rem 0 0" }}>
+            {ROSTER.length} talents under management
+          </p>
+        </div>
+        <button style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", fontSize: "0.75rem", fontWeight: 500, color: "#fff", background: "var(--color-ink)", border: "none", borderRadius: "var(--radius)", cursor: "default" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Talent
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {ROSTER.map((talent, i) => (
+          <div
+            key={talent.id}
+            style={{
+              border: "1px solid var(--color-border)",
+              borderLeft: i === 0 ? "3px solid var(--color-accent)" : "1px solid var(--color-border)",
+              borderRadius: "var(--radius)",
+              background: "var(--color-surface)",
+            }}
+          >
+            <div style={{ padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div style={{
+                width: "2.5rem",
+                height: "2.5rem",
+                borderRadius: "50%",
+                background: i === 0 ? "#c0392b" : "var(--color-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "0.6875rem",
+                fontWeight: 700,
+                color: i === 0 ? "#fff" : "var(--color-muted)",
+                flexShrink: 0,
+              }}>
+                {talent.initials}
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.125rem" }}>
+                  <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{talent.name}</span>
+                  {talent.pendingLicences > 0 && (
+                    <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.1rem 0.4rem", borderRadius: "9999px", background: "#fffbeb", color: "#b45309" }}>
+                      {talent.pendingLicences} pending
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: 0 }}>
+                  {talent.packages} scan package{talent.packages !== 1 ? "s" : ""}
+                </p>
+              </div>
+
+              <button style={{ padding: "0.375rem 0.75rem", fontSize: "0.75rem", fontWeight: 500, border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-bg)", color: "var(--color-muted)", cursor: "default", flexShrink: 0 }}>
+                View
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Rep: detail tab components ───────────────────────────────────────────────
+
+function RepVaultTab() {
+  return (
+    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {CT_PACKAGES.map((pkg) => <PkgCard key={pkg.id} pkg={pkg} />)}
+      </div>
+    </div>
+  );
+}
+
+function RepLicCard({ lic }: { lic: FakeLicence }) {
+  const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
+  const feeRef = lic.agreedFee ?? lic.proposedFee;
+
+  return (
+    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", padding: "1rem 1.25rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.125rem" }}>
+            <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{lic.projectName}</span>
+            <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.1rem 0.5rem", borderRadius: "9999px", background: `${colour}18`, color: colour, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {lic.status}
+            </span>
+          </div>
+          <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.125rem 0 0.25rem" }}>
+            {lic.productionCompany} · {lic.packageName}
+          </p>
+          <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>
+            {formatDate(lic.validFrom)} – {formatDate(lic.validTo)}
+            {feeRef != null && <> · {fmtUSD(feeRef)}</>}
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, alignItems: "center" }}>
+          {lic.status === "PENDING" && (
+            <>
+              <button style={{ padding: "0.375rem 0.875rem", fontSize: "0.75rem", fontWeight: 500, border: "1px solid #bbf7d0", borderRadius: "var(--radius)", background: "#f0fdf4", color: "#166534", cursor: "default" }}>
+                Approve
+              </button>
+              <button style={{ padding: "0.375rem 0.875rem", fontSize: "0.75rem", fontWeight: 500, border: "1px solid #fecaca", borderRadius: "var(--radius)", background: "#fef2f2", color: "#991b1b", cursor: "default" }}>
+                Deny
+              </button>
+            </>
+          )}
+          {lic.status === "APPROVED" && (
+            <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "#166534", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              Active
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RepLicencesTab() {
+  return (
+    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {CT_LICENCES.map((lic) => (
+          <RepLicCard key={lic.id} lic={lic} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RepPermissionsTab() {
+  return (
+    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+      <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0 0 1rem" }}>
+        Controls how Channing's likeness may be used across any licence request.
+      </p>
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        {CT_PERMISSIONS.map((p, i) => (
+          <div
+            key={p.label}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0.75rem 1rem",
+              borderBottom: i < CT_PERMISSIONS.length - 1 ? "1px solid var(--color-border)" : "none",
+              background: "var(--color-surface)",
+            }}
+          >
+            <span style={{ fontSize: "0.8125rem", color: "var(--color-ink)" }}>{p.label}</span>
+            <span style={{
+              fontSize: "0.625rem",
+              fontWeight: 600,
+              padding: "0.15rem 0.5rem",
+              borderRadius: "9999px",
+              background: PERM_BG[p.status],
+              color: PERM_COLOUR[p.status],
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+            }}>
+              {PERM_LABEL[p.status]}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RepRevenueTab() {
+  const gross = 35000000;
+  const talentCut = Math.round(gross * 0.65);
+  const agencyCut = Math.round(gross * 0.20);
+  const platformCut = Math.round(gross * 0.15);
+
+  return (
+    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+      <div style={{ marginBottom: "1.5rem" }}>
+        <p style={{ fontSize: "0.6875rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-muted)", margin: "0 0 0.25rem" }}>Total Gross Revenue</p>
+        <p style={{ fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--color-ink)", margin: 0 }}>{fmtUSD(gross)}</p>
+      </div>
+
+      <div style={{ display: "flex", height: "0.375rem", borderRadius: "9999px", overflow: "hidden", marginBottom: "1rem", gap: "2px" }}>
+        <div style={{ width: "65%", background: "#c0392b", borderRadius: "9999px 0 0 9999px" }} />
+        <div style={{ width: "20%", background: "#475569" }} />
+        <div style={{ width: "15%", background: "#94a3b8", borderRadius: "0 9999px 9999px 0" }} />
+      </div>
+
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: "1.5rem" }}>
+        {[
+          { label: "Channing Tatum", sub: "65% talent share", value: talentCut, dot: "#c0392b" },
+          { label: "United Talent Agency", sub: "20% agency commission", value: agencyCut, dot: "#475569" },
+          { label: "Image Vault", sub: "15% platform fee", value: platformCut, dot: "#94a3b8" },
+        ].map((r, i, arr) => (
+          <div key={r.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1rem", borderBottom: i < arr.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-surface)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+              <div style={{ width: "0.5rem", height: "0.5rem", borderRadius: "50%", background: r.dot, flexShrink: 0 }} />
+              <div>
+                <p style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--color-ink)", margin: 0 }}>{r.label}</p>
+                <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: "0.1rem 0 0" }}>{r.sub}</p>
+              </div>
+            </div>
+            <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-ink)" }}>{fmtUSD(r.value)}</span>
+          </div>
+        ))}
+      </div>
+
+      <p style={{ fontSize: "0.6875rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-muted)", margin: "0 0 0.75rem" }}>Licence Revenue</p>
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+        {CT_LICENCES.map((lic, i) => {
+          const fee = lic.agreedFee ?? lic.proposedFee ?? 0;
+          const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
+          return (
+            <div key={lic.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1rem", borderBottom: i < CT_LICENCES.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-surface)" }}>
+              <div>
+                <p style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--color-ink)", margin: 0 }}>{lic.projectName}</p>
+                <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: "0.1rem 0 0" }}>{lic.productionCompany}</p>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-ink)", margin: "0 0 0.2rem" }}>{fmtUSD(fee)}</p>
+                <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.1rem 0.4rem", borderRadius: "9999px", background: `${colour}18`, color: colour }}>
+                  {lic.status}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Rep: detail layout ───────────────────────────────────────────────────────
+
+function RepDetailLayout({ tab }: { tab: RepTab }) {
+  const TABS: { id: RepTab; label: string }[] = [
+    { id: "vault", label: "Vault" },
+    { id: "licences", label: "Licences" },
+    { id: "permissions", label: "Permissions" },
+    { id: "revenue", label: "Revenue" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Acting-as banner */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        padding: "0.5rem 2rem",
+        background: "rgba(192,57,43,0.05)",
+        borderBottom: "1px solid rgba(192,57,43,0.12)",
+        fontSize: "0.6875rem",
+        color: "#c0392b",
+        flexShrink: 0,
+      }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+        </svg>
+        Acting as <strong style={{ marginLeft: "0.25rem" }}>Channing Tatum</strong>
+        <span style={{ marginLeft: "0.375rem", fontSize: "0.55rem", fontWeight: 700, padding: "0.15rem 0.4rem", background: "rgba(192,57,43,0.12)", borderRadius: "2px", letterSpacing: "0.08em" }}>
+          DELEGATED
+        </span>
+      </div>
+
+      {/* Talent header + tab bar */}
+      <div style={{ padding: "1.25rem 2rem 0", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
+          <div style={{ width: "2.75rem", height: "2.75rem", borderRadius: "50%", background: "#c0392b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+            CT
+          </div>
+          <div>
+            <h1 style={{ fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>
+              Channing Tatum
+            </h1>
+            <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.125rem 0 0" }}>
+              Talent · 3 scan packages · 1 pending licence
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "0" }}>
+          {TABS.map((t) => (
+            <div key={t.id} style={{
+              padding: "0.625rem 1rem",
+              fontSize: "0.875rem",
+              fontWeight: tab === t.id ? 600 : 400,
+              color: tab === t.id ? "var(--color-ink)" : "var(--color-muted)",
+              position: "relative",
+              cursor: "default",
+            }}>
+              {t.label}
+              {tab === t.id && (
+                <span style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", background: "var(--color-accent)" }} />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab content */}
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {tab === "vault" && <RepVaultTab />}
+        {tab === "licences" && <RepLicencesTab />}
+        {tab === "permissions" && <RepPermissionsTab />}
+        {tab === "revenue" && <RepRevenueTab />}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tour card ────────────────────────────────────────────────────────────────
 
 function TourCard({
@@ -869,6 +1426,8 @@ function TourCard({
   sceneIndex,
   total,
   paused,
+  mode,
+  onModeChange,
   onPrev,
   onNext,
   onMouseEnter,
@@ -878,6 +1437,8 @@ function TourCard({
   sceneIndex: number;
   total: number;
   paused: boolean;
+  mode: DemoMode;
+  onModeChange: (m: DemoMode) => void;
   onPrev: () => void;
   onNext: () => void;
   onMouseEnter: () => void;
@@ -903,6 +1464,33 @@ function TourCard({
         zIndex: 40,
       }}
     >
+      {/* Mode switcher */}
+      <div style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem", justifyContent: "center" }}>
+        {(["talent", "rep"] as DemoMode[]).map((m) => (
+          <button
+            key={m}
+            onClick={() => onModeChange(m)}
+            style={{
+              padding: "0.3rem 1rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              borderRadius: "4px",
+              border: "1px solid",
+              borderColor: mode === m ? "#c0392b" : "rgba(255,255,255,0.12)",
+              background: mode === m ? "#c0392b" : "transparent",
+              color: mode === m ? "#fff" : "rgba(255,255,255,0.45)",
+              cursor: "pointer",
+              letterSpacing: "0.04em",
+              textTransform: "capitalize",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {m === "talent" ? "Talent" : "Rep"}
+          </button>
+        ))}
+      </div>
+
+      {/* Progress dots */}
       <div style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem", justifyContent: "center" }}>
         {Array.from({ length: total }).map((_, i) => (
           <div
@@ -951,26 +1539,34 @@ function TourCard({
 // ─── Active nav ID per scene ──────────────────────────────────────────────────
 
 function activeNavId(scene: Scene): NavId {
+  if (scene.view === "rep-roster" || scene.view === "rep-detail") return "roster";
   if (scene.view === "vault") return "vault";
-  if (scene.view === "download") return "licences";
   return "licences";
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function DemoClient() {
+  const [mode, setMode] = useState<DemoMode>("talent");
   const [sceneIndex, setSceneIndex] = useState(0);
   const [paused, setPaused] = useState(false);
 
-  const scene = SCENES[sceneIndex];
+  const scenes = mode === "talent" ? SCENES : REP_SCENES;
+  const scene = scenes[sceneIndex];
+
+  const handleModeChange = (m: DemoMode) => {
+    setMode(m);
+    setSceneIndex(0);
+  };
 
   useEffect(() => {
     if (paused) return;
+    const currentScenes = mode === "talent" ? SCENES : REP_SCENES;
     const t = setTimeout(() => {
-      setSceneIndex((i) => (i + 1) % SCENES.length);
+      setSceneIndex((i) => (i + 1) % currentScenes.length);
     }, AUTO_MS);
     return () => clearTimeout(t);
-  }, [sceneIndex, paused]);
+  }, [sceneIndex, paused, mode]);
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
@@ -993,15 +1589,19 @@ export default function DemoClient() {
             <LicencesView licences={scene.licences ?? ALL_LICENCES} expandedId={scene.expandedLic} />
           )}
           {scene.view === "download" && <DualCustodyDownloadView />}
+          {scene.view === "rep-roster" && <RosterView />}
+          {scene.view === "rep-detail" && <RepDetailLayout tab={scene.repTab ?? "vault"} />}
         </div>
 
         <TourCard
           scene={scene}
           sceneIndex={sceneIndex}
-          total={SCENES.length}
+          total={scenes.length}
           paused={paused}
-          onPrev={() => setSceneIndex((i) => (i - 1 + SCENES.length) % SCENES.length)}
-          onNext={() => setSceneIndex((i) => (i + 1) % SCENES.length)}
+          mode={mode}
+          onModeChange={handleModeChange}
+          onPrev={() => setSceneIndex((i) => (i - 1 + scenes.length) % scenes.length)}
+          onNext={() => setSceneIndex((i) => (i + 1) % scenes.length)}
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
         />
