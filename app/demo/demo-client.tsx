@@ -243,7 +243,7 @@ const ROSTER: RosterEntry[] = [
 const CT_PACKAGES: FakePkg[] = [
   {
     id: "ct-pkg-1",
-    name: "Base_Scan_26",
+    name: "Gambit",
     studioName: "Framestore",
     captureDate: 1746057600,
     fileCount: 412,
@@ -292,7 +292,7 @@ const CT_LICENCES: FakeLicence[] = [
     status: "PENDING",
     licenceType: "film_double",
     productionCompany: "Warner Bros. Pictures",
-    packageName: "Base_Scan_26",
+    packageName: "Gambit",
     packageScanType: "photogrammetry",
     packageHasMesh: true,
     packageHasTexture: true,
@@ -317,7 +317,7 @@ const CT_LICENCES: FakeLicence[] = [
     status: "APPROVED",
     licenceType: "film_double",
     productionCompany: "Paramount Pictures",
-    packageName: "Base_Scan_26",
+    packageName: "Gambit",
     packageScanType: "photogrammetry",
     packageHasMesh: true,
     packageHasTexture: true,
@@ -1500,7 +1500,7 @@ function RepDetailLayout({ tab }: { tab: RepTab }) {
               Channing Tatum
             </h1>
             <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.1rem 0 0.1rem" }}>
-              lukefieldsend+channing@googlemail.com
+              channing@gmail.com
             </p>
             <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>
               3 scan packages
@@ -1658,6 +1658,45 @@ function TourCard({
   );
 }
 
+// ─── Mobile gate ─────────────────────────────────────────────────────────────
+
+function MobileGate() {
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100vh",
+      padding: "2.5rem 2rem",
+      background: "var(--color-bg)",
+      textAlign: "center",
+    }}>
+      <div style={{ marginBottom: "2.5rem" }}>
+        <div style={{ fontSize: "0.9375rem", fontWeight: 500, letterSpacing: "0.05em", color: "var(--color-ink)" }}>
+          Image Vault
+        </div>
+        <div style={{ marginTop: "0.375rem", height: "1px", width: "1.5rem", background: "#c0392b", margin: "0.375rem auto 0" }} />
+      </div>
+
+      <div style={{ marginBottom: "1.75rem", color: "var(--color-muted)" }}>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      </div>
+
+      <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.75rem" }}>
+        Best viewed on desktop
+      </h1>
+      <p style={{ fontSize: "0.9375rem", color: "var(--color-muted)", margin: 0, lineHeight: 1.65, maxWidth: "22rem" }}>
+        This product tour is designed for larger screens. Open this link on a laptop or desktop for the full experience.
+      </p>
+    </div>
+  );
+}
+
 // ─── Active nav ID per scene ──────────────────────────────────────────────────
 
 function activeNavId(scene: Scene): NavId {
@@ -1669,9 +1708,17 @@ function activeNavId(scene: Scene): NavId {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function DemoClient() {
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [mode, setMode] = useState<DemoMode>("talent");
   const [sceneIndex, setSceneIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 1024);
+  }, []);
+
+  if (isMobile === null) return null;
+  if (isMobile) return <MobileGate />;
 
   const scenes = mode === "talent" ? SCENES : REP_SCENES;
   const scene = scenes[sceneIndex];
