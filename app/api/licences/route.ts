@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
       contractUrl: licences.contractUrl,
       contractUploadedAt: licences.contractUploadedAt,
       organisationId: licences.organisationId,
+      productionId: licences.productionId,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
