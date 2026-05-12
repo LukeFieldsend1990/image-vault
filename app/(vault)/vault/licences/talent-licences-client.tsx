@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import OrgMembersPanel from "./org-members-panel";
 
@@ -46,7 +46,20 @@ interface Licence {
   contractUrl: string | null;
   contractUploadedAt: number | null;
   organisationId: string | null;
+  productionId: string | null;
   licenseeId: string;
+}
+
+interface BridgeAgentStatus {
+  agentId: string;
+  displayName: string;
+  organisationName: string;
+  productionName: string;
+  agentOnline: boolean;
+  lastHeartbeatAt: number | null;
+  publishedPackages: Array<{ packageId: string; packageName: string }>;
+  status: string;
+  pendingAction: string | null;
 }
 
 interface PendingDownload {
@@ -92,6 +105,118 @@ function fmtGBP(pence: number) {
   return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
+// Map of licenceId → bridge agent status (keyed by organisationId:productionId combo)
+function useBridgeAgents(licences: Licence[]) {
+  const [agentsByLicence, setAgentsByLicence] = useState<Record<string, BridgeAgentStatus | null>>({});
+
+  const refresh = useCallback(async () => {
+    const projectLicences = licences.filter(l => l.organisationId && l.productionId && l.status === "APPROVED");
+    if (projectLicences.length === 0) return;
+    try {
+      const r = await fetch("/api/bridge/render-bridge");
+      if (!r.ok) return;
+      const d = await r.json() as { agents?: Array<BridgeAgentStatus & { licences: Array<{ licenceId: string }> }> };
+      const map: Record<string, BridgeAgentStatus | null> = {};
+      for (const agent of d.agents ?? []) {
+        for (const al of agent.licences) {
+          map[al.licenceId] = agent;
+        }
+      }
+      setAgentsByLicence(map);
+    } catch { /* non-critical */ }
+  }, [licences]);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    const id = setInterval(() => { void refresh(); }, 15_000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  return agentsByLicence;
+}
+
+function timeSince(ts: number | null): string {
+  if (!ts) return "never";
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 5) return "just now";
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
+}
+
+function RenderBridgePanel({ agent, licencePackageId }: { agent: BridgeAgentStatus; licencePackageId: string | null }) {
+  const isRevoked = agent.status === "revoked";
+  const isPurging = agent.pendingAction === "purge";
+  const packagePublished = licencePackageId
+    ? agent.publishedPackages.some(p => p.packageId === licencePackageId)
+    : false;
+
+  const statusColor = isRevoked ? "#6b7280" : isPurging ? "#c0392b" : agent.agentOnline ? "#16a34a" : "#9ca3af";
+  const statusLabel = isRevoked ? "Revoked" : isPurging ? "Purging" : agent.agentOnline ? "Online" : "Offline";
+
+  return (
+    <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ background: "#0a0a0a" }}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+            <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
+          </svg>
+          <span className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.5)" }}>
+            Render Bridge
+          </span>
+          <span className="font-mono text-[11px] truncate" style={{ color: "rgba(255,255,255,0.35)" }}>
+            {agent.displayName}
+          </span>
+        </div>
+        <span className="flex items-center gap-1.5 flex-shrink-0">
+          {agent.agentOnline && !isRevoked && !isPurging ? (
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: statusColor }} />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: statusColor }} />
+            </span>
+          ) : (
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: statusColor }} />
+          )}
+          <span className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: statusColor }}>
+            {statusLabel}
+          </span>
+        </span>
+      </div>
+
+      {/* Body */}
+      <div className="px-4 py-3 flex items-center justify-between gap-4 flex-wrap" style={{ background: "var(--color-surface)" }}>
+        <div className="space-y-1">
+          <p className="text-xs" style={{ color: "var(--color-ink)" }}>
+            <span style={{ color: "var(--color-muted)" }}>Facility: </span>
+            {agent.organisationName}
+            <span style={{ color: "var(--color-muted)" }}> · </span>
+            {agent.productionName}
+          </p>
+          {licencePackageId && (
+            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+              Package status:{" "}
+              {packagePublished ? (
+                <span style={{ color: "#16a34a" }}>published to render share</span>
+              ) : (
+                <span>not yet published</span>
+              )}
+            </p>
+          )}
+          {agent.publishedPackages.length > 1 && (
+            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+              {agent.publishedPackages.length} packages total on share
+            </p>
+          )}
+        </div>
+        <p className="text-[11px] font-mono flex-shrink-0" style={{ color: "var(--color-muted)" }}>
+          {agent.lastHeartbeatAt ? timeSince(agent.lastHeartbeatAt) : "no heartbeat"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function TalentLicencesClient({ role = "talent" }: { role?: string }) {
   const [licences, setLicences] = useState<Licence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,6 +231,8 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   const [pendingDownloads, setPendingDownloads] = useState<PendingDownload[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [requestsLoaded, setRequestsLoaded] = useState(false);
+
+  const agentsByLicence = useBridgeAgents(licences);
 
   async function load() {
     const r = await fetch("/api/licences");
@@ -332,6 +459,23 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                               Pre-auth until {formatDate(l.preauthUntil!)}
                             </span>
                           )}
+                          {l.organisationId && agentsByLicence[l.id] && (
+                            <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                              style={{
+                                background: agentsByLicence[l.id]!.agentOnline ? "rgba(22,163,74,0.12)" : "rgba(156,163,175,0.15)",
+                                color: agentsByLicence[l.id]!.agentOnline ? "#16a34a" : "#9ca3af",
+                              }}>
+                              {agentsByLicence[l.id]!.agentOnline ? (
+                                <span className="relative flex h-1.5 w-1.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "#16a34a" }} />
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: "#16a34a" }} />
+                                </span>
+                              ) : (
+                                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "#9ca3af" }} />
+                              )}
+                              Render Bridge
+                            </span>
+                          )}
                         </div>
                         <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
                           {l.productionCompany}{l.organisationId ? "" : ""} · {l.packageName ?? "—"}
@@ -464,6 +608,23 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                           <span style={{ color: "var(--color-muted)" }}>Approved</span>
                           <span className="font-medium" style={{ color: "var(--color-ink)" }}>{formatDate(l.approvedAt)}</span>
                         </div>
+
+                        {/* ── Render Bridge panel ───────────────────────── */}
+                        {l.organisationId && agentsByLicence[l.id] && (
+                          <div className="px-3 py-3">
+                            <p className="text-xs font-medium mb-2" style={{ color: "var(--color-ink)" }}>Render Bridge</p>
+                            <RenderBridgePanel
+                              agent={agentsByLicence[l.id]!}
+                              licencePackageId={null}
+                            />
+                          </div>
+                        )}
+                        {l.organisationId && !agentsByLicence[l.id] && (
+                          <div className="flex justify-between gap-4 px-3 py-2">
+                            <span style={{ color: "var(--color-muted)" }}>Render Bridge</span>
+                            <span className="text-xs" style={{ color: "var(--color-muted)" }}>No agent enrolled</span>
+                          </div>
+                        )}
 
                         {/* ── Delivery mode ─────────────────────────────── */}
                         {l.status === "APPROVED" && (
