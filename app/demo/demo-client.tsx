@@ -491,11 +491,6 @@ const PERM_COLOUR: Record<PermissionStatus, string> = {
   blocked: "#991b1b",
 };
 
-const PERM_BG: Record<PermissionStatus, string> = {
-  allowed: "#f0fdf4",
-  approval_required: "#fffbeb",
-  blocked: "#fef2f2",
-};
 
 const PERM_LABEL: Record<PermissionStatus, string> = {
   allowed: "Allowed",
@@ -1717,6 +1712,15 @@ export default function DemoClient() {
     setIsMobile(window.innerWidth < 1024);
   }, []);
 
+  useEffect(() => {
+    if (isMobile !== false || paused) return;
+    const currentScenes = mode === "talent" ? SCENES : REP_SCENES;
+    const t = setTimeout(() => {
+      setSceneIndex((i) => (i + 1) % currentScenes.length);
+    }, AUTO_MS);
+    return () => clearTimeout(t);
+  }, [sceneIndex, paused, mode, isMobile]);
+
   if (isMobile === null) return null;
   if (isMobile) return <MobileGate />;
 
@@ -1727,15 +1731,6 @@ export default function DemoClient() {
     setMode(m);
     setSceneIndex(0);
   };
-
-  useEffect(() => {
-    if (paused) return;
-    const currentScenes = mode === "talent" ? SCENES : REP_SCENES;
-    const t = setTimeout(() => {
-      setSceneIndex((i) => (i + 1) % currentScenes.length);
-    }, AUTO_MS);
-    return () => clearTimeout(t);
-  }, [sceneIndex, paused, mode]);
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
