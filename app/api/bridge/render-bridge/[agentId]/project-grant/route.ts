@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, scanFiles, organisations } from "@/lib/db/schema";
+import { licences, scanFiles, organisations } from "@/lib/db/schema";
 import { and, eq, gt, isNotNull } from "drizzle-orm";
 import {
   requireRenderBridgeToken,

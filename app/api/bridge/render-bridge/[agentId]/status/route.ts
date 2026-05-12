@@ -30,7 +30,6 @@ export async function GET(
 
   // ── Auth: service token or session ────────────────────────────────────────
   const authHeader = req.headers.get("authorization") ?? "";
-  let callerOrgId: string | null = null;
   let callerUserId: string | null = null;
   let callerRole: string | null = null;
 
@@ -40,7 +39,6 @@ export async function GET(
     if (auth.agentId !== agentId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    callerOrgId = auth.organisationId;
   } else {
     const session = await requireSession(req);
     if (isErrorResponse(session)) return session;
