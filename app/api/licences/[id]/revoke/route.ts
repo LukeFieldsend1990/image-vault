@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, users, scanPackages, bridgeGrants } from "@/lib/db/schema";
+import { licences, users, scanPackages, bridgeGrants, renderBridgeAgents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { and, eq, isNull } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -36,6 +36,8 @@ export async function POST(
       status: licences.status,
       projectName: licences.projectName,
       packageId: licences.packageId,
+      organisationId: licences.organisationId,
+      productionId: licences.productionId,
     })
     .from(licences)
     .where(eq(licences.id, id))
@@ -66,9 +68,7 @@ export async function POST(
     .set({ status: "SCRUB_PERIOD", revokedAt: now, scrubDeadline })
     .where(eq(licences.id, id));
 
-  // Signal every live bridge grant to purge its local cache. The bridge
-  // picks this up on its next status poll (tight-poll mode kicks in until
-  // purge-complete lands).
+  // Signal every live bridge grant to purge its local cache.
   await db
     .update(bridgeGrants)
     .set({ purgeRequestedAt: now })
@@ -79,6 +79,20 @@ export async function POST(
         isNull(bridgeGrants.purgeRequestedAt),
       ),
     );
+
+  // Signal any render-bridge agents for this project-scoped licence to purge.
+  if (licence.organisationId && licence.productionId) {
+    await db
+      .update(renderBridgeAgents)
+      .set({ pendingAction: "purge", status: "revoked", revokedAt: now })
+      .where(
+        and(
+          eq(renderBridgeAgents.organisationId, licence.organisationId),
+          eq(renderBridgeAgents.productionId, licence.productionId),
+          isNull(renderBridgeAgents.revokedAt),
+        )
+      );
+  }
 
   // Notify licensee (fire-and-forget)
   void (async () => {
