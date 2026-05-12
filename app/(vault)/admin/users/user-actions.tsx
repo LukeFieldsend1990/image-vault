@@ -3,8 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type Role = "talent" | "rep" | "licensee" | "admin";
+
+const ROLE_COLOR: Record<Role, string> = {
+  talent: "#4f46e5",
+  rep: "#0891b2",
+  licensee: "#059669",
+  admin: "#c0392b",
+};
+
 interface Props {
   userId: string;
+  role: Role;
   isSuspended: boolean;
   isCurrentUser: boolean;
   emailMuted: boolean;
@@ -12,10 +22,32 @@ interface Props {
   inboundEnabled: boolean;
 }
 
-export default function UserActions({ userId, isSuspended, isCurrentUser, emailMuted, aiDisabled, inboundEnabled }: Props) {
+export default function UserActions({ userId, role, isSuspended, isCurrentUser, emailMuted, aiDisabled, inboundEnabled }: Props) {
   const router = useRouter();
-  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | null>(null);
+  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | "role" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleRoleChange(newRole: Role) {
+    if (newRole === role) return;
+    setLoading("role");
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(null);
+    }
+  }
 
   async function handleSuspend() {
     setLoading("suspend");
@@ -121,6 +153,24 @@ export default function UserActions({ userId, isSuspended, isCurrentUser, emailM
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
+      {!isCurrentUser && (
+        <select
+          value={role}
+          disabled={loading !== null}
+          onChange={(e) => void handleRoleChange(e.target.value as Role)}
+          className="text-[10px] font-semibold px-2 py-1 rounded border appearance-none cursor-pointer disabled:opacity-40"
+          style={{
+            borderColor: `${ROLE_COLOR[role]}40`,
+            color: ROLE_COLOR[role],
+            background: `${ROLE_COLOR[role]}10`,
+          }}
+        >
+          <option value="talent">Talent</option>
+          <option value="rep">Rep</option>
+          <option value="licensee">Licensee</option>
+          <option value="admin">Admin</option>
+        </select>
+      )}
       {!isCurrentUser && (
         <button
           onClick={handleSuspend}

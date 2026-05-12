@@ -199,6 +199,7 @@ export default async function AdminUsersPage() {
               {/* Actions */}
               <UserActions
                 userId={u.id}
+                role={role}
                 isSuspended={!!u.suspendedAt}
                 isCurrentUser={u.id === currentUserId}
                 emailMuted={!!u.emailMuted}
