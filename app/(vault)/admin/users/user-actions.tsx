@@ -168,7 +168,6 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
           <option value="talent">Talent</option>
           <option value="rep">Rep</option>
           <option value="licensee">Licensee</option>
-          <option value="admin">Admin</option>
         </select>
       )}
       {!isCurrentUser && (

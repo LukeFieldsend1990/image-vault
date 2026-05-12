@@ -35,7 +35,7 @@ export async function PATCH(
   const hasEmailMuted = typeof body.emailMuted === "boolean";
   const hasAiDisabled = typeof body.aiDisabled === "boolean";
   const hasInboundEnabled = typeof body.inboundEnabled === "boolean";
-  const validRoles = ["talent", "rep", "licensee", "admin"] as const;
+  const validRoles = ["talent", "rep", "licensee"] as const;
   const hasRole = typeof body.role === "string" && validRoles.includes(body.role as typeof validRoles[number]);
 
   if (!hasSuspended && !hasEmailMuted && !hasAiDisabled && !hasInboundEnabled && !hasRole) {
