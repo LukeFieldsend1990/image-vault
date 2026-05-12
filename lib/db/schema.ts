@@ -629,3 +629,20 @@ export const organisationInvites = sqliteTable("organisation_invites", {
   acceptedAt: integer("accepted_at"),
   createdAt: integer("created_at").notNull(),
 });
+
+// ── Render-bridge agents ──────────────────────────────────────────────────────
+
+export const renderBridgeAgents = sqliteTable("render_bridge_agents", {
+  id: text("id").primaryKey(),
+  organisationId: text("organisation_id").notNull().references(() => organisations.id),
+  productionId: text("production_id").notNull().references(() => productions.id),
+  displayName: text("display_name").notNull(),
+  serviceTokenHash: text("service_token_hash"),       // SHA-256; null until enrolment completes
+  tokenExpiresAt: integer("token_expires_at"),         // unix timestamp
+  status: text("status", { enum: ["active", "revoked", "expired"] }).notNull().default("active"),
+  lastHeartbeatAt: integer("last_heartbeat_at"),
+  publishedPackagesJson: text("published_packages_json").notNull().default("[]"),
+  pendingAction: text("pending_action"),               // null | purge | publish | rotate-token
+  revokedAt: integer("revoked_at"),
+  createdAt: integer("created_at").notNull(),
+});
