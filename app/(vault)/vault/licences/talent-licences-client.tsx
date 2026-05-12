@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import OrgMembersPanel from "./org-members-panel";
 
@@ -105,32 +105,35 @@ function fmtGBP(pence: number) {
   return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
-// Map of licenceId → bridge agent status (keyed by organisationId:productionId combo)
+// Map of licenceId → bridge agent status; re-fetches when the set of project-scoped licences changes.
 function useBridgeAgents(licences: Licence[]) {
   const [agentsByLicence, setAgentsByLicence] = useState<Record<string, BridgeAgentStatus | null>>({});
+  const projectCount = licences.filter(l => l.organisationId && l.status === "APPROVED").length;
 
-  const refresh = useCallback(async () => {
-    const projectLicences = licences.filter(l => l.organisationId && l.productionId && l.status === "APPROVED");
-    if (projectLicences.length === 0) return;
-    try {
-      const r = await fetch("/api/bridge/render-bridge");
-      if (!r.ok) return;
-      const d = await r.json() as { agents?: Array<BridgeAgentStatus & { licences: Array<{ licenceId: string }> }> };
-      const map: Record<string, BridgeAgentStatus | null> = {};
-      for (const agent of d.agents ?? []) {
-        for (const al of agent.licences) {
-          map[al.licenceId] = agent;
-        }
-      }
-      setAgentsByLicence(map);
-    } catch { /* non-critical */ }
-  }, [licences]);
-
-  useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    const id = setInterval(() => { void refresh(); }, 15_000);
-    return () => clearInterval(id);
-  }, [refresh]);
+    if (projectCount === 0) return;
+    let alive = true;
+
+    async function fetchAgents() {
+      try {
+        const r = await fetch("/api/bridge/render-bridge");
+        if (!alive || !r.ok) return;
+        const d = await r.json() as { agents?: Array<BridgeAgentStatus & { licences: Array<{ licenceId: string }> }> };
+        if (!alive) return;
+        const map: Record<string, BridgeAgentStatus | null> = {};
+        for (const agent of d.agents ?? []) {
+          for (const al of agent.licences) {
+            map[al.licenceId] = agent;
+          }
+        }
+        setAgentsByLicence(map);
+      } catch { /* non-critical */ }
+    }
+
+    void fetchAgents();
+    const id = setInterval(() => { void fetchAgents(); }, 15_000);
+    return () => { alive = false; clearInterval(id); };
+  }, [projectCount]);
 
   return agentsByLicence;
 }
