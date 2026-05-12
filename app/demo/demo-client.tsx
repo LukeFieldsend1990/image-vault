@@ -1703,14 +1703,12 @@ function activeNavId(scene: Scene): NavId {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function DemoClient() {
-  const [isMobile, setIsMobile] = useState<boolean | null>(null);
+  const [isMobile] = useState<boolean | null>(() =>
+    typeof window !== "undefined" ? window.innerWidth < 1024 : null
+  );
   const [mode, setMode] = useState<DemoMode>("talent");
   const [sceneIndex, setSceneIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-
-  useEffect(() => {
-    setIsMobile(window.innerWidth < 1024);
-  }, []);
 
   useEffect(() => {
     if (isMobile !== false || paused) return;
