@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies } from "@/lib/db/schema";
+import { productions, productionCompanies, organisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, like, desc } from "drizzle-orm";
 
@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
     director?: string;
     vfxSupervisor?: string;
     notes?: string;
+    organisationId?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -107,6 +108,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Validate organisationId if provided
+  let orgId: string | null = null;
+  if (body.organisationId) {
+    const org = await db
+      .select({ id: organisations.id })
+      .from(organisations)
+      .where(eq(organisations.id, body.organisationId))
+      .get();
+    if (!org) return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
+    orgId = org.id;
+  }
+
   const productionId = crypto.randomUUID();
   await db.insert(productions).values({
     id: productionId,
@@ -120,6 +133,7 @@ export async function POST(req: NextRequest) {
     director: body.director ?? null,
     vfxSupervisor: body.vfxSupervisor ?? null,
     notes: body.notes ?? null,
+    organisationId: orgId,
     createdAt: now,
     updatedAt: now,
   });

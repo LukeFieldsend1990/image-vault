@@ -19,12 +19,26 @@ interface BridgeDevice {
   createdAt: number;
 }
 
+interface ConnectionOrg {
+  orgId: string;
+  orgName: string;
+  productions: { id: string; name: string }[];
+}
+
+interface UnlinkedLicence {
+  id: string;
+  projectName: string;
+  packageName: string | null;
+}
+
 interface Props {
   role: string;
   canManage: boolean;
   initialTokens: BridgeToken[];
   initialDevices: BridgeDevice[];
   activeGrantsByLicence: { licenceId: string; count: number }[];
+  connectionIds: ConnectionOrg[];
+  unlinkedLicences: UnlinkedLicence[];
 }
 
 function ts(unix: number | null): string {
@@ -48,6 +62,8 @@ export default function BridgeSettingsClient({
   initialTokens,
   initialDevices,
   activeGrantsByLicence,
+  connectionIds,
+  unlinkedLicences,
 }: Props) {
   const [tokens, setTokens] = useState<BridgeToken[]>(initialTokens);
   const [devices] = useState<BridgeDevice[]>(initialDevices);
@@ -55,8 +71,17 @@ export default function BridgeSettingsClient({
   const [creating, setCreating] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Link production state
+  const [remainingUnlinked, setRemainingUnlinked] = useState<UnlinkedLicence[]>(unlinkedLicences);
+  const [linkingLicenceId, setLinkingLicenceId] = useState<string | null>(null);
+  const [newProdName, setNewProdName] = useState("");
+  const [selectedOrgId, setSelectedOrgId] = useState(connectionIds[0]?.orgId ?? "");
+  const [linkingBusy, setLinkingBusy] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const activeTokens = tokens.filter((t) => !t.revokedAt);
   const revokedTokens = tokens.filter((t) => t.revokedAt);
@@ -114,6 +139,53 @@ export default function BridgeSettingsClient({
     });
   }
 
+  function copyId(value: string) {
+    void navigator.clipboard.writeText(value).then(() => {
+      setCopiedId(value);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  }
+
+  async function createAndLinkProduction(licenceId: string) {
+    if (!newProdName.trim() || !selectedOrgId) return;
+    setLinkingBusy(true);
+    setLinkError(null);
+    try {
+      // Create the production
+      const prodRes = await fetch("/api/productions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newProdName.trim(), organisationId: selectedOrgId }),
+      });
+      if (!prodRes.ok) {
+        const body = await prodRes.json() as { error?: string };
+        setLinkError(body.error ?? "Failed to create production");
+        return;
+      }
+      const { id: productionId } = await prodRes.json() as { id: string };
+
+      // Link it to the licence
+      const linkRes = await fetch(`/api/licences/${licenceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productionId, organisationId: selectedOrgId }),
+      });
+      if (!linkRes.ok) {
+        const body = await linkRes.json() as { error?: string };
+        setLinkError(body.error ?? "Failed to link production");
+        return;
+      }
+
+      setRemainingUnlinked(prev => prev.filter(l => l.id !== licenceId));
+      setLinkingLicenceId(null);
+      setNewProdName("");
+    } catch {
+      setLinkError("Network error");
+    } finally {
+      setLinkingBusy(false);
+    }
+  }
+
   const totalActiveGrants = activeGrantsByLicence.reduce((s, x) => s + x.count, 0);
 
   return (
@@ -169,6 +241,171 @@ export default function BridgeSettingsClient({
             >
               Copy
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Connection IDs — org and production IDs needed for Docker bridge registration */}
+      {canManage && connectionIds.length > 0 && (
+        <div
+          className="rounded border p-4 mb-6"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+            Connection IDs
+          </p>
+          <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
+            Pass these as <code className="font-mono text-[11px]">organisationId</code> and <code className="font-mono text-[11px]">projectId</code> when registering the bridge agent.
+          </p>
+          <div className="flex flex-col gap-4">
+            {connectionIds.map((org) => (
+              <div key={org.orgId}>
+                <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+                  {org.orgName}
+                </p>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs w-28 shrink-0" style={{ color: "var(--color-muted)" }}>organisationId</span>
+                  <code
+                    className="flex-1 rounded px-2.5 py-1.5 text-xs font-mono select-all truncate"
+                    style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-ink)" }}
+                  >
+                    {org.orgId}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => copyId(org.orgId)}
+                    className="shrink-0 rounded border px-2.5 py-1.5 text-xs transition hover:opacity-70"
+                    style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+                  >
+                    {copiedId === org.orgId ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                {org.productions.length === 0 ? (
+                  <p className="text-xs pl-28" style={{ color: "var(--color-muted)" }}>No productions linked to this organisation.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {org.productions.map((prod) => (
+                      <div key={prod.id} className="flex items-center gap-2">
+                        <span className="text-xs w-28 shrink-0 truncate" style={{ color: "var(--color-muted)" }}>
+                          {prod.name}
+                        </span>
+                        <code
+                          className="flex-1 rounded px-2.5 py-1.5 text-xs font-mono select-all truncate"
+                          style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-ink)" }}
+                        >
+                          {prod.id}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => copyId(prod.id)}
+                          className="shrink-0 rounded border px-2.5 py-1.5 text-xs transition hover:opacity-70"
+                          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+                        >
+                          {copiedId === prod.id ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Licences without a production — let licensees create + link a production */}
+      {canManage && remainingUnlinked.length > 0 && (
+        <div
+          className="rounded border p-4 mb-6"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+            Licences without a production
+          </p>
+          <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
+            These licences have no production linked. Create a production to get a <code className="font-mono text-[11px]">projectId</code> for bridge registration.
+          </p>
+          <div className="flex flex-col gap-3">
+            {remainingUnlinked.map((lic) => (
+              <div key={lic.id}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: "var(--color-ink)" }}>
+                      {lic.projectName}
+                    </p>
+                    {lic.packageName && (
+                      <p className="text-[11px] mt-0.5" style={{ color: "var(--color-muted)" }}>{lic.packageName}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLinkingLicenceId(linkingLicenceId === lic.id ? null : lic.id);
+                      setNewProdName("");
+                      setLinkError(null);
+                    }}
+                    className="shrink-0 rounded border px-3 py-1.5 text-xs font-medium transition hover:opacity-70"
+                    style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}
+                  >
+                    {linkingLicenceId === lic.id ? "Cancel" : "Create production"}
+                  </button>
+                </div>
+
+                {linkingLicenceId === lic.id && (
+                  <div
+                    className="mt-3 rounded border p-3 flex flex-col gap-3"
+                    style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                  >
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newProdName}
+                        onChange={(e) => setNewProdName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void createAndLinkProduction(lic.id); }}
+                        placeholder="Production name"
+                        maxLength={120}
+                        className="flex-1 rounded border px-3 py-2 text-sm outline-none"
+                        style={{
+                          borderColor: "var(--color-border)",
+                          background: "var(--color-surface)",
+                          color: "var(--color-ink)",
+                        }}
+                      />
+                      {connectionIds.length > 1 && (
+                        <select
+                          value={selectedOrgId}
+                          onChange={(e) => setSelectedOrgId(e.target.value)}
+                          className="shrink-0 rounded border px-2 py-2 text-xs outline-none"
+                          style={{
+                            borderColor: "var(--color-border)",
+                            background: "var(--color-surface)",
+                            color: "var(--color-ink)",
+                          }}
+                        >
+                          {connectionIds.map((org) => (
+                            <option key={org.orgId} value={org.orgId}>{org.orgName}</option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void createAndLinkProduction(lic.id)}
+                        disabled={linkingBusy || !newProdName.trim()}
+                        className="shrink-0 rounded border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition hover:opacity-80 disabled:opacity-40"
+                        style={{ borderColor: "var(--color-ink)", color: "var(--color-ink)" }}
+                      >
+                        {linkingBusy ? (
+                          <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                          </svg>
+                        ) : "Create & link"}
+                      </button>
+                    </div>
+                    {linkError && <p className="text-xs" style={{ color: "var(--color-danger)" }}>{linkError}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
