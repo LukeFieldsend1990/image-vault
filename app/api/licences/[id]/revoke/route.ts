@@ -80,15 +80,14 @@ export async function POST(
       ),
     );
 
-  // Signal any render-bridge agents for this project-scoped licence to purge.
-  if (licence.organisationId && licence.productionId) {
+  // Signal any render-bridge agents for this org to purge their local cache.
+  if (licence.organisationId) {
     await db
       .update(renderBridgeAgents)
-      .set({ pendingAction: "purge", status: "revoked", revokedAt: now })
+      .set({ pendingAction: "purge" })
       .where(
         and(
           eq(renderBridgeAgents.organisationId, licence.organisationId),
-          eq(renderBridgeAgents.productionId, licence.productionId),
           isNull(renderBridgeAgents.revokedAt),
         )
       );

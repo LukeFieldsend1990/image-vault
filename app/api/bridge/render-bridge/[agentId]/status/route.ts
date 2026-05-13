@@ -3,14 +3,13 @@ export const runtime = "edge";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { renderBridgeAgents, licences, organisationMembers } from "@/lib/db/schema";
-import { and, eq, gt, isNotNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, or } from "drizzle-orm";
 import {
   requireRenderBridgeToken,
   isRenderBridgeTokenError,
 } from "@/lib/auth/requireRenderBridgeToken";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 
-// Agent is considered online if last heartbeat is within 2 × 30s interval
 const ONLINE_THRESHOLD_SECS = 60;
 
 /**
@@ -18,7 +17,7 @@ const ONLINE_THRESHOLD_SECS = 60;
  *
  * Accepts either:
  *   - Bearer svc_... service token (render-bridge agent itself)
- *   - Session cookie (org member or talent/rep on the related licence, or admin)
+ *   - Session cookie (org member, talent with a licence at this org, or admin)
  */
 export async function GET(
   req: NextRequest,
@@ -28,7 +27,6 @@ export async function GET(
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
 
-  // ── Auth: service token or session ────────────────────────────────────────
   const authHeader = req.headers.get("authorization") ?? "";
   let callerUserId: string | null = null;
   let callerRole: string | null = null;
@@ -50,7 +48,6 @@ export async function GET(
     .select({
       id: renderBridgeAgents.id,
       organisationId: renderBridgeAgents.organisationId,
-      productionId: renderBridgeAgents.productionId,
       status: renderBridgeAgents.status,
       lastHeartbeatAt: renderBridgeAgents.lastHeartbeatAt,
       publishedPackagesJson: renderBridgeAgents.publishedPackagesJson,
@@ -64,7 +61,7 @@ export async function GET(
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
 
-  // Session callers: must be admin, org member, or talent on a related licence
+  // Session callers: must be admin, org member, or talent with a licence at this org
   if (callerUserId && callerRole !== "admin") {
     const [membership, talentLicence] = await Promise.all([
       db
@@ -83,7 +80,6 @@ export async function GET(
         .where(
           and(
             eq(licences.organisationId, agent.organisationId),
-            eq(licences.productionId, agent.productionId),
             eq(licences.talentId, callerUserId),
           )
         )
@@ -106,23 +102,36 @@ export async function GET(
     publishedPackages = [];
   }
 
+  // Check for any active licence at this org (org-scoped or member-held)
+  const memberRows = await db
+    .select({ userId: organisationMembers.userId })
+    .from(organisationMembers)
+    .where(eq(organisationMembers.organisationId, agent.organisationId))
+    .all();
+  const memberIds = memberRows.map(r => r.userId);
+
   const activeLicence = await db
     .select({ id: licences.id })
     .from(licences)
     .where(
       and(
-        eq(licences.organisationId, agent.organisationId),
-        eq(licences.productionId, agent.productionId),
         eq(licences.status, "APPROVED"),
         gt(licences.validTo, now),
         isNotNull(licences.packageId),
+        memberIds.length > 0
+          ? or(
+              eq(licences.organisationId, agent.organisationId),
+              inArray(licences.licenseeId, memberIds)
+            )
+          : eq(licences.organisationId, agent.organisationId)
       )
     )
     .get();
 
   return NextResponse.json({
     agentId: agent.id,
-    projectGrantId: activeLicence ? `pg_${agent.productionId}` : null,
+    organisationId: agent.organisationId,
+    hasActiveLicences: activeLicence !== undefined,
     status: agent.status,
     agentOnline,
     lastHeartbeatAt: agent.lastHeartbeatAt,

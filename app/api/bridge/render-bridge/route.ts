@@ -2,8 +2,8 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { renderBridgeAgents, organisations, productions, licences, scanPackages, talentProfiles, organisationMembers } from "@/lib/db/schema";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { renderBridgeAgents, organisations, licences, scanPackages, talentProfiles, organisationMembers } from "@/lib/db/schema";
+import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { requireBridgeToken, isBridgeTokenError } from "@/lib/auth/requireBridgeToken";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 
@@ -23,40 +23,40 @@ function generateServiceToken(): string {
 /**
  * POST /api/bridge/render-bridge
  *
- * Enrolment. Called once on Docker first-start. Auth via an existing bridge PAT
- * (issued to the org admin via /api/bridge/tokens).
+ * Enrolment. Called once on Docker first-start. Auth via an existing bridge PAT.
+ * Agents are org-scoped — they pull all licences granted to the org across all productions.
  *
- * Body: { vendorId?, organisationId, projectId, displayName }
+ * Body: { organisationId, displayName }
  * Returns 201: { agentId, serviceToken, tokenExpiresAt }
  */
 export async function POST(req: NextRequest) {
   const auth = await requireBridgeToken(req);
   if (isBridgeTokenError(auth)) return auth;
 
-  let body: { vendorId?: string; organisationId?: string; projectId?: string; displayName?: string };
+  let body: { organisationId?: string; displayName?: string };
   try {
     body = await req.json() as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { organisationId, projectId, displayName } = body;
-  if (!organisationId || !projectId || !displayName) {
+  const { organisationId, displayName } = body;
+  if (!organisationId || !displayName) {
     return NextResponse.json(
-      { error: "organisationId, projectId, and displayName are required" },
+      { error: "organisationId and displayName are required" },
       { status: 400 }
     );
   }
 
   const db = getDb();
 
-  const [org, production] = await Promise.all([
-    db.select({ id: organisations.id }).from(organisations).where(eq(organisations.id, organisationId)).get(),
-    db.select({ id: productions.id }).from(productions).where(eq(productions.id, projectId)).get(),
-  ]);
+  const org = await db
+    .select({ id: organisations.id })
+    .from(organisations)
+    .where(eq(organisations.id, organisationId))
+    .get();
 
   if (!org) return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
-  if (!production) return NextResponse.json({ error: "Production not found" }, { status: 404 });
 
   const agentId = crypto.randomUUID();
   const serviceToken = generateServiceToken();
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   await db.insert(renderBridgeAgents).values({
     id: agentId,
     organisationId,
-    productionId: projectId,
+    productionId: null,
     displayName,
     serviceTokenHash,
     tokenExpiresAt,
@@ -77,11 +77,7 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json(
-    {
-      agentId,
-      serviceToken,
-      tokenExpiresAt: new Date(tokenExpiresAt * 1000).toISOString(),
-    },
+    { agentId, serviceToken, tokenExpiresAt: new Date(tokenExpiresAt * 1000).toISOString() },
     { status: 201 }
   );
 }
@@ -90,8 +86,9 @@ export async function POST(req: NextRequest) {
  * GET /api/bridge/render-bridge
  *
  * Session-authenticated. Returns render-bridge agents visible to the caller:
- *   licensee → agents for all orgs they're a member of
- *   talent/rep → agents serving their project-scoped licences
+ *   licensee → agents for all orgs they belong to
+ *   talent/rep → agents for orgs that hold licences covering their work
+ *   admin → all agents
  */
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
@@ -102,20 +99,42 @@ export async function GET(req: NextRequest) {
 
   async function buildAgentPayload(rawAgents: Array<{
     id: string; displayName: string; organisationId: string; organisationName: string | null;
-    productionId: string; productionName: string | null; status: string;
-    lastHeartbeatAt: number | null; tokenExpiresAt: number | null;
+    status: string; lastHeartbeatAt: number | null; tokenExpiresAt: number | null;
     publishedPackagesJson: string; pendingAction: string | null; revokedAt: number | null;
   }>) {
     return Promise.all(rawAgents.map(async (agent) => {
+      // All licences for this org (org-scoped + individual members)
+      const memberIds = await db
+        .select({ userId: organisationMembers.userId })
+        .from(organisationMembers)
+        .where(eq(organisationMembers.organisationId, agent.organisationId))
+        .all()
+        .then(rows => rows.map(r => r.userId));
+
       const agentLicences = await db
         .select({
-          id: licences.id, packageId: licences.packageId, packageName: scanPackages.name,
-          talentName: talentProfiles.fullName, validTo: licences.validTo, status: licences.status,
+          id: licences.id,
+          packageId: licences.packageId,
+          packageName: scanPackages.name,
+          talentName: talentProfiles.fullName,
+          validTo: licences.validTo,
+          status: licences.status,
+          productionId: licences.productionId,
         })
         .from(licences)
         .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
         .leftJoin(talentProfiles, eq(talentProfiles.userId, licences.talentId))
-        .where(and(eq(licences.organisationId, agent.organisationId), eq(licences.productionId, agent.productionId)))
+        .where(
+          and(
+            isNotNull(licences.packageId),
+            memberIds.length > 0
+              ? or(
+                  eq(licences.organisationId, agent.organisationId),
+                  inArray(licences.licenseeId, memberIds)
+                )
+              : eq(licences.organisationId, agent.organisationId)
+          )
+        )
         .all();
 
       let publishedIds: string[] = [];
@@ -130,8 +149,6 @@ export async function GET(req: NextRequest) {
         displayName: agent.displayName,
         organisationId: agent.organisationId,
         organisationName: agent.organisationName ?? agent.organisationId,
-        productionId: agent.productionId,
-        productionName: agent.productionName ?? agent.productionId,
         status: agent.status,
         lastHeartbeatAt: agent.lastHeartbeatAt,
         agentOnline: agent.lastHeartbeatAt !== null && agent.lastHeartbeatAt > now - ONLINE_THRESHOLD_SECS,
@@ -140,20 +157,29 @@ export async function GET(req: NextRequest) {
         revokedAt: agent.revokedAt,
         publishedPackages,
         licences: agentLicences.map(l => ({
-          licenceId: l.id, packageId: l.packageId, packageName: l.packageName,
-          talentName: l.talentName ?? null, validTo: l.validTo, status: l.status,
+          licenceId: l.id,
+          packageId: l.packageId,
+          packageName: l.packageName,
+          talentName: l.talentName ?? null,
+          validTo: l.validTo,
+          status: l.status,
+          productionId: l.productionId,
         })),
       };
     }));
   }
 
   const agentSelect = {
-    id: renderBridgeAgents.id, displayName: renderBridgeAgents.displayName,
-    organisationId: renderBridgeAgents.organisationId, organisationName: organisations.name,
-    productionId: renderBridgeAgents.productionId, productionName: productions.name,
-    status: renderBridgeAgents.status, lastHeartbeatAt: renderBridgeAgents.lastHeartbeatAt,
-    tokenExpiresAt: renderBridgeAgents.tokenExpiresAt, publishedPackagesJson: renderBridgeAgents.publishedPackagesJson,
-    pendingAction: renderBridgeAgents.pendingAction, revokedAt: renderBridgeAgents.revokedAt,
+    id: renderBridgeAgents.id,
+    displayName: renderBridgeAgents.displayName,
+    organisationId: renderBridgeAgents.organisationId,
+    organisationName: organisations.name,
+    status: renderBridgeAgents.status,
+    lastHeartbeatAt: renderBridgeAgents.lastHeartbeatAt,
+    tokenExpiresAt: renderBridgeAgents.tokenExpiresAt,
+    publishedPackagesJson: renderBridgeAgents.publishedPackagesJson,
+    pendingAction: renderBridgeAgents.pendingAction,
+    revokedAt: renderBridgeAgents.revokedAt,
   };
 
   if (session.role === "licensee") {
@@ -170,7 +196,6 @@ export async function GET(req: NextRequest) {
       .select(agentSelect)
       .from(renderBridgeAgents)
       .leftJoin(organisations, eq(organisations.id, renderBridgeAgents.organisationId))
-      .leftJoin(productions, eq(productions.id, renderBridgeAgents.productionId))
       .where(inArray(renderBridgeAgents.organisationId, orgIds))
       .all();
 
@@ -178,30 +203,32 @@ export async function GET(req: NextRequest) {
   }
 
   if (session.role === "talent" || session.role === "rep") {
-    const projectLicences = await db
-      .select({ organisationId: licences.organisationId, productionId: licences.productionId })
+    // Find orgs that hold licences covering this talent's work
+    const talentLicenceOrgs = await db
+      .select({ organisationId: licences.organisationId })
       .from(licences)
-      .where(and(eq(licences.talentId, session.sub), isNotNull(licences.organisationId), isNotNull(licences.productionId)))
+      .where(and(eq(licences.talentId, session.sub), isNotNull(licences.organisationId)))
       .all();
 
-    if (projectLicences.length === 0) return NextResponse.json({ agents: [] });
+    if (talentLicenceOrgs.length === 0) return NextResponse.json({ agents: [] });
 
-    const seen = new Set<string>();
-    const combos = projectLicences.filter(l => {
-      const k = `${l.organisationId}:${l.productionId}`;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    const orgIds = [...new Set(talentLicenceOrgs.map(l => l.organisationId!))];
+    const rawAgents = await db
+      .select(agentSelect)
+      .from(renderBridgeAgents)
+      .leftJoin(organisations, eq(organisations.id, renderBridgeAgents.organisationId))
+      .where(inArray(renderBridgeAgents.organisationId, orgIds))
+      .all();
 
-    const rawAgents = (await Promise.all(combos.map(combo =>
-      db.select(agentSelect)
-        .from(renderBridgeAgents)
-        .leftJoin(organisations, eq(organisations.id, renderBridgeAgents.organisationId))
-        .leftJoin(productions, eq(productions.id, renderBridgeAgents.productionId))
-        .where(and(eq(renderBridgeAgents.organisationId, combo.organisationId!), eq(renderBridgeAgents.productionId, combo.productionId!)))
-        .all()
-    ))).flat();
+    return NextResponse.json({ agents: await buildAgentPayload(rawAgents) });
+  }
+
+  if (session.role === "admin") {
+    const rawAgents = await db
+      .select(agentSelect)
+      .from(renderBridgeAgents)
+      .leftJoin(organisations, eq(organisations.id, renderBridgeAgents.organisationId))
+      .all();
 
     return NextResponse.json({ agents: await buildAgentPayload(rawAgents) });
   }

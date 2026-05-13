@@ -54,7 +54,6 @@ interface BridgeAgentStatus {
   agentId: string;
   displayName: string;
   organisationName: string;
-  productionName: string;
   agentOnline: boolean;
   lastHeartbeatAt: number | null;
   publishedPackages: Array<{ packageId: string; packageName: string }>;
@@ -193,8 +192,6 @@ function RenderBridgePanel({ agent, licencePackageId }: { agent: BridgeAgentStat
           <p className="text-xs" style={{ color: "var(--color-ink)" }}>
             <span style={{ color: "var(--color-muted)" }}>Facility: </span>
             {agent.organisationName}
-            <span style={{ color: "var(--color-muted)" }}> · </span>
-            {agent.productionName}
           </p>
           {licencePackageId && (
             <p className="text-xs" style={{ color: "var(--color-muted)" }}>

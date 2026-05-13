@@ -6,7 +6,6 @@ import { eq } from "drizzle-orm";
 export interface RenderBridgeTokenPayload {
   agentId: string;
   organisationId: string;
-  productionId: string;
   status: string;
 }
 
@@ -39,7 +38,6 @@ export async function requireRenderBridgeToken(
     .select({
       id: renderBridgeAgents.id,
       organisationId: renderBridgeAgents.organisationId,
-      productionId: renderBridgeAgents.productionId,
       status: renderBridgeAgents.status,
       revokedAt: renderBridgeAgents.revokedAt,
     })
@@ -57,7 +55,6 @@ export async function requireRenderBridgeToken(
   return {
     agentId: agent.id,
     organisationId: agent.organisationId,
-    productionId: agent.productionId,
     status: agent.status,
   };
 }

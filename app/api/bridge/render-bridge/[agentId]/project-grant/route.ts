@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
-import { licences, scanFiles, organisations } from "@/lib/db/schema";
-import { and, eq, gt, isNotNull } from "drizzle-orm";
+import { licences, scanFiles, organisations, organisationMembers } from "@/lib/db/schema";
+import { and, eq, gt, inArray, isNotNull, or } from "drizzle-orm";
 import {
   requireRenderBridgeToken,
   isRenderBridgeTokenError,
@@ -43,8 +43,9 @@ async function presignGet(r2Key: string, ttlSecs: number): Promise<string> {
 /**
  * GET /api/bridge/render-bridge/:agentId/project-grant
  *
- * Returns all APPROVED, non-expired project-scoped licences for this agent's
- * org + production, with R2 presigned download URLs for each file.
+ * Returns all APPROVED, non-expired licences for this agent's org —
+ * both org-scoped licences and licences held by individual org members —
+ * with R2 presigned download URLs for each file.
  */
 export async function GET(
   req: NextRequest,
@@ -67,31 +68,44 @@ export async function GET(
     .where(eq(organisations.id, auth.organisationId))
     .get();
 
-  const projectLicences = await db
+  // Collect member user IDs so personal licences are included alongside org-scoped ones
+  const memberRows = await db
+    .select({ userId: organisationMembers.userId })
+    .from(organisationMembers)
+    .where(eq(organisationMembers.organisationId, auth.organisationId))
+    .all();
+  const memberIds = memberRows.map(r => r.userId);
+
+  const licenceFilter = and(
+    eq(licences.status, "APPROVED"),
+    gt(licences.validTo, now),
+    isNotNull(licences.packageId),
+    memberIds.length > 0
+      ? or(
+          eq(licences.organisationId, auth.organisationId),
+          inArray(licences.licenseeId, memberIds)
+        )
+      : eq(licences.organisationId, auth.organisationId)
+  );
+
+  const activeLicences = await db
     .select({
       id: licences.id,
       packageId: licences.packageId,
       validTo: licences.validTo,
       fileScope: licences.fileScope,
+      productionId: licences.productionId,
     })
     .from(licences)
-    .where(
-      and(
-        eq(licences.organisationId, auth.organisationId),
-        eq(licences.productionId, auth.productionId),
-        eq(licences.status, "APPROVED"),
-        gt(licences.validTo, now),
-        isNotNull(licences.packageId),
-      )
-    )
+    .where(licenceFilter)
     .all();
 
-  if (projectLicences.length === 0) {
-    return NextResponse.json({ error: "No active project grant found" }, { status: 404 });
+  if (activeLicences.length === 0) {
+    return NextResponse.json({ error: "No active licences found for this organisation" }, { status: 404 });
   }
 
   const packages = await Promise.all(
-    projectLicences.map(async (licence) => {
+    activeLicences.map(async (licence) => {
       const allFiles = await db
         .select({
           id: scanFiles.id,
@@ -130,18 +144,18 @@ export async function GET(
 
       return {
         packageId: licence.packageId,
-        grantId: licence.id,
+        licenceId: licence.id,
+        productionId: licence.productionId ?? null,
         files,
         expiresAt: licence.validTo,
       };
     })
   );
 
-  const earliestExpiry = Math.min(...projectLicences.map(l => l.validTo));
+  const earliestExpiry = Math.min(...activeLicences.map(l => l.validTo));
 
   return NextResponse.json({
-    projectGrantId: `pg_${auth.productionId}`,
-    projectId: auth.productionId,
+    organisationId: auth.organisationId,
     licenceeOrganisation: org?.name ?? auth.organisationId,
     expiresAt: earliestExpiry,
     packages,

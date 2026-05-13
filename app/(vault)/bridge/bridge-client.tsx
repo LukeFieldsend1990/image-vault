@@ -14,6 +14,7 @@ interface AgentLicence {
   talentName: string | null;
   validTo: number;
   status: string;
+  productionId: string | null;
 }
 
 interface AgentSummary {
@@ -21,8 +22,7 @@ interface AgentSummary {
   displayName: string;
   organisationId: string;
   organisationName: string;
-  productionId: string;
-  productionName: string;
+
   status: "active" | "revoked" | "expired";
   lastHeartbeatAt: number | null;
   agentOnline: boolean;
@@ -148,8 +148,6 @@ function AgentCard({ agent, role }: { agent: AgentSummary; role: string }) {
               {agent.displayName}
             </p>
             <p className="mt-0.5 text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>
-              {agent.productionName}
-              <span className="mx-1.5" style={{ color: "rgba(255,255,255,0.25)" }}>·</span>
               {agent.organisationName}
             </p>
           </div>
