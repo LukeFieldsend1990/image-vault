@@ -130,8 +130,11 @@ export async function GET(req: NextRequest) {
           packageId: licences.packageId,
           packageName: scanPackages.name,
           talentName: talentProfiles.fullName,
+          projectName: licences.projectName,
+          validFrom: licences.validFrom,
           validTo: licences.validTo,
           status: licences.status,
+          deliveryMode: licences.deliveryMode,
           productionId: licences.productionId,
         })
         .from(licences)
@@ -174,8 +177,11 @@ export async function GET(req: NextRequest) {
           packageId: l.packageId,
           packageName: l.packageName,
           talentName: l.talentName ?? null,
+          licenceName: l.projectName,
+          validFrom: l.validFrom,
           validTo: l.validTo,
           status: l.status,
+          deliveryMode: l.deliveryMode,
           productionId: l.productionId,
         })),
       };

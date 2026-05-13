@@ -12,8 +12,11 @@ interface AgentLicence {
   packageId: string | null;
   packageName: string | null;
   talentName: string | null;
+  licenceName: string | null;
+  validFrom: number;
   validTo: number;
   status: string;
+  deliveryMode: string | null;
   productionId: string | null;
 }
 
@@ -137,12 +140,24 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
     }
   }
 
-  const activeLicences = agent.licences.filter(l => l.status === "APPROVED");
-  const allPackageNames = [...new Map(
-    agent.licences
-      .filter(l => l.packageId && l.packageName)
-      .map(l => [l.packageId!, l.packageName!])
-  ).entries()];
+  const nowSec = Math.floor(Date.now() / 1000);
+  const activeLicences = agent.licences.filter(
+    l => l.status === "APPROVED" && l.deliveryMode === "bridge_only" && l.validTo > nowSec
+  );
+
+  // For "Published to share": deduplicate packages, tracking whether any bridge-enabled licence covers each
+  const packageMap = new Map<string, { name: string; hasBridgeLicence: boolean }>();
+  for (const l of agent.licences) {
+    if (!l.packageId || !l.packageName) continue;
+    const existing = packageMap.get(l.packageId);
+    const hasBridge = l.deliveryMode === "bridge_only";
+    if (!existing) {
+      packageMap.set(l.packageId, { name: l.packageName, hasBridgeLicence: hasBridge });
+    } else if (hasBridge) {
+      existing.hasBridgeLicence = true;
+    }
+  }
+  const allPackages = [...packageMap.entries()].map(([pkgId, { name, hasBridgeLicence }]) => ({ pkgId, name, hasBridgeLicence }));
 
   return (
     <div
@@ -196,29 +211,51 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
               </span>
             )}
           </p>
-          {allPackageNames.length === 0 ? (
+          {allPackages.length === 0 ? (
             <p className="text-xs" style={{ color: "var(--color-muted)" }}>No packages on this licence yet.</p>
           ) : (
             <ul className="space-y-2">
-              {allPackageNames.map(([pkgId, pkgName]) => {
+              {allPackages.map(({ pkgId, name: pkgName, hasBridgeLicence }) => {
                 const published = agent.publishedPackages.some(p => p.packageId === pkgId);
+                const transferring = !published && hasBridgeLicence && agent.agentOnline;
+                const pending = !published && hasBridgeLicence && !agent.agentOnline;
                 return (
                   <li key={pkgId} className="flex items-center gap-2.5 text-xs">
                     {published ? (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
+                    ) : transferring ? (
+                      <span className="relative flex h-[13px] w-[13px] flex-shrink-0 items-center justify-center">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full opacity-50" style={{ background: "#b45309" }} />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: "#b45309" }} />
+                      </span>
                     ) : (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0" style={{ color: "var(--color-border)" }}>
                         <circle cx="12" cy="12" r="9" />
                       </svg>
                     )}
-                    <span style={{ color: published ? "var(--color-ink)" : "var(--color-muted)" }}>
+                    <span style={{ color: published ? "var(--color-ink)" : transferring ? "var(--color-ink)" : "var(--color-muted)" }}>
                       {pkgName}
                     </span>
                     {published && (
                       <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#16a34a18", color: "#16a34a" }}>
                         on share
+                      </span>
+                    )}
+                    {transferring && (
+                      <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#b4530918", color: "#b45309" }}>
+                        downloading
+                      </span>
+                    )}
+                    {pending && (
+                      <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#9ca3af18", color: "#9ca3af" }}>
+                        pending
+                      </span>
+                    )}
+                    {!published && !hasBridgeLicence && (
+                      <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#b4530918", color: "#b45309" }}>
+                        no bridge licence
                       </span>
                     )}
                   </li>
@@ -234,18 +271,25 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
             <p className="text-[10px] font-semibold tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
               Licences covered
             </p>
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {activeLicences.map(l => (
-                <li key={l.licenceId} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="truncate" style={{ color: "var(--color-ink)" }}>
-                    {l.talentName ?? "—"}
-                    {l.packageName && (
-                      <span style={{ color: "var(--color-muted)" }}> · {l.packageName}</span>
-                    )}
-                  </span>
-                  <span className="flex-shrink-0 font-mono text-[10px]" style={{ color: "var(--color-muted)" }}>
-                    exp {daysUntil(l.validTo)}
-                  </span>
+                <li key={l.licenceId} className="text-xs">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-medium truncate" style={{ color: "var(--color-ink)" }}>
+                      {l.talentName ?? "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3 mt-0.5">
+                    <span className="truncate" style={{ color: "var(--color-muted)" }}>
+                      {l.licenceName ?? "—"}
+                      {l.packageName && (
+                        <> · {l.packageName}</>
+                      )}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 font-mono text-[10px]" style={{ color: "var(--color-muted)" }}>
+                    {formatDate(l.validFrom)} – {formatDate(l.validTo)}
+                  </div>
                 </li>
               ))}
             </ul>
