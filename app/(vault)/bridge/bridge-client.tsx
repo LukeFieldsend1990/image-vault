@@ -217,11 +217,18 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
             <ul className="space-y-2">
               {allPackages.map(({ pkgId, name: pkgName, hasBridgeLicence }) => {
                 const published = agent.publishedPackages.some(p => p.packageId === pkgId);
+                const unauthorised = published && !hasBridgeLicence;
                 const transferring = !published && hasBridgeLicence && agent.agentOnline;
                 const pending = !published && hasBridgeLicence && !agent.agentOnline;
                 return (
                   <li key={pkgId} className="flex items-center gap-2.5 text-xs">
-                    {published ? (
+                    {unauthorised ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                        <circle cx="12" cy="12" r="9" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    ) : published ? (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
@@ -235,10 +242,15 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
                         <circle cx="12" cy="12" r="9" />
                       </svg>
                     )}
-                    <span style={{ color: published ? "var(--color-ink)" : transferring ? "var(--color-ink)" : "var(--color-muted)" }}>
+                    <span style={{ color: unauthorised ? "#c0392b" : published ? "var(--color-ink)" : transferring ? "var(--color-ink)" : "var(--color-muted)" }}>
                       {pkgName}
                     </span>
-                    {published && (
+                    {unauthorised && (
+                      <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#c0392b12", color: "#c0392b" }}>
+                        on share — no licence
+                      </span>
+                    )}
+                    {!unauthorised && published && (
                       <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#16a34a18", color: "#16a34a" }}>
                         on share
                       </span>
