@@ -72,6 +72,7 @@ export default function BridgeSettingsClient({
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedDocker, setCopiedDocker] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,6 +147,13 @@ export default function BridgeSettingsClient({
     });
   }
 
+  function copyDocker() {
+    void navigator.clipboard.writeText(dockerCmd).then(() => {
+      setCopiedDocker(true);
+      setTimeout(() => setCopiedDocker(false), 2000);
+    });
+  }
+
   async function createAndLinkProduction(licenceId: string) {
     if (!newProdName.trim() || !selectedOrgId) return;
     setLinkingBusy(true);
@@ -187,6 +195,24 @@ export default function BridgeSettingsClient({
   }
 
   const totalActiveGrants = activeGrantsByLicence.reduce((s, x) => s + x.count, 0);
+
+  const vaultUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const dockerOrgId = connectionIds[0]?.orgId ?? "<YOUR_ORG_ID>";
+  const dockerToken = createdToken ?? "<YOUR_BRIDGE_TOKEN>";
+  const dockerCmd = [
+    "docker run -d \\",
+    "  --name render-bridge \\",
+    "  --restart unless-stopped \\",
+    `  -e CASBRIDGE_VAULT_URL=${vaultUrl} \\`,
+    `  -e CASBRIDGE_SERVICE_TOKEN=${dockerToken} \\`,
+    `  -e CASBRIDGE_ORGANISATION_ID=${dockerOrgId} \\`,
+    `  -e CASBRIDGE_VENDOR_ID=${dockerOrgId} \\`,
+    "  -e CASBRIDGE_SHARE_PATH=/share \\",
+    "  -e CASBRIDGE_STATE_DIR=/state \\",
+    "  -v /path/to/render/share:/share \\",
+    "  -v render-bridge-state:/state \\",
+    "  ghcr.io/lukefieldsend1990/render-bridge:latest",
+  ].join("\n");
 
   return (
     <div className="p-8 max-w-2xl">
@@ -310,6 +336,60 @@ export default function BridgeSettingsClient({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Render Bridge Quick Start */}
+      {canManage && connectionIds.length > 0 && (
+        <div
+          className="rounded border p-4 mb-6"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
+              Docker Quick Start
+            </p>
+            <button
+              type="button"
+              onClick={copyDocker}
+              className="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition hover:opacity-70"
+              style={{ borderColor: "var(--color-border)", color: copiedDocker ? "#166534" : "var(--color-muted)" }}
+            >
+              {copiedDocker ? (
+                <>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Copied
+                </>
+              ) : (
+                <>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  Copy
+                </>
+              )}
+            </button>
+          </div>
+          <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
+            Run this command to start the Render Bridge container.
+            {!createdToken && (
+              <> Generate a token above first — this command will be pre-filled.</>
+            )}
+          </p>
+          <pre
+            className="rounded text-xs font-mono p-4 overflow-x-auto leading-relaxed select-all"
+            style={{ background: "#0d1117", color: "#e6edf3", border: "1px solid #30363d", whiteSpace: "pre" }}
+          >
+            {dockerCmd}
+          </pre>
+          {!createdToken && (
+            <p className="text-[10px] mt-2" style={{ color: "var(--color-muted)" }}>
+              Replace <code className="font-mono text-[10px]">&lt;YOUR_BRIDGE_TOKEN&gt;</code> with a token generated above.
+            </p>
+          )}
         </div>
       )}
 
