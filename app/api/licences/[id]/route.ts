@@ -2,10 +2,10 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users } from "@/lib/db/schema";
+import { licences, scanPackages, users, productions, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 // GET /api/licences/[id] — fetch a single licence (talent, licensee, admin)
 export async function GET(
@@ -66,7 +66,7 @@ export async function GET(
   return NextResponse.json({ licence: row });
 }
 
-// PATCH /api/licences/[id] — update delivery mode (talent or admin only)
+// PATCH /api/licences/[id] — update delivery mode (talent or admin), or productionId/organisationId (licensee or admin)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -78,28 +78,78 @@ export async function PATCH(
   const db = getDb();
 
   const row = await db
-    .select({ talentId: licences.talentId, status: licences.status })
+    .select({ talentId: licences.talentId, licenseeId: licences.licenseeId, status: licences.status })
     .from(licences)
     .where(eq(licences.id, id))
     .get();
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const isOwner = row.talentId === session.sub;
   const admin = isAdmin(session.email);
-  if (!isOwner && !admin) {
+  const isTalentOwner = row.talentId === session.sub;
+  const isLicenseeOwner = row.licenseeId === session.sub;
+
+  if (!isTalentOwner && !isLicenseeOwner && !admin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { deliveryMode?: string };
+  let body: { deliveryMode?: string; productionId?: string; organisationId?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  const { deliveryMode } = body;
-  if (deliveryMode !== "standard" && deliveryMode !== "bridge_only") {
-    return NextResponse.json({ error: "deliveryMode must be 'standard' or 'bridge_only'" }, { status: 400 });
+  // Talent/admin: update delivery mode
+  if ("deliveryMode" in body) {
+    if (!isTalentOwner && !admin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const { deliveryMode } = body;
+    if (deliveryMode !== "standard" && deliveryMode !== "bridge_only") {
+      return NextResponse.json({ error: "deliveryMode must be 'standard' or 'bridge_only'" }, { status: 400 });
+    }
+    await db.update(licences).set({ deliveryMode }).where(eq(licences.id, id));
+    return NextResponse.json({ ok: true });
   }
 
-  await db.update(licences).set({ deliveryMode }).where(eq(licences.id, id));
+  // Licensee/admin: link production and/or organisation
+  if ("productionId" in body || "organisationId" in body) {
+    if (!isLicenseeOwner && !admin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-  return NextResponse.json({ ok: true });
+    const updates: Partial<{ productionId: string; organisationId: string }> = {};
+
+    if (body.productionId) {
+      const prod = await db
+        .select({ id: productions.id })
+        .from(productions)
+        .where(eq(productions.id, body.productionId))
+        .get();
+      if (!prod) return NextResponse.json({ error: "Production not found" }, { status: 404 });
+      updates.productionId = body.productionId;
+    }
+
+    if (body.organisationId) {
+      // Verify the licensee is a member of this organisation
+      if (!admin) {
+        const membership = await db
+          .select({ organisationId: organisationMembers.organisationId })
+          .from(organisationMembers)
+          .where(and(
+            eq(organisationMembers.userId, session.sub),
+            eq(organisationMembers.organisationId, body.organisationId),
+          ))
+          .get();
+        if (!membership) return NextResponse.json({ error: "Not a member of that organisation" }, { status: 403 });
+      }
+      updates.organisationId = body.organisationId;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+
+    await db.update(licences).set(updates).where(eq(licences.id, id));
+    return NextResponse.json({ ok: true });
+  }
+
+  return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 }

@@ -3,8 +3,8 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { bridgeTokens, bridgeDevices, bridgeGrants, licences } from "@/lib/db/schema";
-import { eq, isNull, and, gt } from "drizzle-orm";
+import { bridgeTokens, bridgeDevices, bridgeGrants, licences, organisationMembers, organisations, productions, scanPackages } from "@/lib/db/schema";
+import { eq, isNull, and, gt, inArray } from "drizzle-orm";
 import BridgeSettingsClient from "./bridge-client";
 
 async function getSessionData() {
@@ -57,6 +57,49 @@ export default async function BridgeSettingsPage() {
     .where(eq(bridgeDevices.userId, user.userId))
     .all();
 
+  // Fetch org + production IDs for licensees (needed to configure Docker bridge registration)
+  let connectionIds: { orgId: string; orgName: string; productions: { id: string; name: string }[] }[] = [];
+  if (canManage) {
+    const memberships = await db
+      .select({ organisationId: organisationMembers.organisationId, orgName: organisations.name })
+      .from(organisationMembers)
+      .leftJoin(organisations, eq(organisations.id, organisationMembers.organisationId))
+      .where(eq(organisationMembers.userId, user.userId))
+      .all();
+
+    if (memberships.length > 0) {
+      const orgIds = memberships.map(m => m.organisationId);
+      const orgProductions = await db
+        .select({ id: productions.id, name: productions.name, organisationId: productions.organisationId })
+        .from(productions)
+        .where(inArray(productions.organisationId, orgIds))
+        .all();
+
+      connectionIds = memberships.map(m => ({
+        orgId: m.organisationId,
+        orgName: m.orgName ?? m.organisationId,
+        productions: orgProductions
+          .filter(p => p.organisationId === m.organisationId)
+          .map(p => ({ id: p.id, name: p.name })),
+      }));
+    }
+  }
+
+  // Fetch licences without a productionId (so the user can link them from this page)
+  let unlinkedLicences: { id: string; projectName: string; packageName: string | null }[] = [];
+  if (canManage) {
+    unlinkedLicences = await db
+      .select({
+        id: licences.id,
+        projectName: licences.projectName,
+        packageName: scanPackages.name,
+      })
+      .from(licences)
+      .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
+      .where(and(eq(licences.licenseeId, user.userId), isNull(licences.productionId)))
+      .all();
+  }
+
   // One "session" = one live (licenceId, deviceId). Each DCC open inserts a new grant,
   // so without dedup a single bridge reopening a package N times counts as N sessions.
   let activeGrantsByLicence: { licenceId: string; count: number }[] = [];
@@ -105,6 +148,8 @@ export default async function BridgeSettingsPage() {
       initialTokens={tokens}
       initialDevices={devices}
       activeGrantsByLicence={activeGrantsByLicence}
+      connectionIds={connectionIds}
+      unlinkedLicences={unlinkedLicences}
     />
   );
 }
