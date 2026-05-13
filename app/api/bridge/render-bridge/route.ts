@@ -156,9 +156,13 @@ export async function GET(req: NextRequest) {
       let publishedIds: string[] = [];
       try { publishedIds = JSON.parse(agent.publishedPackagesJson); } catch { /* empty */ }
 
-      const publishedPackages = agentLicences
-        .filter(l => l.packageId && publishedIds.includes(l.packageId))
-        .map(l => ({ packageId: l.packageId!, packageName: l.packageName ?? l.packageId! }));
+      const publishedPackages = [
+        ...new Map(
+          agentLicences
+            .filter(l => l.packageId && publishedIds.includes(l.packageId))
+            .map(l => [l.packageId!, { packageId: l.packageId!, packageName: l.packageName ?? l.packageId! }])
+        ).values(),
+      ];
 
       return {
         agentId: agent.id,
