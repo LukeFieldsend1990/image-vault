@@ -119,11 +119,23 @@ function StatusDot({ online, revoked, pending }: { online: boolean; revoked: boo
   );
 }
 
-function AgentCard({ agent, role }: { agent: AgentSummary; role: string }) {
+function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: string; onRevoke: (id: string) => void }) {
   useTick(); // re-render every second for live countdown
+  const [revoking, setRevoking] = useState(false);
   const isRevoked = agent.status === "revoked" || agent.revokedAt !== null;
   const pct = tokenPct(agent.tokenExpiresAt);
   const tokenBarColor = pct > 50 ? "#16a34a" : pct > 20 ? "#b45309" : "#c0392b";
+
+  async function handleRevoke() {
+    if (!confirm(`Revoke agent "${agent.displayName}"? It will purge files from the render share on next heartbeat.`)) return;
+    setRevoking(true);
+    try {
+      const r = await fetch(`/api/bridge/render-bridge/${agent.agentId}/revoke`, { method: "POST" });
+      if (r.ok) onRevoke(agent.agentId);
+    } finally {
+      setRevoking(false);
+    }
+  }
 
   const activeLicences = agent.licences.filter(l => l.status === "APPROVED");
   const allPackageNames = [...new Map(
@@ -286,6 +298,16 @@ function AgentCard({ agent, role }: { agent: AgentSummary; role: string }) {
           <p className="mt-3 text-[10px] font-mono truncate" style={{ color: "var(--color-border)" }}>
             {agent.agentId}
           </p>
+          {!isRevoked && role === "licensee" && (
+            <button
+              onClick={() => void handleRevoke()}
+              disabled={revoking}
+              className="mt-3 w-full rounded border px-3 py-1.5 text-xs transition hover:opacity-80 disabled:opacity-40"
+              style={{ borderColor: "#c0392b44", color: "#c0392b", background: "#c0392b0a" }}
+            >
+              {revoking ? "Revoking…" : "Revoke agent"}
+            </button>
+          )}
         </div>
 
       </div>
@@ -415,7 +437,12 @@ export default function BridgeClient({ role }: { role: string }) {
       {!loading && agents.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
           {agents.map(agent => (
-            <AgentCard key={agent.agentId} agent={agent} role={role} />
+            <AgentCard
+              key={agent.agentId}
+              agent={agent}
+              role={role}
+              onRevoke={(id) => setAgents(prev => prev.filter(a => a.agentId !== id))}
+            />
           ))}
         </div>
       )}

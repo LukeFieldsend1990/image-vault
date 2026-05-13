@@ -3,7 +3,7 @@ export const runtime = "edge";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { renderBridgeAgents, organisations, licences, scanPackages, talentProfiles, organisationMembers } from "@/lib/db/schema";
-import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { requireBridgeToken, isBridgeTokenError } from "@/lib/auth/requireBridgeToken";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 
@@ -58,10 +58,23 @@ export async function POST(req: NextRequest) {
 
   if (!org) return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
 
+  // Revoke any existing active agents with the same display name so re-enrolment
+  // after a Docker image update doesn't accumulate duplicates.
+  const now = Math.floor(Date.now() / 1000);
+  await db
+    .update(renderBridgeAgents)
+    .set({ status: "revoked", revokedAt: now, pendingAction: "purge" })
+    .where(
+      and(
+        eq(renderBridgeAgents.organisationId, organisationId),
+        eq(renderBridgeAgents.displayName, displayName),
+        isNull(renderBridgeAgents.revokedAt),
+      )
+    );
+
   const agentId = crypto.randomUUID();
   const serviceToken = generateServiceToken();
   const serviceTokenHash = await sha256Hex(serviceToken);
-  const now = Math.floor(Date.now() / 1000);
   const tokenExpiresAt = now + 365 * 86400;
 
   await db.insert(renderBridgeAgents).values({
