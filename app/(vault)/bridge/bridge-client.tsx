@@ -142,7 +142,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
 
   const nowSec = Math.floor(Date.now() / 1000);
   const activeLicences = agent.licences.filter(
-    l => l.status === "APPROVED" && l.deliveryMode === "bridge_only" && l.validTo > nowSec
+    l => l.status === "APPROVED" && l.validTo > nowSec
   );
 
   // For "Published to share": deduplicate packages, tracking whether any bridge-enabled licence covers each
