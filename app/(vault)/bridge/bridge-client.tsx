@@ -366,7 +366,6 @@ export default function BridgeClient({ role }: { role: string }) {
   useTick(); // drive the "last refreshed" counter
 
   const onlineCount = agents.filter(a => a.agentOnline).length;
-  const revokedCount = agents.filter(a => a.status === "revoked").length;
 
   const pageTitle = role === "licensee" ? "Render Bridge" : "Bridge Access";
   const pageSubtitle = role === "licensee"
@@ -397,14 +396,9 @@ export default function BridgeClient({ role }: { role: string }) {
                   {onlineCount} online
                 </span>
               )}
-              {agents.length - onlineCount - revokedCount > 0 && (
+              {agents.length - onlineCount > 0 && (
                 <span className="rounded-full px-3 py-1 text-xs font-medium" style={{ background: "#9ca3af18", color: "#9ca3af" }}>
-                  {agents.length - onlineCount - revokedCount} offline
-                </span>
-              )}
-              {revokedCount > 0 && (
-                <span className="rounded-full px-3 py-1 text-xs font-medium" style={{ background: "#6b728018", color: "#6b7280" }}>
-                  {revokedCount} revoked
+                  {agents.length - onlineCount} offline
                 </span>
               )}
             </div>

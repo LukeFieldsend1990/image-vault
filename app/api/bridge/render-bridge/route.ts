@@ -209,7 +209,7 @@ export async function GET(req: NextRequest) {
       .select(agentSelect)
       .from(renderBridgeAgents)
       .leftJoin(organisations, eq(organisations.id, renderBridgeAgents.organisationId))
-      .where(inArray(renderBridgeAgents.organisationId, orgIds))
+      .where(and(inArray(renderBridgeAgents.organisationId, orgIds), isNull(renderBridgeAgents.revokedAt)))
       .all();
 
     return NextResponse.json({ agents: await buildAgentPayload(rawAgents) });
@@ -230,7 +230,7 @@ export async function GET(req: NextRequest) {
       .select(agentSelect)
       .from(renderBridgeAgents)
       .leftJoin(organisations, eq(organisations.id, renderBridgeAgents.organisationId))
-      .where(inArray(renderBridgeAgents.organisationId, orgIds))
+      .where(and(inArray(renderBridgeAgents.organisationId, orgIds), isNull(renderBridgeAgents.revokedAt)))
       .all();
 
     return NextResponse.json({ agents: await buildAgentPayload(rawAgents) });
@@ -241,6 +241,7 @@ export async function GET(req: NextRequest) {
       .select(agentSelect)
       .from(renderBridgeAgents)
       .leftJoin(organisations, eq(organisations.id, renderBridgeAgents.organisationId))
+      .where(isNull(renderBridgeAgents.revokedAt))
       .all();
 
     return NextResponse.json({ agents: await buildAgentPayload(rawAgents) });
