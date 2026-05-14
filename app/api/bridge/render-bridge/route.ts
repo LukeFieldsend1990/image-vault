@@ -2,8 +2,8 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { renderBridgeAgents, organisations, licences, scanPackages, talentProfiles, organisationMembers } from "@/lib/db/schema";
-import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { renderBridgeAgents, organisations, licences, scanPackages, scanFiles, bridgeEvents, talentProfiles, organisationMembers } from "@/lib/db/schema";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { requireBridgeToken, isBridgeTokenError } from "@/lib/auth/requireBridgeToken";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 
@@ -116,7 +116,6 @@ export async function GET(req: NextRequest) {
     publishedPackagesJson: string; pendingAction: string | null; revokedAt: number | null;
   }>) {
     return Promise.all(rawAgents.map(async (agent) => {
-      // All licences for this org (org-scoped + individual members)
       const memberIds = await db
         .select({ userId: organisationMembers.userId })
         .from(organisationMembers)
@@ -156,6 +155,27 @@ export async function GET(req: NextRequest) {
       let publishedIds: string[] = [];
       try { publishedIds = JSON.parse(agent.publishedPackagesJson); } catch { /* empty */ }
 
+      const licencePackageIds = new Set(agentLicences.filter(l => l.packageId).map(l => l.packageId!));
+      const allPackageIds = [...new Set([...licencePackageIds, ...publishedIds])];
+
+      // File counts for all relevant packages (for "downloading · N files" display)
+      const fileCountRows = allPackageIds.length > 0
+        ? await db
+            .select({
+              packageId: scanFiles.packageId,
+              fileCount: sql<number>`count(*)`.as("file_count"),
+            })
+            .from(scanFiles)
+            .where(inArray(scanFiles.packageId, allPackageIds))
+            .groupBy(scanFiles.packageId)
+            .all()
+        : [];
+      const packageFileCounts: Record<string, number> = {};
+      for (const row of fileCountRows) {
+        packageFileCounts[row.packageId] = Number(row.fileCount);
+      }
+
+      // Authorised published packages — in publishedIds AND covered by a licence
       const publishedPackages = [
         ...new Map(
           agentLicences
@@ -163,6 +183,42 @@ export async function GET(req: NextRequest) {
             .map(l => [l.packageId!, { packageId: l.packageId!, packageName: l.packageName ?? l.packageId! }])
         ).values(),
       ];
+
+      // Unauthorised published packages — in publishedIds but no licence covers them
+      const unlicensedPublishedIds = publishedIds.filter(id => !licencePackageIds.has(id));
+      let unauthorisedPublishedPackages: Array<{ packageId: string; packageName: string }> = [];
+      if (unlicensedPublishedIds.length > 0) {
+        const rows = await db
+          .select({ id: scanPackages.id, name: scanPackages.name })
+          .from(scanPackages)
+          .where(inArray(scanPackages.id, unlicensedPublishedIds))
+          .all();
+        unauthorisedPublishedPackages = rows.map(r => ({ packageId: r.id, packageName: r.name }));
+
+        // Trigger purge + log audit event (only if not already pending purge)
+        if (agent.pendingAction !== "purge") {
+          await db
+            .update(renderBridgeAgents)
+            .set({ pendingAction: "purge" })
+            .where(eq(renderBridgeAgents.id, agent.id));
+
+          await Promise.all(
+            unlicensedPublishedIds.map(pkgId =>
+              db.insert(bridgeEvents).values({
+                id: crypto.randomUUID(),
+                grantId: null,
+                packageId: pkgId,
+                deviceId: agent.id,
+                userId: null,
+                eventType: "unexpected_copy",
+                severity: "critical",
+                detail: JSON.stringify({ reason: "published_without_bridge_licence", agentId: agent.id }),
+                createdAt: now,
+              })
+            )
+          );
+        }
+      }
 
       return {
         agentId: agent.id,
@@ -176,6 +232,8 @@ export async function GET(req: NextRequest) {
         pendingAction: agent.pendingAction,
         revokedAt: agent.revokedAt,
         publishedPackages,
+        unauthorisedPublishedPackages,
+        packageFileCounts,
         licences: agentLicences.map(l => ({
           licenceId: l.id,
           packageId: l.packageId,

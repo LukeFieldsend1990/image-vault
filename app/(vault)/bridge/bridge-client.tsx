@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 
-interface PublishedPackage {
+interface NamedPackage {
   packageId: string;
   packageName: string;
 }
@@ -25,14 +25,15 @@ interface AgentSummary {
   displayName: string;
   organisationId: string;
   organisationName: string;
-
   status: "active" | "revoked" | "expired";
   lastHeartbeatAt: number | null;
   agentOnline: boolean;
   tokenExpiresAt: number | null;
   pendingAction: string | null;
   revokedAt: number | null;
-  publishedPackages: PublishedPackage[];
+  publishedPackages: NamedPackage[];
+  unauthorisedPublishedPackages: NamedPackage[];
+  packageFileCounts: Record<string, number>;
   licences: AgentLicence[];
 }
 
@@ -145,19 +146,32 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
     l => l.status === "APPROVED" && l.validTo > nowSec
   );
 
-  // For "Published to share": deduplicate packages, tracking whether any bridge-enabled licence covers each
-  const packageMap = new Map<string, { name: string; hasBridgeLicence: boolean }>();
+  // Build a unified package list from both licences and published packages
+  const packageMap = new Map<string, { name: string; hasAnyLicence: boolean; hasBridgeLicence: boolean }>();
   for (const l of agent.licences) {
     if (!l.packageId || !l.packageName) continue;
     const existing = packageMap.get(l.packageId);
     const hasBridge = l.deliveryMode === "bridge_only";
     if (!existing) {
-      packageMap.set(l.packageId, { name: l.packageName, hasBridgeLicence: hasBridge });
-    } else if (hasBridge) {
-      existing.hasBridgeLicence = true;
+      packageMap.set(l.packageId, { name: l.packageName, hasAnyLicence: true, hasBridgeLicence: hasBridge });
+    } else {
+      existing.hasAnyLicence = true;
+      if (hasBridge) existing.hasBridgeLicence = true;
     }
   }
-  const allPackages = [...packageMap.entries()].map(([pkgId, { name, hasBridgeLicence }]) => ({ pkgId, name, hasBridgeLicence }));
+  // Add unauthorised published packages not already in the map
+  for (const p of agent.unauthorisedPublishedPackages) {
+    if (!packageMap.has(p.packageId)) {
+      packageMap.set(p.packageId, { name: p.packageName, hasAnyLicence: false, hasBridgeLicence: false });
+    }
+  }
+
+  const allPackages = [...packageMap.entries()].map(([pkgId, entry]) => {
+    const onBridge = agent.publishedPackages.some(p => p.packageId === pkgId);
+    const unauthorised = agent.unauthorisedPublishedPackages.some(p => p.packageId === pkgId);
+    const fileCount = agent.packageFileCounts[pkgId] ?? 0;
+    return { pkgId, name: entry.name, hasBridgeLicence: entry.hasBridgeLicence, hasAnyLicence: entry.hasAnyLicence, onBridge, unauthorised, fileCount };
+  });
 
   return (
     <div
@@ -210,16 +224,23 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
                 {agent.publishedPackages.length}
               </span>
             )}
+            {agent.unauthorisedPublishedPackages.length > 0 && (
+              <span
+                className="ml-1 rounded-full px-1.5 py-0.5 text-[9px]"
+                style={{ background: "#c0392b12", color: "#c0392b" }}
+              >
+                {agent.unauthorisedPublishedPackages.length} unauthorised
+              </span>
+            )}
           </p>
           {allPackages.length === 0 ? (
             <p className="text-xs" style={{ color: "var(--color-muted)" }}>No packages on this licence yet.</p>
           ) : (
             <ul className="space-y-2">
-              {allPackages.map(({ pkgId, name: pkgName, hasBridgeLicence }) => {
-                const published = agent.publishedPackages.some(p => p.packageId === pkgId);
-                const unauthorised = published && !hasBridgeLicence;
-                const transferring = !published && hasBridgeLicence && agent.agentOnline;
-                const pending = !published && hasBridgeLicence && !agent.agentOnline;
+              {allPackages.map(({ pkgId, name: pkgName, hasBridgeLicence, hasAnyLicence, onBridge, unauthorised, fileCount }) => {
+                const downloading = !onBridge && !unauthorised && hasBridgeLicence && agent.agentOnline;
+                const pending = !onBridge && !unauthorised && hasBridgeLicence && !agent.agentOnline;
+                const notConfigured = !onBridge && !unauthorised && hasAnyLicence && !hasBridgeLicence;
                 return (
                   <li key={pkgId} className="flex items-center gap-2.5 text-xs">
                     {unauthorised ? (
@@ -228,11 +249,11 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
                         <line x1="12" y1="8" x2="12" y2="12" />
                         <line x1="12" y1="16" x2="12.01" y2="16" />
                       </svg>
-                    ) : published ? (
+                    ) : onBridge ? (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-                    ) : transferring ? (
+                    ) : downloading ? (
                       <span className="relative flex h-[13px] w-[13px] flex-shrink-0 items-center justify-center">
                         <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full opacity-50" style={{ background: "#b45309" }} />
                         <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: "#b45309" }} />
@@ -242,7 +263,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
                         <circle cx="12" cy="12" r="9" />
                       </svg>
                     )}
-                    <span style={{ color: unauthorised ? "#c0392b" : published ? "var(--color-ink)" : transferring ? "var(--color-ink)" : "var(--color-muted)" }}>
+                    <span style={{ color: unauthorised ? "#c0392b" : onBridge || downloading ? "var(--color-ink)" : "var(--color-muted)" }}>
                       {pkgName}
                     </span>
                     {unauthorised && (
@@ -250,14 +271,14 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
                         on share — no licence
                       </span>
                     )}
-                    {!unauthorised && published && (
+                    {onBridge && (
                       <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#16a34a18", color: "#16a34a" }}>
-                        on share
+                        on bridge
                       </span>
                     )}
-                    {transferring && (
+                    {downloading && (
                       <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#b4530918", color: "#b45309" }}>
-                        downloading
+                        {fileCount > 0 ? `downloading · ${fileCount} files` : "downloading"}
                       </span>
                     )}
                     {pending && (
@@ -265,9 +286,9 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
                         pending
                       </span>
                     )}
-                    {!published && !hasBridgeLicence && (
+                    {notConfigured && (
                       <span className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#b4530918", color: "#b45309" }}>
-                        no bridge licence
+                        not configured
                       </span>
                     )}
                   </li>
@@ -321,9 +342,9 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
               <span style={{ color: "var(--color-ink)" }}>{agent.organisationName}</span>
               <span style={{ color: "var(--color-muted)" }}>is publishing your data to a render share</span>
             </div>
-            {agent.publishedPackages.length > 0 && (
+            {(agent.publishedPackages.length + agent.unauthorisedPublishedPackages.length) > 0 && (
               <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-                {agent.publishedPackages.length} package{agent.publishedPackages.length !== 1 ? "s" : ""} currently on their share
+                {agent.publishedPackages.length + agent.unauthorisedPublishedPackages.length} package{agent.publishedPackages.length + agent.unauthorisedPublishedPackages.length !== 1 ? "s" : ""} currently on their share
               </p>
             )}
           </div>
