@@ -58,6 +58,24 @@ export async function POST(req: NextRequest) {
 
   if (!org) return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
 
+  const membership = await db
+    .select({ userId: organisationMembers.userId })
+    .from(organisationMembers)
+    .where(
+      and(
+        eq(organisationMembers.organisationId, organisationId),
+        eq(organisationMembers.userId, auth.userId)
+      )
+    )
+    .get();
+
+  if (!membership) {
+    return NextResponse.json(
+      { error: "user is not a member of organisationId" },
+      { status: 403 }
+    );
+  }
+
   // Revoke any existing active agents with the same display name so re-enrolment
   // after a Docker image update doesn't accumulate duplicates.
   const now = Math.floor(Date.now() / 1000);
