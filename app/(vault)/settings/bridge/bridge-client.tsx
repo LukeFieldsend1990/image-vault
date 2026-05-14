@@ -206,7 +206,6 @@ export default function BridgeSettingsClient({
     `  -e CASBRIDGE_VAULT_URL=${vaultUrl} \\`,
     `  -e CASBRIDGE_SERVICE_TOKEN=${dockerToken} \\`,
     `  -e CASBRIDGE_ORGANISATION_ID=${dockerOrgId} \\`,
-    `  -e CASBRIDGE_VENDOR_ID=${dockerOrgId} \\`,
     "  -e CASBRIDGE_SHARE_PATH=/share \\",
     "  -e CASBRIDGE_STATE_DIR=/state \\",
     "  -v /path/to/render/share:/share \\",
