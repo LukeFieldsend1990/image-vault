@@ -2,10 +2,10 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, scanFiles, downloadEvents } from "@/lib/db/schema";
+import { licences, scanFiles, downloadEvents, geometryFingerprints } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { getRequestContext } from "@cloudflare/next-on-pages";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 interface DownloadToken {
   licenceId: string;
@@ -64,7 +64,25 @@ export async function GET(
   }
 
   const { env } = getRequestContext();
-  const object = await env.SCANS_BUCKET.get(file.r2Key);
+
+  // For OBJ files, serve the watermarked copy if one exists for this licence
+  let r2Key = file.r2Key;
+  if (file.filename.toLowerCase().endsWith(".obj")) {
+    const fp = await db
+      .select({ watermarkedR2Key: geometryFingerprints.watermarkedR2Key })
+      .from(geometryFingerprints)
+      .where(
+        and(
+          eq(geometryFingerprints.licenceId, tokenData.licenceId),
+          eq(geometryFingerprints.fileId, tokenData.fileId),
+          eq(geometryFingerprints.status, "ready"),
+        ),
+      )
+      .get();
+    if (fp) r2Key = fp.watermarkedR2Key;
+  }
+
+  const object = await env.SCANS_BUCKET.get(r2Key);
   if (!object) {
     return NextResponse.json({ error: "File not in storage" }, { status: 404 });
   }

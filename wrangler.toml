@@ -56,6 +56,10 @@ queue = "pipeline-jobs"
 binding = "INBOUND_QUEUE"
 queue = "inbound-email"
 
+[[queues.producers]]
+binding = "GEO_FINGERPRINT_QUEUE"
+queue = "geo-fingerprint-jobs"
+
 # -------------------------------------------------------------------
 # Vectorize (semantic search)
 # -------------------------------------------------------------------
@@ -94,3 +98,5 @@ service = "image-vault-ai-cron"
 #                           Generate with: node scripts/generate-bridge-key.mjs
 # ANTHROPIC_API_KEY       - Anthropic API key for Claude Haiku (AI features: fee guidance, licence summaries)
 # RESEND_WEBHOOK_SECRET   - Svix webhook signing secret (from Resend dashboard → Webhooks)
+# FINGERPRINT_SIGNING_KEY - HMAC-SHA256 key for geometric OBJ fingerprinting (shared with geo-fingerprint-worker)
+#                           Generate: openssl rand -hex 32

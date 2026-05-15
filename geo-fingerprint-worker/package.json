@@ -1,0 +1,17 @@
+{
+  "name": "image-vault-geo-fingerprint-worker",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy --config geo-fingerprint-worker/wrangler.toml",
+    "dev": "wrangler dev --config geo-fingerprint-worker/wrangler.toml"
+  },
+  "dependencies": {
+    "drizzle-orm": "*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "typescript": "^5.0.0",
+    "wrangler": "^3.0.0"
+  }
+}
