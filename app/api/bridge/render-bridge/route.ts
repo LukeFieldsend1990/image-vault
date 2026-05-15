@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Revoke any existing active agents with the same display name so re-enrolment
-  // after a Docker image update doesn't accumulate duplicates.
+  // Revoke all existing active agents for this org on re-enrolment — only one
+  // active agent per org is valid. Display name may differ between Docker runs.
   const now = Math.floor(Date.now() / 1000);
   await db
     .update(renderBridgeAgents)
@@ -85,7 +85,6 @@ export async function POST(req: NextRequest) {
     .where(
       and(
         eq(renderBridgeAgents.organisationId, organisationId),
-        eq(renderBridgeAgents.displayName, displayName),
         isNull(renderBridgeAgents.revokedAt),
       )
     );
