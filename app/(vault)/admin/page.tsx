@@ -3,7 +3,7 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, licences, downloadEvents, scanFiles, siteSettings } from "@/lib/db/schema";
+import { users, scanPackages, licences, downloadEvents, scanFiles, siteSettings, geometryFingerprints } from "@/lib/db/schema";
 import { sql, inArray, eq } from "drizzle-orm";
 import DemoToggleCard from "./demo-toggle-card";
 import { getAllSkills } from "@/lib/skills/registry";
@@ -60,6 +60,7 @@ export default async function AdminOverviewPage() {
     dlCount,
     recentDls,
     recentLicences,
+    fpCount,
   ] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(users).get(),
     db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'talent'`).get(),
@@ -83,6 +84,7 @@ export default async function AdminOverviewPage() {
       status: licences.status,
       createdAt: licences.createdAt,
     }).from(licences).orderBy(sql`created_at desc`).limit(6).all(),
+    db.select({ n: sql<number>`count(*)` }).from(geometryFingerprints).where(sql`status = 'ready'`).get(),
   ]);
 
   // Resolve emails and filenames for recent downloads
@@ -130,6 +132,12 @@ export default async function AdminOverviewPage() {
       value: String(getAllSkills().length),
       sub: "whitelisted",
       href: "/admin/skills",
+    },
+    {
+      label: "Geo Fingerprints",
+      value: String(fpCount?.n ?? 0),
+      sub: "watermark records",
+      href: "/admin/geometry-fingerprints",
     },
   ];
 

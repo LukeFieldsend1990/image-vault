@@ -18,7 +18,9 @@
     "deploy:ai-worker": "wrangler deploy --config ai-worker/wrangler.toml",
     "ai-worker:dev": "wrangler dev --config ai-worker/wrangler.toml",
     "deploy:ai-cron": "wrangler deploy --config ai-cron-worker/wrangler.toml",
-    "ai-cron:dev": "wrangler dev --config ai-cron-worker/wrangler.toml"
+    "ai-cron:dev": "wrangler dev --config ai-cron-worker/wrangler.toml",
+    "deploy:geo-fingerprint-worker": "wrangler deploy --config geo-fingerprint-worker/wrangler.toml",
+    "geo-fingerprint-worker:dev": "wrangler dev --config geo-fingerprint-worker/wrangler.toml"
   },
   "dependencies": {
     "aws4fetch": "^1.0.20",

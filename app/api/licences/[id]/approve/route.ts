@@ -7,6 +7,8 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
+import { getRequestContext } from "@cloudflare/next-on-pages";
+import { geometryFingerprintJobs } from "@/lib/db/schema";
 
 // POST /api/licences/[id]/approve — talent/rep approves a pending licence request
 export async function POST(
@@ -70,6 +72,25 @@ export async function POST(
     .update(licences)
     .set({ status: "APPROVED", approvedBy: session.sub, approvedAt: now, agreedFee, platformFee })
     .where(eq(licences.id, id));
+
+  // Enqueue geometric fingerprinting job for OBJ files in this package
+  void (async () => {
+    try {
+      const jobId = crypto.randomUUID();
+      await db.insert(geometryFingerprintJobs).values({
+        id: jobId,
+        licenceId: id,
+        packageId: licencePackageId,
+        status: "queued",
+        createdAt: now,
+      });
+      const { env } = getRequestContext();
+      const queue = (env as unknown as Record<string, Queue>)["GEO_FINGERPRINT_QUEUE"];
+      if (queue) await queue.send({ jobId });
+    } catch {
+      // Non-fatal: fingerprinting is best-effort
+    }
+  })();
 
   // Notify licensee (fire-and-forget)
   void (async () => {

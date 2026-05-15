@@ -646,3 +646,37 @@ export const renderBridgeAgents = sqliteTable("render_bridge_agents", {
   revokedAt: integer("revoked_at"),
   createdAt: integer("created_at").notNull(),
 });
+
+// ── Geometric fingerprinting ──────────────────────────────────────────────────
+
+export const geometryFingerprintJobs = sqliteTable("geometry_fingerprint_jobs", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull(),
+  packageId: text("package_id").notNull(),
+  status: text("status").notNull().default("queued"),
+  filesTotal: integer("files_total"),
+  filesDone: integer("files_done").notNull().default(0),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+  completedAt: integer("completed_at"),
+});
+
+export const geometryFingerprints = sqliteTable("geometry_fingerprints", {
+  id: text("id").primaryKey(),
+  jobId: text("job_id").notNull(),
+  licenceId: text("licence_id").notNull(),
+  fileId: text("file_id").notNull(),
+  packageId: text("package_id").notNull(),
+  licenseeId: text("licensee_id").notNull(),
+  watermarkedR2Key: text("watermarked_r2_key").notNull(),
+  fingerprintPayloadHash: text("fingerprint_payload_hash").notNull(),
+  fingerprintBits: text("fingerprint_bits").notNull(),
+  fingerprintBitsLength: integer("fingerprint_bits_length").notNull().default(128),
+  repeatFactor: integer("repeat_factor").notNull().default(5),
+  watermarkStrength: real("watermark_strength").notNull().default(0.00001),
+  watermarkRegionCount: integer("watermark_region_count"),
+  fingerprintVersion: integer("fingerprint_version").notNull().default(1),
+  status: text("status").notNull().default("pending"),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+});

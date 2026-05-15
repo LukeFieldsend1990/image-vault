@@ -1,0 +1,36 @@
+name = "image-vault-geo-fingerprint-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# -------------------------------------------------------------------
+# Queue consumer
+# -------------------------------------------------------------------
+[[queues.consumers]]
+queue = "geo-fingerprint-jobs"
+max_batch_size = 1
+max_batch_timeout = 60
+max_retries = 2
+dead_letter_queue = "geo-fingerprint-jobs-dlq"
+
+# -------------------------------------------------------------------
+# D1 Database (shared with main app)
+# -------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "image-vault-db"
+database_id = "71665618-0498-48bd-a243-962eb4810769"
+
+# -------------------------------------------------------------------
+# R2 Buckets
+# -------------------------------------------------------------------
+[[r2_buckets]]
+binding = "SCANS_BUCKET"
+bucket_name = "image-vault-scans"
+preview_bucket_name = "image-vault-scans-dev"
+
+# -------------------------------------------------------------------
+# Secrets (set via: wrangler secret put SECRET_NAME --config geo-fingerprint-worker/wrangler.toml)
+# -------------------------------------------------------------------
+# FINGERPRINT_SIGNING_KEY  - HMAC-SHA256 secret for fingerprint bit generation
+#                            Generate: openssl rand -hex 32
