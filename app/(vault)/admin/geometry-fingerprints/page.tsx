@@ -7,26 +7,19 @@ import {
   geometryFingerprints,
   geometryFingerprintJobs,
   scanPackages,
+  scanFiles,
+  licences,
   users,
 } from "@/lib/db/schema";
 import { sql, eq, inArray } from "drizzle-orm";
 import GeoFingerprintDetectClient from "./page-client";
-
-function ts(unix: number): string {
-  return new Date(unix * 1000).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import GeoFingerprintJobsTable, { type JobRow, type FingerprintFileRow } from "./jobs-table";
 
 export default async function GeoFingerprintsAdminPage() {
   await requireAdmin();
   const db = getDb();
 
-  const [totalFps, readyFps, pendingJobs, recentJobs, packages] = await Promise.all([
+  const [totalFps, readyFps, pendingJobs, rawJobs, packages] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(geometryFingerprints).get(),
     db
       .select({ n: sql<number>`count(*)` })
@@ -42,28 +35,133 @@ export default async function GeoFingerprintsAdminPage() {
       .select({
         id: geometryFingerprintJobs.id,
         licenceId: geometryFingerprintJobs.licenceId,
+        packageId: geometryFingerprintJobs.packageId,
         status: geometryFingerprintJobs.status,
         filesTotal: geometryFingerprintJobs.filesTotal,
         filesDone: geometryFingerprintJobs.filesDone,
+        error: geometryFingerprintJobs.error,
         createdAt: geometryFingerprintJobs.createdAt,
+        completedAt: geometryFingerprintJobs.completedAt,
       })
       .from(geometryFingerprintJobs)
       .orderBy(sql`created_at desc`)
-      .limit(10)
+      .limit(25)
       .all(),
     db
-      .select({
-        id: scanPackages.id,
-        name: scanPackages.name,
-        talentId: scanPackages.talentId,
-      })
+      .select({ id: scanPackages.id, name: scanPackages.name, talentId: scanPackages.talentId })
       .from(scanPackages)
       .where(sql`deleted_at is null`)
       .orderBy(sql`created_at desc`)
       .all(),
   ]);
 
-  // Resolve talent emails for packages
+  // Resolve package names + licensee emails for jobs
+  const jobPackageIds = [...new Set(rawJobs.map((j) => j.packageId))];
+  const jobLicenceIds = [...new Set(rawJobs.map((j) => j.licenceId))];
+  const jobIds = rawJobs.map((j) => j.id);
+
+  const [jobPackageRows, jobLicenceRows, fpRows] = await Promise.all([
+    jobPackageIds.length > 0
+      ? db
+          .select({ id: scanPackages.id, name: scanPackages.name })
+          .from(scanPackages)
+          .where(inArray(scanPackages.id, jobPackageIds))
+          .all()
+      : Promise.resolve([] as { id: string; name: string }[]),
+    jobLicenceIds.length > 0
+      ? db
+          .select({ id: licences.id, licenseeId: licences.licenseeId })
+          .from(licences)
+          .where(inArray(licences.id, jobLicenceIds))
+          .all()
+      : Promise.resolve([] as { id: string; licenseeId: string }[]),
+    jobIds.length > 0
+      ? db
+          .select({
+            id: geometryFingerprints.id,
+            jobId: geometryFingerprints.jobId,
+            fileId: geometryFingerprints.fileId,
+            status: geometryFingerprints.status,
+            error: geometryFingerprints.error,
+            createdAt: geometryFingerprints.createdAt,
+          })
+          .from(geometryFingerprints)
+          .where(inArray(geometryFingerprints.jobId, jobIds))
+          .orderBy(sql`created_at asc`)
+          .all()
+      : Promise.resolve(
+          [] as {
+            id: string;
+            jobId: string;
+            fileId: string;
+            status: string;
+            error: string | null;
+            createdAt: number;
+          }[]
+        ),
+  ]);
+
+  // Resolve licensee emails
+  const licenseeIds = [...new Set(jobLicenceRows.map((l) => l.licenseeId))];
+  const licenseeUsers =
+    licenseeIds.length > 0
+      ? await db
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(inArray(users.id, licenseeIds))
+          .all()
+      : [];
+
+  // Resolve scan file names for fingerprint rows
+  const fpFileIds = [...new Set(fpRows.map((f) => f.fileId))];
+  const fpFileRows =
+    fpFileIds.length > 0
+      ? await db
+          .select({ id: scanFiles.id, filename: scanFiles.filename })
+          .from(scanFiles)
+          .where(inArray(scanFiles.id, fpFileIds))
+          .all()
+      : [];
+
+  // Build lookup maps
+  const pkgNameMap = new Map(jobPackageRows.map((p) => [p.id, p.name]));
+  const licenceLicenseeMap = new Map(jobLicenceRows.map((l) => [l.id, l.licenseeId]));
+  const userEmailMap = new Map(licenseeUsers.map((u) => [u.id, u.email]));
+  const fileNameMap = new Map(fpFileRows.map((f) => [f.id, f.filename]));
+
+  // Group fingerprints by jobId
+  const fpByJob = new Map<string, FingerprintFileRow[]>();
+  for (const fp of fpRows) {
+    if (!fpByJob.has(fp.jobId)) fpByJob.set(fp.jobId, []);
+    fpByJob.get(fp.jobId)!.push({
+      id: fp.id,
+      fileId: fp.fileId,
+      filename: fileNameMap.get(fp.fileId) ?? fp.fileId.slice(0, 8) + "…",
+      status: fp.status,
+      error: fp.error,
+      createdAt: fp.createdAt,
+    });
+  }
+
+  // Build final JobRow[]
+  const jobs: JobRow[] = rawJobs.map((j) => {
+    const licenseeId = licenceLicenseeMap.get(j.licenceId) ?? "";
+    return {
+      id: j.id,
+      licenceId: j.licenceId,
+      licenseeEmail: userEmailMap.get(licenseeId) ?? licenseeId.slice(0, 8) + "…",
+      packageName: pkgNameMap.get(j.packageId) ?? j.packageId.slice(0, 8) + "…",
+      status: j.status,
+      filesTotal: j.filesTotal,
+      filesDone: j.filesDone,
+      error: j.error,
+      createdAt: j.createdAt,
+      completedAt: j.completedAt,
+      fingerprints: fpByJob.get(j.id) ?? [],
+    };
+  });
+
+  // Resolve talent emails for packages dropdown
   const talentIds = [...new Set(packages.map((p) => p.talentId))];
   const talentUsers =
     talentIds.length > 0
@@ -73,30 +171,19 @@ export default async function GeoFingerprintsAdminPage() {
           .where(inArray(users.id, talentIds))
           .all()
       : [];
-  const emailMap = new Map(talentUsers.map((u) => [u.id, u.email]));
+  const talentEmailMap = new Map(talentUsers.map((u) => [u.id, u.email]));
 
   const packageOptions = packages.map((p) => ({
     id: p.id,
     name: p.name,
-    talentEmail: emailMap.get(p.talentId) ?? p.talentId.slice(0, 8) + "…",
+    talentEmail: talentEmailMap.get(p.talentId) ?? p.talentId.slice(0, 8) + "…",
   }));
-
-  const JOB_STATUS_COLOR: Record<string, string> = {
-    queued: "#d97706",
-    processing: "#2563eb",
-    complete: "#166534",
-    failed: "#991b1b",
-  };
 
   return (
     <div className="p-8 max-w-5xl">
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
-          <Link
-            href="/admin"
-            className="text-xs"
-            style={{ color: "var(--color-muted)" }}
-          >
+          <Link href="/admin" className="text-xs" style={{ color: "var(--color-muted)" }}>
             Admin
           </Link>
           <span className="text-xs" style={{ color: "var(--color-muted)" }}>
@@ -121,9 +208,21 @@ export default async function GeoFingerprintsAdminPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[
-          { label: "Fingerprints Issued", value: String(readyFps?.n ?? 0), sub: `${totalFps?.n ?? 0} total incl. failed` },
-          { label: "Pending Jobs", value: String(pendingJobs?.n ?? 0), sub: "queued or processing" },
-          { label: "Packages", value: String(packages.length), sub: "available to check" },
+          {
+            label: "Fingerprints Issued",
+            value: String(readyFps?.n ?? 0),
+            sub: `${totalFps?.n ?? 0} total incl. failed`,
+          },
+          {
+            label: "Pending Jobs",
+            value: String(pendingJobs?.n ?? 0),
+            sub: "queued or processing",
+          },
+          {
+            label: "Packages",
+            value: String(packages.length),
+            sub: "available to check",
+          },
         ].map((c) => (
           <div
             key={c.label}
@@ -136,7 +235,10 @@ export default async function GeoFingerprintsAdminPage() {
             >
               {c.label}
             </p>
-            <p className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+            <p
+              className="text-2xl font-semibold tracking-tight"
+              style={{ color: "var(--color-ink)" }}
+            >
               {c.value}
             </p>
             <p className="text-xs mt-1" style={{ color: "var(--color-muted)" }}>
@@ -149,50 +251,26 @@ export default async function GeoFingerprintsAdminPage() {
       {/* Detection tool */}
       <GeoFingerprintDetectClient packages={packageOptions} />
 
-      {/* Recent jobs */}
-      <div className="rounded border mt-8" style={{ borderColor: "var(--color-border)" }}>
+      {/* Job log */}
+      <div
+        className="rounded border mt-8"
+        style={{ borderColor: "var(--color-border)" }}
+      >
         <div
-          className="px-5 py-3.5 border-b"
+          className="px-5 py-3.5 border-b flex items-center justify-between"
           style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
         >
           <h2
             className="text-xs font-semibold uppercase tracking-widest"
             style={{ color: "var(--color-muted)" }}
           >
-            Recent Watermark Jobs
+            Watermark Jobs
           </h2>
+          <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>
+            {jobs.length} most recent · click row to expand files
+          </span>
         </div>
-        {recentJobs.length === 0 ? (
-          <p className="px-5 py-4 text-xs" style={{ color: "var(--color-muted)" }}>
-            No jobs yet. Jobs are created automatically when a licence is approved.
-          </p>
-        ) : (
-          recentJobs.map((job) => (
-            <div
-              key={job.id}
-              className="px-5 py-3 border-b last:border-0 flex items-center justify-between gap-4"
-              style={{ borderColor: "var(--color-border)" }}
-            >
-              <div className="min-w-0">
-                <p className="text-xs font-medium truncate" style={{ color: "var(--color-ink)" }}>
-                  {job.licenceId}
-                </p>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--color-muted)" }}>
-                  {ts(job.createdAt)} · {job.filesDone}/{job.filesTotal ?? "?"} files
-                </p>
-              </div>
-              <span
-                className="text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded shrink-0"
-                style={{
-                  background: `${JOB_STATUS_COLOR[job.status] ?? "#6b7280"}18`,
-                  color: JOB_STATUS_COLOR[job.status] ?? "#6b7280",
-                }}
-              >
-                {job.status}
-              </span>
-            </div>
-          ))
-        )}
+        <GeoFingerprintJobsTable jobs={jobs} />
       </div>
 
       {/* Legal notice */}
