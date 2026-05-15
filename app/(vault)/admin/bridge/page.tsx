@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { sql, eq, isNull, inArray } from "drizzle-orm";
 import RevokeGrantButton from "./revoke-grant-button";
+import { BridgeAgentsTabs } from "./bridge-agents-tabs";
 
 const ONLINE_THRESHOLD_SECS = 60;
 
@@ -25,14 +26,6 @@ function tsTime(unix: number): string {
   return new Date(unix * 1000).toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
-}
-
-function timeSince(unix: number, now: number): string {
-  const s = now - unix;
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
 }
 
 const SEVERITY_COLOR: Record<string, { bg: string; text: string }> = {
@@ -54,12 +47,6 @@ const EVENT_LABELS: Record<string, string> = {
   purge_failed:            "Purge failed",
   file_in_use:             "File in use",
   file_removed_from_cache: "File removed from cache",
-};
-
-const PENDING_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  purge:          { bg: "rgba(153,27,27,0.12)",   text: "#991b1b", label: "Purge pending"  },
-  publish:        { bg: "rgba(37,99,235,0.1)",    text: "#2563eb", label: "Publish pending" },
-  "rotate-token": { bg: "rgba(124,58,237,0.1)",   text: "#7c3aed", label: "Token rotation"  },
 };
 
 export default async function AdminBridgePage() {
@@ -104,8 +91,18 @@ export default async function AdminBridgePage() {
   const pubPkgNames = new Map(pubPkgRows.map(p => [p.id, p.name]));
 
   const agentNameMap = new Map(agents.map(a => [a.id, a.displayName]));
-  const activeAgentCount  = agents.filter(a => a.revokedAt === null).length;
+  const activeAgents  = agents.filter(a => a.revokedAt === null);
+  const revokedAgents = agents.filter(a => a.revokedAt !== null);
+  const activeAgentCount  = activeAgents.length;
   const onlineAgentCount  = agents.filter(a => a.online).length;
+
+  // Serialise pubPkgNames into each agent for the client component
+  const agentsForClient = agents.map(a => ({
+    ...a,
+    pubPkgNames: Object.fromEntries(a.publishedIds.map(id => [id, pubPkgNames.get(id) ?? id.slice(0, 6) + "…"])),
+  }));
+  const activeAgentsForClient  = agentsForClient.filter(a => a.revokedAt === null);
+  const revokedAgentsForClient = agentsForClient.filter(a => a.revokedAt !== null);
 
   // ── Old-style CAS grants ──────────────────────────────────────────────────
   const activeGrants = await db
@@ -187,137 +184,12 @@ export default async function AdminBridgePage() {
         ))}
       </div>
 
-      {/* ── Render bridge agents ─────────────────────────────────────────────── */}
-      <div className="mb-8">
-        <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
-          Render Bridge Agents
-        </h2>
-        <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
-          <div
-            className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[900px]"
-            style={{
-              gridTemplateColumns: "2fr 1.5fr 1.5fr 1fr 1fr 1fr",
-              color: "var(--color-muted)",
-              background: "var(--color-surface)",
-              borderBottom: "1px solid var(--color-border)",
-            }}
-          >
-            <span>Agent</span>
-            <span>Organisation</span>
-            <span>Published</span>
-            <span>Pending</span>
-            <span>Last seen</span>
-            <span>Token</span>
-          </div>
-
-          {agents.length === 0 && (
-            <p className="px-5 py-5 text-sm" style={{ color: "var(--color-muted)" }}>
-              No render bridge agents enrolled.
-            </p>
-          )}
-
-          {agents.map(a => {
-            const isRevoked = a.revokedAt !== null;
-            const pendingStyle = a.pendingAction ? PENDING_STYLE[a.pendingAction] : null;
-            const tokenDaysLeft = a.tokenExpiresAt !== null
-              ? Math.max(0, Math.ceil((a.tokenExpiresAt - now) / 86400))
-              : null;
-
-            return (
-              <div
-                key={a.id}
-                className="grid items-center px-5 py-3.5 text-sm border-b last:border-0 min-w-[900px]"
-                style={{
-                  gridTemplateColumns: "2fr 1.5fr 1.5fr 1fr 1fr 1fr",
-                  borderColor: "var(--color-border)",
-                  opacity: isRevoked ? 0.5 : 1,
-                }}
-              >
-                {/* Agent name + status dot */}
-                <div className="flex items-center gap-2 min-w-0">
-                  {isRevoked ? (
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#991b1b" }} />
-                  ) : a.online ? (
-                    <span className="relative flex h-2 w-2 flex-shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "#16a34a" }} />
-                      <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: "#16a34a" }} />
-                    </span>
-                  ) : (
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--color-border)" }} />
-                  )}
-                  <div className="min-w-0">
-                    <p className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{a.displayName}</p>
-                    <p className="text-[10px] font-mono" style={{ color: "var(--color-muted)" }}>{a.id.slice(0, 8)}…</p>
-                  </div>
-                </div>
-
-                {/* Organisation */}
-                <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
-                  {a.orgName ?? a.organisationId.slice(0, 8) + "…"}
-                </span>
-
-                {/* Published packages */}
-                <div className="flex flex-wrap gap-1">
-                  {a.publishedIds.length === 0 ? (
-                    <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
-                  ) : (
-                    <>
-                      {a.publishedIds.slice(0, 2).map(pkgId => (
-                        <span
-                          key={pkgId}
-                          className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
-                          style={{ background: "#16a34a18", color: "#16a34a" }}
-                        >
-                          {pubPkgNames.get(pkgId) ?? pkgId.slice(0, 6) + "…"}
-                        </span>
-                      ))}
-                      {a.publishedIds.length > 2 && (
-                        <span
-                          className="text-[9px] px-1.5 py-0.5 rounded"
-                          style={{ background: "var(--color-border)", color: "var(--color-muted)" }}
-                        >
-                          +{a.publishedIds.length - 2}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Pending action */}
-                <span>
-                  {pendingStyle ? (
-                    <span
-                      className="text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded"
-                      style={{ background: pendingStyle.bg, color: pendingStyle.text }}
-                    >
-                      {pendingStyle.label}
-                    </span>
-                  ) : (
-                    <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
-                  )}
-                </span>
-
-                {/* Last heartbeat */}
-                <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                  {a.lastHeartbeatAt ? timeSince(a.lastHeartbeatAt, now) : "never"}
-                </span>
-
-                {/* Token expiry */}
-                <span
-                  className="text-xs"
-                  style={{ color: isRevoked ? "var(--color-muted)" : tokenDaysLeft !== null && tokenDaysLeft < 30 ? "#d97706" : "var(--color-muted)" }}
-                >
-                  {isRevoked
-                    ? "revoked"
-                    : tokenDaysLeft !== null
-                    ? `${tokenDaysLeft}d`
-                    : "—"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* ── Render bridge agents (tabbed: active / revoked) ─────────────────── */}
+      <BridgeAgentsTabs
+        activeAgents={activeAgentsForClient}
+        revokedAgents={revokedAgentsForClient}
+        now={now}
+      />
 
       {/* ── CAS bridge sessions (old-style grants) ───────────────────────────── */}
       <div className="mb-8">
