@@ -42,6 +42,7 @@ export default async function AdminUsersPage() {
       emailMuted: users.emailMuted,
       aiDisabled: users.aiDisabled,
       inboundEnabled: users.inboundEnabled,
+      geoFingerprintEnabled: users.geoFingerprintEnabled,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -193,6 +194,14 @@ export default async function AdminUsersPage() {
                       Inbox
                     </span>
                   )}
+                  {u.geoFingerprintEnabled && (
+                    <span
+                      className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(5,150,105,0.12)", color: "#059669" }}
+                    >
+                      Fingerprint
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -205,6 +214,7 @@ export default async function AdminUsersPage() {
                 emailMuted={!!u.emailMuted}
                 aiDisabled={!!u.aiDisabled}
                 inboundEnabled={!!u.inboundEnabled}
+                geoFingerprintEnabled={!!u.geoFingerprintEnabled}
               />
             </div>
           );

@@ -2,13 +2,12 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, users, scanPackages, talentReps } from "@/lib/db/schema";
+import { licences, users, scanPackages, talentReps, geometryFingerprintJobs } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
 import { getRequestContext } from "@cloudflare/next-on-pages";
-import { geometryFingerprintJobs } from "@/lib/db/schema";
 
 // POST /api/licences/[id]/approve — talent/rep approves a pending licence request
 export async function POST(
@@ -43,6 +42,14 @@ export async function POST(
     .limit(1)
     .all();
 
+  // Check if geo-fingerprinting is enabled for this talent
+  const [talentUser] = await db
+    .select({ geoFingerprintEnabled: users.geoFingerprintEnabled })
+    .from(users)
+    .where(eq(users.id, licence?.talentId ?? ""))
+    .limit(1)
+    .all();
+
   if (!licence) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -73,8 +80,9 @@ export async function POST(
     .set({ status: "APPROVED", approvedBy: session.sub, approvedAt: now, agreedFee, platformFee })
     .where(eq(licences.id, id));
 
-  // Enqueue geometric fingerprinting job for OBJ files in this package
+  // Enqueue geometric fingerprinting job (only if enabled for this talent)
   void (async () => {
+    if (!talentUser?.geoFingerprintEnabled) return;
     try {
       const jobId = crypto.randomUUID();
       await db.insert(geometryFingerprintJobs).values({

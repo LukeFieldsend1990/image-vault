@@ -11,6 +11,7 @@ export const users = sqliteTable("users", {
   emailMuted: integer("email_muted", { mode: "boolean" }).notNull().default(false),
   aiDisabled: integer("ai_disabled", { mode: "boolean" }).notNull().default(false),
   inboundEnabled: integer("inbound_enabled", { mode: "boolean" }).notNull().default(false),
+  geoFingerprintEnabled: integer("geo_fingerprint_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
