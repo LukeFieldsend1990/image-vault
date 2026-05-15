@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN geo_fingerprint_enabled INTEGER NOT NULL DEFAULT 0;
