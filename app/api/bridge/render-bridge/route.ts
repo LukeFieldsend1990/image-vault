@@ -3,7 +3,7 @@ export const runtime = "edge";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { renderBridgeAgents, organisations, licences, scanPackages, scanFiles, bridgeEvents, talentProfiles, organisationMembers } from "@/lib/db/schema";
-import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { requireBridgeToken, isBridgeTokenError } from "@/lib/auth/requireBridgeToken";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 
@@ -159,6 +159,8 @@ export async function GET(req: NextRequest) {
         .where(
           and(
             isNotNull(licences.packageId),
+            eq(licences.status, "APPROVED"),
+            gt(licences.validTo, now),
             memberIds.length > 0
               ? or(
                   eq(licences.organisationId, agent.organisationId),
