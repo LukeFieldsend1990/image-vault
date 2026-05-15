@@ -280,7 +280,7 @@ describe("POST /api/licences/[id]/revoke", () => {
     expect(res.status).toBe(200);
 
     const update = t.updatedRows[0].set as any;
-    expect(update.status).toBe("REVOKED");
+    expect(update.status).toBe("SCRUB_PERIOD");
     // KV dual custody session should be deleted
     expect(t.kv.delete).toHaveBeenCalledWith("dual_custody:lic1");
   });
