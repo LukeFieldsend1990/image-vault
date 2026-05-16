@@ -1,103 +1,33 @@
 // Standalone geo-fingerprint implementation for the worker (no app imports)
+//
+// Uses two-pass streaming R2 reads to handle arbitrarily large OBJ files
+// without hitting the 128MB Worker memory limit:
+//   Pass 1 — stream to count vertices + compute bbox diagonal (O(1) extra memory)
+//   Pass 2 — stream to apply modifications line-by-line, piped directly into R2 put
+//
+// Normal estimation (which requires loading all faces) is replaced by a
+// deterministic HMAC-derived direction per slot — same robustness, zero topology cost.
 
-// ── OBJ Parser ────────────────────────────────────────────────────────────────
+const BIT_LENGTH = 128;
+const REPEAT_FACTOR = 5;
+const SLOT_COUNT = BIT_LENGTH * REPEAT_FACTOR; // 640
 
-interface ParsedObj {
-  vertices: Float64Array[];
-  vertexLineIndices: number[];
-  lines: string[];
-  faces: number[][];
-}
-
-function parseObj(text: string): ParsedObj {
-  const lines = text.split("\n");
-  const vertices: Float64Array[] = [];
-  const vertexLineIndices: number[] = [];
-  const faces: number[][] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.startsWith("v ") || line.startsWith("v\t")) {
-      const parts = line.split(/\s+/);
-      const x = parseFloat(parts[1]);
-      const y = parseFloat(parts[2]);
-      const z = parseFloat(parts[3]);
-      if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
-        vertices.push(new Float64Array([x, y, z]));
-        vertexLineIndices.push(i);
-      }
-    } else if (line.startsWith("f ") || line.startsWith("f\t")) {
-      const parts = line.split(/\s+/).slice(1);
-      const faceVerts: number[] = [];
-      for (const part of parts) {
-        const idx = parseInt(part.split("/")[0]) - 1;
-        if (!isNaN(idx) && idx >= 0) faceVerts.push(idx);
-      }
-      if (faceVerts.length >= 3) faces.push(faceVerts);
-    }
-  }
-
-  return { vertices, vertexLineIndices, lines, faces };
-}
-
-function computeBboxDiagonal(vertices: Float64Array[]): number {
-  if (vertices.length === 0) return 1;
-  let minX = Infinity, minY = Infinity, minZ = Infinity;
-  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-  for (const v of vertices) {
-    if (v[0] < minX) minX = v[0];
-    if (v[1] < minY) minY = v[1];
-    if (v[2] < minZ) minZ = v[2];
-    if (v[0] > maxX) maxX = v[0];
-    if (v[1] > maxY) maxY = v[1];
-    if (v[2] > maxZ) maxZ = v[2];
-  }
-  const dx = maxX - minX, dy = maxY - minY, dz = maxZ - minZ;
-  return Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-}
-
-function estimateNormals(vertices: Float64Array[], faces: number[][]): Float64Array[] {
-  const normals = vertices.map(() => new Float64Array(3));
-  for (const face of faces) {
-    for (let tri = 0; tri < face.length - 2; tri++) {
-      const ai = face[0], bi = face[tri + 1], ci = face[tri + 2];
-      if (ai >= vertices.length || bi >= vertices.length || ci >= vertices.length) continue;
-      const a = vertices[ai], b = vertices[bi], c = vertices[ci];
-      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-      const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-      const nx = uy * vz - uz * vy;
-      const ny = uz * vx - ux * vz;
-      const nz = ux * vy - uy * vx;
-      normals[ai][0] += nx; normals[ai][1] += ny; normals[ai][2] += nz;
-      normals[bi][0] += nx; normals[bi][1] += ny; normals[bi][2] += nz;
-      normals[ci][0] += nx; normals[ci][1] += ny; normals[ci][2] += nz;
-    }
-  }
-  for (const n of normals) {
-    const len = Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-    if (len > 0) { n[0] /= len; n[1] /= len; n[2] /= len; } else { n[1] = 1; }
-  }
-  return normals;
-}
-
-function serializeObj(parsed: ParsedObj, modified: Float64Array[]): string {
-  const lines = [...parsed.lines];
-  for (let i = 0; i < modified.length; i++) {
-    const v = modified[i];
-    lines[parsed.vertexLineIndices[i]] =
-      `v ${v[0].toFixed(8)} ${v[1].toFixed(8)} ${v[2].toFixed(8)}`;
-  }
-  return lines.join("\n");
-}
-
-// ── Payload / HMAC ────────────────────────────────────────────────────────────
-
-interface FingerprintParams {
+export interface FingerprintParams {
   licenceId: string;
   licenseeId: string;
   packageId: string;
   fileId: string;
 }
+
+export interface EmbedResult {
+  outputStream: ReadableStream<Uint8Array>;
+  fingerprintBitsHex: string;
+  payloadHash: string;
+  regionCount: number;
+  vertexCount: number;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeXorshift32(seed: number) {
   let s = (seed >>> 0) || 0x12345678;
@@ -124,41 +54,93 @@ function selectVertices(
   return Array.from({ length: slotCount }, () => Math.floor(rng() * vertexCount));
 }
 
+// Deterministic unit direction for slot i, derived from the first 16 hmacBytes.
+// Uses indices mod 16 so only the 128-bit fingerprint payload stored in the DB is needed.
+export function slotDirection(hmacBytes: Uint8Array, slot: number): [number, number, number] {
+  const i0 = (slot * 7) % 16;
+  const i1 = (slot * 7 + 1) % 16;
+  const i2 = (slot * 7 + 2) % 16;
+  const a = ((hmacBytes[i0] ^ (slot >> 2)) & 0xff) / 255;
+  const b = ((hmacBytes[i1] ^ (slot & 0xff)) & 0xff) / 255;
+  const c = ((hmacBytes[i2] ^ ((slot * 3) & 0xff)) & 0xff) / 255;
+  const x = a * 2 - 1, y = b * 2 - 1, z = c * 2 - 1;
+  const len = Math.sqrt(x * x + y * y + z * z) || 1;
+  return [x / len, y / len, z / len];
+}
+
 async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-// ── Embed ────────────────────────────────────────────────────────────────────
+// ── Pass 1: stream to get vertex count + bbox diagonal ────────────────────────
 
-const BIT_LENGTH = 128;
-const REPEAT_FACTOR = 5;
-const SLOT_COUNT = BIT_LENGTH * REPEAT_FACTOR;
+async function streamCountAndBbox(
+  stream: ReadableStream<Uint8Array>,
+): Promise<{ vertexCount: number; diagonal: number }> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let remainder = "";
+  let vertexCount = 0;
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
 
-export interface EmbedResult {
-  watermarkedObjText: string;
-  fingerprintBitsHex: string;
+  const processLine = (line: string) => {
+    const t = line.trimStart();
+    if (!t.startsWith("v ") && !t.startsWith("v\t")) return;
+    const parts = t.split(/\s+/);
+    const x = parseFloat(parts[1]);
+    const y = parseFloat(parts[2]);
+    const z = parseFloat(parts[3]);
+    if (isNaN(x) || isNaN(y) || isNaN(z)) return;
+    vertexCount++;
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    const chunk = decoder.decode(value, { stream: !done });
+    const text = remainder + chunk;
+    if (done) {
+      if (text) processLine(text);
+      break;
+    }
+    const lastNl = text.lastIndexOf("\n");
+    if (lastNl === -1) { remainder = text; continue; }
+    const lines = text.slice(0, lastNl).split("\n");
+    remainder = text.slice(lastNl + 1);
+    for (const line of lines) processLine(line);
+  }
+
+  if (vertexCount === 0) throw new Error("OBJ has no vertices");
+  if (vertexCount < 10) throw new Error("OBJ has too few vertices for fingerprinting");
+
+  const dx = (maxX - minX) || 1;
+  const dy = (maxY - minY) || 1;
+  const dz = (maxZ - minZ) || 1;
+  return { vertexCount, diagonal: Math.sqrt(dx * dx + dy * dy + dz * dz) };
+}
+
+// ── Compute per-vertex delta map (compact; only selected vertices) ─────────────
+
+interface ModMap {
+  mods: Map<number, [number, number, number]>; // vertexIdx → [dx, dy, dz]
+  bitsHex: string;
   payloadHash: string;
   regionCount: number;
-  vertexCount: number;
-  faceCount: number;
-  maxDisplacement: number;
 }
 
-export async function embedFingerprint(
-  objText: string,
+async function computeModifications(
   params: FingerprintParams,
   secret: string,
-  strength = 0.00001,
-): Promise<EmbedResult> {
-  const parsed = parseObj(objText);
-  const { vertices, faces } = parsed;
-
-  if (vertices.length < 10) throw new Error("OBJ has too few vertices for fingerprinting");
-
-  const diagonal = computeBboxDiagonal(vertices);
-  const normals = estimateNormals(vertices, faces);
-
+  vertexCount: number,
+  diagonal: number,
+  strength: number,
+): Promise<ModMap> {
   const payload = JSON.stringify({
     fileId: params.fileId,
     licenceId: params.licenceId,
@@ -185,28 +167,122 @@ export async function embedFingerprint(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  const expandedBits = Array.from({ length: SLOT_COUNT }, (_, i) => bits[Math.floor(i / REPEAT_FACTOR)]);
-  const selectedVertices = selectVertices(hmacBytes, params.fileId, vertices.length, SLOT_COUNT);
-
-  const modified = vertices.map((v) => new Float64Array(v));
+  const expandedBits = Array.from(
+    { length: SLOT_COUNT },
+    (_, i) => bits[Math.floor(i / REPEAT_FACTOR)],
+  );
+  const selectedVertices = selectVertices(hmacBytes, params.fileId, vertexCount, SLOT_COUNT);
   const offsetAmount = strength * diagonal;
 
+  const mods = new Map<number, [number, number, number]>();
   for (let i = 0; i < SLOT_COUNT; i++) {
     const vi = selectedVertices[i];
-    const sign = expandedBits[i] ? 1.0 : -1.0;
-    const n = normals[vi];
-    modified[vi][0] += sign * n[0] * offsetAmount;
-    modified[vi][1] += sign * n[1] * offsetAmount;
-    modified[vi][2] += sign * n[2] * offsetAmount;
+    const sign = expandedBits[i] ? 1 : -1;
+    const [nx, ny, nz] = slotDirection(hmacBytes, i);
+    const existing = mods.get(vi);
+    if (existing) {
+      existing[0] += sign * nx * offsetAmount;
+      existing[1] += sign * ny * offsetAmount;
+      existing[2] += sign * nz * offsetAmount;
+    } else {
+      mods.set(vi, [sign * nx * offsetAmount, sign * ny * offsetAmount, sign * nz * offsetAmount]);
+    }
   }
 
-  return {
-    watermarkedObjText: serializeObj(parsed, modified),
-    fingerprintBitsHex: bitsHex,
-    payloadHash,
-    regionCount: new Set(selectedVertices).size,
-    vertexCount: vertices.length,
-    faceCount: faces.length,
-    maxDisplacement: offsetAmount,
-  };
+  return { mods, bitsHex, payloadHash, regionCount: mods.size };
+}
+
+// ── Pass 2: stream-apply modifications → ReadableStream ───────────────────────
+
+function streamApplyModifications(
+  inputStream: ReadableStream<Uint8Array>,
+  mods: Map<number, [number, number, number]>,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+
+  (async () => {
+    const reader = inputStream.getReader();
+    const decoder = new TextDecoder();
+    let remainder = "";
+    let vertexIdx = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        const input = remainder + decoder.decode(value, { stream: !done });
+
+        let lines: string[];
+        let newRemainder: string;
+
+        if (done) {
+          lines = input ? [input] : [];
+          newRemainder = "";
+        } else {
+          const lastNl = input.lastIndexOf("\n");
+          if (lastNl === -1) { remainder = input; continue; }
+          lines = input.slice(0, lastNl).split("\n");
+          newRemainder = input.slice(lastNl + 1);
+        }
+
+        let chunk = "";
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const t = line.trimStart();
+          const isVertex = t.startsWith("v ") || t.startsWith("v\t");
+
+          if (isVertex) {
+            const mod = mods.get(vertexIdx);
+            if (mod) {
+              const parts = t.split(/\s+/);
+              const x = parseFloat(parts[1]) + mod[0];
+              const y = parseFloat(parts[2]) + mod[1];
+              const z = parseFloat(parts[3]) + mod[2];
+              chunk += `v ${x.toFixed(8)} ${y.toFixed(8)} ${z.toFixed(8)}`;
+            } else {
+              chunk += line;
+            }
+            vertexIdx++;
+          } else {
+            chunk += line;
+          }
+          if (!done || i < lines.length - 1) chunk += "\n";
+        }
+
+        if (chunk) await writer.write(encoder.encode(chunk));
+        remainder = newRemainder;
+        if (done) break;
+      }
+      await writer.close();
+    } catch (err) {
+      await writer.abort(err instanceof Error ? err : new Error(String(err)));
+    }
+  })().catch(() => {});
+
+  return readable;
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+export async function embedFingerprintStreaming(
+  getBucketObject: () => Promise<{ body: ReadableStream<Uint8Array> }>,
+  params: FingerprintParams,
+  secret: string,
+  strength = 0.00001,
+): Promise<EmbedResult> {
+  // Pass 1: count vertices + bbox (O(1) memory)
+  const obj1 = await getBucketObject();
+  const { vertexCount, diagonal } = await streamCountAndBbox(obj1.body);
+
+  // Compute HMAC and build per-vertex delta map (~640 entries max)
+  const { mods, bitsHex, payloadHash, regionCount } = await computeModifications(
+    params, secret, vertexCount, diagonal, strength,
+  );
+
+  // Pass 2: stream modifications directly into R2
+  const obj2 = await getBucketObject();
+  const outputStream = streamApplyModifications(obj2.body, mods);
+
+  return { outputStream, fingerprintBitsHex: bitsHex, payloadHash, regionCount, vertexCount };
 }

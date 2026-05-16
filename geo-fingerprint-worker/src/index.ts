@@ -16,7 +16,7 @@ import {
   geometryFingerprintJobs,
   geometryFingerprints,
 } from "./schema";
-import { embedFingerprint } from "./geoFingerprint";
+import { embedFingerprintStreaming } from "./geoFingerprint";
 
 interface Env {
   DB: D1Database;
@@ -129,18 +129,20 @@ async function processJob(
     const fingerprintId = crypto.randomUUID();
 
     try {
-      // Read original OBJ from R2
-      const object = await env.SCANS_BUCKET.get(file.r2Key);
-      if (!object) {
+      // Verify file exists before starting
+      const probe = await env.SCANS_BUCKET.head(file.r2Key);
+      if (!probe) {
         console.warn(`[geo-fingerprint] file ${file.id} not found in R2, skipping`);
         continue;
       }
 
-      const objText = await object.text();
-
-      // Embed fingerprint
-      const result = await embedFingerprint(
-        objText,
+      // Two-pass streaming embed: pass 1 counts vertices, pass 2 writes modified output
+      const result = await embedFingerprintStreaming(
+        async () => {
+          const obj = await env.SCANS_BUCKET.get(file.r2Key);
+          if (!obj) throw new Error(`File ${file.id} missing from R2`);
+          return obj;
+        },
         {
           licenceId: job.licenceId,
           licenseeId: licence.licenseeId,
@@ -150,13 +152,11 @@ async function processJob(
         env.FINGERPRINT_SIGNING_KEY,
       );
 
-      // Write watermarked copy to R2
+      // Stream watermarked output directly into R2 (no full-file buffering)
       const watermarkedKey = `watermarks/${job.licenceId}/${file.id}.obj`;
-      await env.SCANS_BUCKET.put(
-        watermarkedKey,
-        new TextEncoder().encode(result.watermarkedObjText),
-        { httpMetadata: { contentType: "application/obj" } },
-      );
+      await env.SCANS_BUCKET.put(watermarkedKey, result.outputStream, {
+        httpMetadata: { contentType: "application/obj" },
+      });
 
       // Record fingerprint
       await db.insert(geometryFingerprints).values({
@@ -173,7 +173,7 @@ async function processJob(
         repeatFactor: 5,
         watermarkStrength: 0.00001,
         watermarkRegionCount: result.regionCount,
-        fingerprintVersion: 1,
+        fingerprintVersion: 2,
         status: "ready",
         createdAt: now,
       });
