@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, geometryFingerprintJobs, users } from "@/lib/db/schema";
+import { licences, geometryFingerprintJobs, geometryFingerprints } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { getRequestContext } from "@cloudflare/next-on-pages";
@@ -40,18 +40,19 @@ export async function POST(req: NextRequest) {
   if (licence.status !== "APPROVED") return NextResponse.json({ error: "Licence is not APPROVED" }, { status: 409 });
   if (!licence.packageId) return NextResponse.json({ error: "Licence has no package" }, { status: 409 });
 
-  // Check no ready job already exists
   const existing = await db
     .select({ id: geometryFingerprintJobs.id, status: geometryFingerprintJobs.status })
     .from(geometryFingerprintJobs)
     .where(eq(geometryFingerprintJobs.licenceId, body.licenceId))
+    .orderBy(eq(geometryFingerprintJobs.licenceId, body.licenceId)) // most recent via created_at desc would need sql, use get() which returns first
     .get();
 
-  // Re-queue existing non-failed jobs (handles timing miss: row inserted but message never sent)
-  const jobId = existing && existing.status !== "failed" ? existing.id : crypto.randomUUID();
+  const now = Math.floor(Date.now() / 1000);
+  let jobId: string;
 
-  if (!existing || existing.status === "failed") {
-    const now = Math.floor(Date.now() / 1000);
+  if (!existing) {
+    // Fresh job
+    jobId = crypto.randomUUID();
     await db.insert(geometryFingerprintJobs).values({
       id: jobId,
       licenceId: body.licenceId,
@@ -60,6 +61,18 @@ export async function POST(req: NextRequest) {
       filesDone: 0,
       createdAt: now,
     });
+  } else if (existing.status === "queued" || existing.status === "processing") {
+    // Already in flight — just resend the queue message
+    jobId = existing.id;
+  } else {
+    // complete or failed: reset the existing row so the worker reprocesses it,
+    // and wipe its fingerprint rows so they're recreated cleanly
+    jobId = existing.id;
+    await db.delete(geometryFingerprints).where(eq(geometryFingerprints.jobId, existing.id));
+    await db
+      .update(geometryFingerprintJobs)
+      .set({ status: "queued", filesDone: 0, filesTotal: null, error: null, completedAt: null, createdAt: now })
+      .where(eq(geometryFingerprintJobs.id, existing.id));
   }
 
   try {
@@ -74,5 +87,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to enqueue job", detail: String(err) }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, jobId, requeued: !!(existing && existing.status !== "failed") });
+  return NextResponse.json({ ok: true, jobId });
 }
