@@ -81,6 +81,20 @@ function makeXorshift32(seed: number) {
   };
 }
 
+// Deterministic unit direction per slot, derived from first 16 hmacBytes.
+// Mirrors the worker implementation — used by both embed and detect.
+export function slotDirection(hmacBytes: Uint8Array, slot: number): [number, number, number] {
+  const i0 = (slot * 7) % 16;
+  const i1 = (slot * 7 + 1) % 16;
+  const i2 = (slot * 7 + 2) % 16;
+  const a = ((hmacBytes[i0] ^ (slot >> 2)) & 0xff) / 255;
+  const b = ((hmacBytes[i1] ^ (slot & 0xff)) & 0xff) / 255;
+  const c = ((hmacBytes[i2] ^ ((slot * 3) & 0xff)) & 0xff) / 255;
+  const x = a * 2 - 1, y = b * 2 - 1, z = c * 2 - 1;
+  const len = Math.sqrt(x * x + y * y + z * z) || 1;
+  return [x / len, y / len, z / len];
+}
+
 export function selectVertices(
   hmacBytes: Uint8Array,
   fileId: string,
