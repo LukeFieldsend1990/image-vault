@@ -18,6 +18,57 @@ import {
 } from "./schema";
 import { embedFingerprintStreaming } from "./geoFingerprint";
 
+// R2 put() requires a known content-length for ReadableStream — use multipart upload instead.
+// Parts must be ≥5 MB except the final part; 8 MB gives comfortable headroom.
+const PART_SIZE = 8 * 1024 * 1024;
+
+async function putStreamMultipart(
+  bucket: R2Bucket,
+  key: string,
+  stream: ReadableStream<Uint8Array>,
+  contentType: string,
+): Promise<void> {
+  const upload = await bucket.createMultipartUpload(key, {
+    httpMetadata: { contentType },
+  });
+  const parts: R2UploadedPart[] = [];
+  const chunks: Uint8Array[] = [];
+  let buffered = 0;
+  let partNum = 1;
+
+  const flushPart = async () => {
+    if (chunks.length === 0) return;
+    const buf = new Uint8Array(buffered);
+    let off = 0;
+    for (const c of chunks) { buf.set(c, off); off += c.length; }
+    try {
+      parts.push(await upload.uploadPart(partNum++, buf));
+    } catch (err) {
+      await upload.abort();
+      throw err;
+    }
+    chunks.length = 0;
+    buffered = 0;
+  };
+
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (value?.length) {
+        chunks.push(value);
+        buffered += value.length;
+        if (buffered >= PART_SIZE) await flushPart();
+      }
+      if (done) { await flushPart(); break; }
+    }
+  } catch (err) {
+    await upload.abort();
+    throw err;
+  }
+  await upload.complete(parts);
+}
+
 interface Env {
   DB: D1Database;
   SCANS_BUCKET: R2Bucket;
@@ -152,11 +203,9 @@ async function processJob(
         env.FINGERPRINT_SIGNING_KEY,
       );
 
-      // Stream watermarked output directly into R2 (no full-file buffering)
+      // Write watermarked output via multipart upload (R2 put requires known length for streams)
       const watermarkedKey = `watermarks/${job.licenceId}/${file.id}.obj`;
-      await env.SCANS_BUCKET.put(watermarkedKey, result.outputStream, {
-        httpMetadata: { contentType: "application/obj" },
-      });
+      await putStreamMultipart(env.SCANS_BUCKET, watermarkedKey, result.outputStream, "application/obj");
 
       // Record fingerprint
       await db.insert(geometryFingerprints).values({

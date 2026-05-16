@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 export interface FingerprintFileRow {
   id: string;
@@ -71,6 +71,7 @@ function StatusPill({ status, small }: { status: string; small?: boolean }) {
 
 export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [rerunning, setRerunning] = useState<Set<string>>(new Set());
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -80,6 +81,21 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
       return next;
     });
   }
+
+  const rerun = useCallback(async (e: React.MouseEvent, licenceId: string, jobId: string) => {
+    e.stopPropagation();
+    setRerunning((prev) => new Set(prev).add(jobId));
+    try {
+      await fetch("/api/admin/geometry-fingerprints/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licenceId }),
+      });
+      window.location.reload();
+    } catch {
+      setRerunning((prev) => { const n = new Set(prev); n.delete(jobId); return n; });
+    }
+  }, []);
 
   if (jobs.length === 0) {
     return (
@@ -150,7 +166,7 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
                   </p>
                 </div>
 
-                {/* Progress */}
+                {/* Progress + re-run */}
                 <div className="shrink-0 text-right">
                   <p
                     className="text-[11px] tabular-nums"
@@ -168,6 +184,20 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
                         style={{ width: `${pct}%`, background: barColor }}
                       />
                     </div>
+                  )}
+                  {(job.status === "failed" || job.status === "complete") && (
+                    <button
+                      onClick={(e) => void rerun(e, job.licenceId, job.id)}
+                      disabled={rerunning.has(job.id)}
+                      className="mt-2 text-[10px] font-semibold px-2 py-0.5 rounded transition disabled:opacity-40"
+                      style={{
+                        border: "1px solid rgba(37,99,235,0.3)",
+                        color: "#2563eb",
+                        background: "rgba(37,99,235,0.06)",
+                      }}
+                    >
+                      {rerunning.has(job.id) ? "…" : "Re-run"}
+                    </button>
                   )}
                 </div>
 
