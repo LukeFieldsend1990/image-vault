@@ -47,7 +47,7 @@ interface Licence {
   contractUploadedAt: number | null;
 }
 
-const TABS: { label: string; value: LicenceStatus | "ALL" }[] = [
+const BASE_TABS: { label: string; value: LicenceStatus | "ALL" | "SCRUB" }[] = [
   { label: "Pending", value: "PENDING" },
   { label: "Approved", value: "APPROVED" },
   { label: "Denied", value: "DENIED" },
@@ -98,19 +98,41 @@ function fmtGBP(pence: number) {
   return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
+type TabValue = LicenceStatus | "ALL" | "SCRUB";
+
 export default function LicencesClient() {
   const [licences, setLicences] = useState<Licence[]>([]);
-  const [tab, setTab] = useState<LicenceStatus | "ALL" | null>(null);
+  const [tab, setTab] = useState<TabValue | null>(null);
+  const [hasScrub, setHasScrub] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
 
+  const tabs = hasScrub
+    ? [{ label: "Scrub", value: "SCRUB" as const }, ...BASE_TABS]
+    : BASE_TABS;
+
+  async function fetchForTab(t: TabValue): Promise<Licence[]> {
+    if (t === "ALL") {
+      const d = await fetch("/api/licences").then((r) => r.json() as Promise<{ licences?: Licence[] }>);
+      return d.licences ?? [];
+    }
+    if (t === "SCRUB") {
+      const [scrub, overdue] = await Promise.all([
+        fetch("/api/licences?status=SCRUB_PERIOD").then((r) => r.json() as Promise<{ licences?: Licence[] }>),
+        fetch("/api/licences?status=OVERDUE").then((r) => r.json() as Promise<{ licences?: Licence[] }>),
+      ]);
+      return [...(scrub.licences ?? []), ...(overdue.licences ?? [])];
+    }
+    const d = await fetch(`/api/licences?status=${t}`).then((r) => r.json() as Promise<{ licences?: Licence[] }>);
+    return d.licences ?? [];
+  }
+
   async function reload() {
     if (tab === null) return;
-    const url = tab === "ALL" ? "/api/licences" : `/api/licences?status=${tab}`;
-    const d = await fetch(url).then((r) => r.json() as Promise<{ licences?: Licence[] }>);
-    setLicences(d.licences ?? []);
+    const results = await fetchForTab(tab);
+    setLicences(results);
   }
 
   async function uploadContract(id: string, file: File) {
@@ -129,13 +151,17 @@ export default function LicencesClient() {
     await reload();
   }
 
-  // Determine the default tab on mount: PENDING if any exist, else APPROVED
+  // Determine default tab on mount: scrub > pending > approved
   useEffect(() => {
     fetch("/api/licences")
       .then((r) => r.json() as Promise<{ licences?: Licence[] }>)
       .then((d) => {
         const all = d.licences ?? [];
-        setTab(all.some((l) => l.status === "PENDING") ? "PENDING" : "APPROVED");
+        const scrub = all.some((l) => l.status === "SCRUB_PERIOD" || l.status === "OVERDUE");
+        setHasScrub(scrub);
+        if (scrub) setTab("SCRUB");
+        else if (all.some((l) => l.status === "PENDING")) setTab("PENDING");
+        else setTab("APPROVED");
       })
       .catch(() => setTab("PENDING"));
   }, []);
@@ -144,12 +170,11 @@ export default function LicencesClient() {
     if (tab === null) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    const url = tab === "ALL" ? "/api/licences" : `/api/licences?status=${tab}`;
-    fetch(url)
-      .then((r) => r.json() as Promise<{ licences?: Licence[] }>)
-      .then((d) => setLicences(d.licences ?? []))
+    fetchForTab(tab)
+      .then((results) => setLicences(results))
       .catch(() => setError("Failed to load licences"))
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   return (
@@ -174,23 +199,30 @@ export default function LicencesClient() {
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 border-b" style={{ borderColor: "var(--color-border)" }}>
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const active = tab === t.value;
+          const isScrub = t.value === "SCRUB";
           return (
             <button
               key={t.value}
               onClick={() => setTab(t.value)}
-              className="px-4 py-2 text-sm transition relative"
+              className="px-4 py-2 text-sm transition relative flex items-center gap-1.5"
               style={{
                 color: active ? "var(--color-ink)" : "var(--color-muted)",
                 fontWeight: active ? 600 : 400,
               }}
             >
+              {isScrub && (
+                <span
+                  className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: "#c0392b" }}
+                />
+              )}
               {t.label}
               {active && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-0.5"
-                  style={{ background: "var(--color-accent)" }}
+                  style={{ background: isScrub ? "#c0392b" : "var(--color-accent)" }}
                 />
               )}
             </button>

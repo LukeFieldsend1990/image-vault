@@ -5,8 +5,8 @@ import { NavLinks } from "./nav";
 import UserWidget from "./user-widget";
 import SidebarShell from "./sidebar-shell";
 import { getDb } from "@/lib/db";
-import { talentProfiles, talentSettings, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { licences, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 type Role = "talent" | "rep" | "licensee" | "admin";
 
@@ -81,6 +81,52 @@ async function getPipelineEnabled(userId: string): Promise<boolean> {
   }
 }
 
+async function getLicenceAlert(userId: string, role: Role): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const db = getDb();
+    if (role === "licensee") {
+      const row = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(licences)
+        .where(and(
+          eq(licences.licenseeId, userId),
+          inArray(licences.status, ["PENDING", "SCRUB_PERIOD", "OVERDUE"]),
+        ))
+        .get();
+      return (row?.n ?? 0) > 0;
+    }
+    if (role === "talent") {
+      const row = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(licences)
+        .where(and(eq(licences.talentId, userId), eq(licences.status, "PENDING")))
+        .get();
+      return (row?.n ?? 0) > 0;
+    }
+    if (role === "rep") {
+      const managed = await db
+        .select({ talentId: talentReps.talentId })
+        .from(talentReps)
+        .where(eq(talentReps.repId, userId))
+        .all();
+      if (managed.length === 0) return false;
+      const row = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(licences)
+        .where(and(
+          inArray(licences.talentId, managed.map((m) => m.talentId)),
+          eq(licences.status, "PENDING"),
+        ))
+        .get();
+      return (row?.n ?? 0) > 0;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 async function getInboundEnabled(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
@@ -102,10 +148,11 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled] = await Promise.all([
+  const [identity, pipelineEnabled, inboundEnabled, licenceAlert] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
+    getLicenceAlert(sub, role),
   ]);
 
   const homeHref = role === "licensee" ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
@@ -125,7 +172,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} />
+            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} />
           </div>
 
           <UserWidget
