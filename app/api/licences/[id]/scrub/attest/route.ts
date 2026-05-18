@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import {
   licences,
+  organisationMembers,
   scanPackages,
   scrubAttestations,
   talentReps,
@@ -13,7 +14,7 @@ import {
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { verifyTotpCode } from "@/lib/auth/totp";
 import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { attestationSubmittedEmail } from "@/lib/email/templates";
 
@@ -70,6 +71,7 @@ export async function POST(
       id: licences.id,
       talentId: licences.talentId,
       licenseeId: licences.licenseeId,
+      organisationId: licences.organisationId,
       status: licences.status,
       projectName: licences.projectName,
       packageId: licences.packageId,
@@ -80,7 +82,24 @@ export async function POST(
     .get();
 
   if (!lic) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (lic.licenseeId !== session.sub) {
+
+  // Allow the licensee themselves or any org owner on the associated org
+  let canAttest = lic.licenseeId === session.sub;
+  if (!canAttest && lic.organisationId) {
+    const ownerLink = await db
+      .select({ userId: organisationMembers.userId })
+      .from(organisationMembers)
+      .where(
+        and(
+          eq(organisationMembers.organisationId, lic.organisationId),
+          eq(organisationMembers.userId, session.sub),
+          eq(organisationMembers.memberRole, "owner"),
+        ),
+      )
+      .get();
+    if (ownerLink) canAttest = true;
+  }
+  if (!canAttest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (lic.status !== "SCRUB_PERIOD" && lic.status !== "OVERDUE") {

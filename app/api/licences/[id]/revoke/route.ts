@@ -2,9 +2,9 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, users, scanPackages, bridgeGrants, renderBridgeAgents } from "@/lib/db/schema";
+import { licences, users, scanPackages, bridgeGrants, renderBridgeAgents, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceEndedAttestationEmail } from "@/lib/email/templates";
 
@@ -93,23 +93,57 @@ export async function POST(
       );
   }
 
-  // Notify licensee (fire-and-forget)
+  // Notify licensee + org owners (fire-and-forget)
   void (async () => {
-    const [licenseeUser, pkg] = await Promise.all([
+    const [licenseeUser, pkg, orgOwnerMembers] = await Promise.all([
       db.select({ email: users.email }).from(users).where(eq(users.id, licence.licenseeId)).get(),
       db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licencePackageId)).get(),
+      licence.organisationId
+        ? db
+            .select({ userId: organisationMembers.userId })
+            .from(organisationMembers)
+            .where(
+              and(
+                eq(organisationMembers.organisationId, licence.organisationId),
+                eq(organisationMembers.memberRole, "owner"),
+              ),
+            )
+            .all()
+        : Promise.resolve([] as { userId: string }[]),
     ]);
+
     if (!licenseeUser?.email) return;
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
-    const { subject, html } = licenceEndedAttestationEmail({
-      licenseeEmail: licenseeUser.email,
-      projectName: licence.projectName,
-      packageName: pkg?.name ?? licencePackageId,
-      endReason: "revoked",
-      scrubDeadline,
-      attestUrl: `${baseUrl}/licences/${id}/scrub`,
-    });
-    await sendEmail({ to: licenseeUser.email, subject, html });
+    const attestUrl = `${baseUrl}/licences/${id}/scrub`;
+    const packageName = pkg?.name ?? licencePackageId;
+
+    // Collect all recipient emails — licensee + org owners (deduplicated)
+    const recipientEmails = new Set<string>([licenseeUser.email]);
+    if (orgOwnerMembers.length > 0) {
+      const ownerIds = orgOwnerMembers.map((m) => m.userId).filter((uid) => uid !== licence.licenseeId);
+      if (ownerIds.length > 0) {
+        const ownerUsers = await db
+          .select({ email: users.email })
+          .from(users)
+          .where(inArray(users.id, ownerIds))
+          .all();
+        for (const u of ownerUsers) {
+          if (u.email) recipientEmails.add(u.email);
+        }
+      }
+    }
+
+    for (const to of recipientEmails) {
+      const { subject, html } = licenceEndedAttestationEmail({
+        licenseeEmail: licenseeUser.email,
+        projectName: licence.projectName,
+        packageName,
+        endReason: "revoked",
+        scrubDeadline,
+        attestUrl,
+      });
+      await sendEmail({ to, subject, html });
+    }
   })();
 
   return NextResponse.json({ ok: true, scrubDeadline });

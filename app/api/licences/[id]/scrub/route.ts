@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scrubAttestations, talentReps } from "@/lib/db/schema";
+import { licences, scrubAttestations, talentReps, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { and, desc, eq } from "drizzle-orm";
@@ -24,6 +24,7 @@ export async function GET(
       id: licences.id,
       talentId: licences.talentId,
       licenseeId: licences.licenseeId,
+      organisationId: licences.organisationId,
       status: licences.status,
       projectName: licences.projectName,
       scrubDeadline: licences.scrubDeadline,
@@ -50,6 +51,22 @@ export async function GET(
       .get();
     if (link) authorized = true;
   }
+
+  if (!authorized && lic.organisationId) {
+    const ownerLink = await db
+      .select({ userId: organisationMembers.userId })
+      .from(organisationMembers)
+      .where(
+        and(
+          eq(organisationMembers.organisationId, lic.organisationId),
+          eq(organisationMembers.userId, session.sub),
+          eq(organisationMembers.memberRole, "owner"),
+        ),
+      )
+      .get();
+    if (ownerLink) authorized = true;
+  }
+
   if (!authorized) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const attestation = await db
