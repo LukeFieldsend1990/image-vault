@@ -13,6 +13,7 @@ import {
 import { sql, eq, isNull, inArray } from "drizzle-orm";
 import RevokeGrantButton from "./revoke-grant-button";
 import { BridgeAgentsTabs } from "./bridge-agents-tabs";
+import { BridgeEventLog } from "./bridge-event-log";
 
 const ONLINE_THRESHOLD_SECS = 60;
 
@@ -22,32 +23,6 @@ function ts(unix: number): string {
   });
 }
 
-function tsTime(unix: number): string {
-  return new Date(unix * 1000).toLocaleString("en-GB", {
-    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
-  });
-}
-
-const SEVERITY_COLOR: Record<string, { bg: string; text: string }> = {
-  info:     { bg: "rgba(37,99,235,0.1)",  text: "#2563eb" },
-  warn:     { bg: "rgba(217,119,6,0.1)",  text: "#d97706" },
-  critical: { bg: "rgba(153,27,27,0.12)", text: "#991b1b" },
-};
-
-const EVENT_LABELS: Record<string, string> = {
-  tamper_detected:         "Tamper detected",
-  unexpected_copy:         "Unexpected copy",
-  hash_mismatch:           "Hash mismatch",
-  lease_expired:           "Lease expired",
-  cache_purged:            "Cache purged",
-  open_denied:             "Open denied",
-  purge_started:           "Purge started",
-  purge_partial:           "Purge partial",
-  purge_stalled:           "Purge stalled",
-  purge_failed:            "Purge failed",
-  file_in_use:             "File in use",
-  file_removed_from_cache: "File removed from cache",
-};
 
 export default async function AdminBridgePage() {
   await requireAdmin();
@@ -137,6 +112,7 @@ export default async function AdminBridgePage() {
       grantId:   bridgeEvents.grantId,
       packageId: bridgeEvents.packageId,
       deviceId:  bridgeEvents.deviceId,
+      userId:    bridgeEvents.userId,
       eventType: bridgeEvents.eventType,
       severity:  bridgeEvents.severity,
       detail:    bridgeEvents.detail,
@@ -153,6 +129,13 @@ export default async function AdminBridgePage() {
         .from(scanPackages).where(inArray(scanPackages.id, eventPkgIds)).all()
     : [];
   const pkgNameMap = new Map(eventPkgRows.map(p => [p.id, p.name]));
+
+  const eventUserIds = [...new Set(events.map(e => e.userId).filter((id): id is string => id !== null))];
+  const eventUserRows = eventUserIds.length > 0
+    ? await db.select({ id: users.id, email: users.email }).from(users)
+        .where(inArray(users.id, eventUserIds)).all()
+    : [];
+  const eventEmailMap = new Map(eventUserRows.map(u => [u.id, u.email]));
 
   const criticalCount = events.filter(e => e.severity === "critical").length;
   const warnCount     = events.filter(e => e.severity === "warn").length;
@@ -248,102 +231,12 @@ export default async function AdminBridgePage() {
       </div>
 
       {/* ── Event log ────────────────────────────────────────────────────────── */}
-      <div>
-        <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
-          Event Log
-        </h2>
-        <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
-          <div
-            className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[960px]"
-            style={{
-              gridTemplateColumns: "1fr 1.5fr 1.2fr 1fr 1fr 2fr",
-              color: "var(--color-muted)",
-              background: "var(--color-surface)",
-              borderBottom: "1px solid var(--color-border)",
-            }}
-          >
-            <span>When</span>
-            <span>Package</span>
-            <span>Source</span>
-            <span>Type</span>
-            <span>Severity</span>
-            <span>Detail</span>
-          </div>
-
-          {events.length === 0 && (
-            <p className="px-5 py-5 text-sm" style={{ color: "var(--color-muted)" }}>
-              No bridge events recorded yet.
-            </p>
-          )}
-
-          {events.map(e => {
-            const sev = SEVERITY_COLOR[e.severity] ?? SEVERITY_COLOR.warn;
-            let detailText = "—";
-            if (e.detail) {
-              try {
-                const parsed = JSON.parse(e.detail) as Record<string, unknown>;
-                detailText = Object.entries(parsed).map(([k, v]) => `${k}: ${String(v)}`).join(", ");
-              } catch {
-                detailText = e.detail;
-              }
-            }
-            const agentName = agentNameMap.get(e.deviceId);
-            const isRenderBridge = agentName !== undefined;
-
-            return (
-              <div
-                key={e.id}
-                className="grid items-start px-5 py-3 text-xs border-b last:border-0 min-w-[960px]"
-                style={{ gridTemplateColumns: "1fr 1.5fr 1.2fr 1fr 1fr 2fr", borderColor: "var(--color-border)" }}
-              >
-                <span style={{ color: "var(--color-muted)" }}>{tsTime(e.createdAt)}</span>
-
-                <span className="truncate font-medium" style={{ color: "var(--color-ink)" }}>
-                  {pkgNameMap.get(e.packageId) ?? e.packageId.slice(0, 8) + "…"}
-                </span>
-
-                {/* Source: render bridge agent, CAS grant, or raw device ID */}
-                <span>
-                  {isRenderBridge ? (
-                    <span
-                      className="inline-flex text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
-                      style={{ background: "#16a34a18", color: "#16a34a" }}
-                    >
-                      {agentName}
-                    </span>
-                  ) : e.grantId ? (
-                    <span
-                      className="inline-flex text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
-                      style={{ background: "rgba(37,99,235,0.1)", color: "#2563eb" }}
-                    >
-                      CAS · {e.grantId.slice(0, 6)}
-                    </span>
-                  ) : (
-                    <span className="font-mono text-[10px]" style={{ color: "var(--color-muted)" }}>
-                      {e.deviceId.slice(0, 8)}…
-                    </span>
-                  )}
-                </span>
-
-                <span style={{ color: "var(--color-muted)" }}>
-                  {EVENT_LABELS[e.eventType] ?? e.eventType}
-                </span>
-
-                <span
-                  className="inline-flex text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded w-fit"
-                  style={{ background: sev.bg, color: sev.text }}
-                >
-                  {e.severity}
-                </span>
-
-                <span className="truncate font-mono text-[10px]" style={{ color: "var(--color-muted)" }}>
-                  {detailText}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <BridgeEventLog
+        events={events}
+        pkgNames={Object.fromEntries(pkgNameMap)}
+        agentNames={Object.fromEntries(agentNameMap)}
+        userEmails={Object.fromEntries(eventEmailMap)}
+      />
     </div>
   );
 }
