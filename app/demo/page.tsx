@@ -11,6 +11,7 @@ export const metadata = {
 };
 
 export default async function DemoPage() {
+  let enabled = false;
   try {
     const db = getDb();
     const row = await db
@@ -18,10 +19,13 @@ export default async function DemoPage() {
       .from(siteSettings)
       .where(eq(siteSettings.key, "demo_enabled"))
       .get();
-    if (!row || row.value !== "true") notFound();
+    enabled = row?.value === "true";
   } catch {
     // In local dev without D1 bindings, allow the demo through
+    enabled = true;
   }
+
+  if (!enabled) notFound();
 
   return <DemoClient />;
 }
