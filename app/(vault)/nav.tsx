@@ -216,7 +216,7 @@ function navItemsForRole(role: Role) {
   return TALENT_NAV; // talent, admin
 }
 
-function NavItem({ item, active }: { item: { href: string; label: string; icon: React.ReactNode }; active: boolean }) {
+function NavItem({ item, active, alert }: { item: { href: string; label: string; icon: React.ReactNode }; active: boolean; alert?: boolean }) {
   return (
     <Link
       href={item.href}
@@ -232,8 +232,14 @@ function NavItem({ item, active }: { item: { href: string; label: string; icon: 
           style={{ height: "60%", background: "var(--color-accent)" }}
         />
       )}
-      <span style={{ color: active ? "var(--color-accent)" : "inherit" }}>
+      <span className="relative" style={{ color: active ? "var(--color-accent)" : "inherit" }}>
         {item.icon}
+        {alert && (
+          <span
+            className="absolute -top-1 -right-1 w-2 h-2 rounded-full"
+            style={{ background: "#c0392b" }}
+          />
+        )}
       </span>
       {item.label}
     </Link>
@@ -251,7 +257,7 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled, inboundEnabled }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean }) {
+export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   if (!inboundEnabled) {
@@ -261,11 +267,14 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled }: { role: Role
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]
     : base;
 
+  const LICENCE_HREFS = new Set(["/licences", "/vault/licences"]);
+
   return (
     <nav className="space-y-0.5 px-3">
       {items.map((item) => {
         const active = pathname === item.href || pathname.startsWith(item.href + "/");
-        return <NavItem key={item.href} item={item} active={active} />;
+        const alert = licenceAlert && LICENCE_HREFS.has(item.href);
+        return <NavItem key={item.href} item={item} active={active} alert={alert} />;
       })}
     </nav>
   );
