@@ -50,6 +50,19 @@ interface Licence {
   licenseeId: string;
 }
 
+interface ScrubData {
+  scrubDeadline: number | null;
+  daysRemaining: number | null;
+  overdue: boolean;
+  scrubAttestedAt: number | null;
+  attestation: {
+    attestedAt: number;
+    devicesScrubbed: string[];
+    bridgeCachePurged: boolean;
+    additionalNotes: string | null;
+  } | null;
+}
+
 interface BridgeAgentStatus {
   agentId: string;
   displayName: string;
@@ -226,6 +239,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   const [cancellingPreauthId, setCancellingPreauthId] = useState<string | null>(null);
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LicenceTab>("active");
+  const [scrubDataById, setScrubDataById] = useState<Record<string, ScrubData | "loading">>({});
 
   // Download Requests tab state
   const [pendingDownloads, setPendingDownloads] = useState<PendingDownload[]>([]);
@@ -306,6 +320,15 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
       return;
     }
     await load();
+  }
+
+  function fetchScrubData(id: string) {
+    if (scrubDataById[id]) return;
+    setScrubDataById((prev) => ({ ...prev, [id]: "loading" }));
+    fetch(`/api/licences/${id}/scrub`)
+      .then((r) => r.json())
+      .then((d) => setScrubDataById((prev) => ({ ...prev, [id]: d as ScrubData })))
+      .catch(() => setScrubDataById((prev) => ({ ...prev, [id]: { scrubDeadline: null, daysRemaining: null, overdue: false, scrubAttestedAt: null, attestation: null } })));
   }
 
   async function cancelPreauth(id: string) {
@@ -506,7 +529,13 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setExpandedId(expanded ? null : l.id)}
+                          onClick={() => {
+                            const next = expanded ? null : l.id;
+                            setExpandedId(next);
+                            if (next && (l.status === "CLOSED" || l.status === "SCRUB_PERIOD" || l.status === "OVERDUE")) {
+                              fetchScrubData(l.id);
+                            }
+                          }}
                           className="flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs transition"
                           style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}
                         >
@@ -608,6 +637,65 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                           <span style={{ color: "var(--color-muted)" }}>Approved</span>
                           <span className="font-medium" style={{ color: "var(--color-ink)" }}>{formatDate(l.approvedAt)}</span>
                         </div>
+
+                        {/* ── Scrub attestation ─────────────────────────── */}
+                        {(l.status === "CLOSED" || l.status === "SCRUB_PERIOD" || l.status === "OVERDUE") && (() => {
+                          const sd = scrubDataById[l.id];
+                          return (
+                            <div className="px-3 py-3">
+                              <p className="text-[10px] font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
+                                Scrub attestation
+                              </p>
+                              {(!sd || sd === "loading") ? (
+                                <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                                  {sd === "loading" ? "Loading…" : "—"}
+                                </p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {sd.scrubDeadline && (
+                                    <div className="flex justify-between gap-4">
+                                      <span style={{ color: "var(--color-muted)" }}>Deadline</span>
+                                      <span style={{ color: sd.overdue ? "#c0392b" : "var(--color-ink)" }}>
+                                        {formatDate(sd.scrubDeadline)}
+                                        {sd.overdue ? " — overdue" : sd.daysRemaining !== null ? ` (${sd.daysRemaining}d remaining)` : ""}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {sd.attestation ? (
+                                    <>
+                                      <div className="flex justify-between gap-4">
+                                        <span style={{ color: "var(--color-muted)" }}>Attested on</span>
+                                        <span className="font-medium" style={{ color: "var(--color-ink)" }}>{formatDate(sd.attestation.attestedAt)}</span>
+                                      </div>
+                                      <div>
+                                        <p className="mb-1" style={{ color: "var(--color-muted)" }}>Devices scrubbed</p>
+                                        <ul className="space-y-0.5 pl-0">
+                                          {sd.attestation.devicesScrubbed.map((d, i) => (
+                                            <li key={i} className="font-medium" style={{ color: "var(--color-ink)" }}>{d}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                      <div className="flex justify-between gap-4">
+                                        <span style={{ color: "var(--color-muted)" }}>Bridge cache purged</span>
+                                        <span className="font-medium" style={{ color: sd.attestation.bridgeCachePurged ? "#166534" : "var(--color-muted)" }}>
+                                          {sd.attestation.bridgeCachePurged ? "Confirmed" : "Not confirmed"}
+                                        </span>
+                                      </div>
+                                      {sd.attestation.additionalNotes && (
+                                        <div>
+                                          <p className="mb-1" style={{ color: "var(--color-muted)" }}>Notes</p>
+                                          <p style={{ color: "var(--color-ink)" }}>{sd.attestation.additionalNotes}</p>
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <p style={{ color: "var(--color-muted)" }}>No attestation submitted yet.</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* ── Render Bridge panel ───────────────────────── */}
                         {l.organisationId && agentsByLicence[l.id] && (
