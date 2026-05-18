@@ -253,7 +253,7 @@ export default function ScrubAttestationClient({ licenceId }: { licenceId: strin
             onChange={(e) => setBridgeCachePurged(e.target.checked)}
             className="mt-1"
           />
-          <span>I have purged the Image Vault Bridge local cache on any device that used it.</span>
+          <span>I confirm the Image Vault Bridge purged its local cache on any device that used it.</span>
         </label>
       </section>
 
