@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import { licences, users, scanPackages } from "@/lib/db/schema";
 import { sql, eq, inArray } from "drizzle-orm";
+import Link from "next/link";
 
 function ts(unix: number): string {
   return new Date(unix * 1000).toLocaleDateString("en-GB", {
@@ -71,6 +72,16 @@ export default async function AdminLicencesPage() {
         <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
           {rows.length} licence requests platform-wide
         </p>
+      </div>
+
+      <div className="mb-5">
+        <Link
+          href="/admin/licences/scrub"
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border transition hover:opacity-80"
+          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-surface)" }}
+        >
+          Scrub attestations →
+        </Link>
       </div>
 
       <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
