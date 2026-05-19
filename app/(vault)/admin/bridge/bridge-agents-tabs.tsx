@@ -14,6 +14,7 @@ interface Agent {
   lastHeartbeatAt: number | null;
   tokenExpiresAt: number | null;
   revokedAt: number | null;
+  createdAt: number;
 }
 
 const PENDING_STYLE: Record<string, { bg: string; text: string; label: string }> = {
@@ -30,7 +31,15 @@ function timeSince(unix: number, now: number): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+function fmtDate(unix: number): string {
+  return new Date(unix * 1000).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
 function AgentRow({ a, now }: { a: Agent; now: number }) {
+  const [expanded, setExpanded] = useState(false);
   const isRevoked = a.revokedAt !== null;
   const pendingStyle = a.pendingAction ? PENDING_STYLE[a.pendingAction] : null;
   const tokenDaysLeft = a.tokenExpiresAt !== null
@@ -38,88 +47,198 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
     : null;
 
   return (
-    <div
-      className="grid items-center px-5 py-3.5 text-sm border-b last:border-0 min-w-[900px]"
-      style={{
-        gridTemplateColumns: "2fr 1.5fr 1.5fr 1fr 1fr 1fr",
-        borderColor: "var(--color-border)",
-        opacity: isRevoked ? 0.5 : 1,
-      }}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        {isRevoked ? (
-          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#991b1b" }} />
-        ) : a.online ? (
-          <span className="relative flex h-2 w-2 flex-shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "#16a34a" }} />
-            <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: "#16a34a" }} />
+    <>
+      <div
+        role="button"
+        onClick={() => setExpanded(v => !v)}
+        className="grid items-center px-5 py-3.5 text-sm border-b min-w-[900px] cursor-pointer select-none transition-colors"
+        style={{
+          gridTemplateColumns: "2fr 1.5fr 1.5fr 1fr 1fr 1fr",
+          borderColor: "var(--color-border)",
+          opacity: isRevoked ? 0.5 : 1,
+          background: expanded ? "var(--color-surface)" : undefined,
+        }}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {isRevoked ? (
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#991b1b" }} />
+          ) : a.online ? (
+            <span className="relative flex h-2 w-2 flex-shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "#16a34a" }} />
+              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: "#16a34a" }} />
+            </span>
+          ) : (
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--color-border)" }} />
+          )}
+          <div className="min-w-0">
+            <p className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{a.displayName}</p>
+            <p className="text-[10px] font-mono" style={{ color: "var(--color-muted)" }}>{a.id.slice(0, 8)}…</p>
+          </div>
+        </div>
+
+        <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
+          {a.orgName ?? a.organisationId.slice(0, 8) + "…"}
+        </span>
+
+        <div className="flex flex-wrap gap-1">
+          {a.publishedIds.length === 0 ? (
+            <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
+          ) : (
+            <>
+              {a.publishedIds.slice(0, 2).map(pkgId => (
+                <span
+                  key={pkgId}
+                  className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
+                  style={{ background: "#16a34a18", color: "#16a34a" }}
+                >
+                  {a.pubPkgNames[pkgId] ?? pkgId.slice(0, 6) + "…"}
+                </span>
+              ))}
+              {a.publishedIds.length > 2 && (
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded"
+                  style={{ background: "var(--color-border)", color: "var(--color-muted)" }}
+                >
+                  +{a.publishedIds.length - 2}
+                </span>
+              )}
+            </>
+          )}
+        </div>
+
+        <span>
+          {pendingStyle ? (
+            <span
+              className="text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded"
+              style={{ background: pendingStyle.bg, color: pendingStyle.text }}
+            >
+              {pendingStyle.label}
+            </span>
+          ) : (
+            <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
+          )}
+        </span>
+
+        <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+          {a.lastHeartbeatAt ? timeSince(a.lastHeartbeatAt, now) : "never"}
+        </span>
+
+        <div className="flex items-center justify-between">
+          <span
+            className="text-xs"
+            style={{ color: isRevoked ? "var(--color-muted)" : tokenDaysLeft !== null && tokenDaysLeft < 30 ? "#d97706" : "var(--color-muted)" }}
+          >
+            {isRevoked
+              ? "revoked"
+              : tokenDaysLeft !== null
+              ? `${tokenDaysLeft}d`
+              : "—"}
           </span>
-        ) : (
-          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--color-border)" }} />
-        )}
-        <div className="min-w-0">
-          <p className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{a.displayName}</p>
-          <p className="text-[10px] font-mono" style={{ color: "var(--color-muted)" }}>{a.id.slice(0, 8)}…</p>
+          <span className="text-[10px] ml-2" style={{ color: "var(--color-muted)" }}>
+            {expanded ? "▲" : "▼"}
+          </span>
         </div>
       </div>
 
-      <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
-        {a.orgName ?? a.organisationId.slice(0, 8) + "…"}
-      </span>
-
-      <div className="flex flex-wrap gap-1">
-        {a.publishedIds.length === 0 ? (
-          <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
-        ) : (
-          <>
-            {a.publishedIds.slice(0, 2).map(pkgId => (
-              <span
-                key={pkgId}
-                className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
-                style={{ background: "#16a34a18", color: "#16a34a" }}
-              >
-                {a.pubPkgNames[pkgId] ?? pkgId.slice(0, 6) + "…"}
+      {expanded && (
+        <div
+          className="border-b px-5 py-4 min-w-[900px]"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-3">
+            <DetailField label="Agent ID">
+              <span className="font-mono text-xs break-all" style={{ color: "var(--color-ink)" }}>{a.id}</span>
+            </DetailField>
+            <DetailField label="Display Name">
+              <span className="text-xs" style={{ color: "var(--color-ink)" }}>{a.displayName}</span>
+            </DetailField>
+            <DetailField label="Organisation">
+              <span className="text-xs" style={{ color: "var(--color-ink)" }}>{a.orgName ?? "—"}</span>
+              <span className="font-mono text-[10px] block" style={{ color: "var(--color-muted)" }}>{a.organisationId}</span>
+            </DetailField>
+            <DetailField label="Status">
+              {isRevoked ? (
+                <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded" style={{ background: "rgba(153,27,27,0.12)", color: "#991b1b" }}>Revoked</span>
+              ) : a.online ? (
+                <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded" style={{ background: "#16a34a18", color: "#16a34a" }}>Online</span>
+              ) : (
+                <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded" style={{ background: "var(--color-border)", color: "var(--color-muted)" }}>Offline</span>
+              )}
+            </DetailField>
+            <DetailField label="Enrolled">
+              <span className="text-xs" style={{ color: "var(--color-ink)" }}>{fmtDate(a.createdAt)}</span>
+            </DetailField>
+            <DetailField label="Last Heartbeat">
+              <span className="text-xs" style={{ color: "var(--color-ink)" }}>
+                {a.lastHeartbeatAt ? fmtDate(a.lastHeartbeatAt) : "Never"}
               </span>
-            ))}
-            {a.publishedIds.length > 2 && (
+              {a.lastHeartbeatAt && (
+                <span className="text-[10px] block" style={{ color: "var(--color-muted)" }}>
+                  {timeSince(a.lastHeartbeatAt, now)}
+                </span>
+              )}
+            </DetailField>
+            <DetailField label="Token Expires">
               <span
-                className="text-[9px] px-1.5 py-0.5 rounded"
-                style={{ background: "var(--color-border)", color: "var(--color-muted)" }}
+                className="text-xs"
+                style={{ color: !isRevoked && tokenDaysLeft !== null && tokenDaysLeft < 30 ? "#d97706" : "var(--color-ink)" }}
               >
-                +{a.publishedIds.length - 2}
+                {a.tokenExpiresAt ? fmtDate(a.tokenExpiresAt) : "—"}
               </span>
+              {tokenDaysLeft !== null && !isRevoked && (
+                <span className="text-[10px] block" style={{ color: tokenDaysLeft < 30 ? "#d97706" : "var(--color-muted)" }}>
+                  {tokenDaysLeft}d remaining
+                </span>
+              )}
+            </DetailField>
+            {isRevoked && a.revokedAt && (
+              <DetailField label="Revoked At">
+                <span className="text-xs" style={{ color: "#991b1b" }}>{fmtDate(a.revokedAt)}</span>
+              </DetailField>
             )}
-          </>
-        )}
-      </div>
+            {a.pendingAction && (
+              <DetailField label="Pending Action">
+                {pendingStyle && (
+                  <span
+                    className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded"
+                    style={{ background: pendingStyle.bg, color: pendingStyle.text }}
+                  >
+                    {pendingStyle.label}
+                  </span>
+                )}
+              </DetailField>
+            )}
+          </div>
 
-      <span>
-        {pendingStyle ? (
-          <span
-            className="text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded"
-            style={{ background: pendingStyle.bg, color: pendingStyle.text }}
-          >
-            {pendingStyle.label}
-          </span>
-        ) : (
-          <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
-        )}
-      </span>
+          {a.publishedIds.length > 0 && (
+            <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--color-border)" }}>
+              <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+                Published Packages ({a.publishedIds.length})
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {a.publishedIds.map(pkgId => (
+                  <span
+                    key={pkgId}
+                    className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded"
+                    style={{ background: "#16a34a18", color: "#16a34a" }}
+                  >
+                    {a.pubPkgNames[pkgId] ?? pkgId.slice(0, 6) + "…"}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
 
-      <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-        {a.lastHeartbeatAt ? timeSince(a.lastHeartbeatAt, now) : "never"}
-      </span>
-
-      <span
-        className="text-xs"
-        style={{ color: isRevoked ? "var(--color-muted)" : tokenDaysLeft !== null && tokenDaysLeft < 30 ? "#d97706" : "var(--color-muted)" }}
-      >
-        {isRevoked
-          ? "revoked"
-          : tokenDaysLeft !== null
-          ? `${tokenDaysLeft}d`
-          : "—"}
-      </span>
+function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-widest font-semibold mb-0.5" style={{ color: "var(--color-muted)" }}>{label}</p>
+      {children}
     </div>
   );
 }

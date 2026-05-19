@@ -73,8 +73,18 @@ export default async function AdminBridgePage() {
 
   // Serialise pubPkgNames into each agent for the client component
   const agentsForClient = agents.map(a => ({
-    ...a,
-    pubPkgNames: Object.fromEntries(a.publishedIds.map(id => [id, pubPkgNames.get(id) ?? id.slice(0, 6) + "…"])),
+    id:               a.id,
+    displayName:      a.displayName,
+    orgName:          a.orgName,
+    organisationId:   a.organisationId,
+    online:           a.online,
+    publishedIds:     a.publishedIds,
+    pendingAction:    a.pendingAction,
+    lastHeartbeatAt:  a.lastHeartbeatAt,
+    tokenExpiresAt:   a.tokenExpiresAt,
+    revokedAt:        a.revokedAt,
+    createdAt:        a.createdAt,
+    pubPkgNames:      Object.fromEntries(a.publishedIds.map(id => [id, pubPkgNames.get(id) ?? id.slice(0, 6) + "…"])),
   }));
   const activeAgentsForClient  = agentsForClient.filter(a => a.revokedAt === null);
   const revokedAgentsForClient = agentsForClient.filter(a => a.revokedAt !== null);
