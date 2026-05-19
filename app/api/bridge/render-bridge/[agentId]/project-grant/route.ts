@@ -78,7 +78,7 @@ export async function GET(
 
   const licenceFilter = and(
     eq(licences.status, "APPROVED"),
-    gt(licences.validTo, now),
+    gt(licences.validTo, now - 86400),
     isNotNull(licences.packageId),
     memberIds.length > 0
       ? or(
@@ -147,7 +147,7 @@ export async function GET(
         licenceId: licence.id,
         productionId: licence.productionId ?? null,
         files,
-        expiresAt: licence.validTo,
+        expiresAt: licence.validTo + 86400,
       };
     })
   );
@@ -157,7 +157,7 @@ export async function GET(
   return NextResponse.json({
     organisationId: auth.organisationId,
     licenceeOrganisation: org?.name ?? auth.organisationId,
-    expiresAt: earliestExpiry,
+    expiresAt: earliestExpiry + 86400,
     packages,
   });
 }

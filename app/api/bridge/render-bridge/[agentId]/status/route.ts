@@ -116,7 +116,7 @@ export async function GET(
     .where(
       and(
         eq(licences.status, "APPROVED"),
-        gt(licences.validTo, now),
+        gt(licences.validTo, now - 86400),
         isNotNull(licences.packageId),
         memberIds.length > 0
           ? or(
