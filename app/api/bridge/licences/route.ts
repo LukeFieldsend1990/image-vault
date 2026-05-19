@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       and(
         eq(licences.licenseeId, auth.userId),
         eq(licences.status, "APPROVED"),
-        gt(licences.validTo, now)
+        gt(licences.validTo, now - 86400)
       )
     )
     .orderBy(licences.validTo)

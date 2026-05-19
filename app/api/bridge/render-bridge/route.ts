@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
           and(
             isNotNull(licences.packageId),
             eq(licences.status, "APPROVED"),
-            gt(licences.validTo, now),
+            gt(licences.validTo, now - 86400),
             memberIds.length > 0
               ? or(
                   eq(licences.organisationId, agent.organisationId),
