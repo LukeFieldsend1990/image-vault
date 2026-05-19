@@ -143,7 +143,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
 
   const nowSec = Math.floor(Date.now() / 1000);
   const activeLicences = agent.licences.filter(
-    l => l.status === "APPROVED" && l.validTo > nowSec
+    l => l.status === "APPROVED" && l.validTo + 86400 > nowSec
   );
 
   // Build a unified package list from both licences and published packages

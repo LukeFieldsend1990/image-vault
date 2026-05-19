@@ -167,7 +167,7 @@ export async function POST(
     });
     return NextResponse.json({ error: "Licence is not approved" }, { status: 409 });
   }
-  if (licence.validTo < now) {
+  if (licence.validTo + 86400 <= now) {
     void db.insert(bridgeEvents).values({
       id: crypto.randomUUID(),
       grantId: null,
