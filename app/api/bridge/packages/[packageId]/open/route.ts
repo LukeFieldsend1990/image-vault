@@ -301,7 +301,7 @@ export async function POST(
   }
 
   const grantId = crypto.randomUUID();
-  const expiresAt = licence.validTo;
+  const expiresAt = licence.validTo + 86400; // inclusive of validTo day
   const offlineUntil = expiresAt + OFFLINE_GRACE_SECS;
 
   const manifest = {
