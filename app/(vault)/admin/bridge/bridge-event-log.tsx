@@ -64,8 +64,14 @@ function formatDetail(detail: string | null): { pretty: string; flat: string } {
 
 const GRID = "1fr 1.5fr 1.2fr 1.4fr 1fr 1fr 2fr";
 
+const PAGE_SIZE = 25;
+
 export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [shown, setShown] = useState(PAGE_SIZE);
+
+  const visibleEvents = events.slice(0, shown);
+  const remaining = events.length - shown;
 
   function downloadCsv() {
     const header = ["When", "Package", "Source", "User", "Type", "Severity", "Detail"];
@@ -145,7 +151,7 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
           </p>
         )}
 
-        {events.map(e => {
+        {visibleEvents.map(e => {
           const sev = SEVERITY_COLOR[e.severity] ?? SEVERITY_COLOR.warn;
           const { pretty, flat } = formatDetail(e.detail);
           const agentName = agentNames[e.deviceId];
@@ -238,6 +244,23 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
           );
         })}
       </div>
+
+      {remaining > 0 && (
+        <div className="mt-3 flex justify-center">
+          <button
+            onClick={() => setShown(s => s + PAGE_SIZE)}
+            className="text-[11px] font-medium px-4 py-2 rounded border"
+            style={{
+              color: "var(--color-ink)",
+              borderColor: "var(--color-border)",
+              background: "var(--color-surface)",
+            }}
+          >
+            Load {Math.min(remaining, PAGE_SIZE)} more
+            <span className="ml-1.5" style={{ color: "var(--color-muted)" }}>({remaining} remaining)</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
