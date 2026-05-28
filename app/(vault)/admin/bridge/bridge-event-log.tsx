@@ -74,10 +74,11 @@ export function BridgeEventLog({ agentNames }: Props) {
   useEffect(() => {
     fetch("/api/admin/bridge/events")
       .then(r => r.json())
-      .then((data: { events: BridgeEvent[]; pkgNames: Record<string, string>; userEmails: Record<string, string> }) => {
-        setEvents(data.events);
-        setPkgNames(data.pkgNames);
-        setUserEmails(data.userEmails);
+      .then((data) => {
+        const { events, pkgNames, userEmails } = data as { events: BridgeEvent[]; pkgNames: Record<string, string>; userEmails: Record<string, string> };
+        setEvents(events);
+        setPkgNames(pkgNames);
+        setUserEmails(userEmails);
         setLoading(false);
       })
       .catch(() => { setError(true); setLoading(false); });

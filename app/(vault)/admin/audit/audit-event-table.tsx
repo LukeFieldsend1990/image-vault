@@ -51,8 +51,9 @@ export function AuditEventTable() {
   useEffect(() => {
     fetch("/api/admin/audit/events")
       .then(r => r.json())
-      .then((data: { events: AuditEvent[] }) => {
-        setEvents(data.events);
+      .then((data) => {
+        const { events } = data as { events: AuditEvent[] };
+        setEvents(events);
         setLoading(false);
       })
       .catch(() => { setError(true); setLoading(false); });
