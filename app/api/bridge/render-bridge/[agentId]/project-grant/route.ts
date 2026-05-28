@@ -5,11 +5,12 @@ import { AwsClient } from "aws4fetch";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { licences, scanFiles, organisations, organisationMembers } from "@/lib/db/schema";
-import { and, eq, gt, inArray, isNotNull, or } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, or, sql, lte } from "drizzle-orm";
 import {
   requireRenderBridgeToken,
   isRenderBridgeTokenError,
 } from "@/lib/auth/requireRenderBridgeToken";
+import { beginScrubPeriod } from "@/lib/licences/expire";
 
 const PRESIGN_TTL_SECS = 86400; // 24 h
 
@@ -99,6 +100,29 @@ export async function GET(
     .from(licences)
     .where(licenceFilter)
     .all();
+
+  // Transition any APPROVED licences that have just expired into SCRUB_PERIOD.
+  // This is the natural trigger point — the bridge already stops serving them
+  // via the validTo filter above; here we make that state durable in the DB.
+  const expiredOrgFilter = and(
+    eq(licences.status, "APPROVED"),
+    lte(licences.validTo, sql`${now} - 86400`),
+    isNotNull(licences.packageId),
+    memberIds.length > 0
+      ? or(
+          eq(licences.organisationId, auth.organisationId),
+          inArray(licences.licenseeId, memberIds)
+        )
+      : eq(licences.organisationId, auth.organisationId)
+  );
+  const justExpired = await db
+    .select({ id: licences.id })
+    .from(licences)
+    .where(expiredOrgFilter)
+    .all();
+  for (const { id } of justExpired) {
+    void beginScrubPeriod(db, id, now);
+  }
 
   if (activeLicences.length === 0) {
     return NextResponse.json({ error: "No active licences found for this organisation" }, { status: 404 });

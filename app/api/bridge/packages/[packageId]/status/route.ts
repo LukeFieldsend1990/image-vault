@@ -8,6 +8,7 @@ import {
   requireBridgeToken,
   isBridgeTokenError,
 } from "@/lib/auth/requireBridgeToken";
+import { beginScrubPeriod } from "@/lib/licences/expire";
 
 type GrantStatus = "active" | "revoked" | "expired" | "vault_locked";
 
@@ -102,6 +103,12 @@ export async function GET(
 
     const status = resolveStatus(grant.revokedAt, grant.offlineUntil, vaultLocked, now);
     const purgeNeeded = purgeRequired(grant.purgeRequestedAt, grant.purgeCompletedAt);
+
+    // When the desktop bridge sees its grant as expired, ensure the licence is
+    // transitioned to SCRUB_PERIOD so the attestation flow starts for the org.
+    if (status === "expired") {
+      void beginScrubPeriod(db, grant.licenceId, now);
+    }
 
     return NextResponse.json({
       grantId: grant.id,
