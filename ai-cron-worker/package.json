@@ -6,8 +6,9 @@
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0",
-    "typescript": "^5.0.0"
+    "@cloudflare/workers-types": "^4.20260528.1",
+    "typescript": "^5.0.0",
+    "wrangler": "^4.0.0"
   },
   "dependencies": {
     "drizzle-orm": "^0.39.0"
