@@ -14,6 +14,8 @@ import {
 } from "@/lib/db/schema";
 import { desc, sql } from "drizzle-orm";
 import AuditExportButton from "./export-button";
+import { AuditEventTable } from "./audit-event-table";
+import type { AuditEvent } from "./audit-event-table";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,16 +27,6 @@ type EventCategory =
   | "vault"
   | "invite"
   | "admin";
-
-type AuditEvent = {
-  id: string;
-  category: EventCategory;
-  timestamp: number;
-  actor: string | null;
-  detail: string;
-  meta: string | null;
-  severity: "info" | "warn" | "critical";
-};
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -51,12 +43,6 @@ const CATEGORY_CONFIG: Record<
   admin: { label: "Admin", color: "#dc2626" },
 };
 
-const SEVERITY_DOT: Record<string, string> = {
-  info: "transparent",
-  warn: "#d97706",
-  critical: "#dc2626",
-};
-
 const BRIDGE_EVENT_LABEL: Record<string, string> = {
   tamper_detected: "Tamper detected",
   unexpected_copy: "Unexpected copy",
@@ -67,16 +53,6 @@ const BRIDGE_EVENT_LABEL: Record<string, string> = {
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function ts(unix: number): string {
-  return new Date(unix * 1000).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function fmt(bytes: number | null): string {
   if (!bytes) return "";
@@ -96,8 +72,8 @@ export default async function AdminAuditPage() {
   await requireAdmin();
   const db = getDb();
 
-  // Run all queries in parallel — each scoped to last 200 rows for performance
-  const LIMIT = 200;
+  // Run all queries in parallel — each scoped to last 50 rows for performance
+  const LIMIT = 50;
 
   const [
     dlRows,
@@ -444,9 +420,9 @@ export default async function AdminAuditPage() {
     }
   }
 
-  // Sort by time descending, cap at 500
+  // Sort by time descending, cap at 200
   events.sort((a, b) => b.timestamp - a.timestamp);
-  const display = events.slice(0, 500);
+  const display = events.slice(0, 200);
 
   // Category counts
   const counts = new Map<EventCategory, number>();
@@ -490,87 +466,7 @@ export default async function AdminAuditPage() {
         </div>
       </div>
 
-      <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>
-        Scroll for more &rarr;
-      </p>
-      <div
-        className="rounded border overflow-x-auto"
-        style={{ borderColor: "var(--color-border)" }}
-      >
-        {/* Header */}
-        <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
-          style={{
-            gridTemplateColumns: "90px 1.4fr 2.4fr 1fr 1fr",
-            color: "var(--color-muted)",
-            background: "var(--color-surface)",
-            borderBottom: "1px solid var(--color-border)",
-          }}
-        >
-          <span>Category</span>
-          <span>Actor</span>
-          <span>Event</span>
-          <span>Details</span>
-          <span>Date &amp; time</span>
-        </div>
-
-        {display.length === 0 && (
-          <p className="px-5 py-6 text-sm" style={{ color: "var(--color-muted)" }}>
-            No events yet.
-          </p>
-        )}
-
-        {display.map((e) => {
-          const cfg = CATEGORY_CONFIG[e.category];
-          return (
-            <div
-              key={e.id}
-              className="grid items-center px-5 py-3 border-b last:border-0 text-xs min-w-[800px]"
-              style={{
-                gridTemplateColumns: "90px 1.4fr 2.4fr 1fr 1fr",
-                borderColor: "var(--color-border)",
-              }}
-            >
-              {/* Category badge */}
-              <span className="flex items-center gap-1.5">
-                {e.severity !== "info" && (
-                  <span
-                    className="inline-block h-1.5 w-1.5 rounded-full flex-shrink-0"
-                    style={{ background: SEVERITY_DOT[e.severity] }}
-                  />
-                )}
-                <span
-                  className="inline-flex items-center text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded"
-                  style={{ background: `${cfg.color}14`, color: cfg.color }}
-                >
-                  {cfg.label}
-                </span>
-              </span>
-
-              {/* Actor */}
-              <span className="truncate" style={{ color: "var(--color-text)" }}>
-                {e.actor ?? "—"}
-              </span>
-
-              {/* Event detail */}
-              <span className="truncate" style={{ color: "var(--color-text)" }}>
-                {e.detail}
-              </span>
-
-              {/* Meta */}
-              <span
-                className="truncate font-mono text-[11px]"
-                style={{ color: "var(--color-muted)" }}
-              >
-                {e.meta ?? ""}
-              </span>
-
-              {/* Timestamp */}
-              <span style={{ color: "var(--color-muted)" }}>{ts(e.timestamp)}</span>
-            </div>
-          );
-        })}
-      </div>
+      <AuditEventTable events={display} />
     </div>
   );
 }
