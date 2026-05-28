@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface BridgeEvent {
   id: string;
@@ -15,10 +15,7 @@ interface BridgeEvent {
 }
 
 interface Props {
-  events: BridgeEvent[];
-  pkgNames: Record<string, string>;
   agentNames: Record<string, string>;
-  userEmails: Record<string, string>;
 }
 
 const SEVERITY_COLOR: Record<string, { bg: string; text: string }> = {
@@ -63,15 +60,31 @@ function formatDetail(detail: string | null): { pretty: string; flat: string } {
 }
 
 const GRID = "1fr 1.5fr 1.2fr 1.4fr 1fr 1fr 2fr";
-
 const PAGE_SIZE = 25;
 
-export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Props) {
+export function BridgeEventLog({ agentNames }: Props) {
+  const [events, setEvents]         = useState<BridgeEvent[]>([]);
+  const [pkgNames, setPkgNames]     = useState<Record<string, string>>({});
+  const [userEmails, setUserEmails] = useState<Record<string, string>>({});
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [shown, setShown] = useState(PAGE_SIZE);
+  const [shown, setShown]           = useState(PAGE_SIZE);
+
+  useEffect(() => {
+    fetch("/api/admin/bridge/events")
+      .then(r => r.json())
+      .then((data: { events: BridgeEvent[]; pkgNames: Record<string, string>; userEmails: Record<string, string> }) => {
+        setEvents(data.events);
+        setPkgNames(data.pkgNames);
+        setUserEmails(data.userEmails);
+        setLoading(false);
+      })
+      .catch(() => { setError(true); setLoading(false); });
+  }, []);
 
   const visibleEvents = events.slice(0, shown);
-  const remaining = events.length - shown;
+  const remaining     = events.length - shown;
 
   function downloadCsv() {
     const header = ["When", "Package", "Source", "User", "Type", "Severity", "Detail"];
@@ -110,15 +123,11 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
         <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
           Event Log
         </h2>
-        {events.length > 0 && (
+        {!loading && events.length > 0 && (
           <button
             onClick={downloadCsv}
             className="text-[11px] font-medium px-3 py-1.5 rounded border"
-            style={{
-              color: "var(--color-ink)",
-              borderColor: "var(--color-border)",
-              background: "var(--color-surface)",
-            }}
+            style={{ color: "var(--color-ink)", borderColor: "var(--color-border)", background: "var(--color-surface)" }}
           >
             Download CSV
           </button>
@@ -126,7 +135,6 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
       </div>
 
       <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
-        {/* Header */}
         <div
           className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[1080px]"
           style={{
@@ -145,7 +153,20 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
           <span>Detail</span>
         </div>
 
-        {events.length === 0 && (
+        {loading && (
+          <div className="px-5 py-8 flex items-center gap-3" style={{ color: "var(--color-muted)" }}>
+            <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+            <span className="text-sm">Loading events…</span>
+          </div>
+        )}
+
+        {!loading && error && (
+          <p className="px-5 py-5 text-sm" style={{ color: "#dc2626" }}>
+            Failed to load events.
+          </p>
+        )}
+
+        {!loading && !error && events.length === 0 && (
           <p className="px-5 py-5 text-sm" style={{ color: "var(--color-muted)" }}>
             No bridge events recorded yet.
           </p>
@@ -160,7 +181,6 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
 
           return (
             <div key={e.id} style={{ borderBottom: "1px solid var(--color-border)" }} className="last:border-0">
-              {/* Main row */}
               <div
                 className="grid items-start px-5 py-3 text-xs min-w-[1080px] cursor-pointer"
                 style={{ gridTemplateColumns: GRID }}
@@ -214,7 +234,6 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
                 </span>
               </div>
 
-              {/* Expanded detail panel */}
               {isExpanded && (
                 <div
                   className="px-5 pb-4 min-w-[1080px]"
@@ -225,11 +244,7 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
                   </p>
                   <pre
                     className="text-[11px] font-mono whitespace-pre-wrap break-all rounded p-3"
-                    style={{
-                      color: "var(--color-ink)",
-                      background: "var(--color-bg)",
-                      border: "1px solid var(--color-border)",
-                    }}
+                    style={{ color: "var(--color-ink)", background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
                   >
                     {pretty}
                   </pre>
@@ -250,11 +265,7 @@ export function BridgeEventLog({ events, pkgNames, agentNames, userEmails }: Pro
           <button
             onClick={() => setShown(s => s + PAGE_SIZE)}
             className="text-[11px] font-medium px-4 py-2 rounded border"
-            style={{
-              color: "var(--color-ink)",
-              borderColor: "var(--color-border)",
-              background: "var(--color-surface)",
-            }}
+            style={{ color: "var(--color-ink)", borderColor: "var(--color-border)", background: "var(--color-surface)" }}
           >
             Load {Math.min(remaining, PAGE_SIZE)} more
             <span className="ml-1.5" style={{ color: "var(--color-muted)" }}>({remaining} remaining)</span>

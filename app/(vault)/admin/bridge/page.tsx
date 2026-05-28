@@ -3,7 +3,6 @@ export const runtime = "edge";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import {
-  bridgeEvents,
   bridgeGrants,
   organisations,
   renderBridgeAgents,
@@ -115,40 +114,6 @@ export default async function AdminBridgePage() {
     : [];
   const grantEmailMap = new Map(grantUsers.map(u => [u.id, u.email]));
 
-  // ── Events (last 100) ────────────────────────────────────────────────────
-  const events = await db
-    .select({
-      id:        bridgeEvents.id,
-      grantId:   bridgeEvents.grantId,
-      packageId: bridgeEvents.packageId,
-      deviceId:  bridgeEvents.deviceId,
-      userId:    bridgeEvents.userId,
-      eventType: bridgeEvents.eventType,
-      severity:  bridgeEvents.severity,
-      detail:    bridgeEvents.detail,
-      createdAt: bridgeEvents.createdAt,
-    })
-    .from(bridgeEvents)
-    .orderBy(sql`${bridgeEvents.createdAt} desc`)
-    .limit(100)
-    .all();
-
-  const eventPkgIds = [...new Set(events.map(e => e.packageId))];
-  const eventPkgRows = eventPkgIds.length > 0
-    ? await db.select({ id: scanPackages.id, name: scanPackages.name })
-        .from(scanPackages).where(inArray(scanPackages.id, eventPkgIds)).all()
-    : [];
-  const pkgNameMap = new Map(eventPkgRows.map(p => [p.id, p.name]));
-
-  const eventUserIds = [...new Set(events.map(e => e.userId).filter((id): id is string => id !== null))];
-  const eventUserRows = eventUserIds.length > 0
-    ? await db.select({ id: users.id, email: users.email }).from(users)
-        .where(inArray(users.id, eventUserIds)).all()
-    : [];
-  const eventEmailMap = new Map(eventUserRows.map(u => [u.id, u.email]));
-
-  const criticalCount = events.filter(e => e.severity === "critical").length;
-  const warnCount     = events.filter(e => e.severity === "warn").length;
 
   return (
     <div className="p-8 max-w-6xl">
@@ -166,9 +131,6 @@ export default async function AdminBridgePage() {
           { label: "Render agents",    value: activeAgentCount,  color: "#166534" },
           { label: "Online now",       value: onlineAgentCount,  color: onlineAgentCount > 0 ? "#16a34a" : "var(--color-muted)" },
           { label: "CAS sessions",     value: liveGrants.length, color: "#2563eb" },
-          { label: "Events (last 100)",value: events.length,     color: "var(--color-ink)" },
-          { label: "Warnings",         value: warnCount,         color: "#d97706" },
-          { label: "Critical",         value: criticalCount,     color: "#991b1b" },
         ].map(s => (
           <div key={s.label} className="rounded border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
             <p className="text-2xl font-semibold" style={{ color: s.color }}>{s.value}</p>
@@ -241,12 +203,7 @@ export default async function AdminBridgePage() {
       </div>
 
       {/* ── Event log ────────────────────────────────────────────────────────── */}
-      <BridgeEventLog
-        events={events}
-        pkgNames={Object.fromEntries(pkgNameMap)}
-        agentNames={Object.fromEntries(agentNameMap)}
-        userEmails={Object.fromEntries(eventEmailMap)}
-      />
+      <BridgeEventLog agentNames={Object.fromEntries(agentNameMap)} />
     </div>
   );
 }
