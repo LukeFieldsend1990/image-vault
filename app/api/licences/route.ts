@@ -148,6 +148,8 @@ export async function POST(req: NextRequest) {
     exclusivity?: string;
     permitAiTraining?: boolean;
     proposedFee?: number;
+    proposedUnitType?: string;
+    proposedUnitRatePence?: number;
     agreedFee?: number;       // placeholder only — deal may already be signed
     productionId?: string;
     productionCompanyId?: string;
@@ -306,6 +308,8 @@ export async function POST(req: NextRequest) {
     exclusivity: (body.exclusivity as "non_exclusive" | "sole" | "exclusive" | undefined) ?? "non_exclusive",
     permitAiTraining: body.permitAiTraining ?? false,
     proposedFee: body.proposedFee ?? null,
+    proposedUnitType: body.proposedUnitType ?? null,
+    proposedUnitRatePence: body.proposedUnitRatePence ?? null,
     agreedFee: isPlaceholder ? (body.agreedFee ?? null) : null,
     platformFee: isPlaceholder && body.agreedFee ? Math.round(body.agreedFee * 0.15) : null,
     productionId: resolvedProductionId,

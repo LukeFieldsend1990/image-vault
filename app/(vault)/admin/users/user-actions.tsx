@@ -21,11 +21,12 @@ interface Props {
   aiDisabled: boolean;
   inboundEnabled: boolean;
   geoFingerprintEnabled: boolean;
+  royaltyMeterEnabled: boolean;
 }
 
-export default function UserActions({ userId, role, isSuspended, isCurrentUser, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled }: Props) {
+export default function UserActions({ userId, role, isSuspended, isCurrentUser, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled }: Props) {
   const router = useRouter();
-  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | "geo" | "role" | null>(null);
+  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | "geo" | "royalty" | "role" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleRoleChange(newRole: Role) {
@@ -155,6 +156,27 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
     }
   }
 
+  async function handleRoyaltyToggle() {
+    setLoading("royalty");
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ royaltyMeterEnabled: !royaltyMeterEnabled }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(null);
+    }
+  }
+
   async function handleDelete() {
     if (!confirm(`Permanently delete this user? This cannot be undone.`)) return;
     setLoading("delete");
@@ -248,6 +270,17 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
         }
       >
         {loading === "geo" ? "…" : geoFingerprintEnabled ? "Fingerprint On" : "Fingerprint Off"}
+      </button>
+      <button
+        onClick={handleRoyaltyToggle}
+        disabled={loading !== null}
+        className="text-[10px] font-semibold px-2.5 py-1 rounded border transition disabled:opacity-40 whitespace-nowrap"
+        style={royaltyMeterEnabled
+          ? { borderColor: "rgba(192,57,43,0.3)", color: "#c0392b", background: "rgba(192,57,43,0.06)" }
+          : { borderColor: "rgba(107,114,128,0.3)", color: "#6b7280", background: "rgba(107,114,128,0.06)" }
+        }
+      >
+        {loading === "royalty" ? "…" : royaltyMeterEnabled ? "Royalties On" : "Royalties Off"}
       </button>
       {!isCurrentUser && (
         <button

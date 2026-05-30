@@ -43,6 +43,7 @@ export default async function AdminUsersPage() {
       aiDisabled: users.aiDisabled,
       inboundEnabled: users.inboundEnabled,
       geoFingerprintEnabled: users.geoFingerprintEnabled,
+      royaltyMeterEnabled: users.royaltyMeterEnabled,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -215,6 +216,7 @@ export default async function AdminUsersPage() {
                 aiDisabled={!!u.aiDisabled}
                 inboundEnabled={!!u.inboundEnabled}
                 geoFingerprintEnabled={!!u.geoFingerprintEnabled}
+                royaltyMeterEnabled={u.royaltyMeterEnabled !== false}
               />
             </div>
           );
