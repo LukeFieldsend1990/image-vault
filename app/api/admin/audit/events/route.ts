@@ -49,7 +49,8 @@ function fmtGBP(pence: number | null): string {
   return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
-const LIMIT = 50;
+const BASE_LIMIT = 50;
+const FILTERED_LIMIT = 500;
 
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
@@ -57,6 +58,21 @@ export async function GET(req: NextRequest) {
   if (!isAdmin(session.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const url = new URL(req.url);
+  const fromParam    = url.searchParams.get("from") ?? "";
+  const toParam      = url.searchParams.get("to") ?? "";
+  const usersParam   = url.searchParams.get("users") ?? "";
+  const categoryParam = url.searchParams.get("category") ?? "";
+
+  const fromTs = fromParam ? Math.floor(new Date(fromParam + "T00:00:00Z").getTime() / 1000) : null;
+  const toTs   = toParam   ? Math.floor(new Date(toParam   + "T23:59:59Z").getTime() / 1000) : null;
+  const userEmails = usersParam
+    ? usersParam.split(",").map(e => e.trim().toLowerCase()).filter(Boolean)
+    : [];
+
+  const hasFilter = !!(fromParam || toParam || usersParam || categoryParam);
+  const LIMIT = hasFilter ? FILTERED_LIMIT : BASE_LIMIT;
 
   const db = getDb();
 
@@ -339,5 +355,15 @@ export async function GET(req: NextRequest) {
 
   events.sort((a, b) => b.timestamp - a.timestamp);
 
-  return NextResponse.json({ events: events.slice(0, 200) });
+  let filtered = events;
+  if (fromTs !== null) filtered = filtered.filter(e => e.timestamp >= fromTs);
+  if (toTs !== null)   filtered = filtered.filter(e => e.timestamp <= toTs);
+  if (userEmails.length > 0) {
+    filtered = filtered.filter(e => e.actor && userEmails.includes(e.actor.toLowerCase()));
+  }
+  if (categoryParam) {
+    filtered = filtered.filter(e => e.category === categoryParam);
+  }
+
+  return NextResponse.json({ events: filtered.slice(0, 1000) });
 }
