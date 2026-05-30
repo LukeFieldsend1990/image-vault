@@ -21,6 +21,7 @@
 13. [Semantic Search — Licensee Package Discovery](#13-semantic-search--licensee-package-discovery)
 14. [Trial Production — End-to-End Proving Ground](#14-trial-production--end-to-end-proving-ground)
 15. [Live Royalty Meter — Pay-As-You-Go Likeness Usage Feed](#15-live-royalty-meter--pay-as-you-go-likeness-usage-feed)
+16. [Compliance Layer — SAG-AFTRA Article 39 & Multi-Regime Consent Ledger](#16-compliance-layer--sag-aftra-article-39--multi-regime-consent-ledger)
 
 ---
 
@@ -455,10 +456,12 @@ The SAG-AFTRA 2026 TV/Theatrical Tentative Agreement (term 1 July 2026 – 30 Ju
 
 | Path | Effort | Build order |
 |---|---|---|
-| 1. Consent OS | Low — extends existing schema | **Next** |
-| 3. ICDR Royalty Meter | Medium — dual-custody mechanism already similar | Follow-on to Path 1 |
-| 2. Compliant Producer Custody | Medium — gated on Union endorsement | Parallel biz-dev track |
+| 1. Consent OS | Low — extends existing schema | **Specced — §16 Compliance Layer** |
+| 3. ICDR Royalty Meter | Medium — dual-custody mechanism already similar | **Built — §15 Live Royalty Meter** |
+| 2. Compliant Producer Custody | Medium — gated on Union endorsement | **Specced — §16 Compliance Layer** (Paths 1 + 2 unified) |
 | 4. Training Data Brokerage | High — adversarial; scope as a separate initiative | Long bet, scope when actor-side registry has critical mass |
+
+> Paths 1 and 2 are specced together as the **Compliance Layer (§16)** — one hash-chained consent ledger serving both the actor-side Consent OS and the producer-side compliant-custody product, with the one-click SAG-AFTRA Compliance Certificate as the hero deliverable.
 
 Source: SAG-AFTRA 2026 TV/Theatrical Contracts Summary of Tentative Agreement, Article 39 (pages 12–14).
 
@@ -3123,3 +3126,476 @@ New talent page **`/royalties`** (server `page.tsx` auth + redirect → client `
 - Cryptographic webhook signatures (HMAC) — the bearer API key is sufficient for the demo; HMAC (Svix-style, as in the Resend webhook) is a hardening follow-up.
 - Cross-currency — pence/GBP only for now.
 - A materialised `royalty_balances` rollup — live aggregation is fine at demo scale.
+
+---
+
+## 16. Compliance Layer — SAG-AFTRA Article 39 & Multi-Regime Consent Ledger
+
+### 16.1 Context & Strategic Fit
+
+This section specs the **Compliance Layer** — the unification of two monetisation paths called out in the §6.10 SAG-AFTRA strategic analysis:
+
+- **Path 1 — Consent OS** (B2C, actor-side): every Article 39 consent moment becomes a signed, hashed, time-stamped event in the talent's vault.
+- **Path 2 — Compliant Producer Custody** (B2B): sell producers the answer to their Article 39 obligations (39.E/G/H/I) — demonstrable, audited, exportable compliance.
+
+These are two faces of one mechanism: an **append-only, hash-chained compliance ledger**. The actor side generates the consent events; the producer side consumes them as proof. The ledger is the data; the **one-click Compliance Certificate** is the product.
+
+**The reframe (from §6.10).** Article 39.A ("no-scan" replicas) erodes the storage-as-chokepoint pitch — a replica can now be built from on-set footage without ever touching the vault. The defensible position is therefore *"we are the production's consent, audit, and royalty layer for every use of the likeness."* The Live Royalty Meter (§15) already delivers the royalty layer (Path 3 / clause 39.C). This section delivers the **consent and audit layer**.
+
+> **Build intent.** This is a real build, not a pitch mock — the building blocks already exist (`licences`, `download_events`, `scrub_attestations`, `bridge_events`, `access_window_events`, `usage_events`, dual-custody tokens, the printable chain-of-custody document). The Compliance Layer is largely a **new ledger + a generator that folds those existing audit trails into a tamper-evident certificate**.
+
+> **The demo moment.** From the admin panel, select a talent/licence and click **"Generate SAG-AFTRA Compliance Certificate."** A tamper-evident document renders in seconds: identity of the replica, every consent granted (with scope), security/custody attestations, full chain of custody, metered AI uses (39.C), strike status, and transfer history — sealed with a verification hash. The single click is the pitch.
+
+### 16.2 Compliance Thesis
+
+A SAG-AFTRA production that uses a digital replica carries a basket of Article 39 obligations. Today those obligations are discharged informally — consent in PDFs and inboxes, "commercially reasonable" security asserted in email, transfers tracked in a spreadsheet. When the Union, the performer, or a court asks *"prove it,"* the production has no system of record.
+
+The platform becomes that system of record. Every obligation maps to an **event type** the platform can capture, and every event is admissible into the **Compliance Certificate**. The producer's pitch is: *"Run your replica through Image Vault and you can prove Article 39 compliance with one export, instead of reconstructing it from email."*
+
+### 16.3 Clause → Feature Map
+
+Derived from §6.10.1 (Article 39, pages 12–14 of the 2026 TV/Theatrical Summary of Tentative Agreement). **39.F (minor protections) is explicitly deferred** — out of the platform's demographic for now. 39.A and 39.K are positioning context, not buildable features.
+
+| Clause | Obligation | Platform feature | Event type(s) |
+|---|---|---|---|
+| **39.A** No-scan replicas | (context — replicas can exist outside the vault) | N/A — informs the reframe in §16.1 | — |
+| **39.B** "Scripted" alterations | Script-described alterations don't need extra consent | Consent **scope** model records what *is* vs *isn't* covered | `consent.granted` (with `scriptedAlterations` scope flag) |
+| **39.C** ICDR minimums + residuals | Each ICDR use is a billable, residual-bearing event | **Live Royalty Meter (§15)** — already built; folded into certificate | `use.metered` (links `usage_events`) |
+| **39.D** Cross-language dub consent | Separate consent per dubbed language | Per-language / per-territory consent events | `consent.dub_language_granted`, `consent.revoked` |
+| **39.E** Biometric data limits | No collecting biometrics for purposes unrelated to the picture | **Biometric isolation attestation** — producer attests data stays in the vault, not their custody | `biometric.isolation_attested` |
+| **39.F** Minor protections | No nude/sexual-simulation replicas of minors | **Deferred** — not current demographic | *(none)* |
+| **39.G** Strike protection | Replicas can't be used during a strike where consent would be required | **Strike Lock** — admin declares a strike → scoped replicas freeze; uses/downloads blocked | `strike.declared`, `strike.lifted`, `use.blocked_by_strike` |
+| **39.H** Replica security | "Commercially reasonable efforts" to limit access & protect replicas | **Custody attestation** + the existing chain-of-custody / bridge-event evidence | `security.custody_attested` |
+| **39.I** Transfer protection | Producer stays liable on third-party transfer unless transferee is Union-approved | **Transfer approval / escrow** — request → approve/deny workflow; transferee approval recorded | `transfer.requested`, `transfer.approved`, `transfer.denied` |
+| **39.J** Articulable business reason | Producer needs a real reason to request a scan | **Business-reason capture** on licence/scan request | `business_reason.recorded` |
+| **39.K** Synthetics | GenAI synthetic performers need Union notice + bargaining | (context — not platform-relevant) | — |
+| **39.L** AI-training-data licensing | Producer may license performances for training; owes the Union written notice (no actor revenue share required) | **Training-notice filing** record + opt-in registry hook (Path 4, scoped separately) | `training.notice_filed` |
+
+### 16.4 Multi-Regime Framework (one framework, many regimes)
+
+SAG-AFTRA Article 39 is the first regime, but the V1 demo tenant (United Agents) is UK/Equity and all tenants carry GDPR Art. 9 (biometric = special-category data) and, for US work, BIPA exposure. The framework is **regime-agnostic**: obligations are code-defined definitions (mirroring the `lib/skills/` registry pattern — in-memory, type-safe, zero cold-start), and a certificate is generated **per regime**.
+
+```
+lib/compliance/
+  registry.ts          ← registerRegime() / getRegime() / listObligations()
+  types.ts             ← ComplianceRegime, ComplianceObligation, ComplianceEventType
+  regimes/
+    sag-aftra.ts       ← Article 39 obligations (the build target)
+    equity.ts          ← UK Equity equivalent (stub — clauses TBD pending Equity review, see §6.10.3)
+    gdpr.ts            ← Art. 9 special-category-data obligations (stub)
+    bipa.ts            ← Illinois BIPA consent/retention (stub)
+    index.ts           ← imports each regime for side-effect registration
+```
+
+```typescript
+interface ComplianceObligation {
+  id: string;                 // "sag-39-d-dub-consent"
+  regime: RegimeId;           // "sag_aftra" | "equity" | "gdpr" | "bipa"
+  clauseRef: string;          // "39.D"
+  title: string;
+  description: string;
+  satisfiedBy: ComplianceEventType[];     // event types that discharge it
+  appliesWhen?: (licence: Licence) => boolean;  // e.g. AI-bearing licences only
+  severity: "required" | "recommended";
+}
+```
+
+The certificate generator walks the active regime's obligations, checks the ledger for satisfying events within scope, and renders each as **met ✓ / gap ⚠**. "One framework for now" = SAG-AFTRA is fully populated; the other three are registered stubs so the architecture is regime-plural from day one without blocking the demo.
+
+### 16.5 The Compliance Ledger (event-sourced, hash-chained)
+
+The ledger is the spine. It is **append-only** and **tamper-evident** via per-scope hash chaining — matching the codebase's existing event-table convention (`bridge_events`, `access_window_events`, `download_events`) but adding integrity sealing.
+
+- **Chain scoping.** Each event belongs to a chain identified by `chain_key` — either `licence:{licenceId}` (most events) or `talent:{talentId}` (talent-level consents not tied to a single licence, e.g. platform biometric handling). Events within a chain carry a monotonic `seq`.
+- **Hashing.** `hash = SHA-256(prev_hash ‖ canonicalJson(event-without-hash))`. The first event in a chain uses `prev_hash = chain_key`. Any retroactive edit breaks every downstream hash — the certificate embeds the **tip hash**, so verification is a single recompute.
+- **Signing (optional hardening).** Tip hash may be HMAC-signed with `COMPLIANCE_SIGNING_KEY` (new secret) for non-repudiation. Eventing first; signature is a follow-up (mirrors §15.8's HMAC-deferral decision).
+- **No deletes, no updates.** A consent is "revoked" by appending a `consent.revoked` event, never by mutating the grant. State is a **projection** (see `consent_records`, §16.6).
+- **Fold-in of existing audit trails.** The certificate generator reads `download_events`, `access_window_events`, `usage_events`, `bridge_events`, and `scrub_attestations` for the scope and folds them in as derived ledger rows (clause 39.C/H custody evidence) — so the certificate is comprehensive without re-recording data the platform already captures. These derived rows are hashed into the certificate snapshot at generation time.
+
+> **Edge/D1 concurrency note.** Per-licence chains keep `seq` contention low (one chain per licence, low write rate). Append is a transaction: read tip → compute hash → insert. If two appends race on the same chain, the unique index on `(chain_key, seq)` forces a retry — acceptable given consent/strike/transfer events are human-paced, not machine traffic (unlike the royalty webhook).
+
+### 16.6 Data Model (migration `0048_compliance.sql`)
+
+All timestamps **unix epoch seconds**, IDs `crypto.randomUUID()`, booleans as 0/1 integers — matching existing conventions.
+
+**`compliance_events`** — the append-only hash-chained ledger.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `chain_key` | TEXT | `licence:{id}` or `talent:{id}` |
+| `seq` | INTEGER | monotonic within `chain_key` |
+| `event_type` | TEXT | see §16.3 vocabulary (`consent.granted`, `strike.declared`, …) |
+| `regime` | TEXT | `sag_aftra` \| `equity` \| `gdpr` \| `bipa` \| `platform` |
+| `clause_ref` | TEXT | nullable, e.g. `39.D` |
+| `licence_id` | TEXT FK → `licences.id` | nullable (cascade) |
+| `talent_id` | TEXT FK → `users.id` | denormalised target |
+| `organisation_id` | TEXT FK → `organisations.id` | nullable — the producer party |
+| `actor_id` | TEXT FK → `users.id` | who triggered the event |
+| `scope_json` | TEXT | JSON: `{ useType?, territory?, language?, validFrom?, validTo?, scriptedAlterations? }` |
+| `payload_json` | TEXT | JSON: event-specific detail (untrusted producer input stored as text) |
+| `prev_hash` | TEXT | tip hash of the chain before this event |
+| `hash` | TEXT | `SHA-256(prev_hash ‖ canonicalJson(...))` |
+| `ip_address` | TEXT | nullable (provenance, as in `scrub_attestations`) |
+| `user_agent` | TEXT | nullable |
+| `created_at` | INTEGER | server receipt time |
+
+- **Unique index** `(chain_key, seq)` — append serialisation + tamper detection.
+- **Index** `(talent_id, created_at)`, `(licence_id, created_at)`, `(organisation_id, event_type)` — powers ledger views and the obligation matrix.
+
+**`consent_records`** — current-state projection of consents (materialised for fast querying; derived from `consent.*` events).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `licence_id` | TEXT FK → `licences.id` | cascade |
+| `talent_id` | TEXT FK → `users.id` | |
+| `use_type` | TEXT | mirrors `licenceType` enum or `dub_language` |
+| `territory` | TEXT | nullable; ISO region or "worldwide" |
+| `language` | TEXT | nullable; for 39.D dub consent |
+| `valid_from` / `valid_to` | INTEGER | nullable bounds |
+| `status` | TEXT enum | `granted` \| `revoked` \| `expired` |
+| `granted_event_id` | TEXT FK → `compliance_events.id` | provenance |
+| `revoked_event_id` | TEXT FK → `compliance_events.id` | nullable |
+| `updated_at` | INTEGER | |
+
+**`strike_locks`** — Article 39.G. Admin-declared; freezes scoped replicas.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `scope` | TEXT enum | `global` \| `organisation` \| `production` \| `licence` |
+| `scope_id` | TEXT | nullable for `global`; else the org/production/licence id |
+| `reason` | TEXT | e.g. "SAG-AFTRA strike declared 2026-07-01" |
+| `declared_by` | TEXT FK → `users.id` | admin |
+| `declared_at` | INTEGER | |
+| `lifted_by` | TEXT FK → `users.id` | nullable |
+| `lifted_at` | INTEGER | nullable |
+| `status` | TEXT enum | `active` \| `lifted` |
+
+- **Index** `(status, scope, scope_id)` — fast enforcement lookups on the download/use hot path.
+
+**`replica_transfers`** — Article 39.I transfer approval / escrow.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `licence_id` | TEXT FK → `licences.id` | cascade |
+| `from_organisation_id` | TEXT FK → `organisations.id` | the liable producer |
+| `to_party_name` | TEXT | proposed transferee |
+| `to_party_details_json` | TEXT | contact / company info |
+| `union_approved` | INTEGER (bool) | transferee is Union-approved |
+| `status` | TEXT enum | `requested` \| `approved` \| `denied` |
+| `requested_by` | TEXT FK → `users.id` | |
+| `decided_by` | TEXT FK → `users.id` | nullable (admin acting as Union escrow) |
+| `decided_at` | INTEGER | nullable |
+| `decision_note` | TEXT | nullable |
+| `created_at` | INTEGER | |
+
+**`compliance_attestations`** — Article 39.E (biometric isolation) & 39.H (custody). Generalises the existing `scrub_attestations` pattern.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `licence_id` | TEXT FK → `licences.id` | nullable (cascade) |
+| `organisation_id` | TEXT FK → `organisations.id` | the attesting producer |
+| `attestation_type` | TEXT enum | `biometric_isolation` (39.E) \| `security_custody` (39.H) |
+| `attested_by` | TEXT FK → `users.id` | |
+| `attestation_text` | TEXT | the statement attested to |
+| `ip_address` / `user_agent` | TEXT | provenance |
+| `event_id` | TEXT FK → `compliance_events.id` | the ledger entry this created |
+| `created_at` | INTEGER | |
+
+**`compliance_certificates`** — generated certificate artifacts (the hero output).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `scope` | TEXT enum | `licence` \| `talent` \| `production` |
+| `scope_id` | TEXT | the licence/talent/production id |
+| `regime` | TEXT | `sag_aftra` (others when populated) |
+| `r2_key` | TEXT | `compliance-certs/{id}.html` — self-contained printable doc |
+| `ledger_tip_hash` | TEXT | chain tip hash(es) at generation — the tamper seal |
+| `obligations_json` | TEXT | snapshot of met/gap status per obligation |
+| `event_count` | INTEGER | events folded in |
+| `generated_by` | TEXT FK → `users.id` | |
+| `generated_at` | INTEGER | |
+
+### 16.7 Consent Eventing (39.B / 39.D / 39.J)
+
+- **Granting consent** writes a `consent.granted` event with a `scope_json` describing exactly what's permitted: `useType` (mirrors `licenceType`), `territory`, `language` (39.D dub), `validFrom/To`, and a `scriptedAlterations` flag (39.B — does this consent cover script-described alterations?). The `consent_records` projection is updated in the same transaction.
+- **Per-language dub (39.D).** A `consent.dub_language_granted` event per language. The certificate lists exactly which languages are cleared — the producer's proof that dubbing into French was consented but Mandarin was not.
+- **Revocation** appends `consent.revoked` (never mutates). Enforcement (§16.10) treats a revoked or expired consent as a hard block on new uses/downloads.
+- **Articulable business reason (39.J).** When a licensee requests a scan/licence, the wizard captures a free-text business reason → `business_reason.recorded` event. Per the contract the producer needn't disclose it externally, but capturing it in-platform is the evidence that one existed.
+- **No e-signature.** Per decision, consent is **eventing, not DocuSign** — auth identity + timestamp + hash-chain entry + IP/UA provenance is the legal artifact. (E-signature integration noted as a future option in §16.12 Out of Scope.)
+
+### 16.8 Strike Lock (39.G) — admin control + enforcement
+
+The strike lock is driven entirely from the **admin panel** (the platform operator, not producers).
+
+- **Declare** (`/admin/compliance`): admin picks a scope (global / organisation / production / licence), enters a reason, confirms. Inserts a `strike_locks` row (`status=active`) and appends a `strike.declared` ledger event to every affected chain.
+- **Effect.** While a covering strike is active, all **use** and **download** entry points return **`423 Locked`** with the strike reason, and append a `use.blocked_by_strike` event (so the block itself is auditable — proof the platform enforced 39.G). Covered endpoints:
+  - `POST /api/royalties/usage` (the §15 meter — refuse to meter a strike-period use)
+  - dual-custody download initiation + token issuance (§6.3)
+  - access-window opening/downloads (§12)
+  - bridge grant issuance
+- **Lift.** Admin lifts → `status=lifted`, `lifted_at` set, `strike.lifted` event appended. Replicas resume.
+- **Notifications.** Affected talent/reps/licensees get an in-app notification (§11) + email on declare and lift.
+
+> This is the union-aligned defensive feature from §6.10: when SAG-AFTRA calls a strike, the operator flips one switch and every covered replica freezes — demonstrable, instant, audited.
+
+### 16.9 Security & Custody Attestations (39.E / 39.H)
+
+- **Biometric isolation (39.E).** The producer attests, per licence or per organisation, that biometric data (the scan) is **not replicated into their own custody for unrelated purposes** — it stays vault-resident, accessed via the bridge / time-boxed windows. The existing `delivery_mode = bridge_only` and access-window machinery are the *technical* enforcement; the attestation is the *contractual* record. Writes `biometric.isolation_attested`.
+- **Security custody (39.H).** "Commercially reasonable efforts" attestation. The certificate strengthens this with **objective evidence already in the platform**: `bridge_events` (tamper/copy detection), `scrub_attestations` (post-licence data destruction), `download_events` (access logging), access-window limits. The attestation event references this evidence. Writes `security.custody_attested`.
+
+### 16.10 Transfer Protection / Escrow (39.I)
+
+- A producer requests a transfer of a replica/licence to a third party → `replica_transfers` row (`requested`) + `transfer.requested` event.
+- Because the producer **stays liable unless the transferee is Union-approved**, the platform positions itself as the **Union-approved escrow** (the §6.10 "path to becoming the Union-approved escrow"). An admin (acting as escrow) approves/denies, recording `union_approved` and a decision note → `transfer.approved` / `transfer.denied` event.
+- On approval, the licence's `licensee_id` / `organisation_id` can be re-pointed (or a child licence minted) — the transfer is a first-class, audited event, not an off-platform handshake.
+
+### 16.11 Enforcement Hooks
+
+The Compliance Layer is only credible if it **gates real actions**. A single guard — `assertComplianceOk({ licenceId, action })` in `lib/compliance/enforce.ts` — is called at each hot path and checks, in order: (1) no active covering strike lock (39.G); (2) a valid, non-revoked, in-window consent exists for the action's `useType`/territory/language (39.B/D); (3) for transfers, an approved `replica_transfers` row (39.I). On failure it returns the appropriate status (`423` strike, `403` consent) and appends the corresponding ledger event.
+
+| Existing flow | File (approx.) | Added check |
+|---|---|---|
+| Royalty meter ingest | `app/api/royalties/usage/route.ts` | strike + consent before metering |
+| Dual-custody download | dual-custody token issuance (§6.3) | strike + consent before token |
+| Access window open/download | `app/api/.../access-windows` (§12) | strike + consent |
+| Bridge grant issuance | bridge token routes | strike + consent |
+
+### 16.12 The Compliance Certificate (the hero, one-click)
+
+The centerpiece artifact (decision: **one-click ledger export**). Mirrors the existing printable **chain-of-custody** document (`/vault/packages/[packageId]/chain-of-custody`) — a self-contained, print-to-PDF HTML doc, no headless-browser dependency (edge-compatible).
+
+**Generation (`POST /api/compliance/certificates`)** — admin/talent/rep (own scope) session:
+1. Resolve scope (`licence` / `talent` / `production`) and `regime` (default `sag_aftra`).
+2. Load the regime's obligations from the registry (§16.4).
+3. Pull all `compliance_events` for the in-scope chain(s), plus fold-in of `download_events`, `access_window_events`, `usage_events` (§15 meter — clause 39.C), `bridge_events`, `scrub_attestations`.
+4. For each obligation, evaluate `satisfiedBy` against the events → **met ✓ / gap ⚠**.
+5. Render the certificate HTML, store at `compliance-certs/{id}.html` in R2, insert a `compliance_certificates` row capturing the **ledger tip hash(es)** and obligation snapshot.
+6. Return `{ id, url, ledgerTipHash, obligations: [...] }`.
+
+**Certificate contents:**
+- **Header** — replica/talent identity (from `talent_profiles`), licence/production identity, regime, generation timestamp, **verification hash**.
+- **Obligation matrix** — every Article 39 clause in scope, met/gap, with the satisfying event(s) linked.
+- **Consent register** — granted scopes (use-type, territory, language, validity), revocations, business reasons (39.B/D/J).
+- **Custody & security** — attestations (39.E/H) + objective evidence counts (downloads, bridge events, scrubs).
+- **Metered use** — clause 39.C summary from `usage_events` (total uses, royalty accrued — links the §15 meter).
+- **Strike history** — any 39.G locks/lifts touching the scope.
+- **Transfer history** — 39.I requests/approvals.
+- **Tamper seal** — the chain tip hash + "verify at /api/compliance/verify".
+
+**Verification (`GET /api/compliance/verify?certificateId=` or `?hash=`)** — recomputes the hash chain for the scope and reports whether the current ledger still matches the certificate's sealed tip hash. A mismatch means the ledger was altered after issuance.
+
+### 16.13 Roles
+
+| Role | Capability |
+|---|---|
+| **Talent** | Grant/revoke consent; view own consent ledger; generate own Compliance Certificate; view strike status affecting them. |
+| **Rep / Agency** | Same as talent for managed roster (delegation, existing roster pattern). |
+| **Licensee (producer)** | File business reason (39.J); submit biometric-isolation & custody attestations (39.E/H); request transfers (39.I); view obligation matrix for their licences; generate certificate for licences they hold. |
+| **Admin (platform operator)** | Declare/lift strike locks (39.G); approve/deny transfers as Union escrow (39.I); generate any certificate; view full ledger; the **one-click certificate** lives here. |
+
+### 16.14 API Surface
+
+| Route | Method | Auth | Purpose |
+|---|---|---|---|
+| `/api/compliance/consent` | POST | talent/rep | Append `consent.granted` / `consent.dub_language_granted` |
+| `/api/compliance/consent` | DELETE | talent/rep | Append `consent.revoked` |
+| `/api/compliance/consent?licenceId=` | GET | talent/rep/licensee | Current consent state + history |
+| `/api/compliance/attestations` | POST | licensee/admin | 39.E / 39.H attestation |
+| `/api/compliance/transfers` | POST | licensee | 39.I transfer request |
+| `/api/compliance/transfers/:id` | PATCH | admin | Approve / deny (Union escrow) |
+| `/api/compliance/strikes` | GET / POST | admin | List / declare strike lock |
+| `/api/compliance/strikes/:id` | PATCH | admin | Lift strike |
+| `/api/compliance/business-reason` | POST | licensee | 39.J reason capture |
+| `/api/compliance/status?scope=&id=&regime=` | GET | scoped | Obligation matrix (powers dashboards) |
+| `/api/compliance/certificates` | POST | scoped/admin | **Generate certificate** (the hero) |
+| `/api/compliance/certificates/:id` | GET | scoped | Fetch certificate HTML / metadata |
+| `/api/compliance/verify` | GET | public-ish | Recompute & verify tamper seal |
+
+Auth helpers reuse `requireSession` / `isAdmin` (`lib/auth/adminEmails.ts`); scoped checks follow the existing roster/delegation pattern.
+
+### 16.15 UI
+
+- **Admin Compliance Console — `/admin/compliance`** (new, alongside `/admin/audit`, `/admin/licences`). The operator's cockpit. Admin sees **everything** — every event, every scope, every obligation gap across the whole platform:
+  - **Compliance health overview** — portfolio-wide obligation matrix: a table of every active licence with its met/gap status per regime, sortable by gap count. The "where are we exposed right now" view. Powered by `GET /api/compliance/status` run across all licences (admin scope = no `id` filter).
+  - **Strike board** — active strikes + history, declare-strike form (scope picker + reason) with a **scope-impact preview** ("this affects 12 licences across 4 talent"), one-click lift. The 39.G control.
+  - **Blocked-use log** — stream of `use.blocked_by_strike` events: proof the platform *enforced* 39.G, and visibility of who attempted a use during a strike.
+  - **Transfer queue** — pending 39.I requests with approve/deny + full transfer history (approved/denied with notes).
+  - **Consent register (all talent)** — every `consent_records` row platform-wide, filterable by talent/licence/use-type/territory/language/status; shows grants, revocations, dub-language clearances (39.B/D/J).
+  - **Attestation tracker** — 39.E/H attestations per producer/licence, surfacing **who has *not* attested** (the gap view), not just who has.
+  - **Business-reason log (39.J)** & **training-notice log (39.L)** — filterable lists of those events.
+  - **Certificate history** — every generated `compliance_certificates` row: scope, regime, generator, timestamp, and a live **verify badge** (re-runs `/api/compliance/verify` → ✓ intact / ✗ tampered).
+  - **Certificate generator** — pick talent/licence → **"Generate SAG-AFTRA Compliance Certificate"** → renders + downloads. *The demo moment.*
+  - **Ledger viewer** — filterable `compliance_events` stream (reuses the `/admin/audit` table aesthetic), with per-chain hash-integrity check.
+- **Talent — `/compliance`** (or a Settings tab): "What I've consented to" — consent register with revoke buttons, per-language dub grants, and a **"Download my certificate"** button.
+- **Licensee — compliance panel on the licence detail page**: obligation matrix (✓/gap), attestation forms (39.E/H), business-reason field (39.J), transfer-request button (39.I), and "Generate certificate."
+
+Styling: existing admin stat-card + table patterns, CSS variables (`--color-accent` `#c0392b`, `--color-surface`, `--color-border`, `--color-muted`), typography-led United Agents aesthetic. Obligation status uses ✓ (met, accent/green) vs ⚠ (gap, muted/amber).
+
+### 16.16 Build Plan (suggested PR slices)
+
+1. **Ledger core** — migration `0048`, Drizzle tables, `lib/compliance/ledger.ts` (append + hash-chain + projection), vitest for hash-chain integrity & idempotent append.
+2. **Regime framework** — `lib/compliance/registry.ts` + `regimes/sag-aftra.ts` (full Article 39 obligations), Equity/GDPR/BIPA stubs, obligation-evaluation unit tests.
+3. **Consent eventing** — `/api/compliance/consent` (grant/revoke/dub) + `consent_records` projection + talent `/compliance` page.
+4. **Strike lock** — `strike_locks`, admin declare/lift API + console, and `lib/compliance/enforce.ts` wired into the four hot paths (§16.11) with tests.
+5. **Attestations + transfers + business reason** — 39.E/H/I/J events + licensee panel + admin transfer queue.
+6. **Compliance Certificate** — generator, R2 HTML render, `compliance_certificates`, verify endpoint, and the admin one-click button. **The demo deliverable.**
+7. **Fold-in + polish** — fold existing audit trails (`download_events`/`usage_events`/`bridge_events`/`scrub_attestations`) into the certificate; obligation-matrix dashboard.
+
+### 16.17 Admin Visibility Coverage
+
+Confirmation that **every compliance surface is observable from the admin panel** — the operator can see and act on all of it. (Read = can view; Act = can change state.)
+
+| Compliance surface | Clause | Admin view | Read | Act |
+|---|---|---|---|---|
+| Portfolio obligation gaps | all | Compliance health overview | ✓ | — |
+| Consent grants / revocations / dub clearances | 39.B/D/J | Consent register (all talent) | ✓ | view-only* |
+| Strike locks | 39.G | Strike board (+ impact preview) | ✓ | declare / lift |
+| Strike-blocked use attempts | 39.G | Blocked-use log | ✓ | — |
+| Security / biometric attestations | 39.E/H | Attestation tracker (incl. *missing*) | ✓ | — |
+| Business reasons | 39.J | Business-reason log | ✓ | — |
+| Training-data notices | 39.L | Training-notice log | ✓ | — |
+| Transfer requests / approvals | 39.I | Transfer queue + history | ✓ | approve / deny |
+| Metered AI uses (royalties) | 39.C | Royalty feeds (existing §15 admin) + certificate fold-in | ✓ | fire demo (§15) |
+| Generated certificates + tamper status | all | Certificate history (verify badge) | ✓ | generate |
+| Raw event ledger | all | Ledger viewer (+ hash-integrity check) | ✓ | — |
+
+\* Admin does **not** grant/revoke consent on a talent's behalf (consent is the talent's act, §16.13) — admin has full *visibility* but consent state changes only via talent/rep. This is deliberate: an operator silently editing consent would defeat the ledger's evidentiary value.
+
+### 16.18 Test Plan & Acceptance Criteria
+
+Tests follow existing conventions — pure-logic in `__tests__/lib/compliance/*.test.ts` (vitest, like `__tests__/lib/royalties/split.test.ts`), flow-level in `__tests__/domain/*.test.ts` (like `licence-lifecycle.test.ts`). The hash-chain and obligation-evaluation logic are deterministic pure functions and are written **test-first** (build-plan slices 1–2).
+
+#### 16.18.1 Unit — ledger hash chain (`lib/compliance/ledger.ts`)
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { hashEvent, verifyChain, appendEvent } from "@/lib/compliance/ledger";
+
+describe("compliance ledger hash chain", () => {
+  it("first event chains off the chain_key as genesis prev_hash", () => {
+    const e = hashEvent({ chainKey: "licence:L1", seq: 0, eventType: "consent.granted", payload: {} }, "licence:L1");
+    expect(e.prevHash).toBe("licence:L1");
+    expect(e.hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("is deterministic — same input ⇒ same hash (canonical JSON)", () => {
+    const a = hashEvent({ chainKey: "licence:L1", seq: 1, eventType: "x", payload: { b: 2, a: 1 } }, "PREV");
+    const b = hashEvent({ chainKey: "licence:L1", seq: 1, eventType: "x", payload: { a: 1, b: 2 } }, "PREV");
+    expect(a.hash).toBe(b.hash); // key order must not matter
+  });
+
+  it("each event's prev_hash equals the previous event's hash", () => {
+    const chain = ["consent.granted", "consent.dub_language_granted", "consent.revoked"]
+      .reduce((acc, t, i) => {
+        const prev = i === 0 ? "licence:L1" : acc[i - 1].hash;
+        acc.push(hashEvent({ chainKey: "licence:L1", seq: i, eventType: t, payload: {} }, prev));
+        return acc;
+      }, [] as any[]);
+    expect(verifyChain(chain)).toEqual({ ok: true });
+  });
+
+  it("detects tampering — mutating a middle event breaks verification", () => {
+    const chain = buildChain(["a", "b", "c"]);          // helper builds a valid 3-event chain
+    chain[1] = { ...chain[1], payload: { tampered: true } };
+    expect(verifyChain(chain).ok).toBe(false);
+    expect(verifyChain(chain).brokenAtSeq).toBe(1);
+  });
+
+  it("detects deletion — removing an event breaks seq continuity", () => {
+    const chain = buildChain(["a", "b", "c"]);
+    expect(verifyChain([chain[0], chain[2]]).ok).toBe(false);
+  });
+
+  it("appendEvent rejects a non-monotonic seq (unique index emulation)", async () => {
+    await expect(appendEvent(fakeDb, { chainKey: "licence:L1", seq: 0, /* dup */ })).rejects.toThrow();
+  });
+});
+```
+
+#### 16.18.2 Unit — obligation evaluation (`lib/compliance/registry.ts`)
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { evaluateObligations } from "@/lib/compliance/registry";
+
+describe("SAG-AFTRA obligation evaluation", () => {
+  it("marks 39.D met when a dub-language consent event exists for the language", () => {
+    const r = evaluateObligations("sag_aftra", aiLicence, [
+      { eventType: "consent.dub_language_granted", scope: { language: "fr" } },
+    ]);
+    expect(r.find(o => o.clauseRef === "39.D")?.status).toBe("met");
+  });
+
+  it("marks 39.E/H as gaps when no attestation event is present", () => {
+    const r = evaluateObligations("sag_aftra", aiLicence, []);
+    expect(r.filter(o => ["39.E", "39.H"].includes(o.clauseRef)).every(o => o.status === "gap")).toBe(true);
+  });
+
+  it("skips clause 39.F entirely (deferred — not registered)", () => {
+    const r = evaluateObligations("sag_aftra", aiLicence, []);
+    expect(r.some(o => o.clauseRef === "39.F")).toBe(false);
+  });
+
+  it("39.C only applies to AI-bearing licences (appliesWhen gate)", () => {
+    const filmOnly = evaluateObligations("sag_aftra", filmDoubleLicence, []);
+    expect(filmOnly.some(o => o.clauseRef === "39.C")).toBe(false);
+  });
+
+  it("a revoked consent does not satisfy its obligation", () => {
+    const r = evaluateObligations("sag_aftra", aiLicence, [
+      { eventType: "consent.granted", scope: { useType: "ai_avatar" } },
+      { eventType: "consent.revoked", scope: { useType: "ai_avatar" } },
+    ]);
+    expect(r.find(o => o.clauseRef === "39.B")?.status).toBe("gap");
+  });
+});
+```
+
+#### 16.18.3 Flow — consent, enforcement, strike, transfer, certificate
+
+Given/When/Then acceptance criteria (each becomes a `__tests__/domain/*` case):
+
+| # | Given | When | Then |
+|---|---|---|---|
+| C1 | An approved AI licence | Talent grants consent (use-type `ai_avatar`, territory `worldwide`) | `consent.granted` event appended; `consent_records` row `status=granted`; obligation 39.B → met |
+| C2 | A granted consent | Talent revokes it | `consent.revoked` appended (grant row untouched); record `status=revoked`; later uses blocked `403` |
+| C3 | Consent valid `validTo` in the past | Licensee initiates download | Enforcement returns `403`; `use.blocked` reason = expired consent |
+| S1 | Active `strike_locks` row scoped to the licence's organisation | `POST /api/royalties/usage` for that licence | `423 Locked`; `use.blocked_by_strike` event written; **no** `usage_events` row created |
+| S2 | Strike active at `production` scope | Dual-custody download token requested | `423`; token **not** issued |
+| S3 | A strike covering 3 licences | Admin lifts the strike | `strike.lifted` appended to each chain; subsequent uses succeed |
+| S4 | Declaring a global strike | Admin opens declare form | Impact preview reports correct affected licence/talent counts before confirm |
+| T1 | Licensee submits a transfer request | Admin approves with `union_approved=true` | `transfer.approved` event; status `approved`; licence transferable |
+| T2 | Transfer request with `union_approved=false` | Admin denies | `transfer.denied` event; status `denied`; original producer stays liable |
+| A1 | Producer with no attestation | Admin opens attestation tracker | Licence shows as a **39.E/H gap** |
+| A2 | Producer submits biometric-isolation attestation | — | `biometric.isolation_attested` event; tracker flips to met; provenance (IP/UA) recorded |
+| X1 | A licence with consents, attestations, metered uses, one strike-lift | Admin clicks **Generate SAG-AFTRA Certificate** | `compliance_certificates` row created; R2 HTML stored; obligation matrix reflects met/gap; tip hash sealed |
+| X2 | A generated certificate | `GET /api/compliance/verify?certificateId=` with ledger **unchanged** | `{ ok: true }` |
+| X3 | A generated certificate | A ledger event is mutated post-issuance, then verify | `{ ok: false }`; certificate-history verify badge shows ✗ tampered |
+| X4 | Certificate fold-in | Certificate generated for a licence with `usage_events` + `download_events` + `scrub_attestations` | All three audit trails appear in the certificate; `event_count` includes them |
+
+#### 16.18.4 Authz & admin-visibility tests
+
+| # | Scenario | Expected |
+|---|---|---|
+| Z1 | Licensee calls `POST /api/compliance/strikes` | `403` — only admin declares strikes |
+| Z2 | Admin calls `POST /api/compliance/consent` to grant on a talent's behalf | `403` — consent is talent/rep only (§16.17) |
+| Z3 | Talent A requests Talent B's certificate | `403` — scope check |
+| Z4 | Rep requests a managed talent's certificate | `200` — delegation allowed |
+| Z5 | Admin opens `/admin/compliance` | All 11 surfaces in the §16.17 matrix render with data |
+| Z6 | Licensee opens their licence's compliance panel | Sees obligation matrix + own attestation/transfer/business-reason controls; **cannot** see other licensees' data |
+| Z7 | Admin consent register filters by `language=fr` | Returns only 39.D French dub clearances across all talent |
+
+### 16.19 Out of Scope (this iteration)
+
+- **39.F minor protections** — deferred (not current demographic); add as an obligation + replica age-flag when targeting that market.
+- **Equity / GDPR / BIPA obligation content** — regimes registered as stubs; SAG-AFTRA fully populated. Equity clause review is the §6.10.3 gating item before UK-first positioning.
+- **HMAC/asymmetric signing of the ledger tip** — hash-chaining ships first; cryptographic non-repudiation signature is a hardening follow-up (mirrors §15.8).
+- **E-signature integration** (DocuSign/Adobe) — decision is eventing-based consent; e-sign is a future option if a tenant's counsel requires it.
+- **Union API integration** — 39.L training notices and 39.I approvals are captured in-platform; automated filing to a SAG-AFTRA endpoint is a later phase and gated on Union endorsement (§6.10.3).
+- **Path 4 (AI Training Data Brokerage)** — the opt-in registry remains a separate, adversarial initiative; this section only captures the 39.L `training.notice_filed` record.
