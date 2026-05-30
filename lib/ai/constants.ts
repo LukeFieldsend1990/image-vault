@@ -78,7 +78,7 @@ Otherwise respond with: {"guidance": "<your one sentence>"}`;
 
 export const METADATA_TAG_PROMPT = `You are a metadata tagging assistant for 3D likeness scan packages.
 
-You will receive a scan package manifest: file names, sizes, content types, and optional technician notes.
+You will receive a scan package manifest with package details and a filesByExtension summary (extension, count, total size in bytes, example filenames). Use these to infer tags.
 
 From the following controlled vocabulary ONLY, select all tags that apply:
 
