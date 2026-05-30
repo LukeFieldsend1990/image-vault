@@ -139,6 +139,12 @@ export default async function AdminOverviewPage() {
       sub: "watermark records",
       href: "/admin/geometry-fingerprints",
     },
+    {
+      label: "Compliance",
+      value: "Art. 39",
+      sub: "strikes · transfers · certificates",
+      href: "/admin/compliance",
+    },
   ];
 
   return (
