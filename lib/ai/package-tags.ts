@@ -236,6 +236,18 @@ export async function suggestPackageTags(
     .where(eq(talentProfiles.userId, pkg.talentId))
     .get();
 
+  // Group files by extension to avoid exceeding the Workers AI context window (7968 tokens)
+  // on large packages with many files. The AI only needs extension presence + counts to infer tags.
+  const extGroups: Record<string, { count: number; totalBytes: number; examples: string[] }> = {};
+  for (const f of files) {
+    const dotIdx = f.filename.lastIndexOf(".");
+    const ext = dotIdx !== -1 ? f.filename.slice(dotIdx).toLowerCase() : "(no-ext)";
+    if (!extGroups[ext]) extGroups[ext] = { count: 0, totalBytes: 0, examples: [] };
+    extGroups[ext].count++;
+    extGroups[ext].totalBytes += f.sizeBytes ?? 0;
+    if (extGroups[ext].examples.length < 2) extGroups[ext].examples.push(f.filename);
+  }
+
   const manifest = {
     packageName: pkg.name,
     description: pkg.description,
@@ -243,10 +255,12 @@ export async function suggestPackageTags(
     technicianNotes: pkg.technicianNotes,
     totalSizeBytes: pkg.totalSizeBytes,
     talentName: profile?.fullName,
-    files: files.map((f) => ({
-      filename: f.filename,
-      sizeBytes: f.sizeBytes,
-      contentType: f.contentType,
+    totalFileCount: files.length,
+    filesByExtension: Object.entries(extGroups).map(([ext, g]) => ({
+      extension: ext,
+      count: g.count,
+      totalSizeBytes: g.totalBytes,
+      examples: g.examples,
     })),
   };
 
