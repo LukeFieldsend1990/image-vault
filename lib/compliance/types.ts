@@ -45,3 +45,53 @@ export interface HashedEvent extends LedgerEventInput {
 }
 
 export type ChainVerification = { ok: true } | { ok: false; brokenAtSeq: number; reason: string };
+
+// ── Regime framework (§16.4) ────────────────────────────────────────────────
+
+// Minimal licence shape an obligation's `appliesWhen` predicate can inspect.
+export interface LicenceLike {
+  licenceType?: string | null;
+  permitAiTraining?: boolean | null;
+}
+
+// A single regulatory obligation, code-defined (registry pattern, like lib/skills).
+export interface ComplianceObligation {
+  id: string; // e.g. "sag-39-d-dub-consent"
+  regime: RegimeId;
+  clauseRef: string; // e.g. "39.D"
+  title: string;
+  description: string;
+  // Event types whose active presence discharges this obligation.
+  satisfiedBy: ComplianceEventType[];
+  // If set, the obligation is only assessed once one of these events exists;
+  // otherwise it is reported "n/a" (e.g. transfer approval only matters once a
+  // transfer is requested). Omit for always-assessed obligations.
+  triggeredBy?: ComplianceEventType[];
+  // Restrict applicability (e.g. AI-bearing licences only). Omit = always applies.
+  appliesWhen?: (licence: LicenceLike) => boolean;
+  severity: "required" | "recommended";
+}
+
+export interface ComplianceRegime {
+  id: RegimeId;
+  name: string;
+  description: string;
+  obligations: ComplianceObligation[];
+}
+
+// A ledger event reduced to what obligation evaluation needs.
+export interface EvaluatedEvent {
+  eventType: ComplianceEventType | string;
+  scope?: ComplianceScope;
+}
+
+export type ObligationStatus = "met" | "gap" | "n/a";
+
+export interface ObligationResult {
+  id: string;
+  clauseRef: string;
+  title: string;
+  severity: "required" | "recommended";
+  status: ObligationStatus;
+  satisfiedBy: ComplianceEventType[];
+}
