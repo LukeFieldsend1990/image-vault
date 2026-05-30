@@ -88,14 +88,15 @@ export default async function AdminLicencesPage() {
       <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
         {/* Header */}
         <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[900px]"
+          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[1080px]"
           style={{
-            gridTemplateColumns: "2fr 1.5fr 1.5fr 1fr 1fr 1fr 1fr",
+            gridTemplateColumns: "1.6fr 2fr 1.5fr 1.5fr 1fr 1fr 1fr 1fr",
             color: "var(--color-muted)",
             background: "var(--color-surface)",
             borderBottom: "1px solid var(--color-border)",
           }}
         >
+          <span>Licence ID</span>
           <span>Project</span>
           <span>Talent</span>
           <span>Licensee</span>
@@ -112,12 +113,21 @@ export default async function AdminLicencesPage() {
         {rows.map((r) => (
           <div
             key={r.id}
-            className="grid items-start px-5 py-3.5 border-b last:border-0 text-sm min-w-[900px]"
+            className="grid items-start px-5 py-3.5 border-b last:border-0 text-sm min-w-[1080px]"
             style={{
-              gridTemplateColumns: "2fr 1.5fr 1.5fr 1fr 1fr 1fr 1fr",
+              gridTemplateColumns: "1.6fr 2fr 1.5fr 1.5fr 1fr 1fr 1fr 1fr",
               borderColor: "var(--color-border)",
             }}
           >
+            {/* Licence ID */}
+            <span
+              className="font-mono text-[10px] whitespace-nowrap select-all"
+              style={{ color: "var(--color-muted)" }}
+              title={r.id}
+            >
+              {r.id}
+            </span>
+
             {/* Project */}
             <div className="min-w-0">
               <p className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{r.projectName}</p>
