@@ -41,8 +41,14 @@ async function putStreamMultipart(
     const buf = new Uint8Array(buffered);
     let off = 0;
     for (const c of chunks) { buf.set(c, off); off += c.length; }
+    // CF Workers requires the readable half of a FixedLengthStream — a plain
+    // Uint8Array or ReadableStream without a fixed length is rejected.
+    const { readable, writable } = new FixedLengthStream(buf.byteLength);
+    const w = writable.getWriter();
+    await w.write(buf);
+    await w.close();
     try {
-      parts.push(await upload.uploadPart(partNum++, buf));
+      parts.push(await upload.uploadPart(partNum++, readable));
     } catch (err) {
       await upload.abort();
       throw err;
