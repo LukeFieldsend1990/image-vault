@@ -414,6 +414,56 @@ The contract is stamped with:
 
 ---
 
+### 6.10 SAG-AFTRA 2026 Amendment — Strategic Implications
+
+The SAG-AFTRA 2026 TV/Theatrical Tentative Agreement (term 1 July 2026 – 30 June 2030) materially reshapes the digital-replica landscape. Article 39 (Artificial Intelligence) is the only section that bears on this platform; the rest is rate/residuals housekeeping.
+
+**Headline reframe.** The original positioning — *"we hold the actor's only scan, so producers must transact through us"* — is partially undermined by 39.A. The platform's defensible position becomes *"we are the actor's consent, audit, and royalty layer for every downstream AI use of their likeness."* Storage becomes table stakes; the ledger and metering are the business.
+
+#### 6.10.1 What changes in Article 39
+
+| Clause | Effect | Implication |
+|---|---|---|
+| **39.A "No Scan" Digital Replicas** | Producers can build an Employment-Based Digital Replica from on-set footage with no separate scan. | Storage-as-chokepoint is dead. Replicas can exist outside the vault. |
+| **39.B "Scripted" clarified** | Script-described alterations don't require additional consent. | Narrows actor consent footprint. |
+| **39.C ICDR minimums + residuals** | Independently Created Digital Replicas require minimum payments + residuals when used to qualify the performer for residuals. | Each ICDR use is a billable event the vault can meter. |
+| **39.D Cross-language dub consent** | Separate consent required for dubbing a replica into another language. | New per-language, per-territory consent transaction. |
+| **39.E Biometric data limits** | Producers can't collect fingerprints, palmprints, iris scans for purposes unrelated to the picture. | Reinforces that biometric data should live outside producer custody. |
+| **39.F Minor protections** | No nude / sexual-simulation replicas of minors. | Compliance feature, not revenue. |
+| **39.G Strike protection** | Replicas can't be used during a strike where consent would have been required. | Vault auto-locks during strikes → union-aligned defensive feature. |
+| **39.H Digital Replica Security** | Producers must limit access and use "commercially reasonable efforts" to protect replicas. | Contractual security obligation → market for compliant custody. |
+| **39.I Transfer Protection** | Producers stay liable on third-party transfer unless the transferee is Union-approved. | Path to becoming the Union-approved escrow for replica transfers. |
+| **39.J Articulable Business Reason** | Producers need a real reason to ask for a scan, but don't have to disclose it. | Hook for consent ledger, weaker than hoped. |
+| **39.K Synthetics** | GenAI synthetic performers require notice + bargaining with the Union. | Not directly relevant. |
+| **39.L AI training data licensing** | Producers may license performances for AI training; they owe the Union written notice. **No actor revenue share required.** | Largest open revenue pool — actors have no contractual share unless a clearinghouse organises one. |
+
+#### 6.10.2 Four monetisation paths the contract opens
+
+1. **Consent OS (B2C — actor subscription).** Every Article 39 consent moment becomes a signed, hashed, time-stamped event in the actor's vault. Today these live in PDFs and inboxes. Pricing: per-actor monthly + per-consent transaction fee. Extends existing `licences` / `download_events` schema.
+2. **Compliant Producer Custody (B2B SKU).** Sell to producers as the answer to 39.H + 39.I. Pricing: per-replica-stored + audit log generation. Requires SAG-AFTRA endorsement.
+3. **ICDR Royalty Meter (transactional).** 39.C mandates minimums and residuals — vault is the metering layer. Take rate on each metered use. The dual-custody token mechanism is the architectural starting point.
+4. **AI Training Data Brokerage (long bet).** 39.L only requires notice, not actor revenue share. Build an opt-in registry where actors register willingness and price for training-data inclusion; broker the deals. Scales with AI compute spend, not actor count.
+
+#### 6.10.3 Risks and gating items
+
+- **Jurisdictional fit.** Article 39 binds SAG-AFTRA productions only. United Agents (V1 demo) is Equity (UK). Check Equity's equivalent provisions before US-first positioning.
+- **39.A erodes the storage-only pitch.** Selling actor-owned vault without the consent/audit layer means value decays year-over-year.
+- **Union endorsement is the keystone** for paths 2 and 3. Without it, producers will build in-house. Treat SAG-AFTRA approval as a deliberate biz-dev workstream.
+- **Path 4 is adversarial.** Producers benefit from the current 39.L gap and will resist a clearinghouse. Organise the actor/agency side first, then go to producers from a position of supply leverage.
+
+#### 6.10.4 Recommended prioritisation
+
+| Path | Effort | Build order |
+|---|---|---|
+| 1. Consent OS | Low — extends existing schema | **Next** |
+| 3. ICDR Royalty Meter | Medium — dual-custody mechanism already similar | Follow-on to Path 1 |
+| 2. Compliant Producer Custody | Medium — gated on Union endorsement | Parallel biz-dev track |
+| 4. Training Data Brokerage | High — adversarial; scope as a separate initiative | Long bet, scope when actor-side registry has critical mass |
+
+Source: SAG-AFTRA 2026 TV/Theatrical Contracts Summary of Tentative Agreement, Article 39 (pages 12–14).
+
+---
+
 ## 7. Multi-Tenancy & Branding
 
 ### 7.1 Strategy — Hardcoded Multi-Tenancy
