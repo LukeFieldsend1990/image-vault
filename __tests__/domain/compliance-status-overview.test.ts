@@ -46,6 +46,18 @@ describe("GET /api/compliance/status", () => {
     expect(byClause["39.E"]).toBe("gap"); // no attestation
     expect(typeof json.requiredGaps).toBe("number");
   });
+
+  it("authorises a production-scope request for an email-whitelisted admin whose role is talent", async () => {
+    // Regression: admin is determined by email whitelist, not session.role.
+    t.setSession({ sub: "u1", email: "lukefieldsend@googlemail.com", role: "talent" });
+    t.enqueue([{ id: "L1" }]); // resolveLicenceIds(production)
+    t.enqueue([]); // loadChainEvents(L1)
+    t.enqueue([{ licenceType: "ai_avatar", permitAiTraining: false }]); // loadLicenceMeta
+
+    const res = await statusRoute.GET(buildRequest("/api/compliance/status?scope=production&id=prod-1"));
+    expect(res.status).toBe(200); // previously 403 → silent client failure
+    expect((await parseJson(res)).licenceCount).toBe(1);
+  });
 });
 
 describe("GET /api/compliance/overview", () => {
