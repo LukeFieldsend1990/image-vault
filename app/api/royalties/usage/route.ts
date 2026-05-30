@@ -7,6 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { requireRoyaltySource, isRoyaltySourceError } from "@/lib/auth/requireRoyaltySource";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
 import { computeRoyalty, DEFAULT_SPLIT, type SplitPcts } from "@/lib/royalties/split";
+import { assertNoActiveStrike } from "@/lib/compliance/enforce";
 
 const AI_LICENCE_TYPES = new Set(["ai_avatar", "training_data"]);
 
@@ -74,6 +75,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "Licence does not permit AI/likeness generation" },
       { status: 403 },
+    );
+  }
+
+  // SAG-AFTRA 39.G — refuse to meter a use while a covering strike is active.
+  // The blocked attempt is recorded (use.blocked_by_strike) and nothing is metered.
+  const strike = await assertNoActiveStrike(db, {
+    licenceId: auth.licenceId,
+    talentId: auth.talentId,
+    actorId: auth.sourceId,
+    action: "royalty_usage",
+  });
+  if (strike) {
+    return NextResponse.json(
+      { error: "Replica is locked by an active strike", strike: { scope: strike.scope, reason: strike.reason } },
+      { status: 423 },
     );
   }
 
