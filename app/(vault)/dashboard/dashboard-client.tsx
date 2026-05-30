@@ -821,6 +821,7 @@ export default function DashboardClient() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [activeLicences, setActiveLicences] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [royaltyLifetimePence, setRoyaltyLifetimePence] = useState<number | null>(null);
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -844,6 +845,15 @@ export default function DashboardClient() {
           const now = Math.floor(Date.now() / 1000);
           setActiveLicences(data.licences.filter((l) => l.status === "APPROVED" && (!l.validTo || l.validTo > now)).length);
           setPendingRequests(data.licences.filter((l) => l.status === "PENDING").length);
+        }
+      } catch { /* stats are non-critical */ }
+    })();
+    void (async () => {
+      try {
+        const res = await fetch("/api/royalties/summary");
+        if (res.ok) {
+          const data = await res.json() as { lifetimePence: number };
+          setRoyaltyLifetimePence(data.lifetimePence);
         }
       } catch { /* stats are non-critical */ }
     })();
@@ -989,6 +999,16 @@ export default function DashboardClient() {
             </p>
           </div>
         ))}
+        {royaltyLifetimePence !== null && royaltyLifetimePence > 0 && (
+          <Link href="/royalties" className="group ml-auto">
+            <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>
+              Royalty earnings →
+            </p>
+            <p className="text-sm font-semibold mt-0.5 tabular-nums group-hover:underline" style={{ color: "var(--color-ink)" }}>
+              £{(royaltyLifetimePence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </Link>
+        )}
       </footer>
 
       {/* ── Upload modal ── */}

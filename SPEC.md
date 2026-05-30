@@ -20,6 +20,7 @@
 12. [Access Windows — Controlled Temporary Download Access](#12-access-windows--controlled-temporary-download-access)
 13. [Semantic Search — Licensee Package Discovery](#13-semantic-search--licensee-package-discovery)
 14. [Trial Production — End-to-End Proving Ground](#14-trial-production--end-to-end-proving-ground)
+15. [Live Royalty Meter — Pay-As-You-Go Likeness Usage Feed](#15-live-royalty-meter--pay-as-you-go-likeness-usage-feed)
 
 ---
 
@@ -2925,3 +2926,150 @@ The trial is successful if:
 3. **Wind-down** — Bridge auto-purges on licence expiry. Licensee submits attestation within the scrub period. Licence reaches `CLOSED` with a complete audit trail.
 4. **No manual intervention** — the platform handles state transitions, notifications, and access control without us needing to run SQL or manually edit records.
 5. **Audit confidence** — at the end, we can generate a licence closure report that a talent agent would trust as proof their client's data was handled correctly.
+
+---
+
+## 15. Live Royalty Meter — Pay-As-You-Go Likeness Usage Feed
+
+### 15.1 Context & Strategic Fit
+
+This feature is the concrete build-out of the **ICDR Royalty Meter** monetisation path identified in the SAG-AFTRA 2026 strategic analysis (riffs on **Article 39.C** — Independently Created Digital Replicas now require minimum payments and residuals each time a replica is used). The existing licensing model prices a likeness as a **one-time fee** at grant. Generative AI breaks that model: a single licence may drive thousands of downstream generations, each one a discrete, billable use.
+
+The Live Royalty Meter turns each generation into a metered, royalty-bearing event:
+
+- A studio or AI-scaler company is issued a **royalty source key** and calls a webhook **every time** a talent's likeness is used to generate output.
+- Each call accrues a per-use royalty, split automatically between talent / agency / platform using the existing `talentSettings` percentages.
+- The talent sees the money arrive **live** on a flashy circular **Royalty Hub** infographic in their account — a count-up ticker, an animated donut of today vs. lifetime, and a real-time event feed.
+
+This reframes the platform from "we store the scan" to "we are the **royalty meter** for every AI use of the likeness" — the defensible position called out in §6 strategic context.
+
+> **Demo intent.** The headline demo moment is: fire simulated generation events at the webhook and watch the talent's Royalty Hub tick upward in real time. The visual is the pitch.
+
+### 15.2 Roles
+
+| Role | Capability |
+|---|---|
+| **Royalty source** (studio / AI company) | Holds an API key scoped to a licence (or production company). POSTs usage events. Cannot read talent earnings. |
+| **Talent** | Views own Royalty Hub: live total, today, breakdown by source/usage type, event feed. Read-only. |
+| **Rep / Agency** | Views managed talent's royalty feed (delegation, same as existing roster pattern). |
+| **Admin** | Issues/revokes royalty source keys, sees all feeds, can fire demo events. |
+
+### 15.3 Data Model (migration `0046_royalty_meter.sql`)
+
+All money in **integer pence (GBP)**, all timestamps **unix epoch seconds**, all IDs `crypto.randomUUID()` — matching existing conventions (`licences`, `download_events`).
+
+**`royalty_sources`** — a registered studio/AI-company integration (the webhook caller).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `licence_id` | TEXT FK → `licences.id` | the licence this source bills against (cascade delete) |
+| `organisation_id` | TEXT FK → `organisations.id` | nullable; for org-scoped sources |
+| `display_name` | TEXT | e.g. "Pixel Forge VFX — Unreal pipeline" |
+| `api_key_hash` | TEXT UNIQUE | SHA-256 of raw key (`rsk_` + 64 hex). Raw key shown once. |
+| `unit_type` | TEXT enum | `per_generation` \| `per_1k_inferences` \| `per_frame` \| `per_second` |
+| `unit_rate_pence` | INTEGER | server-trusted price per unit; event amounts are computed from this, never from caller-supplied money |
+| `status` | TEXT enum | `active` \| `revoked` |
+| `last_used_at` | INTEGER | fire-and-forget update on each call |
+| `created_at` | INTEGER | |
+| `revoked_at` | INTEGER | nullable |
+
+**`usage_events`** — one row per reported generation (the meter ticks).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `source_id` | TEXT FK → `royalty_sources.id` | cascade delete |
+| `licence_id` | TEXT FK → `licences.id` | denormalised for fast talent queries |
+| `talent_id` | TEXT FK → `users.id` | denormalised target of the royalty |
+| `event_type` | TEXT | mirrors source `unit_type` at time of event |
+| `units` | INTEGER | quantity reported by the caller (e.g. 240 frames) |
+| `unit_rate_pence` | INTEGER | snapshot of the rate at event time |
+| `gross_pence` | INTEGER | `units × unit_rate_pence` (server-computed) |
+| `talent_pence` | INTEGER | gross × talentSharePct / 100 |
+| `agency_pence` | INTEGER | gross × agencySharePct / 100 |
+| `platform_pence` | INTEGER | remainder (gross − talent − agency) |
+| `external_ref` | TEXT | caller's own generation/run id — idempotency key |
+| `detail_json` | TEXT | JSON: `{ modelId?, shotId?, prompt?, ... }` (untrusted, stored as text) |
+| `occurred_at` | INTEGER | caller-supplied event time |
+| `recorded_at` | INTEGER | server receipt time |
+
+- **Unique index** on `(source_id, external_ref)` — replays of the same generation id dedupe to a no-op (idempotent webhook).
+- **Index** on `(talent_id, recorded_at)` — powers the live feed and time-windowed aggregates.
+
+Aggregates (lifetime total, today, last-24h sparkline, per-source breakdown) are **computed live** from `usage_events` for the MVP — no rollup table needed at demo scale. A `royalty_balances` rollup is noted as a future optimisation once event volume warrants it.
+
+### 15.4 Split Calculation
+
+Reuse the existing `talentSettings` row for the talent (`talentSharePct` / `agencySharePct` / `platformSharePct`, default **65 / 20 / 15**, enforced to sum to 100 by the `0013` CHECK constraint). If no row exists, fall back to the defaults. Platform share is computed as the remainder to avoid rounding leakage:
+
+```
+gross    = units × unit_rate_pence
+talent   = floor(gross × talentSharePct / 100)
+agency   = floor(gross × agencySharePct / 100)
+platform = gross − talent − agency
+```
+
+### 15.5 API
+
+**`POST /api/royalties/usage`** — the webhook studios/AI companies call. **API-key auth**, not session.
+
+- Auth: `Authorization: Bearer rsk_...`. New helper `requireRoyaltySource(req)` in `lib/auth/`, modelled on `requireBridgeToken` (SHA-256 hash lookup against `royalty_sources`, reject if `status = revoked`). Returns `{ sourceId, licenceId, talentId, unitType, unitRatePence }` or a 401 `NextResponse`.
+- Rate-limited via existing `checkRateLimit` (`lib/auth/rateLimit.ts`), keyed on `source_id` (generous ceiling — this is machine traffic, e.g. 600/min).
+- Request body:
+  ```json
+  { "externalRef": "gen_8f2a...", "units": 240, "eventType": "per_frame",
+    "occurredAt": 1717000000, "detail": { "modelId": "ue5-metahuman", "shotId": "SH0420" } }
+  ```
+- Server validates the licence is `APPROVED` and AI-bearing (`licenceType ∈ {ai_avatar, training_data}` or `permitAiTraining = true`), computes `gross/talent/agency/platform`, inserts a `usage_events` row (idempotent on `external_ref`), updates `last_used_at`.
+- Returns `201 { ok: true, eventId, grossPence, talentPence }`, or `200 { ok: true, deduped: true }` on replay.
+
+**`GET /api/royalties/summary`** — talent/rep/admin session. Powers the Hub. Returns:
+```jsonc
+{ "lifetimePence": 1284500, "todayPence": 32400, "last24hPence": 48900,
+  "eventCount": 1842, "currency": "GBP",
+  "bySource":   [{ "sourceId": "...", "name": "Pixel Forge VFX", "pence": 740000, "events": 980 }],
+  "byUsageType":[{ "type": "per_frame", "pence": 900000, "events": 1500 }],
+  "sparkline":  [ /* 24 hourly buckets of pence */ ],
+  "recent":     [{ "id": "...", "source": "Pixel Forge VFX", "units": 240,
+                   "talentPence": 1560, "occurredAt": 1717000000 }] }
+```
+Aggregated with Drizzle `sum()`/`count()` grouped queries over `usage_events` for the talent, windowed by `recorded_at`.
+
+**`POST /api/royalties/sources`** / **`GET /api/royalties/sources`** — talent/admin session. Issue (returns raw `rsk_...` once), list, and revoke royalty source keys for a licence. Mirrors `app/api/bridge/tokens/route.ts`.
+
+**`POST /api/royalties/demo/fire`** *(demo-only, admin/talent session)* — fires N synthetic usage events against a chosen source so the Hub visibly ticks during a pitch. Guarded so it only operates on sources the caller owns.
+
+### 15.6 The Royalty Hub UI
+
+New talent page **`/royalties`** (server `page.tsx` auth + redirect → client `royalties-client.tsx`), plus a compact summary card linked from the dashboard. Built with **inline SVG + CSS only** — no charting dependency added, consistent with the rest of the app.
+
+**Visual layout:**
+- **Centre — the circular hub.** A layered SVG donut:
+  - Outer ring = today's earnings as a sweeping arc (`stroke-dasharray`/`stroke-dashoffset` animated via CSS transition), accent red `#c0392b`.
+  - Inner ring segments = breakdown by source (each studio a coloured arc).
+  - **Centre count-up** — large live total in pence→£, animated count-up (rAF tween from previous value to new on each poll). This is the hero number.
+  - Subtle pulse/glow animation when a new event lands (CSS keyframe, accent ring flash).
+- **Orbit labels** — small chips around the ring naming each source and its share, like an infographic.
+- **Right rail — live event feed.** Reverse-chron list of recent generations: source name, units, `+£X.XX` to talent, relative time. New rows slide/fade in.
+- **Top stats strip** — Today / Last 24h / Lifetime / Total generations, using the existing admin stat-card pattern (label `text-[10px] uppercase tracking-widest`, value `text-2xl font-semibold`).
+
+**Live behaviour:** client polls `GET /api/royalties/summary` every **5s** via `setInterval` (the established pattern in `app/(vault)/vault/pipeline/jobs/[jobId]/pipeline-job-client.tsx`), diffs against previous state, animates the count-up and ring sweep, and prepends any new feed rows. No websockets/SSE (none exist in the codebase; polling matches convention and the edge model).
+
+**Styling:** CSS variables (`--color-accent` `#c0392b`, `--color-surface`, `--color-border`, `--color-muted`), minimal radius, typography-led — matches United Agents aesthetic.
+
+### 15.7 Build Plan (suggested PR slices)
+
+1. **Schema + auth** — migration `0046`, `lib/auth/requireRoyaltySource.ts`, `royalty_sources` + `usage_events` Drizzle tables.
+2. **Ingest webhook** — `POST /api/royalties/usage` with idempotency, split calc, rate limiting + unit tests (vitest) for the split maths and dedupe.
+3. **Key management** — `POST/GET /api/royalties/sources` + minimal settings UI to issue/revoke keys per licence.
+4. **Summary API** — `GET /api/royalties/summary` aggregation queries.
+5. **Royalty Hub UI** — `/royalties` page + client, dashboard summary card.
+6. **Demo simulator** — `POST /api/royalties/demo/fire` + a "Fire demo events" button for the pitch.
+
+### 15.8 Out of Scope (this iteration)
+
+- Real payment settlement / payout rails (Stripe Connect, bank transfer) — the ledger accrues; actual money movement is a later phase.
+- Cryptographic webhook signatures (HMAC) — the bearer API key is sufficient for the demo; HMAC (Svix-style, as in the Resend webhook) is a hardening follow-up.
+- Cross-currency — pence/GBP only for now.
+- A materialised `royalty_balances` rollup — live aggregation is fine at demo scale.
