@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { AuditFilters } from "./audit-shell";
 
 const CATEGORIES = [
   { value: "", label: "All categories" },
@@ -13,27 +14,37 @@ const CATEGORIES = [
   { value: "admin", label: "Admin" },
 ];
 
+const EMPTY: AuditFilters = { from: "", to: "", users: "", category: "" };
+
 interface Props {
   endpoint?: string;
   showCategoryFilter?: boolean;
+  filters?: AuditFilters;
+  onFiltersChange?: (f: AuditFilters) => void;
 }
 
 export default function AuditExportButton({
   endpoint = "/api/admin/audit/export",
   showCategoryFilter = false,
+  filters: controlledFilters,
+  onFiltersChange,
 }: Props) {
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [usersInput, setUsersInput] = useState("");
-  const [category, setCategory] = useState("");
+  const [localFilters, setLocalFilters] = useState<AuditFilters>(EMPTY);
+  const filters = controlledFilters ?? localFilters;
+
+  function set(key: keyof AuditFilters, value: string) {
+    const next = { ...filters, [key]: value };
+    if (onFiltersChange) onFiltersChange(next);
+    else setLocalFilters(next);
+  }
 
   function handleExport() {
     const params = new URLSearchParams();
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-    const trimmed = usersInput.trim();
+    if (filters.from) params.set("from", filters.from);
+    if (filters.to) params.set("to", filters.to);
+    const trimmed = filters.users.trim();
     if (trimmed) params.set("users", trimmed);
-    if (category) params.set("category", category);
+    if (filters.category) params.set("category", filters.category);
 
     const a = document.createElement("a");
     a.href = `${endpoint}?${params.toString()}`;
@@ -62,7 +73,6 @@ export default function AuditExportButton({
       </p>
 
       <div className="flex flex-wrap gap-3 items-end">
-        {/* Date range */}
         <div>
           <label
             className="block text-[10px] uppercase tracking-widest mb-1"
@@ -72,8 +82,8 @@ export default function AuditExportButton({
           </label>
           <input
             type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            value={filters.from}
+            onChange={(e) => set("from", e.target.value)}
             className="text-xs rounded border px-2 py-1.5"
             style={inputStyle}
           />
@@ -88,14 +98,13 @@ export default function AuditExportButton({
           </label>
           <input
             type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
+            value={filters.to}
+            onChange={(e) => set("to", e.target.value)}
             className="text-xs rounded border px-2 py-1.5"
             style={inputStyle}
           />
         </div>
 
-        {/* User filter */}
         <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <label
             className="block text-[10px] uppercase tracking-widest mb-1"
@@ -105,15 +114,14 @@ export default function AuditExportButton({
           </label>
           <input
             type="text"
-            value={usersInput}
-            onChange={(e) => setUsersInput(e.target.value)}
+            value={filters.users}
+            onChange={(e) => set("users", e.target.value)}
             placeholder="user@example.com, other@example.com"
             className="w-full text-xs rounded border px-2 py-1.5"
             style={inputStyle}
           />
         </div>
 
-        {/* Category filter (optional) */}
         {showCategoryFilter && (
           <div>
             <label
@@ -123,8 +131,8 @@ export default function AuditExportButton({
               Category
             </label>
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={filters.category}
+              onChange={(e) => set("category", e.target.value)}
               className="text-xs rounded border px-2 py-1.5"
               style={inputStyle}
             >

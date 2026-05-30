@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import type { AuditFilters } from "./audit-shell";
 
 type EventCategory = "download" | "licence" | "auth" | "bridge" | "vault" | "invite" | "admin";
 
@@ -42,14 +43,35 @@ function ts(unix: number): string {
   });
 }
 
-export function AuditEventTable() {
+interface Props {
+  filters?: AuditFilters;
+}
+
+export function AuditEventTable({ filters }: Props) {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(false);
   const [shown, setShown]     = useState(PAGE_SIZE);
 
-  useEffect(() => {
-    fetch("/api/admin/audit/events")
+  const hasMountedRef = useRef(false);
+  const debounceRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filtersRef    = useRef(filters);
+  filtersRef.current  = filters;
+
+  function fetchEvents(f?: AuditFilters) {
+    setLoading(true);
+    setError(false);
+    setShown(PAGE_SIZE);
+
+    const params = new URLSearchParams();
+    if (f?.from) params.set("from", f.from);
+    if (f?.to) params.set("to", f.to);
+    const trimmed = f?.users.trim() ?? "";
+    if (trimmed) params.set("users", trimmed);
+    if (f?.category) params.set("category", f.category);
+
+    const qs = params.toString();
+    fetch(`/api/admin/audit/events${qs ? `?${qs}` : ""}`)
       .then(r => r.json())
       .then((data) => {
         const { events } = data as { events: AuditEvent[] };
@@ -57,7 +79,27 @@ export function AuditEventTable() {
         setLoading(false);
       })
       .catch(() => { setError(true); setLoading(false); });
+  }
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchEvents(filtersRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-fetch on filter changes (skip the initial mount firing)
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchEvents(filtersRef.current), 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters?.from, filters?.to, filters?.category, filters?.users]);
 
   const visible   = events.slice(0, shown);
   const remaining = events.length - shown;
@@ -67,7 +109,6 @@ export function AuditEventTable() {
 
   return (
     <div>
-      {/* Category pills — shown once data loads */}
       {!loading && events.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {(Object.entries(CATEGORY_CONFIG) as [EventCategory, { label: string; color: string }][])
@@ -120,7 +161,7 @@ export function AuditEventTable() {
 
         {!loading && !error && events.length === 0 && (
           <p className="px-5 py-6 text-sm" style={{ color: "var(--color-muted)" }}>
-            No events yet.
+            No events found.
           </p>
         )}
 

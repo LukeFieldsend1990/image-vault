@@ -1,8 +1,7 @@
 export const runtime = "edge";
 
 import { requireAdmin } from "@/lib/auth/requireAdmin";
-import AuditExportButton from "./export-button";
-import { AuditEventTable } from "./audit-event-table";
+import AuditShell from "./audit-shell";
 
 export default async function AdminAuditPage() {
   await requireAdmin();
@@ -22,10 +21,9 @@ export default async function AdminAuditPage() {
         <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
           Recent events across the platform.
         </p>
-        <AuditExportButton showCategoryFilter />
       </div>
 
-      <AuditEventTable />
+      <AuditShell />
     </div>
   );
 }
