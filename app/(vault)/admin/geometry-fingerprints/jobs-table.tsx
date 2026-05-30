@@ -185,7 +185,7 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
                       />
                     </div>
                   )}
-                  {(job.status === "failed" || job.status === "complete") && (
+                  {job.status !== "queued" && (
                     <button
                       onClick={(e) => void rerun(e, job.licenceId, job.id)}
                       disabled={rerunning.has(job.id)}

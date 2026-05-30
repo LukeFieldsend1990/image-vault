@@ -61,11 +61,11 @@ export async function POST(req: NextRequest) {
       filesDone: 0,
       createdAt: now,
     });
-  } else if (existing.status === "queued" || existing.status === "processing") {
-    // Already in flight — just resend the queue message
+  } else if (existing.status === "queued") {
+    // Already queued — just resend the queue message
     jobId = existing.id;
   } else {
-    // complete or failed: reset the existing row so the worker reprocesses it,
+    // processing (stuck), complete, or failed: reset the existing row so the worker reprocesses it,
     // and wipe its fingerprint rows so they're recreated cleanly
     jobId = existing.id;
     await db.delete(geometryFingerprints).where(eq(geometryFingerprints.jobId, existing.id));
