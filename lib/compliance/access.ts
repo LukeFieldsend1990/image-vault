@@ -64,3 +64,28 @@ export async function authorizeLicence(
 
   return { ok: false, status: 403, error: "Forbidden" };
 }
+
+// Producer-side acts (attestations 39.E/H, transfer requests 39.I, business
+// reason 39.J): the licensee who holds the licence, or an admin.
+export async function authorizeProducer(
+  db: Db,
+  session: SessionPayload,
+  licenceId: string,
+): Promise<LicenceAccess> {
+  const licence = await db
+    .select({
+      talentId: licences.talentId,
+      licenseeId: licences.licenseeId,
+      organisationId: licences.organisationId,
+    })
+    .from(licences)
+    .where(eq(licences.id, licenceId))
+    .get();
+
+  if (!licence) return { ok: false, status: 404, error: "Licence not found" };
+  if (session.role === "admin") return { ok: true, licence };
+  if (session.role === "licensee" && session.sub === licence.licenseeId) {
+    return { ok: true, licence };
+  }
+  return { ok: false, status: 403, error: "Forbidden" };
+}
