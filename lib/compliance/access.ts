@@ -8,6 +8,12 @@ import { and, eq } from "drizzle-orm";
 import { licences, talentReps } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 import type { SessionPayload } from "@/lib/auth/jwt";
+import { isAdmin } from "@/lib/auth/adminEmails";
+
+// Admin is determined by the email whitelist (lib/auth/adminEmails), not the JWT
+// role — platform admins keep their original role (e.g. talent) and gain admin via
+// email. Use this everywhere instead of `session.role === "admin"`.
+const isAdminSession = (session: SessionPayload) => session.role === "admin" || isAdmin(session.email);
 
 type Db = ReturnType<typeof getDb>;
 
@@ -41,7 +47,7 @@ export async function authorizeLicence(
 
   if (!licence) return { ok: false, status: 404, error: "Licence not found" };
 
-  if (session.role === "admin") return { ok: true, licence };
+  if (isAdminSession(session)) return { ok: true, licence };
 
   if (session.role === "talent") {
     return session.sub === licence.talentId
@@ -83,7 +89,7 @@ export async function authorizeProducer(
     .get();
 
   if (!licence) return { ok: false, status: 404, error: "Licence not found" };
-  if (session.role === "admin") return { ok: true, licence };
+  if (isAdminSession(session)) return { ok: true, licence };
   if (session.role === "licensee" && session.sub === licence.licenseeId) {
     return { ok: true, licence };
   }
@@ -98,7 +104,7 @@ export async function authorizeScope(
   scope: "licence" | "talent" | "production",
   scopeId: string,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  if (session.role === "admin") return { ok: true };
+  if (isAdminSession(session)) return { ok: true };
 
   if (scope === "licence") {
     const a = await authorizeLicence(db, session, scopeId, "read");

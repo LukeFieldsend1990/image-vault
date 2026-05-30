@@ -105,21 +105,27 @@ export default function AdminComplianceClient() {
   const [certScope, setCertScope] = useState("licence");
   const [certScopeId, setCertScopeId] = useState("");
   const [certUrl, setCertUrl] = useState<string | null>(null);
+  const [certError, setCertError] = useState<string | null>(null);
 
   async function generateCert() {
     setBusy("cert");
     setCertUrl(null);
+    setCertError(null);
     try {
       const res = await fetch("/api/compliance/certificates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: certScope, scopeId: certScopeId }),
+        body: JSON.stringify({ scope: certScope, scopeId: certScopeId.trim() }),
       });
-      if (res.ok) {
-        const json = (await res.json()) as { url: string };
+      const json = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (res.ok && json.url) {
         setCertUrl(json.url);
         await load();
+      } else {
+        setCertError(json.error || `Generation failed (HTTP ${res.status}).`);
       }
+    } catch {
+      setCertError("Network error — please try again.");
     } finally {
       setBusy(null);
     }
@@ -156,8 +162,13 @@ export default function AdminComplianceClient() {
           </button>
           {certUrl && (
             <a href={certUrl} target="_blank" rel="noreferrer" className="text-xs underline" style={{ color: "var(--color-accent)" }}>
-              Open certificate ↗
+              ✓ Certificate generated — open ↗
             </a>
+          )}
+          {certError && (
+            <span className="text-xs" style={{ color: "var(--color-accent)" }}>
+              ⚠ {certError}
+            </span>
           )}
         </div>
       </section>
