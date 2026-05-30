@@ -44,6 +44,7 @@ export default async function AdminUsersPage() {
       inboundEnabled: users.inboundEnabled,
       geoFingerprintEnabled: users.geoFingerprintEnabled,
       royaltyMeterEnabled: users.royaltyMeterEnabled,
+      complianceEnabled: users.complianceEnabled,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -203,6 +204,14 @@ export default async function AdminUsersPage() {
                       Fingerprint
                     </span>
                   )}
+                  {u.complianceEnabled === false && (
+                    <span
+                      className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(192,57,43,0.12)", color: "#c0392b" }}
+                    >
+                      No Compliance
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -217,6 +226,7 @@ export default async function AdminUsersPage() {
                 inboundEnabled={!!u.inboundEnabled}
                 geoFingerprintEnabled={!!u.geoFingerprintEnabled}
                 royaltyMeterEnabled={u.royaltyMeterEnabled !== false}
+                complianceEnabled={u.complianceEnabled !== false}
               />
             </div>
           );

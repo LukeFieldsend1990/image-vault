@@ -5,7 +5,7 @@
 // check so every compliance route enforces it identically.
 
 import { and, eq } from "drizzle-orm";
-import { licences, talentReps } from "@/lib/db/schema";
+import { licences, talentReps, users } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 import type { SessionPayload } from "@/lib/auth/jwt";
 import { isAdmin } from "@/lib/auth/adminEmails";
@@ -16,6 +16,17 @@ import { isAdmin } from "@/lib/auth/adminEmails";
 const isAdminSession = (session: SessionPayload) => session.role === "admin" || isAdmin(session.email);
 
 type Db = ReturnType<typeof getDb>;
+
+// Returns false if the user has compliance access disabled (admins are always allowed).
+async function isComplianceEnabled(db: Db, session: SessionPayload): Promise<boolean> {
+  if (isAdminSession(session)) return true;
+  const row = await db
+    .select({ complianceEnabled: users.complianceEnabled })
+    .from(users)
+    .where(eq(users.id, session.sub))
+    .get();
+  return row?.complianceEnabled !== false;
+}
 
 export interface LicenceParties {
   talentId: string;
@@ -35,6 +46,10 @@ export async function authorizeLicence(
   licenceId: string,
   mode: "read" | "write",
 ): Promise<LicenceAccess> {
+  if (!await isComplianceEnabled(db, session)) {
+    return { ok: false, status: 403, error: "Compliance access disabled for this account" };
+  }
+
   const licence = await db
     .select({
       talentId: licences.talentId,
@@ -78,6 +93,10 @@ export async function authorizeProducer(
   session: SessionPayload,
   licenceId: string,
 ): Promise<LicenceAccess> {
+  if (!await isComplianceEnabled(db, session)) {
+    return { ok: false, status: 403, error: "Compliance access disabled for this account" };
+  }
+
   const licence = await db
     .select({
       talentId: licences.talentId,
@@ -104,6 +123,10 @@ export async function authorizeScope(
   scope: "licence" | "talent" | "production",
   scopeId: string,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!await isComplianceEnabled(db, session)) {
+    return { ok: false, status: 403, error: "Compliance access disabled for this account" };
+  }
+
   if (isAdminSession(session)) return { ok: true };
 
   if (scope === "licence") {

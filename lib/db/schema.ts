@@ -13,6 +13,7 @@ export const users = sqliteTable("users", {
   inboundEnabled: integer("inbound_enabled", { mode: "boolean" }).notNull().default(false),
   geoFingerprintEnabled: integer("geo_fingerprint_enabled", { mode: "boolean" }).notNull().default(false),
   royaltyMeterEnabled: integer("royalty_meter_enabled", { mode: "boolean" }).notNull().default(true),
+  complianceEnabled: integer("compliance_enabled", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

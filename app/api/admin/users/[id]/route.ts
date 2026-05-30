@@ -26,7 +26,7 @@ export async function PATCH(
   if (isErrorResponse(session)) return session;
   if (session instanceof NextResponse) return session;
 
-  let body: { suspended?: boolean; emailMuted?: boolean; aiDisabled?: boolean; inboundEnabled?: boolean; geoFingerprintEnabled?: boolean; royaltyMeterEnabled?: boolean; role?: string } = {};
+  let body: { suspended?: boolean; emailMuted?: boolean; aiDisabled?: boolean; inboundEnabled?: boolean; geoFingerprintEnabled?: boolean; royaltyMeterEnabled?: boolean; complianceEnabled?: boolean; role?: string } = {};
   try {
     body = JSON.parse(await req.text());
   } catch { /* ok */ }
@@ -37,11 +37,12 @@ export async function PATCH(
   const hasInboundEnabled = typeof body.inboundEnabled === "boolean";
   const hasGeoFingerprintEnabled = typeof body.geoFingerprintEnabled === "boolean";
   const hasRoyaltyMeterEnabled = typeof body.royaltyMeterEnabled === "boolean";
+  const hasComplianceEnabled = typeof body.complianceEnabled === "boolean";
   const validRoles = ["talent", "rep", "licensee"] as const;
   const hasRole = typeof body.role === "string" && validRoles.includes(body.role as typeof validRoles[number]);
 
-  if (!hasSuspended && !hasEmailMuted && !hasAiDisabled && !hasInboundEnabled && !hasGeoFingerprintEnabled && !hasRoyaltyMeterEnabled && !hasRole) {
-    return NextResponse.json({ error: "suspended, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled, or role is required" }, { status: 400 });
+  if (!hasSuspended && !hasEmailMuted && !hasAiDisabled && !hasInboundEnabled && !hasGeoFingerprintEnabled && !hasRoyaltyMeterEnabled && !hasComplianceEnabled && !hasRole) {
+    return NextResponse.json({ error: "suspended, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled, complianceEnabled, or role is required" }, { status: 400 });
   }
 
   const db = getDb();
@@ -91,6 +92,13 @@ export async function PATCH(
     await db
       .update(users)
       .set({ royaltyMeterEnabled: body.royaltyMeterEnabled! })
+      .where(eq(users.id, id));
+  }
+
+  if (hasComplianceEnabled) {
+    await db
+      .update(users)
+      .set({ complianceEnabled: body.complianceEnabled! })
       .where(eq(users.id, id));
   }
 
