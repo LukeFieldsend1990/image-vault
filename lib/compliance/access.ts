@@ -89,3 +89,35 @@ export async function authorizeProducer(
   }
   return { ok: false, status: 403, error: "Forbidden" };
 }
+
+// Read authorization for a certificate scope (licence / talent / production).
+// Used by the certificate + verify routes.
+export async function authorizeScope(
+  db: Db,
+  session: SessionPayload,
+  scope: "licence" | "talent" | "production",
+  scopeId: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (session.role === "admin") return { ok: true };
+
+  if (scope === "licence") {
+    const a = await authorizeLicence(db, session, scopeId, "read");
+    return a.ok ? { ok: true } : { ok: false, status: a.status, error: a.error };
+  }
+
+  if (scope === "talent") {
+    if (session.role === "talent" && session.sub === scopeId) return { ok: true };
+    if (session.role === "rep") {
+      const link = await db
+        .select({ id: talentReps.id })
+        .from(talentReps)
+        .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, scopeId)))
+        .get();
+      if (link) return { ok: true };
+    }
+    return { ok: false, status: 403, error: "Forbidden" };
+  }
+
+  // production scope is admin-only (handled above)
+  return { ok: false, status: 403, error: "Forbidden" };
+}
