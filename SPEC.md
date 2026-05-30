@@ -2954,7 +2954,7 @@ This reframes the platform from "we store the scan" to "we are the **royalty met
 | **Rep / Agency** | Views managed talent's royalty feed (delegation, same as existing roster pattern). |
 | **Admin** | Issues/revokes royalty source keys, sees all feeds, can fire demo events. |
 
-### 15.3 Data Model (migration `0045_royalty_meter.sql`)
+### 15.3 Data Model (migration `0046_royalty_meter.sql`)
 
 All money in **integer pence (GBP)**, all timestamps **unix epoch seconds**, all IDs `crypto.randomUUID()` — matching existing conventions (`licences`, `download_events`).
 
@@ -3060,7 +3060,7 @@ New talent page **`/royalties`** (server `page.tsx` auth + redirect → client `
 
 ### 15.7 Build Plan (suggested PR slices)
 
-1. **Schema + auth** — migration `0045`, `lib/auth/requireRoyaltySource.ts`, `royalty_sources` + `usage_events` Drizzle tables.
+1. **Schema + auth** — migration `0046`, `lib/auth/requireRoyaltySource.ts`, `royalty_sources` + `usage_events` Drizzle tables.
 2. **Ingest webhook** — `POST /api/royalties/usage` with idempotency, split calc, rate limiting + unit tests (vitest) for the split maths and dedupe.
 3. **Key management** — `POST/GET /api/royalties/sources` + minimal settings UI to issue/revoke keys per licence.
 4. **Summary API** — `GET /api/royalties/summary` aggregation queries.

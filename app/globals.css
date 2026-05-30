@@ -59,6 +59,26 @@ details[open] .details-chevron { transform: rotate(180deg); }
   background: var(--color-accent-hover);
 }
 
+/* Live Royalty Meter — Royalty Hub animations */
+@keyframes royalty-pulse {
+  0%   { opacity: 0.55; transform: scale(0.94); transform-origin: center; }
+  70%  { opacity: 0;    transform: scale(1.04); transform-origin: center; }
+  100% { opacity: 0;    transform: scale(1.04); transform-origin: center; }
+}
+.royalty-pulse { animation: royalty-pulse 0.9s ease-out; }
+
+@keyframes royalty-live-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+.royalty-live-dot { animation: royalty-live-dot 1.6s ease-in-out infinite; }
+
+@keyframes royalty-feed-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.royalty-feed-row { animation: royalty-feed-in 0.4s ease-out; }
+
 /* Input reset */
 input, textarea, select {
   font-family: inherit;

@@ -681,3 +681,44 @@ export const geometryFingerprints = sqliteTable("geometry_fingerprints", {
   error: text("error"),
   createdAt: integer("created_at").notNull(),
 });
+
+// ── Live Royalty Meter ─────────────────────────────────────────────────────────
+// Pay-as-you-go likeness usage: a studio / AI company holds a royalty source key
+// scoped to a licence and POSTs a usage event each time the talent's likeness
+// drives a generation. Each event accrues a per-use royalty, split via
+// talent_settings. See SPEC §15.
+
+export const royaltySources = sqliteTable("royalty_sources", {
+  id: text("id").primaryKey(), // UUID
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  organisationId: text("organisation_id").references(() => organisations.id), // optional org scope
+  displayName: text("display_name").notNull(), // e.g. "Pixel Forge VFX — Unreal pipeline"
+  apiKeyHash: text("api_key_hash").notNull().unique(), // SHA-256 of raw rsk_ key
+  unitType: text("unit_type", {
+    enum: ["per_generation", "per_1k_inferences", "per_frame", "per_second"],
+  }).notNull().default("per_generation"),
+  unitRatePence: integer("unit_rate_pence").notNull(), // server-trusted price per unit
+  status: text("status", { enum: ["active", "revoked"] }).notNull().default("active"),
+  lastUsedAt: integer("last_used_at"),
+  createdAt: integer("created_at").notNull(),
+  createdBy: text("created_by").references(() => users.id),
+  revokedAt: integer("revoked_at"),
+});
+
+export const usageEvents = sqliteTable("usage_events", {
+  id: text("id").primaryKey(), // UUID
+  sourceId: text("source_id").notNull().references(() => royaltySources.id, { onDelete: "cascade" }),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(), // mirrors source unit_type at event time
+  units: integer("units").notNull(),
+  unitRatePence: integer("unit_rate_pence").notNull(), // snapshot of rate at event time
+  grossPence: integer("gross_pence").notNull(),    // units × unit_rate_pence
+  talentPence: integer("talent_pence").notNull(),
+  agencyPence: integer("agency_pence").notNull(),
+  platformPence: integer("platform_pence").notNull(),
+  externalRef: text("external_ref"), // caller's generation/run id — idempotency key
+  detailJson: text("detail_json"),    // JSON: { modelId?, shotId?, ... } (untrusted)
+  occurredAt: integer("occurred_at").notNull(), // caller-supplied event time
+  recordedAt: integer("recorded_at").notNull(), // server receipt time
+});
