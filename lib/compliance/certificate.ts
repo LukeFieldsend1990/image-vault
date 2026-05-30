@@ -5,7 +5,7 @@
 // HTML doc to R2, and seals it with the ledger tip hash. verify() recomputes the
 // chain and compares — a mismatch means the ledger was altered after issuance.
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { canonicalJson, sha256Hex, verifyChain, licenceChain } from "./ledger";
 import { evaluateObligations } from "./registry";
 import "./regimes"; // ensure regimes are registered
@@ -96,13 +96,22 @@ export interface GenerateResult {
   eventCount: number;
 }
 
-export async function generateCertificate(
+// Load + evaluate a scope's obligations without rendering — powers the status
+// endpoint and the admin obligation matrix, and is reused by generateCertificate.
+export interface ScopeEvaluation {
+  obligations: ObligationResult[];
+  events: LedgerRow[];
+  perLicence: Array<{ licenceId: string; tip: string }>;
+  licenceIds: string[];
+}
+
+export async function evaluateScope(
   db: Db,
-  bucket: CertBucket,
-  p: { scope: CertScope; scopeId: string; regime?: RegimeId; generatedBy: string },
-): Promise<GenerateResult> {
-  const regime: RegimeId = p.regime ?? "sag_aftra";
-  const licenceIds = await resolveLicenceIds(db, p.scope, p.scopeId);
+  scope: CertScope,
+  scopeId: string,
+  regime: RegimeId,
+): Promise<ScopeEvaluation> {
+  const licenceIds = await resolveLicenceIds(db, scope, scopeId);
 
   const perLicence: Array<{ licenceId: string; tip: string }> = [];
   let allEvents: LedgerRow[] = [];
@@ -112,7 +121,6 @@ export async function generateCertificate(
     perLicence.push({ licenceId: lid, tip: ev.length ? ev[ev.length - 1].hash : "" });
   }
 
-  // Representative licence for appliesWhen gating across the scope.
   const meta = await loadLicenceMeta(db, licenceIds);
   const repLicence = {
     licenceType: meta.anyAi ? "ai_avatar" : (meta.firstType ?? "commercial"),
@@ -121,6 +129,22 @@ export async function generateCertificate(
 
   const evaluated: EvaluatedEvent[] = allEvents.map((e) => ({ eventType: e.eventType, scope: e.scope }));
   const obligations = evaluateObligations(regime, repLicence, evaluated);
+
+  return { obligations, events: allEvents, perLicence, licenceIds };
+}
+
+export async function generateCertificate(
+  db: Db,
+  bucket: CertBucket,
+  p: { scope: CertScope; scopeId: string; regime?: RegimeId; generatedBy: string },
+): Promise<GenerateResult> {
+  const regime: RegimeId = p.regime ?? "sag_aftra";
+  const { obligations, events: allEvents, perLicence, licenceIds } = await evaluateScope(
+    db,
+    p.scope,
+    p.scopeId,
+    regime,
+  );
 
   const usage = await loadUsageSummary(db, licenceIds);
   const downloads = await loadDownloadCount(db, licenceIds);
