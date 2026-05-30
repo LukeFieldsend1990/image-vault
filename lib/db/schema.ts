@@ -728,3 +728,95 @@ export const usageEvents = sqliteTable("usage_events", {
   occurredAt: integer("occurred_at").notNull(), // caller-supplied event time
   recordedAt: integer("recorded_at").notNull(), // server receipt time
 });
+
+// ── Compliance Layer (SPEC §16) — SAG-AFTRA Article 39 + multi-regime ledger ──
+
+export const complianceEvents = sqliteTable("compliance_events", {
+  id: text("id").primaryKey(), // UUID
+  chainKey: text("chain_key").notNull(),     // 'licence:{id}' | 'talent:{id}'
+  seq: integer("seq").notNull(),             // monotonic within chain_key
+  eventType: text("event_type").notNull(),   // consent.granted | strike.declared | ...
+  regime: text("regime").notNull().default("sag_aftra"),
+  clauseRef: text("clause_ref"),             // e.g. '39.D'
+  licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").references(() => users.id, { onDelete: "cascade" }),
+  organisationId: text("organisation_id").references(() => organisations.id),
+  actorId: text("actor_id").references(() => users.id),
+  scopeJson: text("scope_json").notNull().default("{}"),
+  payloadJson: text("payload_json").notNull().default("{}"),
+  prevHash: text("prev_hash").notNull(),     // tip hash before this event (chain_key for genesis)
+  hash: text("hash").notNull(),              // SHA-256(prev_hash + canonicalJson(content))
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const consentRecords = sqliteTable("consent_records", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  useType: text("use_type").notNull(),       // licenceType enum value | 'dub_language'
+  territory: text("territory"),
+  language: text("language"),
+  validFrom: integer("valid_from"),
+  validTo: integer("valid_to"),
+  status: text("status", { enum: ["granted", "revoked", "expired"] }).notNull().default("granted"),
+  grantedEventId: text("granted_event_id").notNull().references(() => complianceEvents.id),
+  revokedEventId: text("revoked_event_id").references(() => complianceEvents.id),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const strikeLocks = sqliteTable("strike_locks", {
+  id: text("id").primaryKey(),
+  scope: text("scope", { enum: ["global", "organisation", "production", "licence"] }).notNull(),
+  scopeId: text("scope_id"),                 // null for global; else org/production/licence id
+  reason: text("reason").notNull(),
+  declaredBy: text("declared_by").notNull().references(() => users.id),
+  declaredAt: integer("declared_at").notNull(),
+  liftedBy: text("lifted_by").references(() => users.id),
+  liftedAt: integer("lifted_at"),
+  status: text("status", { enum: ["active", "lifted"] }).notNull().default("active"),
+});
+
+export const replicaTransfers = sqliteTable("replica_transfers", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  fromOrganisationId: text("from_organisation_id").references(() => organisations.id),
+  toPartyName: text("to_party_name").notNull(),
+  toPartyDetailsJson: text("to_party_details_json").notNull().default("{}"),
+  unionApproved: integer("union_approved", { mode: "boolean" }).notNull().default(false),
+  status: text("status", { enum: ["requested", "approved", "denied"] }).notNull().default("requested"),
+  requestedBy: text("requested_by").notNull().references(() => users.id),
+  decidedBy: text("decided_by").references(() => users.id),
+  decidedAt: integer("decided_at"),
+  decisionNote: text("decision_note"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const complianceAttestations = sqliteTable("compliance_attestations", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }),
+  organisationId: text("organisation_id").references(() => organisations.id),
+  attestationType: text("attestation_type", {
+    enum: ["biometric_isolation", "security_custody"],
+  }).notNull(),
+  attestedBy: text("attested_by").notNull().references(() => users.id),
+  attestationText: text("attestation_text").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  eventId: text("event_id").references(() => complianceEvents.id),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const complianceCertificates = sqliteTable("compliance_certificates", {
+  id: text("id").primaryKey(),
+  scope: text("scope", { enum: ["licence", "talent", "production"] }).notNull(),
+  scopeId: text("scope_id").notNull(),
+  regime: text("regime").notNull().default("sag_aftra"),
+  r2Key: text("r2_key").notNull(),
+  ledgerTipHash: text("ledger_tip_hash").notNull(),
+  obligationsJson: text("obligations_json").notNull().default("[]"),
+  eventCount: integer("event_count").notNull().default(0),
+  generatedBy: text("generated_by").notNull().references(() => users.id),
+  generatedAt: integer("generated_at").notNull(),
+});
