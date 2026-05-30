@@ -2,12 +2,13 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, users, scanPackages, talentReps, geometryFingerprintJobs } from "@/lib/db/schema";
+import { licences, users, scanPackages, talentReps, geometryFingerprintJobs, royaltySources } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
 import { getRequestContext } from "@cloudflare/next-on-pages";
+import { sha256Hex, generateRoyaltyKey } from "@/lib/auth/requireRoyaltySource";
 
 // POST /api/licences/[id]/approve — talent/rep approves a pending licence request
 export async function POST(
@@ -21,6 +22,10 @@ export async function POST(
   if (session.role !== "talent" && session.role !== "rep" && session.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  // Talent may accept as-is or override the per-unit rate at approval time.
+  let body: { agreedUnitType?: string; agreedUnitRatePence?: number } = {};
+  try { body = await req.json(); } catch { /* body is optional */ }
 
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
@@ -36,6 +41,9 @@ export async function POST(
       validFrom: licences.validFrom,
       validTo: licences.validTo,
       proposedFee: licences.proposedFee,
+      proposedUnitType: licences.proposedUnitType,
+      proposedUnitRatePence: licences.proposedUnitRatePence,
+      organisationId: licences.organisationId,
     })
     .from(licences)
     .where(eq(licences.id, id))
@@ -75,10 +83,45 @@ export async function POST(
   const agreedFee = licence.proposedFee ?? null;
   const platformFee = agreedFee !== null ? Math.round(agreedFee * 0.15) : null;
 
+  // Resolve agreed unit rate — talent may override, otherwise accept licensee's proposal.
+  const VALID_UNIT_TYPES = ["per_generation", "per_1k_inferences", "per_frame", "per_second"];
+  const agreedUnitType =
+    (typeof body.agreedUnitType === "string" && VALID_UNIT_TYPES.includes(body.agreedUnitType))
+      ? body.agreedUnitType
+      : (licence.proposedUnitType ?? null);
+  const agreedUnitRatePence =
+    (typeof body.agreedUnitRatePence === "number" && body.agreedUnitRatePence > 0)
+      ? Math.floor(body.agreedUnitRatePence)
+      : (licence.proposedUnitRatePence ?? null);
+
   await db
     .update(licences)
-    .set({ status: "APPROVED", approvedBy: session.sub, approvedAt: now, agreedFee, platformFee })
+    .set({ status: "APPROVED", approvedBy: session.sub, approvedAt: now, agreedFee, platformFee, agreedUnitType, agreedUnitRatePence })
     .where(eq(licences.id, id));
+
+  // Auto-create royalty source if a unit rate was agreed.
+  let royaltyKey: string | null = null;
+  if (agreedUnitType && agreedUnitRatePence) {
+    try {
+      const rawKey = generateRoyaltyKey();
+      const apiKeyHash = await sha256Hex(rawKey);
+      await db.insert(royaltySources).values({
+        id: crypto.randomUUID(),
+        licenceId: id,
+        organisationId: licence.organisationId ?? null,
+        displayName: licence.projectName,
+        apiKeyHash,
+        unitType: agreedUnitType as "per_generation" | "per_1k_inferences" | "per_frame" | "per_second",
+        unitRatePence: agreedUnitRatePence,
+        status: "active",
+        createdAt: now,
+        createdBy: session.sub,
+      });
+      royaltyKey = rawKey;
+    } catch {
+      // Non-fatal: source creation failure shouldn't block approval.
+    }
+  }
 
   // Enqueue geometric fingerprinting job (only if enabled for this talent)
   void (async () => {
@@ -119,5 +162,5 @@ export async function POST(
     await sendEmail({ to: licenseeUser.email, subject, html });
   })();
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...(royaltyKey ? { royaltyKey } : {}) });
 }

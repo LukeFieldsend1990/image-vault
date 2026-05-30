@@ -133,5 +133,6 @@ export async function GET(req: NextRequest) {
       occurredAt: r.occurredAt,
       recordedAt: r.recordedAt,
     })),
+    hasMore: recent.length === 15,
   });
 }

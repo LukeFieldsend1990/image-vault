@@ -182,6 +182,8 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
   const [exclusivity, setExclusivity] = useState<Exclusivity>("non_exclusive");
   const [proposedFee, setProposedFee] = useState("");
   const [permitAiTraining, setPermitAiTraining] = useState(false);
+  const [proposedUnitType, setProposedUnitType] = useState<string>("per_generation");
+  const [proposedUnitRatePounds, setProposedUnitRatePounds] = useState<string>("");
   const [declared, setDeclared] = useState(false);
 
   // Production entity IDs (set when selecting an existing entity from autocomplete)
@@ -277,6 +279,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
     const vf = Math.floor(new Date(validFrom).getTime() / 1000);
     const vt = Math.floor(new Date(validTo).getTime() / 1000);
     const proposedFeePence = proposedFee ? Math.round(parseFloat(proposedFee) * 100) : undefined;
+    const unitRatePence = proposedUnitRatePounds ? Math.round(parseFloat(proposedUnitRatePounds) * 100) : undefined;
 
     try {
       const res = await fetch("/api/licences", {
@@ -295,6 +298,8 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
           exclusivity,
           permitAiTraining: effectiveAi,
           proposedFee: proposedFeePence,
+          proposedUnitType: effectiveAi ? proposedUnitType : undefined,
+          proposedUnitRatePence: effectiveAi && unitRatePence ? unitRatePence : undefined,
           productionId: productionId ?? undefined,
           productionCompanyId: productionCompanyId ?? undefined,
           organisationId: (organisationId && organisationId !== "individual") ? organisationId : undefined,
@@ -608,6 +613,58 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
             <p>
               By enabling AI processing, you acknowledge that the biometric scan data may be used to train, fine-tune, or evaluate machine learning models. The talent retains the right to revoke this permission at any time. This request will be flagged for the talent&apos;s specific attention and may require additional contractual terms.
             </p>
+          </div>
+        )}
+
+        {effectiveAi && (
+          <div
+            className="mt-5 rounded border p-4"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+          >
+            <p className="text-xs font-semibold mb-0.5" style={{ color: "var(--color-ink)" }}>
+              Pay-as-you-go royalty rate
+            </p>
+            <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
+              Propose a per-use royalty rate for each AI generation. The talent will review and accept or modify this at approval. Earnings split to talent automatically via the Royalty Meter.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--color-muted)" }}>
+                  Unit type
+                </label>
+                <select
+                  value={proposedUnitType}
+                  onChange={(e) => setProposedUnitType(e.target.value)}
+                  className="w-full rounded border px-3 py-2 text-sm"
+                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+                >
+                  <option value="per_generation">per generation</option>
+                  <option value="per_1k_inferences">per 1k inferences</option>
+                  <option value="per_frame">per frame</option>
+                  <option value="per_second">per second</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--color-muted)" }}>
+                  Rate (£ per unit)
+                </label>
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  placeholder="e.g. 0.05"
+                  value={proposedUnitRatePounds}
+                  onChange={(e) => setProposedUnitRatePounds(e.target.value)}
+                  className="w-full rounded border px-3 py-2 text-sm"
+                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+                />
+              </div>
+            </div>
+            {proposedUnitRatePounds && (
+              <p className="text-[11px] mt-2" style={{ color: "var(--color-muted)" }}>
+                e.g. 1,000 {proposedUnitType === "per_generation" ? "generations" : proposedUnitType === "per_frame" ? "frames" : proposedUnitType === "per_second" ? "seconds" : "1k-inference batches"} = £{(parseFloat(proposedUnitRatePounds || "0") * 1000).toFixed(2)} gross · talent receives 65%
+              </p>
+            )}
           </div>
         )}
 

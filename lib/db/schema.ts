@@ -12,6 +12,7 @@ export const users = sqliteTable("users", {
   aiDisabled: integer("ai_disabled", { mode: "boolean" }).notNull().default(false),
   inboundEnabled: integer("inbound_enabled", { mode: "boolean" }).notNull().default(false),
   geoFingerprintEnabled: integer("geo_fingerprint_enabled", { mode: "boolean" }).notNull().default(false),
+  royaltyMeterEnabled: integer("royalty_meter_enabled", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -147,6 +148,11 @@ export const licences = sqliteTable("licences", {
   contractUploadedBy: text("contract_uploaded_by").references(() => users.id),
   scrubDeadline: integer("scrub_deadline"),
   scrubAttestedAt: integer("scrub_attested_at"),
+  // Per-unit royalty rate proposed by licensee (AI/avatar licences); accepted by talent on approval.
+  proposedUnitType: text("proposed_unit_type"),
+  proposedUnitRatePence: integer("proposed_unit_rate_pence"),
+  agreedUnitType: text("agreed_unit_type"),
+  agreedUnitRatePence: integer("agreed_unit_rate_pence"),
   createdAt: integer("created_at").notNull(),
 });
 

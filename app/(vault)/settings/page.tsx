@@ -10,6 +10,7 @@ import VaultLockToggle from "./vault-lock-toggle";
 import ChangePassword from "./change-password";
 import PhoneField from "./phone-field";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -150,6 +151,10 @@ export default async function SettingsPage({
           <p className="text-[10px] uppercase tracking-widest font-semibold mb-4" style={{ color: "var(--color-accent)" }}>
             Platform Administration
           </p>
+          <div className="mb-4">
+            <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>Platform Features</p>
+            <RoyaltyMeterPlatformToggle />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {ADMIN_SECTIONS.map((s) => (
               <Link

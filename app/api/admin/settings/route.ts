@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 
 const VALID_KEYS = [
   "demo_enabled",
+  "royalty_meter_enabled",
 ];
 
 export async function GET(req: NextRequest) {
