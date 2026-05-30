@@ -22,11 +22,12 @@ interface Props {
   inboundEnabled: boolean;
   geoFingerprintEnabled: boolean;
   royaltyMeterEnabled: boolean;
+  complianceEnabled: boolean;
 }
 
-export default function UserActions({ userId, role, isSuspended, isCurrentUser, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled }: Props) {
+export default function UserActions({ userId, role, isSuspended, isCurrentUser, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled, complianceEnabled }: Props) {
   const router = useRouter();
-  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | "geo" | "royalty" | "role" | null>(null);
+  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | "geo" | "royalty" | "compliance" | "role" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleRoleChange(newRole: Role) {
@@ -177,6 +178,27 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
     }
   }
 
+  async function handleComplianceToggle() {
+    setLoading("compliance");
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ complianceEnabled: !complianceEnabled }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(null);
+    }
+  }
+
   async function handleDelete() {
     if (!confirm(`Permanently delete this user? This cannot be undone.`)) return;
     setLoading("delete");
@@ -281,6 +303,17 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
         }
       >
         {loading === "royalty" ? "…" : royaltyMeterEnabled ? "Royalties On" : "Royalties Off"}
+      </button>
+      <button
+        onClick={handleComplianceToggle}
+        disabled={loading !== null}
+        className="text-[10px] font-semibold px-2.5 py-1 rounded border transition disabled:opacity-40 whitespace-nowrap"
+        style={complianceEnabled
+          ? { borderColor: "rgba(8,145,178,0.3)", color: "#0891b2", background: "rgba(8,145,178,0.06)" }
+          : { borderColor: "rgba(107,114,128,0.3)", color: "#6b7280", background: "rgba(107,114,128,0.06)" }
+        }
+      >
+        {loading === "compliance" ? "…" : complianceEnabled ? "Compliance On" : "Compliance Off"}
       </button>
       {!isCurrentUser && (
         <button

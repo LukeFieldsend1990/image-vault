@@ -1,24 +1,51 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getDb } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { isAdmin } from "@/lib/auth/adminEmails";
+import { cookies } from "next/headers";
 import ComplianceClient from "./compliance-client";
 
-async function getRole(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
-  if (!session) return null;
-  try {
-    const payload = JSON.parse(atob(session.split(".")[1])) as { role?: string };
-    return payload.role ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export default async function CompliancePage() {
-  const role = await getRole();
-  // Consent is a talent/rep act; licensees use their licence's compliance panel instead.
+  // Read session from cookie (edge-compatible approach used across vault pages)
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("session")?.value;
+
+  let role: string | null = null;
+  let userId: string | null = null;
+  let email: string | null = null;
+
+  if (sessionCookie) {
+    try {
+      const payload = JSON.parse(atob(sessionCookie.split(".")[1])) as {
+        role?: string;
+        sub?: string;
+        email?: string;
+      };
+      role  = payload.role ?? null;
+      userId = payload.sub ?? null;
+      email  = payload.email ?? null;
+    } catch { /* malformed JWT — will redirect below */ }
+  }
+
+  if (!userId) redirect("/login");
+
+  // Licensees access compliance through their licence panel, not this page
   if (role === "licensee") redirect("/dashboard");
+
+  // Admins always have access; non-admins check the DB flag
+  if (!isAdmin(email ?? "")) {
+    const db = getDb();
+    const row = await db
+      .select({ complianceEnabled: users.complianceEnabled })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
+
+    if (row?.complianceEnabled === false) redirect("/dashboard");
+  }
+
   return <ComplianceClient />;
 }
