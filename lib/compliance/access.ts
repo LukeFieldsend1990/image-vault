@@ -1,0 +1,66 @@
+// Authorization helpers for the Compliance Layer (SPEC §16.13).
+//
+// Consent and most compliance writes are talent/rep acts; licensees and admins
+// have read visibility (admins everywhere). This centralises the licence-scoped
+// check so every compliance route enforces it identically.
+
+import { and, eq } from "drizzle-orm";
+import { licences, talentReps } from "@/lib/db/schema";
+import type { getDb } from "@/lib/db";
+import type { SessionPayload } from "@/lib/auth/jwt";
+
+type Db = ReturnType<typeof getDb>;
+
+export interface LicenceParties {
+  talentId: string;
+  licenseeId: string;
+  organisationId: string | null;
+}
+
+export type LicenceAccess =
+  | { ok: true; licence: LicenceParties }
+  | { ok: false; status: number; error: string };
+
+// `write` = grant/revoke consent and similar talent acts (talent/rep/admin only).
+// `read`  = view consent/obligations (adds the licensee who holds the licence).
+export async function authorizeLicence(
+  db: Db,
+  session: SessionPayload,
+  licenceId: string,
+  mode: "read" | "write",
+): Promise<LicenceAccess> {
+  const licence = await db
+    .select({
+      talentId: licences.talentId,
+      licenseeId: licences.licenseeId,
+      organisationId: licences.organisationId,
+    })
+    .from(licences)
+    .where(eq(licences.id, licenceId))
+    .get();
+
+  if (!licence) return { ok: false, status: 404, error: "Licence not found" };
+
+  if (session.role === "admin") return { ok: true, licence };
+
+  if (session.role === "talent") {
+    return session.sub === licence.talentId
+      ? { ok: true, licence }
+      : { ok: false, status: 403, error: "Forbidden" };
+  }
+
+  if (session.role === "rep") {
+    const link = await db
+      .select({ id: talentReps.id })
+      .from(talentReps)
+      .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, licence.talentId)))
+      .get();
+    return link ? { ok: true, licence } : { ok: false, status: 403, error: "Forbidden" };
+  }
+
+  if (session.role === "licensee" && mode === "read" && session.sub === licence.licenseeId) {
+    return { ok: true, licence };
+  }
+
+  return { ok: false, status: 403, error: "Forbidden" };
+}
