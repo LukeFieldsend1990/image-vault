@@ -25,9 +25,14 @@ export interface JobRow {
   fingerprints: FingerprintFileRow[];
 }
 
+// CF queue consumers have a 15-minute wall clock limit. Jobs stuck in
+// processing beyond this are almost certainly dead (OOM/timeout).
+const STALL_THRESHOLD_SECS = 15 * 60;
+
 const JOB_COLOR: Record<string, { bg: string; fg: string }> = {
   queued:     { bg: "rgba(217,119,6,0.12)",  fg: "#d97706" },
   processing: { bg: "rgba(37,99,235,0.12)",  fg: "#2563eb" },
+  stalled:    { bg: "rgba(217,119,6,0.15)",  fg: "#b45309" },
   complete:   { bg: "rgba(22,101,52,0.12)",  fg: "#166534" },
   failed:     { bg: "rgba(153,27,27,0.12)",  fg: "#991b1b" },
 };
@@ -113,10 +118,13 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
           job.filesTotal && job.filesTotal > 0
             ? Math.round((job.filesDone / job.filesTotal) * 100)
             : null;
+        const elapsedSecs = (job.completedAt ?? Math.floor(Date.now() / 1000)) - job.createdAt;
+        const isStalled = job.status === "processing" && elapsedSecs > STALL_THRESHOLD_SECS;
+        const displayStatus = isStalled ? "stalled" : job.status;
         const isRunning = job.status === "processing" || job.status === "queued";
         const dur = duration(job.createdAt, job.completedAt);
         const barColor =
-          job.status === "failed"
+          job.status === "failed" || isStalled
             ? "#991b1b"
             : job.status === "complete"
             ? "#166534"
@@ -137,7 +145,7 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
               <div className="px-5 py-3.5 flex items-start gap-4">
                 {/* Status */}
                 <div className="pt-0.5 shrink-0">
-                  <StatusPill status={job.status} />
+                  <StatusPill status={displayStatus} />
                 </div>
 
                 {/* Licence / licensee / package */}
@@ -217,6 +225,16 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
                   style={{ background: "rgba(153,27,27,0.06)", color: "#991b1b", border: "1px solid rgba(153,27,27,0.2)" }}
                 >
                   {job.error}
+                </div>
+              )}
+
+              {/* Stall warning — worker crashed (OOM/timeout) without recording an error */}
+              {isStalled && (
+                <div
+                  className="mx-5 mb-3 px-3 py-2 rounded text-[11px] text-left"
+                  style={{ background: "rgba(180,83,9,0.06)", color: "#b45309", border: "1px solid rgba(180,83,9,0.2)" }}
+                >
+                  Worker timed out or ran out of memory — no error was recorded. Hit Re-run to try again.
                 </div>
               )}
             </button>
