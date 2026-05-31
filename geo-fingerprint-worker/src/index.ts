@@ -20,15 +20,18 @@ import { computeFingerprintMods } from "./geoFingerprint";
 
 // Pass 2 + multipart upload in a single streaming loop.
 //
-// Processes the R2 stream line-by-line using indexOf("\n") rather than
-// split("\n") — this avoids materialising a million-element string array
-// for large OBJ files, which was causing OOM crashes in pass 2.
+// R2 may return an entire large file (e.g. 344 MB) as a single read() chunk.
+// decoder.decode() on that chunk creates a ~344 MB JS string, which combined
+// with line processing overhead pushes past the 128 MB Worker memory limit.
 //
-// Output is buffered into 8 MB parts (well above R2's 5 MB minimum) and
-// each part is wrapped in FixedLengthStream, which CF Workers requires for
-// multipart uploadPart bodies.
-const PART_SIZE = 8 * 1024 * 1024; // 8 MB per part
-const LINE_FLUSH = 128 * 1024;      // encode output text every 128 KB
+// Fix: decode each raw R2 chunk in 256 KB sub-batches so the decoded string
+// is always bounded, regardless of how R2 delivers the data.
+//
+// Output is buffered into 8 MB multipart parts, each wrapped in a
+// FixedLengthStream (required by CF Workers for uploadPart bodies).
+const PART_SIZE = 8 * 1024 * 1024;   // 8 MB per R2 multipart part
+const LINE_FLUSH = 128 * 1024;        // encode output text every 128 KB
+const DECODE_BATCH = 256 * 1024;      // decode raw bytes in 256 KB slices
 
 async function streamModifyAndUpload(
   inputStream: ReadableStream<Uint8Array>,
@@ -50,7 +53,7 @@ async function streamModifyAndUpload(
   let partChunks: Uint8Array[] = [];
   let partBuffered = 0;
 
-  const uploadPart = async () => {
+  const flushPart = async () => {
     if (partChunks.length === 0) return;
     const buf = new Uint8Array(partBuffered);
     let off = 0;
@@ -62,13 +65,14 @@ async function streamModifyAndUpload(
     await w.write(buf);
     await w.close();
     uploadedParts.push(await multipart.uploadPart(partNum++, readable));
+    console.log(`[geo-fingerprint] uploaded part ${partNum - 1} (${buf.byteLength} bytes)`);
   };
 
   const pushOutput = async (text: string) => {
     const encoded = encoder.encode(text);
     partChunks.push(encoded);
     partBuffered += encoded.length;
-    if (partBuffered >= PART_SIZE) await uploadPart();
+    if (partBuffered >= PART_SIZE) await flushPart();
   };
 
   const processLine = (line: string): string => {
@@ -88,36 +92,51 @@ async function streamModifyAndUpload(
     return line;
   };
 
+  // Process a decoded text segment: find newlines, apply modifications, push output.
+  const processText = async (text: string, isFinal: boolean) => {
+    let start = 0;
+    let lineOutput = "";
+    let nl: number;
+
+    while ((nl = text.indexOf("\n", start)) !== -1) {
+      lineOutput += processLine(text.slice(start, nl)) + "\n";
+      start = nl + 1;
+      if (lineOutput.length >= LINE_FLUSH) {
+        await pushOutput(lineOutput);
+        lineOutput = "";
+      }
+    }
+
+    remainder = text.slice(start);
+
+    if (isFinal && remainder) {
+      lineOutput += processLine(remainder);
+      remainder = "";
+    }
+
+    if (lineOutput) await pushOutput(lineOutput);
+  };
+
   try {
     while (true) {
       const { done, value } = await reader.read();
-      const text = remainder + decoder.decode(value, { stream: !done });
 
-      // Process one line at a time — indexOf avoids split() materialising
-      // a ~1M-element array for large files, keeping memory bounded.
-      let start = 0;
-      let lineOutput = "";
+      // Decode raw bytes in DECODE_BATCH slices to cap per-iteration string size.
+      // Without this, a single 344 MB R2 chunk becomes a 344 MB JS string → OOM.
+      const totalBytes = value?.length ?? 0;
+      const batchCount = totalBytes > 0 ? Math.ceil(totalBytes / DECODE_BATCH) : 1;
 
-      let nl: number;
-      while ((nl = text.indexOf("\n", start)) !== -1) {
-        lineOutput += processLine(text.slice(start, nl)) + "\n";
-        start = nl + 1;
-        if (lineOutput.length >= LINE_FLUSH) {
-          await pushOutput(lineOutput);
-          lineOutput = "";
-        }
+      for (let b = 0; b < batchCount; b++) {
+        const isLastBatch = b === batchCount - 1;
+        const isStreamEnd = done && isLastBatch;
+        const slice = totalBytes > 0
+          ? value!.subarray(b * DECODE_BATCH, (b + 1) * DECODE_BATCH)
+          : undefined;
+        const decoded = decoder.decode(slice, { stream: !isStreamEnd });
+        await processText(remainder + decoded, isStreamEnd);
       }
 
-      remainder = text.slice(start);
-
-      // On the final chunk, flush the last (possibly newline-less) line
-      if (done && remainder) {
-        lineOutput += processLine(remainder);
-        remainder = "";
-      }
-
-      if (lineOutput) await pushOutput(lineOutput);
-      if (done) { await uploadPart(); break; }
+      if (done) { await flushPart(); break; }
     }
   } catch (err) {
     await multipart.abort();
