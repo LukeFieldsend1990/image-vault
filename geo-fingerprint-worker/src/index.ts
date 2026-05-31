@@ -16,63 +16,115 @@ import {
   geometryFingerprintJobs,
   geometryFingerprints,
 } from "./schema";
-import { embedFingerprintStreaming } from "./geoFingerprint";
+import { computeFingerprintMods } from "./geoFingerprint";
 
-// R2 put() requires a known content-length for ReadableStream — use multipart upload instead.
-// Parts must be ≥5 MB except the final part; 8 MB gives comfortable headroom.
-const PART_SIZE = 8 * 1024 * 1024;
+// Pass 2 + multipart upload in a single streaming loop.
+//
+// Processes the R2 stream line-by-line using indexOf("\n") rather than
+// split("\n") — this avoids materialising a million-element string array
+// for large OBJ files, which was causing OOM crashes in pass 2.
+//
+// Output is buffered into 8 MB parts (well above R2's 5 MB minimum) and
+// each part is wrapped in FixedLengthStream, which CF Workers requires for
+// multipart uploadPart bodies.
+const PART_SIZE = 8 * 1024 * 1024; // 8 MB per part
+const LINE_FLUSH = 128 * 1024;      // encode output text every 128 KB
 
-async function putStreamMultipart(
+async function streamModifyAndUpload(
+  inputStream: ReadableStream<Uint8Array>,
+  mods: Map<number, [number, number, number]>,
   bucket: R2Bucket,
   key: string,
-  stream: ReadableStream<Uint8Array>,
   contentType: string,
 ): Promise<void> {
-  const upload = await bucket.createMultipartUpload(key, {
-    httpMetadata: { contentType },
-  });
-  const parts: R2UploadedPart[] = [];
-  const chunks: Uint8Array[] = [];
-  let buffered = 0;
-  let partNum = 1;
+  const multipart = await bucket.createMultipartUpload(key, { httpMetadata: { contentType } });
+  const uploadedParts: R2UploadedPart[] = [];
 
-  const flushPart = async () => {
-    if (chunks.length === 0) return;
-    const buf = new Uint8Array(buffered);
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const reader = inputStream.getReader();
+
+  let remainder = "";
+  let vertexIdx = 0;
+  let partNum = 1;
+  let partChunks: Uint8Array[] = [];
+  let partBuffered = 0;
+
+  const uploadPart = async () => {
+    if (partChunks.length === 0) return;
+    const buf = new Uint8Array(partBuffered);
     let off = 0;
-    for (const c of chunks) { buf.set(c, off); off += c.length; }
-    // CF Workers requires the readable half of a FixedLengthStream — a plain
-    // Uint8Array or ReadableStream without a fixed length is rejected.
+    for (const c of partChunks) { buf.set(c, off); off += c.length; }
+    partChunks = [];
+    partBuffered = 0;
     const { readable, writable } = new FixedLengthStream(buf.byteLength);
     const w = writable.getWriter();
     await w.write(buf);
     await w.close();
-    try {
-      parts.push(await upload.uploadPart(partNum++, readable));
-    } catch (err) {
-      await upload.abort();
-      throw err;
-    }
-    chunks.length = 0;
-    buffered = 0;
+    uploadedParts.push(await multipart.uploadPart(partNum++, readable));
   };
 
-  const reader = stream.getReader();
+  const pushOutput = async (text: string) => {
+    const encoded = encoder.encode(text);
+    partChunks.push(encoded);
+    partBuffered += encoded.length;
+    if (partBuffered >= PART_SIZE) await uploadPart();
+  };
+
+  const processLine = (line: string): string => {
+    const t = line.trimStart();
+    if (t.startsWith("v ") || t.startsWith("v\t")) {
+      const idx = vertexIdx++;
+      const mod = mods.get(idx);
+      if (mod) {
+        const p = t.split(/\s+/);
+        const x = parseFloat(p[1]) + mod[0];
+        const y = parseFloat(p[2]) + mod[1];
+        const z = parseFloat(p[3]) + mod[2];
+        return `v ${x.toFixed(8)} ${y.toFixed(8)} ${z.toFixed(8)}`;
+      }
+      return line;
+    }
+    return line;
+  };
+
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (value?.length) {
-        chunks.push(value);
-        buffered += value.length;
-        if (buffered >= PART_SIZE) await flushPart();
+      const text = remainder + decoder.decode(value, { stream: !done });
+
+      // Process one line at a time — indexOf avoids split() materialising
+      // a ~1M-element array for large files, keeping memory bounded.
+      let start = 0;
+      let lineOutput = "";
+
+      let nl: number;
+      while ((nl = text.indexOf("\n", start)) !== -1) {
+        lineOutput += processLine(text.slice(start, nl)) + "\n";
+        start = nl + 1;
+        if (lineOutput.length >= LINE_FLUSH) {
+          await pushOutput(lineOutput);
+          lineOutput = "";
+        }
       }
-      if (done) { await flushPart(); break; }
+
+      remainder = text.slice(start);
+
+      // On the final chunk, flush the last (possibly newline-less) line
+      if (done && remainder) {
+        lineOutput += processLine(remainder);
+        remainder = "";
+      }
+
+      if (lineOutput) await pushOutput(lineOutput);
+      if (done) { await uploadPart(); break; }
     }
   } catch (err) {
-    await upload.abort();
+    await multipart.abort();
     throw err;
   }
-  await upload.complete(parts);
+
+  await multipart.complete(uploadedParts);
 }
 
 interface Env {
@@ -198,14 +250,14 @@ async function processJob(
 
       console.log(`[geo-fingerprint] [${file.filename}] pass 1 — counting vertices (size: ${probe.size} bytes)`);
       const t0 = Date.now();
+      const getBucket = async () => {
+        const obj = await env.SCANS_BUCKET.get(file.r2Key);
+        if (!obj) throw new Error(`File ${file.id} missing from R2`);
+        return obj;
+      };
 
-      // Two-pass streaming embed: pass 1 counts vertices, pass 2 writes modified output
-      const result = await embedFingerprintStreaming(
-        async () => {
-          const obj = await env.SCANS_BUCKET.get(file.r2Key);
-          if (!obj) throw new Error(`File ${file.id} missing from R2`);
-          return obj;
-        },
+      const result = await computeFingerprintMods(
+        getBucket,
         {
           licenceId: job.licenceId,
           licenseeId: licence.licenseeId,
@@ -218,9 +270,10 @@ async function processJob(
       console.log(`[geo-fingerprint] [${file.filename}] pass 1 done in ${Date.now() - t0}ms — ${result.vertexCount} vertices, ${result.regionCount} modified. pass 2 — writing watermarked OBJ`);
       const t1 = Date.now();
 
-      // Write watermarked output via multipart upload (R2 put requires known length for streams)
       const watermarkedKey = `watermarks/${job.licenceId}/${file.id}.obj`;
-      await putStreamMultipart(env.SCANS_BUCKET, watermarkedKey, result.outputStream, "application/obj");
+      const obj2 = await env.SCANS_BUCKET.get(file.r2Key);
+      if (!obj2) throw new Error(`File ${file.id} missing from R2 on pass 2`);
+      await streamModifyAndUpload(obj2.body, result.mods, env.SCANS_BUCKET, watermarkedKey, "application/obj");
       console.log(`[geo-fingerprint] [${file.filename}] pass 2 done in ${Date.now() - t1}ms — uploaded to ${watermarkedKey}`);
 
       // Record fingerprint
