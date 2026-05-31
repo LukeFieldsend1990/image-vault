@@ -73,52 +73,56 @@ export async function POST(req: NextRequest) {
   let appended = 0;
   const errors: string[] = [];
 
+  // actor_id has a FK constraint to users.id — use null for system/platform events.
+  // The approving admin's userId is the closest real actor for consent/business-reason events.
+  const adminId = session.sub;
+
   for (const l of approvedLicences) {
     const chain = licenceChain(l.id);
     const useType = l.licenceType ?? "commercial";
     const scope = l.territory ? { useType, territory: l.territory } : { useType };
 
-    // 39.B
+    // 39.B — approval = consent; admin performing backfill is the actor
     if (!hasEvent.has(`${l.id}:consent.granted`)) {
       try {
         await appendEvent(db, {
           chainKey: chain, eventType: "consent.granted", clauseRef: "39.B",
-          licenceId: l.id, talentId: l.talentId, actorId: "system-backfill", scope,
+          licenceId: l.id, talentId: l.talentId, actorId: adminId, scope,
         });
         appended++;
       } catch (e) { errors.push(`${l.id} 39.B: ${String(e)}`); }
     }
 
-    // 39.E
+    // 39.E — platform guarantee; no user actor
     if (!hasEvent.has(`${l.id}:biometric.isolation_attested`)) {
       try {
         await appendEvent(db, {
           chainKey: chain, eventType: "biometric.isolation_attested", clauseRef: "39.E",
-          licenceId: l.id, talentId: l.talentId, actorId: "platform",
+          licenceId: l.id, talentId: l.talentId, actorId: null,
           payload: { note: "Image Vault platform guarantee — backfilled" },
         });
         appended++;
       } catch (e) { errors.push(`${l.id} 39.E: ${String(e)}`); }
     }
 
-    // 39.H
+    // 39.H — platform guarantee; no user actor
     if (!hasEvent.has(`${l.id}:security.custody_attested`)) {
       try {
         await appendEvent(db, {
           chainKey: chain, eventType: "security.custody_attested", clauseRef: "39.H",
-          licenceId: l.id, talentId: l.talentId, actorId: "platform",
+          licenceId: l.id, talentId: l.talentId, actorId: null,
           payload: { note: "Image Vault platform guarantee — backfilled" },
         });
         appended++;
       } catch (e) { errors.push(`${l.id} 39.H: ${String(e)}`); }
     }
 
-    // 39.J
+    // 39.J — business reason from licence form
     if (!hasEvent.has(`${l.id}:business_reason.recorded`) && l.intendedUse) {
       try {
         await appendEvent(db, {
           chainKey: chain, eventType: "business_reason.recorded", clauseRef: "39.J",
-          licenceId: l.id, talentId: l.talentId, actorId: "system-backfill",
+          licenceId: l.id, talentId: l.talentId, actorId: adminId,
           payload: { projectName: l.projectName, productionCompany: l.productionCompany, intendedUse: l.intendedUse },
         });
         appended++;
@@ -131,7 +135,7 @@ export async function POST(req: NextRequest) {
       try {
         await appendEvent(db, {
           chainKey: chain, eventType: "use.metered", clauseRef: "39.C",
-          licenceId: l.id, talentId: l.talentId, actorId: "system-backfill",
+          licenceId: l.id, talentId: l.talentId, actorId: null,
           payload: { note: `Backfilled — ${usageCount} pre-existing usage event(s)` },
         });
         appended++;
