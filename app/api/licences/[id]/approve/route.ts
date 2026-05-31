@@ -117,12 +117,12 @@ export async function POST(
       });
       await appendEvent(db, {
         chainKey: chain, eventType: "biometric.isolation_attested", clauseRef: "39.E",
-        licenceId: id, talentId: licence.talentId, actorId: "platform",
+        licenceId: id, talentId: licence.talentId, actorId: null,
         payload: { note: "Image Vault platform guarantee — biometric data never leaves R2 custody" },
       });
       await appendEvent(db, {
         chainKey: chain, eventType: "security.custody_attested", clauseRef: "39.H",
-        licenceId: id, talentId: licence.talentId, actorId: "platform",
+        licenceId: id, talentId: licence.talentId, actorId: null,
         payload: { note: "Image Vault platform guarantee — all delivery via dual-custody download or bridge" },
       });
     } catch { /* non-fatal */ }
