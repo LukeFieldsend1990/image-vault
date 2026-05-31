@@ -2,6 +2,7 @@ name = "image-vault-geo-fingerprint-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+usage_model = "unbound"
 
 # -------------------------------------------------------------------
 # Queue consumer

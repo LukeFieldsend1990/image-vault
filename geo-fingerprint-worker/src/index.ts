@@ -23,7 +23,7 @@ import { buildFingerprintMods } from "./geoFingerprint";
 // RANGE_CHUNK slices — never more than ~8 MB in memory at once.
 // Peak memory per iteration: 8 MB raw bytes + 8 MB decoded text + 8 MB part buffer
 // + 8 MB FixedLengthStream ≈ 32 MB regardless of file size.
-const RANGE_CHUNK = 8 * 1024 * 1024; // 8 MB per R2 range request
+const RANGE_CHUNK = 32 * 1024 * 1024; // 32 MB per R2 range request (11 reads vs 42 for 344 MB file)
 const PART_SIZE   = 8 * 1024 * 1024; // 8 MB per multipart part (≥5 MB required by R2)
 const LINE_FLUSH  = 128 * 1024;       // flush lineOutput to part buffer every 128 KB
 
@@ -34,7 +34,6 @@ async function countVerticesAndBbox(
   r2Key: string,
   fileSize: number,
 ): Promise<{ vertexCount: number; diagonal: number }> {
-  const decoder = new TextDecoder();
   let remainder = "";
   let vertexCount = 0;
   let minX = Infinity, minY = Infinity, minZ = Infinity;
@@ -57,9 +56,7 @@ async function countVerticesAndBbox(
     const isLast = offset + length >= fileSize;
     const obj = await bucket.get(r2Key, { range: { offset, length } });
     if (!obj) throw new Error(`Range read failed at offset ${offset}`);
-    const bytes = new Uint8Array(await obj.arrayBuffer());
-    const decoded = decoder.decode(bytes, { stream: !isLast });
-    const text = remainder + decoded;
+    const text = remainder + (await obj.text());
 
     let start = 0, nl: number;
     while ((nl = text.indexOf("\n", start)) !== -1) {
@@ -86,7 +83,9 @@ async function rangeModifyAndUpload(
   destKey: string,
   contentType: string,
 ): Promise<void> {
+  console.log(`[geo-fingerprint] pass2 start — creating multipart upload (mods=${mods.size}, chunks=${Math.ceil(fileSize / RANGE_CHUNK)})`);
   const multipart = await bucket.createMultipartUpload(destKey, { httpMetadata: { contentType } });
+  console.log(`[geo-fingerprint] pass2 multipart created`);
   const uploadedParts: R2UploadedPart[] = [];
 
   const encoder = new TextEncoder();
@@ -140,10 +139,13 @@ async function rangeModifyAndUpload(
     for (let offset = 0; offset < fileSize; offset += RANGE_CHUNK) {
       const length = Math.min(RANGE_CHUNK, fileSize - offset);
       const isLast = offset + length >= fileSize;
+      console.log(`[geo-fingerprint] pass2 range offset=${offset} calling bucket.get...`);
       const obj = await bucket.get(srcKey, { range: { offset, length } });
+      console.log(`[geo-fingerprint] pass2 range got obj=${!!obj}, calling arrayBuffer...`);
       if (!obj) throw new Error(`Range read failed at offset ${offset}`);
-      const bytes = new Uint8Array(await obj.arrayBuffer());
-      const decoded = decoder.decode(bytes, { stream: !isLast });
+      const text2 = await obj.text();
+      console.log(`[geo-fingerprint] pass2 range text len=${text2.length}`);
+      const decoded = text2;
       const text = remainder + decoded;
 
       let start = 0, nl: number;
@@ -188,16 +190,17 @@ export default {
         await processJob(db, env, jobId);
         message.ack();
       } catch (err) {
-        console.error(`[geo-fingerprint] job ${jobId} failed:`, err);
-        await db
-          .update(geometryFingerprintJobs)
-          .set({
-            status: "failed",
-            error: err instanceof Error ? err.message : String(err),
-            completedAt: Math.floor(Date.now() / 1000),
-          })
-          .where(eq(geometryFingerprintJobs.id, jobId));
-        message.ack(); // don't retry on hard failure
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[geo-fingerprint] job ${jobId} CAUGHT ERROR: ${errMsg}`);
+        try {
+          await db
+            .update(geometryFingerprintJobs)
+            .set({ status: "failed", error: errMsg, completedAt: Math.floor(Date.now() / 1000) })
+            .where(eq(geometryFingerprintJobs.id, jobId));
+        } catch (dbErr) {
+          console.error(`[geo-fingerprint] DB update failed: ${dbErr}`);
+        }
+        message.ack();
       }
     }
   },
@@ -289,7 +292,7 @@ async function processJob(
       }
 
       const fileSize = probe.size;
-      console.log(`[geo-fingerprint] [${file.filename}] pass 1 — counting vertices (size: ${fileSize} bytes, chunks: ${Math.ceil(fileSize / RANGE_CHUNK)})`);
+      console.log(`[geo-fingerprint] [${file.filename}] pass 1 — counting vertices (size: ${fileSize} bytes, chunks: ${Math.ceil(fileSize / RANGE_CHUNK)}, chunkSize: ${RANGE_CHUNK})`);
       const t0 = Date.now();
 
       const { vertexCount, diagonal } = await countVerticesAndBbox(env.SCANS_BUCKET, file.r2Key, fileSize);
