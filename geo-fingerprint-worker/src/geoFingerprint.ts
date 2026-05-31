@@ -265,24 +265,31 @@ function streamApplyModifications(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function embedFingerprintStreaming(
+export interface FingerprintMods {
+  mods: Map<number, [number, number, number]>;
+  fingerprintBitsHex: string;
+  payloadHash: string;
+  regionCount: number;
+  vertexCount: number;
+}
+
+// Pass 1 only: streams the R2 object to count vertices + compute bbox,
+// then derives the HMAC and returns the per-vertex modification map.
+// The caller handles pass 2 (applying mods + uploading) via streamModifyAndUpload.
+export async function computeFingerprintMods(
   getBucketObject: () => Promise<{ body: ReadableStream<Uint8Array> }>,
   params: FingerprintParams,
   secret: string,
   strength = 0.00001,
-): Promise<EmbedResult> {
-  // Pass 1: count vertices + bbox (O(1) memory)
+): Promise<FingerprintMods> {
   const obj1 = await getBucketObject();
   const { vertexCount, diagonal } = await streamCountAndBbox(obj1.body);
 
-  // Compute HMAC and build per-vertex delta map (~640 entries max)
+  if (vertexCount < 10) throw new Error("OBJ has too few vertices for fingerprinting");
+
   const { mods, bitsHex, payloadHash, regionCount } = await computeModifications(
     params, secret, vertexCount, diagonal, strength,
   );
 
-  // Pass 2: stream modifications directly into R2
-  const obj2 = await getBucketObject();
-  const outputStream = streamApplyModifications(obj2.body, mods);
-
-  return { outputStream, fingerprintBitsHex: bitsHex, payloadHash, regionCount, vertexCount };
+  return { mods, fingerprintBitsHex: bitsHex, payloadHash, regionCount, vertexCount };
 }
