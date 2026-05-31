@@ -318,9 +318,29 @@ async function processJob(
     return;
   }
 
-  let filesDone = 0;
+  // Start from persisted progress — don't re-do files that already succeeded.
+  let filesDone = job.filesDone;
 
   for (const file of objFiles) {
+    // Skip files that already have a ready fingerprint from a previous run.
+    // This prevents re-processing LR/MR (390+ R2 ops) on every HR retry,
+    // which was causing cumulative runtime memory to exceed 128 MB.
+    const alreadyDone = await db
+      .select({ id: geometryFingerprints.id })
+      .from(geometryFingerprints)
+      .where(
+        and(
+          eq(geometryFingerprints.jobId, jobId),
+          eq(geometryFingerprints.fileId, file.id),
+          eq(geometryFingerprints.status, "ready"),
+        ),
+      )
+      .get();
+    if (alreadyDone) {
+      console.log(`[geo-fingerprint] [${file.filename}] already fingerprinted — skipping`);
+      continue;
+    }
+
     const fingerprintId = crypto.randomUUID();
 
     try {
