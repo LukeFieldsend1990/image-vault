@@ -11,6 +11,14 @@ export interface FingerprintFileRow {
   createdAt: number;
 }
 
+interface VerifyResult {
+  confidence: number;
+  bitErrorRate: number;
+  correctBits: number;
+  totalBits: number;
+  verdict: "confirmed" | "likely" | "weak";
+}
+
 export interface JobRow {
   id: string;
   licenceId: string;
@@ -77,6 +85,8 @@ function StatusPill({ status, small }: { status: string; small?: boolean }) {
 export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRow[]; nowSecs: number }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [rerunning, setRerunning] = useState<Set<string>>(new Set());
+  const [verifying, setVerifying] = useState<Set<string>>(new Set());
+  const [verifyResults, setVerifyResults] = useState<Map<string, VerifyResult | "error">>(new Map());
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -99,6 +109,26 @@ export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRo
       window.location.reload();
     } catch {
       setRerunning((prev) => { const n = new Set(prev); n.delete(jobId); return n; });
+    }
+  }, []);
+
+  const verify = useCallback(async (e: React.MouseEvent, fingerprintId: string) => {
+    e.stopPropagation();
+    setVerifying((prev) => new Set(prev).add(fingerprintId));
+    setVerifyResults((prev) => { const m = new Map(prev); m.delete(fingerprintId); return m; });
+    try {
+      const res = await fetch("/api/admin/geometry-fingerprints/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fingerprintId }),
+      });
+      if (!res.ok) throw new Error("failed");
+      const data = await res.json() as VerifyResult;
+      setVerifyResults((prev) => new Map(prev).set(fingerprintId, data));
+    } catch {
+      setVerifyResults((prev) => new Map(prev).set(fingerprintId, "error"));
+    } finally {
+      setVerifying((prev) => { const n = new Set(prev); n.delete(fingerprintId); return n; });
     }
   }, []);
 
@@ -296,7 +326,7 @@ export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRo
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
                             {fp.status === "ready" && (
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap justify-end">
                                 <a
                                   href={`/api/admin/geometry-fingerprints/download?fingerprintId=${fp.id}&type=original`}
                                   download
@@ -315,6 +345,31 @@ export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRo
                                 >
                                   Watermarked
                                 </a>
+                                <button
+                                  onClick={(e) => void verify(e, fp.id)}
+                                  disabled={verifying.has(fp.id)}
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded transition disabled:opacity-40"
+                                  style={{ border: "1px solid rgba(37,99,235,0.3)", color: "#2563eb", background: "rgba(37,99,235,0.06)" }}
+                                >
+                                  {verifying.has(fp.id) ? "Verifying…" : "Verify"}
+                                </button>
+                                {verifyResults.has(fp.id) && (() => {
+                                  const r = verifyResults.get(fp.id);
+                                  if (r === "error") return (
+                                    <span className="text-[10px]" style={{ color: "#991b1b" }}>Error</span>
+                                  );
+                                  const res = r as VerifyResult;
+                                  const col = res.verdict === "confirmed" ? "#059669" : res.verdict === "likely" ? "#d97706" : "#991b1b";
+                                  return (
+                                    <span
+                                      className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                                      style={{ background: `${col}18`, color: col }}
+                                      title={`${res.correctBits}/${res.totalBits} bits · BER ${(res.bitErrorRate * 100).toFixed(1)}%`}
+                                    >
+                                      {Math.round(res.confidence * 100)}% {res.verdict}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             )}
                             <span
