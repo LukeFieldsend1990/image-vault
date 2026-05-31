@@ -11,7 +11,7 @@ usage_model = "unbound"
 queue = "geo-fingerprint-jobs"
 max_batch_size = 1
 max_batch_timeout = 60
-max_retries = 2
+max_retries = 10
 dead_letter_queue = "geo-fingerprint-jobs-dlq"
 
 # -------------------------------------------------------------------
