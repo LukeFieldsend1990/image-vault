@@ -23,9 +23,10 @@ import { buildFingerprintMods } from "./geoFingerprint";
 // RANGE_CHUNK slices — never more than ~8 MB in memory at once.
 // Peak memory per iteration: 8 MB raw bytes + 8 MB decoded text + 8 MB part buffer
 // + 8 MB FixedLengthStream ≈ 32 MB regardless of file size.
-const RANGE_CHUNK = 32 * 1024 * 1024; // 32 MB per R2 range request (11 reads vs 42 for 344 MB file)
-const PART_SIZE   = 8 * 1024 * 1024; // 8 MB per multipart part (≥5 MB required by R2)
-const LINE_FLUSH  = 128 * 1024;       // flush lineOutput to part buffer every 128 KB
+const RANGE_CHUNK  = 32 * 1024 * 1024; // 32 MB per R2 range request (11 reads vs 42 for 344 MB)
+const DECODE_BATCH = 256 * 1024;       // decode raw bytes in 256 KB slices (avoids 32 MB JS string)
+const PART_SIZE    = 8 * 1024 * 1024;  // 8 MB per multipart part (≥5 MB required by R2)
+const LINE_FLUSH   = 128 * 1024;       // flush lineOutput to part buffer every 128 KB
 
 // ── Pass 1: count vertices + bbox using R2 Range reads ────────────────────────
 
@@ -34,6 +35,7 @@ async function countVerticesAndBbox(
   r2Key: string,
   fileSize: number,
 ): Promise<{ vertexCount: number; diagonal: number }> {
+  const decoder = new TextDecoder();
   let remainder = "";
   let vertexCount = 0;
   let minX = Infinity, minY = Infinity, minZ = Infinity;
@@ -56,15 +58,23 @@ async function countVerticesAndBbox(
     const isLast = offset + length >= fileSize;
     const obj = await bucket.get(r2Key, { range: { offset, length } });
     if (!obj) throw new Error(`Range read failed at offset ${offset}`);
-    const text = remainder + (await obj.text());
+    const rawBytes = new Uint8Array(await obj.arrayBuffer());
 
-    let start = 0, nl: number;
-    while ((nl = text.indexOf("\n", start)) !== -1) {
-      processLine(text.slice(start, nl));
-      start = nl + 1;
+    // Decode in 256 KB sub-batches: rawBytes (32 MB Uint8Array) stays compact;
+    // decoded string is at most 256 KB at any time.
+    for (let b = 0; b < rawBytes.length; b += DECODE_BATCH) {
+      const isLastBatch = isLast && b + DECODE_BATCH >= rawBytes.length;
+      const slice = rawBytes.subarray(b, b + DECODE_BATCH);
+      const decoded = decoder.decode(slice, { stream: !isLastBatch });
+      const text = remainder + decoded;
+      let start = 0, nl: number;
+      while ((nl = text.indexOf("\n", start)) !== -1) {
+        processLine(text.slice(start, nl));
+        start = nl + 1;
+      }
+      remainder = text.slice(start);
+      if (isLastBatch && remainder) { processLine(remainder); remainder = ""; }
     }
-    remainder = text.slice(start);
-    if (isLast && remainder) processLine(remainder);
   }
 
   if (vertexCount === 0) throw new Error("OBJ has no vertices");
@@ -89,7 +99,7 @@ async function rangeModifyAndUpload(
   const uploadedParts: R2UploadedPart[] = [];
 
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder(); // stateful: tracks partial multi-byte chars across sub-batches
   let remainder = "";
   let vertexIdx = 0;
   let partNum = 1;
@@ -139,26 +149,32 @@ async function rangeModifyAndUpload(
     for (let offset = 0; offset < fileSize; offset += RANGE_CHUNK) {
       const length = Math.min(RANGE_CHUNK, fileSize - offset);
       const isLast = offset + length >= fileSize;
-      console.log(`[geo-fingerprint] pass2 range offset=${offset} calling bucket.get...`);
+      console.log(`[geo-fingerprint] pass2 range offset=${offset} loading...`);
       const obj = await bucket.get(srcKey, { range: { offset, length } });
-      console.log(`[geo-fingerprint] pass2 range got obj=${!!obj}, calling arrayBuffer...`);
       if (!obj) throw new Error(`Range read failed at offset ${offset}`);
-      const text2 = await obj.text();
-      console.log(`[geo-fingerprint] pass2 range text len=${text2.length}`);
-      const decoded = text2;
-      const text = remainder + decoded;
+      const rawBytes = new Uint8Array(await obj.arrayBuffer());
+      console.log(`[geo-fingerprint] pass2 range loaded ${rawBytes.length} bytes, decoding in ${Math.ceil(rawBytes.length / DECODE_BATCH)} sub-batches`);
 
-      let start = 0, nl: number;
-      let lineOutput = "";
-      while ((nl = text.indexOf("\n", start)) !== -1) {
-        lineOutput += processLine(text.slice(start, nl)) + "\n";
-        start = nl + 1;
-        if (lineOutput.length >= LINE_FLUSH) { await pushOutput(lineOutput); lineOutput = ""; }
+      // Decode in 256 KB sub-batches so the decoded string is ≤256 KB at any time
+      // while rawBytes (up to 32 MB) stays as a compact Uint8Array.
+      for (let b = 0; b < rawBytes.length; b += DECODE_BATCH) {
+        const isLastBatch = isLast && b + DECODE_BATCH >= rawBytes.length;
+        const slice = rawBytes.subarray(b, b + DECODE_BATCH);
+        const decoded = decoder.decode(slice, { stream: !isLastBatch });
+        const text = remainder + decoded;
+
+        let start = 0, nl: number;
+        let lineOutput = "";
+        while ((nl = text.indexOf("\n", start)) !== -1) {
+          lineOutput += processLine(text.slice(start, nl)) + "\n";
+          start = nl + 1;
+          if (lineOutput.length >= LINE_FLUSH) { await pushOutput(lineOutput); lineOutput = ""; }
+        }
+        remainder = text.slice(start);
+        if (isLastBatch && remainder) { lineOutput += processLine(remainder); remainder = ""; }
+        if (lineOutput) await pushOutput(lineOutput);
       }
-      remainder = text.slice(start);
-
-      if (isLast && remainder) { lineOutput += processLine(remainder); remainder = ""; }
-      if (lineOutput) await pushOutput(lineOutput);
+      console.log(`[geo-fingerprint] pass2 range offset=${offset} done`);
     }
     await flushPart();
   } catch (err) {
