@@ -2925,3 +2925,127 @@ The trial is successful if:
 3. **Wind-down** — Bridge auto-purges on licence expiry. Licensee submits attestation within the scrub period. Licence reaches `CLOSED` with a complete audit trail.
 4. **No manual intervention** — the platform handles state transitions, notifications, and access control without us needing to run SQL or manually edit records.
 5. **Audit confidence** — at the end, we can generate a licence closure report that a talent agent would trust as proof their client's data was handled correctly.
+
+---
+
+## 15. Geometric OBJ Fingerprinting
+
+### Overview
+
+Every licensed download of an OBJ scan file is served as a **watermarked copy** — geometrically identical to the original at human or production scale, but carrying a forensic attribution signal embedded directly in the vertex positions. If a file is leaked or redistributed without authorisation, the watermark can be read back to identify exactly which licensee received that specific copy.
+
+The original files are **never modified**. Watermarked copies are generated per-licence and stored separately in R2.
+
+---
+
+### What Gets Encoded
+
+The **payload** is a canonical JSON object uniquely identifying the licence grant:
+
+```json
+{ "fileId": "...", "licenceId": "...", "licenseeId": "...", "packageId": "..." }
+```
+
+This is signed with HMAC-SHA256 using a secret platform key (`FINGERPRINT_SIGNING_KEY`). The first 16 bytes of the HMAC output become **128 logical bits** — this is the fingerprint. The signing key is a Cloudflare secret; neither the platform nor any user has access to it in plaintext.
+
+---
+
+### What It Does to the Geometry
+
+**Step 1 — Select 640 vertices**
+
+A deterministic pseudo-random number generator (xorshift32), seeded from the HMAC bytes XOR'd with a hash of the fileId, selects 640 vertex indices from the mesh. For a file with 1,001,772 vertices, an attacker has 640 unknowns drawn from a pool of over a million — without the signing key it is not possible to determine which vertices were selected.
+
+**Step 2 — Assign a direction to each slot**
+
+128 bits × 5 repeats = 640 slots. Each slot has a **deterministic 3D unit vector** derived from the HMAC bytes and the slot index. These directions are also key-derived and unknown without the signing key.
+
+**Step 3 — Embed each bit as a signed displacement**
+
+For each of the 640 slots:
+- Bit = 1 → displace the selected vertex **+`strength × bbox_diagonal`** along its slot direction
+- Bit = 0 → displace the selected vertex **−`strength × bbox_diagonal`** along its slot direction
+
+The default strength is `0.00001` (1/100,000th). For a full-body scan with a 2-metre bounding diagonal:
+
+```
+0.00001 × 2,000 mm = 0.02 mm displacement per vertex
+```
+
+This is well below the measurement tolerance of any photogrammetry scan and produces no visible artefact.
+
+**Step 4 — Upload watermarked copy to R2**
+
+The modified OBJ is written to `watermarks/{licenceId}/{fileId}.obj`. The original at its R2 key is never touched. When the licensee downloads, the platform transparently serves the watermarked copy. The licensee cannot distinguish it from the original.
+
+---
+
+### What the File Actually Contains
+
+The file contains **only modified vertex positions**. Nothing else changes — no metadata, no headers, no comments, no appended text. The entire encoding is:
+
+```
+v 0.12345601 0.45678912 0.78901234   ← was 0.12345582 (Δ = 0.02 mm)
+v 1.09283741 0.34521098 2.10293847   ← was 1.09283762 (Δ = 0.02 mm)
+```
+
+There is no human-readable text in the file. The "Decoded Watermark Payload" shown in the admin panel is a **database lookup** — the platform recovers the 128-bit pattern from the vertex displacements and matches it against stored fingerprint records to resolve the licence, licensee, and project.
+
+The chain is:
+
+```
+Vertex shifts in OBJ file
+     ↓ (read sign of displacement along key-derived direction)
+128-bit HMAC pattern recovered via majority vote
+     ↓ (match against geometry_fingerprints table)
+"This pattern was issued for licence d4d61713, licensee lukefieldsend+licensee@…"
+```
+
+---
+
+### Tamper Resistance
+
+| Attack vector | Effect |
+|---|---|
+| Add small random noise (< 0.02 mm) | Most bits survive — watermark remains detectable |
+| Add large random noise (> 0.02 mm) | Flips bits but is perceptible — production quality degrades |
+| Quantise to 3 decimal places (1 mm precision) | Destroys watermark but degrades the scan visibly |
+| Remesh or resample | Breaks fingerprint indexing entirely; changes the model significantly |
+| Uniform scale / rotate / translate | Detection compares against original so relative displacement sign is preserved |
+| Partial file extraction | Watermark is spread across the full mesh; partial files still carry detectable signal |
+
+**Why removal requires damaging the asset:**
+
+1. **Unknown vertices.** Without the signing key, the attacker cannot compute which 640 vertices carry the signal. Perturbing all vertices damages model quality.
+2. **Unknown directions.** Even knowing a modified vertex, the displacement direction is key-derived. Applying noise to flip the sign of an unknown direction requires exceeding the signal strength on average.
+3. **5× majority vote.** Each logical bit is encoded on 5 independent vertices. Flipping a bit requires corrupting 3 of 5 specific unknown vertices. Random noise corrupts all vertices equally and needs to be large enough to flip majority — which is visible.
+4. **Original never distributed.** Detection compares `watermarked[vi] − original[vi]`. An attacker who does not possess the original cannot reconstruct what was changed versus what was always there.
+
+---
+
+### Detection (Forensic Use)
+
+The admin panel includes two forensic tools:
+
+**Verify (stored fingerprints):** For any ready fingerprint in the jobs table, the platform streams both the original and watermarked files from R2 using 32 MB range reads. Only ~640 vertex positions are held in memory (~15 KB) regardless of file size. Confidence ≥ 95% confirms the watermark reads back correctly.
+
+**Detect (uploaded suspect file):** An admin uploads a suspect OBJ that may have been leaked. The file is streamed as a raw HTTP body — never buffered in full. The original's vertex count drives index selection, and a single pass through the suspect file collects ~640 positions. The platform compares against all issued fingerprints for the package and returns ranked matches with confidence scores, licensee email, project name, and licence dates.
+
+Results describe confidence as:
+- **Confirmed** (≥ 95%) — strong forensic attribution
+- **Likely** (≥ 75%) — probable attribution, manual review advised
+- **Weak** (< 75%) — inconclusive
+
+These results provide technical evidence for investigation and enforcement. They are not absolute legal proof and should be described as *likely source* or *confidence-ranked attribution* in any legal context.
+
+---
+
+### Technical Notes
+
+- **Algorithm version:** v2 (slot-direction based; v1 used mesh normals and is deprecated)
+- **Bit length:** 128 bits with 5× repeat factor = 640 embedded slots
+- **Embedding strength:** `0.00001 × bbox_diagonal`
+- **Storage:** Watermarked copies at `watermarks/{licenceId}/{fileId}.obj` in `SCANS_BUCKET`
+- **Worker:** `image-vault-geo-fingerprint-worker` — Cloudflare Queue consumer, `usage_model = "unbound"`, `max_retries = 10`, checkpoint-resumable across invocations
+- **Schema:** `geometry_fingerprint_jobs` (job tracking), `geometry_fingerprints` (per-file records with ETags, bits, and payload hash)
+- **Per-user toggle:** Fingerprinting is opt-in per talent user (`geoFingerprintEnabled`). Defaults to off.
