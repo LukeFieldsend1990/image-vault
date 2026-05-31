@@ -17,7 +17,10 @@ interface DetectionMatch {
   fingerprintId: string;
   licenceId: string;
   licenseeId: string;
-  licenseeEmail?: string;
+  licenseeEmail?: string | null;
+  projectName?: string | null;
+  validFrom?: string | null;
+  validTo?: string | null;
   fileId: string;
   originalFilename: string;
   confidence: number;
@@ -87,13 +90,14 @@ export default function GeoFingerprintDetectClient({
     setError(null);
     setResult(null);
     try {
-      const fd = new FormData();
-      fd.append("file", suspectFile);
-      fd.append("packageId", packageId);
-      if (fileId) fd.append("fileId", fileId);
-      const res = await fetch("/api/admin/geometry-fingerprints/detect", {
+      // Send file as raw body — avoids buffering the entire file server-side.
+      // packageId and fileId are passed as query params.
+      const params = new URLSearchParams({ packageId });
+      if (fileId) params.set("fileId", fileId);
+      const res = await fetch(`/api/admin/geometry-fingerprints/detect?${params}`, {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/octet-stream" },
+        body: suspectFile,
       });
       if (!res.ok) {
         const data = await res.json() as { error?: string };
@@ -267,7 +271,11 @@ export default function GeoFingerprintDetectClient({
                         </span>
                       </div>
                       <div className="text-xs space-y-0.5" style={{ color: "var(--color-muted)" }}>
-                        <p>Licensee: {m.licenseeEmail ?? m.licenseeId}</p>
+                        <p>Licensee: <strong style={{ color: "var(--color-ink)" }}>{m.licenseeEmail ?? m.licenseeId}</strong></p>
+                        {m.projectName && <p>Project: <strong style={{ color: "var(--color-ink)" }}>{m.projectName}</strong></p>}
+                        {(m.validFrom || m.validTo) && (
+                          <p>Licence period: {m.validFrom ?? "—"} → {m.validTo ?? "—"}</p>
+                        )}
                         <p>
                           Licence ID:{" "}
                           <a
