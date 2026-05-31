@@ -144,6 +144,8 @@ export default async function GeoFingerprintsAdminPage() {
   }
 
   // Build final JobRow[]
+  const nowSecs = Math.floor(Date.now() / 1000);
+
   const jobs: JobRow[] = rawJobs.map((j) => {
     const licenseeId = licenceLicenseeMap.get(j.licenceId) ?? "";
     return {
@@ -270,7 +272,7 @@ export default async function GeoFingerprintsAdminPage() {
             {jobs.length} most recent · click row to expand files
           </span>
         </div>
-        <GeoFingerprintJobsTable jobs={jobs} nowSecs={Math.floor(Date.now() / 1000)} />
+        <GeoFingerprintJobsTable jobs={jobs} nowSecs={nowSecs} />
       </div>
 
       {/* Legal notice */}
