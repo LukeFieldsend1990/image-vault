@@ -144,6 +144,7 @@ export default async function GeoFingerprintsAdminPage() {
   }
 
   // Build final JobRow[]
+  // eslint-disable-next-line react-hooks/purity -- server component, Date.now() is fine here
   const nowSecs = Math.floor(Date.now() / 1000);
 
   const jobs: JobRow[] = rawJobs.map((j) => {
