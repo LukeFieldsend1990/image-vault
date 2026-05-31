@@ -6,7 +6,7 @@ import { licences, geometryFingerprintJobs, geometryFingerprints } from "@/lib/d
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { getRequestContext } from "@cloudflare/next-on-pages";
-import { eq } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 
 // POST /api/admin/geometry-fingerprints/trigger
 // Manually enqueue a watermarking job for an already-approved licence.
@@ -65,13 +65,33 @@ export async function POST(req: NextRequest) {
     // Already queued — just resend the queue message
     jobId = existing.id;
   } else {
-    // processing (stuck), complete, or failed: reset the existing row so the worker reprocesses it,
-    // and wipe its fingerprint rows so they're recreated cleanly
+    // processing (stuck), complete, or failed: reset job but PRESERVE ready fingerprints.
+    // The worker skips files that already have a ready row, so re-running only
+    // processes the files that still need work (e.g. just HR, not LR+MR again).
+    // Deleting ready rows would force a full re-run and re-accumulate the R2 op
+    // state that was causing OOM crashes on large files.
     jobId = existing.id;
-    await db.delete(geometryFingerprints).where(eq(geometryFingerprints.jobId, existing.id));
+    await db
+      .delete(geometryFingerprints)
+      .where(and(
+        eq(geometryFingerprints.jobId, existing.id),
+        ne(geometryFingerprints.status, "ready"), // keep ready, delete failed/pending
+      ));
+    const readyCount = await db
+      .select({ n: sql<number>`count(*)` })
+      .from(geometryFingerprints)
+      .where(and(eq(geometryFingerprints.jobId, existing.id), eq(geometryFingerprints.status, "ready")))
+      .get();
     await db
       .update(geometryFingerprintJobs)
-      .set({ status: "queued", filesDone: 0, filesTotal: null, error: null, completedAt: null, createdAt: now })
+      .set({
+        status: "queued",
+        filesDone: readyCount?.n ?? 0,
+        filesTotal: null,
+        error: null,
+        completedAt: null,
+        createdAt: now,
+      })
       .where(eq(geometryFingerprintJobs.id, existing.id));
   }
 
