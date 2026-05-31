@@ -254,7 +254,10 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
                   style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
                 >
                   <span>File</span>
-                  <span>Status</span>
+                  <div className="flex items-center gap-4">
+                    <span>Downloads</span>
+                    <span>Status</span>
+                  </div>
                 </div>
 
                 {job.fingerprints.length === 0 ? (
@@ -291,17 +294,41 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
                               </p>
                             )}
                           </div>
-                          <span
-                            className="uppercase tracking-wide font-semibold rounded shrink-0"
-                            style={{
-                              background: fc.bg,
-                              color: fc.fg,
-                              fontSize: 9,
-                              padding: "2px 6px",
-                            }}
-                          >
-                            {fp.status}
-                          </span>
+                          <div className="flex items-center gap-3 shrink-0">
+                            {fp.status === "ready" && (
+                              <div className="flex items-center gap-1.5">
+                                <a
+                                  href={`/api/admin/geometry-fingerprints/download?fingerprintId=${fp.id}&type=original`}
+                                  download
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                                  style={{ border: "1px solid rgba(107,114,128,0.3)", color: "#6b7280", background: "rgba(107,114,128,0.06)" }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Original
+                                </a>
+                                <a
+                                  href={`/api/admin/geometry-fingerprints/download?fingerprintId=${fp.id}&type=watermarked`}
+                                  download
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                                  style={{ border: "1px solid rgba(5,150,105,0.3)", color: "#059669", background: "rgba(5,150,105,0.06)" }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Watermarked
+                                </a>
+                              </div>
+                            )}
+                            <span
+                              className="uppercase tracking-wide font-semibold rounded"
+                              style={{
+                                background: fc.bg,
+                                color: fc.fg,
+                                fontSize: 9,
+                                padding: "2px 6px",
+                              }}
+                            >
+                              {fp.status}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
