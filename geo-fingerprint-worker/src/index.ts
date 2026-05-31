@@ -23,7 +23,8 @@ import { buildFingerprintMods } from "./geoFingerprint";
 // RANGE_CHUNK slices — never more than ~8 MB in memory at once.
 // Peak memory per iteration: 8 MB raw bytes + 8 MB decoded text + 8 MB part buffer
 // + 8 MB FixedLengthStream ≈ 32 MB regardless of file size.
-const RANGE_CHUNK  = 32 * 1024 * 1024; // 32 MB per R2 range request (11 reads vs 42 for 344 MB)
+const RANGE_CHUNK  = 8 * 1024 * 1024;  // 8 MB per R2 range request — small enough that pass-1
+                                        // residuals stay well under 128 MB (unbound has no time limit)
 const DECODE_BATCH = 256 * 1024;       // decode raw bytes in 256 KB slices (avoids 32 MB JS string)
 const PART_SIZE    = 8 * 1024 * 1024;  // 8 MB per multipart part (≥5 MB required by R2)
 const LINE_FLUSH   = 128 * 1024;       // flush lineOutput to part buffer every 128 KB
