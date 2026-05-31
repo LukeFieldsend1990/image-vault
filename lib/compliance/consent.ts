@@ -19,7 +19,7 @@ export interface GrantConsentParams {
   actorId: string;
   useType: string; // licenceType value, or any string for a dub
   territory?: string | null;
-  language?: string | null; // presence ⇒ a 39.D dub-language consent
+  language?: string | null; // presence ⇒ also a 39.D dub-language consent
   validFrom?: number | null;
   validTo?: number | null;
   scriptedAlterations?: boolean;
@@ -29,43 +29,80 @@ export interface GrantConsentParams {
 
 export async function grantConsent(p: GrantConsentParams): Promise<{ eventId: string; recordId: string }> {
   const isDub = typeof p.language === "string" && p.language.length > 0;
-  const scope: ComplianceScope = { useType: p.useType };
-  if (p.territory) scope.territory = p.territory;
-  if (isDub) scope.language = p.language as string;
-  if (p.validFrom != null) scope.validFrom = p.validFrom;
-  if (p.validTo != null) scope.validTo = p.validTo;
-  if (p.scriptedAlterations) scope.scriptedAlterations = true;
+  const now = Math.floor(Date.now() / 1000);
 
-  const ev = await appendEvent(p.db, {
+  // Base scope (no language) — covers 39.B regardless of whether it's a dub
+  const baseScope: ComplianceScope = { useType: p.useType };
+  if (p.territory) baseScope.territory = p.territory;
+  if (p.validFrom != null) baseScope.validFrom = p.validFrom;
+  if (p.validTo != null) baseScope.validTo = p.validTo;
+  if (p.scriptedAlterations) baseScope.scriptedAlterations = true;
+
+  // Always append consent.granted for 39.B
+  const baseEv = await appendEvent(p.db, {
     chainKey: licenceChain(p.licenceId),
-    eventType: isDub ? "consent.dub_language_granted" : "consent.granted",
-    clauseRef: isDub ? "39.D" : "39.B",
+    eventType: "consent.granted",
+    clauseRef: "39.B",
     licenceId: p.licenceId,
     talentId: p.talentId,
     actorId: p.actorId,
-    scope,
+    scope: baseScope,
     ipAddress: p.ip ?? null,
     userAgent: p.ua ?? null,
   });
 
-  const recordId = crypto.randomUUID();
-  const now = Math.floor(Date.now() / 1000);
+  const baseRecordId = crypto.randomUUID();
   await p.db.insert(consentRecords).values({
-    id: recordId,
+    id: baseRecordId,
     licenceId: p.licenceId,
     talentId: p.talentId,
     useType: p.useType,
     territory: p.territory ?? null,
-    language: isDub ? (p.language as string) : null,
+    language: null,
     validFrom: p.validFrom ?? null,
     validTo: p.validTo ?? null,
     status: "granted",
-    grantedEventId: ev.id,
+    grantedEventId: baseEv.id,
     revokedEventId: null,
     updatedAt: now,
   });
 
-  return { eventId: ev.id, recordId };
+  // If a dub language was specified, additionally append consent.dub_language_granted for 39.D
+  if (isDub) {
+    const dubScope: ComplianceScope = { ...baseScope, language: p.language as string };
+    const dubEv = await appendEvent(p.db, {
+      chainKey: licenceChain(p.licenceId),
+      eventType: "consent.dub_language_granted",
+      clauseRef: "39.D",
+      licenceId: p.licenceId,
+      talentId: p.talentId,
+      actorId: p.actorId,
+      scope: dubScope,
+      ipAddress: p.ip ?? null,
+      userAgent: p.ua ?? null,
+    });
+
+    const dubRecordId = crypto.randomUUID();
+    await p.db.insert(consentRecords).values({
+      id: dubRecordId,
+      licenceId: p.licenceId,
+      talentId: p.talentId,
+      useType: p.useType,
+      territory: p.territory ?? null,
+      language: p.language as string,
+      validFrom: p.validFrom ?? null,
+      validTo: p.validTo ?? null,
+      status: "granted",
+      grantedEventId: dubEv.id,
+      revokedEventId: null,
+      updatedAt: now,
+    });
+
+    // Return the dub event as primary (it implies base consent was also recorded)
+    return { eventId: dubEv.id, recordId: dubRecordId };
+  }
+
+  return { eventId: baseEv.id, recordId: baseRecordId };
 }
 
 export async function revokeConsent(
@@ -113,7 +150,7 @@ export async function listConsentRecords(db: Db, licenceId: string) {
 }
 
 // Consent events for a licence chain, newest first — feeds the history view and
-// (later) obligation evaluation.
+// obligation evaluation.
 export async function listConsentEvents(db: Db, licenceId: string): Promise<EvaluatedEvent[]> {
   const rows = await db
     .select({ eventType: complianceEvents.eventType, scopeJson: complianceEvents.scopeJson })
