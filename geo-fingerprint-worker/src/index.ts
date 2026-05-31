@@ -23,8 +23,11 @@ import { buildFingerprintMods } from "./geoFingerprint";
 // RANGE_CHUNK slices — never more than ~8 MB in memory at once.
 // Peak memory per iteration: 8 MB raw bytes + 8 MB decoded text + 8 MB part buffer
 // + 8 MB FixedLengthStream ≈ 32 MB regardless of file size.
-const RANGE_CHUNK  = 8 * 1024 * 1024;  // 8 MB per R2 range request — small enough that pass-1
-                                        // residuals stay well under 128 MB (unbound has no time limit)
+const RANGE_CHUNK  = 32 * 1024 * 1024; // 32 MB per R2 range request.
+                                        // 8 MB OOMed due to FixedLengthStream copying buf; that's
+                                        // fixed now (direct Uint8Array uploadPart). 32 MB keeps
+                                        // subrequest count under 1000 for 3 GB files: ~97 reads
+                                        // per pass + ~390 uploadPart = ~580 per file.
 const DECODE_BATCH = 256 * 1024;       // decode raw bytes in 256 KB slices (avoids 32 MB JS string)
 const PART_SIZE    = 8 * 1024 * 1024;  // 8 MB per multipart part (≥5 MB required by R2)
 const LINE_FLUSH   = 128 * 1024;       // flush lineOutput to part buffer every 128 KB
@@ -104,29 +107,31 @@ async function rangeModifyAndUpload(
   let remainder = "";
   let vertexIdx = 0;
   let partNum = 1;
-  let partChunks: Uint8Array[] = [];
-  let partBuffered = 0;
 
-  const flushPart = async () => {
-    if (partChunks.length === 0) return;
-    const buf = new Uint8Array(partBuffered);
+  // R2 requires ALL non-trailing parts to be EXACTLY the same size.
+  // Use a fixed-size buffer filled byte-by-byte; upload only when exactly full.
+  let partBuf = new Uint8Array(PART_SIZE);
+  let partFilled = 0;
+
+  const feedBytes = async (encoded: Uint8Array) => {
     let off = 0;
-    for (const c of partChunks) { buf.set(c, off); off += c.length; }
-    partChunks = [];
-    partBuffered = 0;
-    const { readable, writable } = new FixedLengthStream(buf.byteLength);
-    const w = writable.getWriter();
-    await w.write(buf);
-    await w.close();
-    uploadedParts.push(await multipart.uploadPart(partNum++, readable));
-    console.log(`[geo-fingerprint] uploaded part ${partNum - 1} (${buf.byteLength} bytes)`);
+    while (off < encoded.length) {
+      const take = Math.min(encoded.length - off, PART_SIZE - partFilled);
+      partBuf.set(encoded.subarray(off, off + take), partFilled);
+      partFilled += take;
+      off += take;
+      if (partFilled === PART_SIZE) {
+        console.log(`[geo-fingerprint] uploading part ${partNum} (${PART_SIZE} bytes)`);
+        uploadedParts.push(await multipart.uploadPart(partNum++, partBuf));
+        console.log(`[geo-fingerprint] part ${partNum - 1} ok`);
+        partBuf = new Uint8Array(PART_SIZE);
+        partFilled = 0;
+      }
+    }
   };
 
   const pushOutput = async (text: string) => {
-    const encoded = encoder.encode(text);
-    partChunks.push(encoded);
-    partBuffered += encoded.length;
-    if (partBuffered >= PART_SIZE) await flushPart();
+    await feedBytes(encoder.encode(text));
   };
 
   const processLine = (line: string): string => {
@@ -157,33 +162,51 @@ async function rangeModifyAndUpload(
       console.log(`[geo-fingerprint] pass2 range loaded ${rawBytes.length} bytes, decoding in ${Math.ceil(rawBytes.length / DECODE_BATCH)} sub-batches`);
 
       // Decode in 256 KB sub-batches so the decoded string is ≤256 KB at any time
-      // while rawBytes (up to 32 MB) stays as a compact Uint8Array.
+      // while rawBytes (up to 8 MB) stays as a compact Uint8Array.
+      const totalBatches = Math.ceil(rawBytes.length / DECODE_BATCH);
       for (let b = 0; b < rawBytes.length; b += DECODE_BATCH) {
+        const batchIdx = b / DECODE_BATCH;
         const isLastBatch = isLast && b + DECODE_BATCH >= rawBytes.length;
         const slice = rawBytes.subarray(b, b + DECODE_BATCH);
-        const decoded = decoder.decode(slice, { stream: !isLastBatch });
-        const text = remainder + decoded;
+        try {
+          const decoded = decoder.decode(slice, { stream: !isLastBatch });
+          const text = remainder + decoded;
 
-        let start = 0, nl: number;
-        let lineOutput = "";
-        while ((nl = text.indexOf("\n", start)) !== -1) {
-          lineOutput += processLine(text.slice(start, nl)) + "\n";
-          start = nl + 1;
-          if (lineOutput.length >= LINE_FLUSH) { await pushOutput(lineOutput); lineOutput = ""; }
+          let start = 0, nl: number;
+          let lineOutput = "";
+          let lineCount = 0;
+          while ((nl = text.indexOf("\n", start)) !== -1) {
+            lineOutput += processLine(text.slice(start, nl)) + "\n";
+            start = nl + 1;
+            lineCount++;
+            if (lineOutput.length >= LINE_FLUSH) { await pushOutput(lineOutput); lineOutput = ""; }
+          }
+          remainder = text.slice(start);
+          if (isLastBatch && remainder) { lineOutput += processLine(remainder); remainder = ""; }
+          if (lineOutput) await pushOutput(lineOutput);
+          if (batchIdx === 0 || batchIdx === totalBatches - 1) {
+            console.log(`[geo-fingerprint] sub-batch ${batchIdx}/${totalBatches} ok — ${lineCount} lines, partFilled=${partFilled}`);
+          }
+        } catch (subErr) {
+          console.error(`[geo-fingerprint] CRASH in sub-batch ${batchIdx}: ${subErr instanceof Error ? subErr.message : String(subErr)}`);
+          throw subErr;
         }
-        remainder = text.slice(start);
-        if (isLastBatch && remainder) { lineOutput += processLine(remainder); remainder = ""; }
-        if (lineOutput) await pushOutput(lineOutput);
       }
       console.log(`[geo-fingerprint] pass2 range offset=${offset} done`);
     }
-    await flushPart();
+    // Upload the final (trailing) part — can be any size, including < PART_SIZE
+    if (partFilled > 0) {
+      const lastBuf = partBuf.subarray(0, partFilled);
+      console.log(`[geo-fingerprint] uploading final part ${partNum} (${lastBuf.byteLength} bytes)`);
+      uploadedParts.push(await multipart.uploadPart(partNum++, lastBuf));
+    }
   } catch (err) {
     await multipart.abort();
     throw err;
   }
 
   await multipart.complete(uploadedParts);
+  console.log(`[geo-fingerprint] multipart complete: ${uploadedParts.length} parts`);
 }
 
 interface Env {
