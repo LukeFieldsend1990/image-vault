@@ -270,7 +270,7 @@ export default async function GeoFingerprintsAdminPage() {
             {jobs.length} most recent · click row to expand files
           </span>
         </div>
-        <GeoFingerprintJobsTable jobs={jobs} />
+        <GeoFingerprintJobsTable jobs={jobs} nowSecs={Math.floor(Date.now() / 1000)} />
       </div>
 
       {/* Legal notice */}

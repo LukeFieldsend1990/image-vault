@@ -74,7 +74,7 @@ function StatusPill({ status, small }: { status: string; small?: boolean }) {
   );
 }
 
-export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
+export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRow[]; nowSecs: number }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [rerunning, setRerunning] = useState<Set<string>>(new Set());
 
@@ -118,7 +118,7 @@ export default function GeoFingerprintJobsTable({ jobs }: { jobs: JobRow[] }) {
           job.filesTotal && job.filesTotal > 0
             ? Math.round((job.filesDone / job.filesTotal) * 100)
             : null;
-        const elapsedSecs = (job.completedAt ?? Math.floor(Date.now() / 1000)) - job.createdAt;
+        const elapsedSecs = (job.completedAt ?? nowSecs) - job.createdAt;
         const isStalled = job.status === "processing" && elapsedSecs > STALL_THRESHOLD_SECS;
         const displayStatus = isStalled ? "stalled" : job.status;
         const isRunning = job.status === "processing" || job.status === "queued";
