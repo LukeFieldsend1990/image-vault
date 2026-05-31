@@ -667,6 +667,7 @@ export const geometryFingerprintJobs = sqliteTable("geometry_fingerprint_jobs", 
   error: text("error"),
   createdAt: integer("created_at").notNull(),
   completedAt: integer("completed_at"),
+  fileCheckpointJson: text("file_checkpoint_json"), // resumable pass-2 state, cleared on completion
 });
 
 export const geometryFingerprints = sqliteTable("geometry_fingerprints", {

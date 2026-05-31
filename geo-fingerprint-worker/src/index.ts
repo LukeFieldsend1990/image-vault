@@ -88,6 +88,19 @@ async function countVerticesAndBbox(
 }
 
 // ── Pass 2: apply mods + multipart upload using R2 Range reads ────────────────
+// Supports resuming a previously interrupted upload via chkpt/saveChkpt.
+
+interface Pass2Checkpoint {
+  fileId: string;
+  watermarkedKey: string;
+  uploadId: string;
+  nextByteOffset: number;
+  partNum: number;
+  partFilled: number; // bytes in the partial partBuf (stored separately in R2)
+  vertexIdx: number;
+  remainder: string;  // partial last line from the previous chunk
+  parts: { partNumber: number; etag: string }[];
+}
 
 async function rangeModifyAndUpload(
   mods: Map<number, [number, number, number]>,
@@ -96,22 +109,41 @@ async function rangeModifyAndUpload(
   fileSize: number,
   destKey: string,
   contentType: string,
+  chkpt?: Pass2Checkpoint,
+  saveChkpt?: (c: Pass2Checkpoint) => Promise<void>,
 ): Promise<void> {
-  console.log(`[geo-fingerprint] pass2 start — creating multipart upload (mods=${mods.size}, chunks=${Math.ceil(fileSize / RANGE_CHUNK)})`);
-  const multipart = await bucket.createMultipartUpload(destKey, { httpMetadata: { contentType } });
-  console.log(`[geo-fingerprint] pass2 multipart created`);
-  const uploadedParts: R2UploadedPart[] = [];
+  const chkBufKey = `${destKey}.chkbuf`;
+
+  // Create or resume the multipart upload
+  const multipart = chkpt
+    ? bucket.resumeMultipartUpload(destKey, chkpt.uploadId)
+    : await bucket.createMultipartUpload(destKey, { httpMetadata: { contentType } });
+  console.log(`[geo-fingerprint] pass2 ${chkpt ? `resuming uploadId=${chkpt.uploadId} from byte=${chkpt.nextByteOffset}` : `created upload, chunks=${Math.ceil(fileSize / RANGE_CHUNK)}`}`);
+
+  const uploadedParts: R2UploadedPart[] = chkpt
+    ? chkpt.parts.map(p => ({ partNumber: p.partNumber, etag: p.etag })) as R2UploadedPart[]
+    : [];
 
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder(); // stateful: tracks partial multi-byte chars across sub-batches
-  let remainder = "";
-  let vertexIdx = 0;
-  let partNum = 1;
+  const decoder = new TextDecoder();
+  let remainder = chkpt?.remainder ?? "";
+  let vertexIdx = chkpt?.vertexIdx ?? 0;
+  let partNum = chkpt?.partNum ?? 1;
+  const startOffset = chkpt?.nextByteOffset ?? 0;
 
-  // R2 requires ALL non-trailing parts to be EXACTLY the same size.
-  // Use a fixed-size buffer filled byte-by-byte; upload only when exactly full.
   let partBuf = new Uint8Array(PART_SIZE);
   let partFilled = 0;
+
+  // Restore partial partBuf from R2 checkpoint buffer
+  if (chkpt?.partFilled) {
+    const chkBufObj = await bucket.get(chkBufKey);
+    if (chkBufObj) {
+      const bytes = new Uint8Array(await chkBufObj.arrayBuffer());
+      partBuf.set(bytes, 0);
+      partFilled = chkpt.partFilled;
+      console.log(`[geo-fingerprint] restored ${partFilled} bytes from checkpoint buffer`);
+    }
+  }
 
   const feedBytes = async (encoded: Uint8Array) => {
     let off = 0;
@@ -130,9 +162,7 @@ async function rangeModifyAndUpload(
     }
   };
 
-  const pushOutput = async (text: string) => {
-    await feedBytes(encoder.encode(text));
-  };
+  const pushOutput = async (text: string) => { await feedBytes(encoder.encode(text)); };
 
   const processLine = (line: string): string => {
     const t = line.trimStart();
@@ -152,7 +182,7 @@ async function rangeModifyAndUpload(
   };
 
   try {
-    for (let offset = 0; offset < fileSize; offset += RANGE_CHUNK) {
+    for (let offset = startOffset; offset < fileSize; offset += RANGE_CHUNK) {
       const length = Math.min(RANGE_CHUNK, fileSize - offset);
       const isLast = offset + length >= fileSize;
       console.log(`[geo-fingerprint] pass2 range offset=${offset} loading...`);
@@ -161,8 +191,6 @@ async function rangeModifyAndUpload(
       const rawBytes = new Uint8Array(await obj.arrayBuffer());
       console.log(`[geo-fingerprint] pass2 range loaded ${rawBytes.length} bytes, decoding in ${Math.ceil(rawBytes.length / DECODE_BATCH)} sub-batches`);
 
-      // Decode in 256 KB sub-batches so the decoded string is ≤256 KB at any time
-      // while rawBytes (up to 8 MB) stays as a compact Uint8Array.
       const totalBatches = Math.ceil(rawBytes.length / DECODE_BATCH);
       for (let b = 0; b < rawBytes.length; b += DECODE_BATCH) {
         const batchIdx = b / DECODE_BATCH;
@@ -171,10 +199,7 @@ async function rangeModifyAndUpload(
         try {
           const decoded = decoder.decode(slice, { stream: !isLastBatch });
           const text = remainder + decoded;
-
-          let start = 0, nl: number;
-          let lineOutput = "";
-          let lineCount = 0;
+          let start = 0, nl: number, lineOutput = "", lineCount = 0;
           while ((nl = text.indexOf("\n", start)) !== -1) {
             lineOutput += processLine(text.slice(start, nl)) + "\n";
             start = nl + 1;
@@ -193,13 +218,34 @@ async function rangeModifyAndUpload(
         }
       }
       console.log(`[geo-fingerprint] pass2 range offset=${offset} done`);
+
+      // Save checkpoint after each range chunk so the next invocation can resume here.
+      // The partial partBuf is stored separately in R2 (too large for a JSON column).
+      if (saveChkpt) {
+        if (partFilled > 0) {
+          await bucket.put(chkBufKey, partBuf.subarray(0, partFilled));
+        }
+        await saveChkpt({
+          fileId: "", // caller fills this in
+          watermarkedKey: destKey,
+          uploadId: multipart.uploadId,
+          nextByteOffset: offset + length,
+          partNum,
+          partFilled,
+          vertexIdx,
+          remainder,
+          parts: uploadedParts.map(p => ({ partNumber: p.partNumber, etag: p.etag })),
+        });
+      }
     }
-    // Upload the final (trailing) part — can be any size, including < PART_SIZE
+
     if (partFilled > 0) {
       const lastBuf = partBuf.subarray(0, partFilled);
       console.log(`[geo-fingerprint] uploading final part ${partNum} (${lastBuf.byteLength} bytes)`);
       uploadedParts.push(await multipart.uploadPart(partNum++, lastBuf));
     }
+    // Clean up checkpoint buffer
+    await bucket.delete(chkBufKey).catch(() => {});
   } catch (err) {
     await multipart.abort();
     throw err;
@@ -366,9 +412,35 @@ async function processJob(
       console.log(`[geo-fingerprint] [${file.filename}] pass 1 done in ${Date.now() - t0}ms — ${result.vertexCount} vertices, ${result.regionCount} modified. pass 2 — writing watermarked OBJ`);
       const t1 = Date.now();
 
+      // Load checkpoint if this file was partially processed in a previous invocation
       const watermarkedKey = `watermarks/${job.licenceId}/${file.id}.obj`;
-      await rangeModifyAndUpload(result.mods, env.SCANS_BUCKET, file.r2Key, fileSize, watermarkedKey, "application/obj");
+      let chkpt: Pass2Checkpoint | undefined;
+      if (job.fileCheckpointJson) {
+        try {
+          const parsed = JSON.parse(job.fileCheckpointJson) as Pass2Checkpoint;
+          if (parsed.fileId === file.id && parsed.uploadId) {
+            chkpt = parsed;
+            console.log(`[geo-fingerprint] [${file.filename}] checkpoint found — resuming from byte ${chkpt.nextByteOffset}, part ${chkpt.partNum} (${chkpt.parts.length} parts already uploaded)`);
+          }
+        } catch { /* invalid checkpoint, start fresh */ }
+      }
+
+      await rangeModifyAndUpload(
+        result.mods, env.SCANS_BUCKET, file.r2Key, fileSize, watermarkedKey, "application/obj",
+        chkpt,
+        async (c) => {
+          const saved = JSON.stringify({ ...c, fileId: file.id });
+          await db.update(geometryFingerprintJobs)
+            .set({ fileCheckpointJson: saved })
+            .where(eq(geometryFingerprintJobs.id, jobId));
+        },
+      );
       console.log(`[geo-fingerprint] [${file.filename}] pass 2 done in ${Date.now() - t1}ms — uploaded to ${watermarkedKey}`);
+
+      // Clear checkpoint on success
+      await db.update(geometryFingerprintJobs)
+        .set({ fileCheckpointJson: null })
+        .where(eq(geometryFingerprintJobs.id, jobId));
 
       // Record fingerprint
       await db.insert(geometryFingerprints).values({

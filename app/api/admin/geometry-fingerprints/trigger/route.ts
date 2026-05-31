@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
         error: null,
         completedAt: null,
         createdAt: now,
+        fileCheckpointJson: null, // clear any partial pass-2 checkpoint
       })
       .where(eq(geometryFingerprintJobs.id, existing.id));
   }
