@@ -13,6 +13,81 @@ interface ObjFileOption {
   filename: string;
 }
 
+interface FingerprintParam {
+  id: string;
+  fileId: string;
+  originalFilename: string;
+  fingerprintBits: string;
+  fingerprintBitsLength: number;
+  repeatFactor: number;
+  originalVertexCount: number;
+}
+
+// ── Client-side vertex extraction helpers ─────────────────────────────────────
+// Runs entirely in the browser — no upload, no size limit.
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(Math.min(hex.length / 2, 16));
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
+function makeXorshift32(seed: number) {
+  let s = (seed >>> 0) || 0x12345678;
+  return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return (s >>> 0) / 0x100000000; };
+}
+
+function selectVertices(hmacBytes: Uint8Array, fileId: string, vertexCount: number, slotCount: number): number[] {
+  let fh = 0;
+  for (let i = 0; i < fileId.length; i++) fh = (Math.imul(fh, 31) + fileId.charCodeAt(i)) | 0;
+  const hmacSeed = ((hmacBytes[0] << 24) | (hmacBytes[1] << 16) | (hmacBytes[2] << 8) | hmacBytes[3]) >>> 0;
+  const rng = makeXorshift32(((hmacSeed ^ (fh >>> 0)) >>> 0));
+  return Array.from({ length: slotCount }, () => Math.floor(rng() * vertexCount));
+}
+
+async function extractVertexPositions(
+  file: File,
+  targetIndices: Set<number>,
+): Promise<{ positions: Map<number, [number, number, number]>; vertexCount: number }> {
+  const decoder = new TextDecoder();
+  const positions = new Map<number, [number, number, number]>();
+  const reader = file.stream().getReader();
+  let remainder = "", vertexIdx = 0;
+  const BATCH = 256 * 1024;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (let b = 0; b < value.length; b += BATCH) {
+      const decoded = decoder.decode(value.subarray(b, b + BATCH), { stream: true });
+      const text = remainder + decoded;
+      let start = 0, nl: number;
+      while ((nl = text.indexOf("\n", start)) !== -1) {
+        const t = text.slice(start, nl).trimStart();
+        if (t.startsWith("v ") || t.startsWith("v\t")) {
+          if (targetIndices.has(vertexIdx)) {
+            const p = t.split(/\s+/);
+            positions.set(vertexIdx, [parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3])]);
+          }
+          vertexIdx++;
+        }
+        start = nl + 1;
+      }
+      remainder = text.slice(start);
+    }
+  }
+  decoder.decode(undefined, { stream: false });
+  if (remainder) {
+    const t = remainder.trimStart();
+    if ((t.startsWith("v ") || t.startsWith("v\t")) && targetIndices.has(vertexIdx)) {
+      const p = t.split(/\s+/);
+      positions.set(vertexIdx, [parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3])]);
+    }
+    vertexIdx++;
+  }
+  return { positions, vertexCount: vertexIdx };
+}
+
 interface DetectionMatch {
   fingerprintId: string;
   licenceId: string;
@@ -90,21 +165,37 @@ export default function GeoFingerprintDetectClient({
     setError(null);
     setResult(null);
     try {
-      // Send file as raw body — avoids buffering the entire file server-side.
-      // packageId and fileId are passed as query params.
-      const params = new URLSearchParams({ packageId });
-      if (fileId) params.set("fileId", fileId);
-      const res = await fetch(`/api/admin/geometry-fingerprints/detect?${params}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: suspectFile,
-      });
-      if (!res.ok) {
-        const data = await res.json() as { error?: string };
-        throw new Error(data.error ?? "Detection failed");
+      // Step 1: get fingerprint params + original vertex count from server
+      const paramsUrl = new URLSearchParams({ packageId });
+      if (fileId) paramsUrl.set("fileId", fileId);
+      const paramsRes = await fetch(`/api/admin/geometry-fingerprints/detect-params?${paramsUrl}`);
+      if (!paramsRes.ok) throw new Error((await paramsRes.json() as { error?: string }).error ?? "Failed to load fingerprint params");
+      const { fingerprints } = await paramsRes.json() as { fingerprints: FingerprintParam[] };
+      if (fingerprints.length === 0) { setResult({ ok: true, packageId, matches: [], message: "No issued fingerprints found" }); return; }
+
+      // Step 2: compute target vertex indices (deterministic, same algorithm as server)
+      const allTargets = new Set<number>();
+      for (const fp of fingerprints) {
+        const hmac = hexToBytes(fp.fingerprintBits);
+        const slotCount = fp.fingerprintBitsLength * fp.repeatFactor;
+        for (const vi of selectVertices(hmac, fp.fileId, fp.originalVertexCount, slotCount)) allTargets.add(vi);
       }
-      const data = await res.json() as DetectionResult;
-      setResult(data);
+
+      // Step 3: stream through the suspect file locally — no upload, no size limit
+      const suspectPositions = await extractVertexPositions(suspectFile, allTargets);
+
+      // Step 4: send only ~640 positions to server for comparison
+      const compareRes = await fetch("/api/admin/geometry-fingerprints/detect-compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          packageId, fileId: fileId || undefined,
+          suspectVertexCount: suspectPositions.vertexCount,
+          suspectPositions: Object.fromEntries(suspectPositions.positions),
+        }),
+      });
+      if (!compareRes.ok) throw new Error((await compareRes.json() as { error?: string }).error ?? "Comparison failed");
+      setResult(await compareRes.json() as DetectionResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
