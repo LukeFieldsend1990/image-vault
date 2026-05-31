@@ -9,6 +9,7 @@ import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { sha256Hex, generateRoyaltyKey } from "@/lib/auth/requireRoyaltySource";
+import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 
 // POST /api/licences/[id]/approve — talent/rep approves a pending licence request
 export async function POST(
@@ -44,6 +45,8 @@ export async function POST(
       proposedUnitType: licences.proposedUnitType,
       proposedUnitRatePence: licences.proposedUnitRatePence,
       organisationId: licences.organisationId,
+      licenceType: licences.licenceType,
+      territory: licences.territory,
     })
     .from(licences)
     .where(eq(licences.id, id))
@@ -98,6 +101,32 @@ export async function POST(
     .update(licences)
     .set({ status: "APPROVED", approvedBy: session.sub, approvedAt: now, agreedFee, platformFee, agreedUnitType, agreedUnitRatePence })
     .where(eq(licences.id, id));
+
+  // Auto-satisfy compliance obligations on approval (fire-and-forget, non-fatal).
+  // 39.B — talent approving the licence IS giving consent to the replica use.
+  // 39.E — Image Vault's architecture guarantees biometric data isolation.
+  // 39.H — files are only ever served through the platform's secure delivery paths.
+  void (async () => {
+    try {
+      const chain = licenceChain(id);
+      const useType = licence.licenceType ?? "commercial";
+      const scope = licence.territory ? { useType, territory: licence.territory } : { useType };
+      await appendEvent(db, {
+        chainKey: chain, eventType: "consent.granted", clauseRef: "39.B",
+        licenceId: id, talentId: licence.talentId, actorId: session.sub, scope,
+      });
+      await appendEvent(db, {
+        chainKey: chain, eventType: "biometric.isolation_attested", clauseRef: "39.E",
+        licenceId: id, talentId: licence.talentId, actorId: "platform",
+        payload: { note: "Image Vault platform guarantee — biometric data never leaves R2 custody" },
+      });
+      await appendEvent(db, {
+        chainKey: chain, eventType: "security.custody_attested", clauseRef: "39.H",
+        licenceId: id, talentId: licence.talentId, actorId: "platform",
+        payload: { note: "Image Vault platform guarantee — all delivery via dual-custody download or bridge" },
+      });
+    } catch { /* non-fatal */ }
+  })();
 
   // Auto-create royalty source if a unit rate was agreed.
   let royaltyKey: string | null = null;

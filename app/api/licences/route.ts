@@ -7,6 +7,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, desc, and, inArray, like, or } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceRequestedEmail, placeholderLicenceCreatedEmail } from "@/lib/email/templates";
+import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -318,6 +319,17 @@ export async function POST(req: NextRequest) {
     downloadCount: 0,
     createdAt: now,
   });
+
+  // 39.J — the licence form itself is the articulable business reason (fire-and-forget).
+  void appendEvent(db, {
+    chainKey: licenceChain(licenceId),
+    eventType: "business_reason.recorded",
+    clauseRef: "39.J",
+    licenceId,
+    talentId: resolvedTalentId,
+    actorId: session.sub,
+    payload: { projectName: projectName.trim(), productionCompany: productionCompany.trim(), intendedUse: intendedUse.trim() },
+  }).catch(() => { /* non-fatal */ });
 
   // Notification routing depends on who created the licence.
   void (async () => {

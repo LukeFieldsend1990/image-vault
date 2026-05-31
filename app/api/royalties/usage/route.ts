@@ -8,6 +8,7 @@ import { requireRoyaltySource, isRoyaltySourceError } from "@/lib/auth/requireRo
 import { checkRateLimit } from "@/lib/auth/rateLimit";
 import { computeRoyalty, DEFAULT_SPLIT, type SplitPcts } from "@/lib/royalties/split";
 import { assertNoActiveStrike } from "@/lib/compliance/enforce";
+import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 
 const AI_LICENCE_TYPES = new Set(["ai_avatar", "training_data"]);
 
@@ -156,6 +157,17 @@ export async function POST(req: NextRequest) {
       recordedAt: now,
     })
     .onConflictDoNothing();
+
+  // 39.C — each metered generation appends a use.metered ledger event (fire-and-forget).
+  void appendEvent(db, {
+    chainKey: licenceChain(auth.licenceId),
+    eventType: "use.metered",
+    clauseRef: "39.C",
+    licenceId: auth.licenceId,
+    talentId: auth.talentId,
+    actorId: auth.sourceId,
+    payload: { units, grossPence: split.grossPence, talentPence: split.talentPence, usageEventId: eventId },
+  }).catch(() => { /* non-fatal */ });
 
   return NextResponse.json(
     { ok: true, eventId, grossPence: split.grossPence, talentPence: split.talentPence },
