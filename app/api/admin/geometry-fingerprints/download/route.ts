@@ -6,7 +6,7 @@ import { geometryFingerprints, scanFiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { getRequestContext } from "@cloudflare/next-on-pages";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 // GET /api/admin/geometry-fingerprints/download?fingerprintId=xxx&type=original|watermarked
 // Admin-only direct download bypassing the licensee dual-custody flow.
