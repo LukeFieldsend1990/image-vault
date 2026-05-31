@@ -8,6 +8,7 @@ import { isAdmin } from "@/lib/auth/adminEmails";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { eq } from "drizzle-orm";
 import { slotDirection } from "@/lib/geo-fingerprint/payload";
+import { licences, scanPackages, users } from "@/lib/db/schema";
 
 // POST /api/admin/geometry-fingerprints/verify
 // Server-side streaming verification of a stored watermarked OBJ against its fingerprint.
@@ -33,10 +34,15 @@ export async function POST(req: NextRequest) {
     .select({
       id: geometryFingerprints.id,
       fileId: geometryFingerprints.fileId,
+      licenceId: geometryFingerprints.licenceId,
+      licenseeId: geometryFingerprints.licenseeId,
+      packageId: geometryFingerprints.packageId,
       watermarkedR2Key: geometryFingerprints.watermarkedR2Key,
       fingerprintBits: geometryFingerprints.fingerprintBits,
       fingerprintBitsLength: geometryFingerprints.fingerprintBitsLength,
       repeatFactor: geometryFingerprints.repeatFactor,
+      fingerprintPayloadHash: geometryFingerprints.fingerprintPayloadHash,
+      createdAt: geometryFingerprints.createdAt,
       status: geometryFingerprints.status,
     })
     .from(geometryFingerprints)
@@ -112,6 +118,19 @@ export async function POST(req: NextRequest) {
   const confidence = correctBits / fp.fingerprintBitsLength;
   const bitErrorRate = 1 - confidence;
 
+  // Resolve human-readable payload fields
+  const [licenceRow, licenseeRow, pkgRow] = await Promise.all([
+    db.select({ projectName: licences.projectName, validFrom: licences.validFrom, validTo: licences.validTo })
+      .from(licences).where(eq(licences.id, fp.licenceId)).get(),
+    db.select({ email: users.email }).from(users).where(eq(users.id, fp.licenseeId)).get(),
+    db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, fp.packageId)).get(),
+  ]);
+
+  function ts(unix: number | null | undefined): string | null {
+    if (!unix) return null;
+    return new Date(unix * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
   return NextResponse.json({
     ok: true,
     fingerprintId: fp.id,
@@ -123,6 +142,21 @@ export async function POST(req: NextRequest) {
     bitErrorRate: Math.round(bitErrorRate * 1000) / 1000,
     confidence: Math.round(confidence * 1000) / 1000,
     verdict: confidence >= 0.95 ? "confirmed" : confidence >= 0.75 ? "likely" : "weak",
+    // Decoded watermark payload — the exact data baked into the geometry
+    encodedPayload: {
+      fileId: fp.fileId,
+      filename: file.filename,
+      licenceId: fp.licenceId,
+      projectName: licenceRow?.projectName ?? null,
+      validFrom: ts(licenceRow?.validFrom),
+      validTo: ts(licenceRow?.validTo),
+      licenseeId: fp.licenseeId,
+      licenseeEmail: licenseeRow?.email ?? null,
+      packageId: fp.packageId,
+      packageName: pkgRow?.name ?? null,
+      payloadHash: fp.fingerprintPayloadHash,
+      issuedAt: ts(fp.createdAt),
+    },
   });
 }
 

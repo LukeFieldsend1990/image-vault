@@ -11,12 +11,28 @@ export interface FingerprintFileRow {
   createdAt: number;
 }
 
+interface EncodedPayload {
+  fileId: string;
+  filename: string;
+  licenceId: string;
+  projectName: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  licenseeId: string;
+  licenseeEmail: string | null;
+  packageId: string;
+  packageName: string | null;
+  payloadHash: string;
+  issuedAt: string | null;
+}
+
 interface VerifyResult {
   confidence: number;
   bitErrorRate: number;
   correctBits: number;
   totalBits: number;
   verdict: "confirmed" | "likely" | "weak";
+  encodedPayload?: EncodedPayload;
 }
 
 export interface JobRow {
@@ -308,7 +324,7 @@ export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRo
                         style={{ borderColor: "var(--color-border)" }}
                       >
                         <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p
                               className="text-[11px] font-mono truncate"
                               style={{ color: "var(--color-ink)" }}
@@ -323,6 +339,40 @@ export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRo
                                 {fp.error}
                               </p>
                             )}
+                            {/* Decoded payload — shown after successful verify */}
+                            {(() => {
+                              const r = verifyResults.get(fp.id);
+                              if (!r || r === "error") return null;
+                              const res = r as VerifyResult;
+                              if (!res.encodedPayload) return null;
+                              const p = res.encodedPayload;
+                              const rows = [
+                                ["File", p.filename],
+                                ["Package", p.packageName ?? p.packageId],
+                                ["Project", p.projectName ?? "—"],
+                                ["Licensee", p.licenseeEmail ?? p.licenseeId],
+                                ["Licence period", p.validFrom && p.validTo ? `${p.validFrom} → ${p.validTo}` : p.validFrom ?? p.validTo ?? "—"],
+                                ["Licence ID", p.licenceId],
+                                ["Issued", p.issuedAt ?? "—"],
+                                ["Payload hash", p.payloadHash.slice(0, 16) + "…"],
+                              ];
+                              return (
+                                <div
+                                  className="mt-2 rounded px-3 py-2 text-[10px] font-mono"
+                                  style={{ background: "rgba(5,150,105,0.06)", border: "1px solid rgba(5,150,105,0.2)" }}
+                                >
+                                  <p className="text-[9px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#059669" }}>
+                                    Decoded Watermark Payload
+                                  </p>
+                                  {rows.map(([label, value]) => (
+                                    <div key={label} className="flex gap-2">
+                                      <span className="shrink-0 w-28" style={{ color: "var(--color-muted)" }}>{label}</span>
+                                      <span className="break-all" style={{ color: "var(--color-ink)" }}>{value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
                             {fp.status === "ready" && (
@@ -353,8 +403,9 @@ export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRo
                                 >
                                   {verifying.has(fp.id) ? "Verifying…" : "Verify"}
                                 </button>
-                                {verifyResults.has(fp.id) && (() => {
+                                {(() => {
                                   const r = verifyResults.get(fp.id);
+                                  if (!r) return null;
                                   if (r === "error") return (
                                     <span className="text-[10px]" style={{ color: "#991b1b" }}>Error</span>
                                   );
@@ -362,7 +413,7 @@ export default function GeoFingerprintJobsTable({ jobs, nowSecs }: { jobs: JobRo
                                   const col = res.verdict === "confirmed" ? "#059669" : res.verdict === "likely" ? "#d97706" : "#991b1b";
                                   return (
                                     <span
-                                      className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                                      className="text-[10px] font-semibold px-2 py-0.5 rounded cursor-help"
                                       style={{ background: `${col}18`, color: col }}
                                       title={`${res.correctBits}/${res.totalBits} bits · BER ${(res.bitErrorRate * 100).toFixed(1)}%`}
                                     >
