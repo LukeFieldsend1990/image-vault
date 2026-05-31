@@ -126,8 +126,9 @@ async function processJob(
     .all();
 
   if (!job) throw new Error(`Job ${jobId} not found`);
-  if (job.status === "complete") return; // idempotent
+  if (job.status === "complete") { console.log(`[geo-fingerprint] job ${jobId} already complete, skipping`); return; }
 
+  console.log(`[geo-fingerprint] job ${jobId} starting (licence ${job.licenceId})`);
   await db
     .update(geometryFingerprintJobs)
     .set({ status: "processing" })
@@ -172,6 +173,8 @@ async function processJob(
     .set({ filesTotal: objFiles.length })
     .where(eq(geometryFingerprintJobs.id, jobId));
 
+  console.log(`[geo-fingerprint] found ${objFiles.length} OBJ files to process`);
+
   if (objFiles.length === 0) {
     await db
       .update(geometryFingerprintJobs)
@@ -193,6 +196,9 @@ async function processJob(
         continue;
       }
 
+      console.log(`[geo-fingerprint] [${file.filename}] pass 1 — counting vertices (size: ${probe.size} bytes)`);
+      const t0 = Date.now();
+
       // Two-pass streaming embed: pass 1 counts vertices, pass 2 writes modified output
       const result = await embedFingerprintStreaming(
         async () => {
@@ -209,9 +215,13 @@ async function processJob(
         env.FINGERPRINT_SIGNING_KEY,
       );
 
+      console.log(`[geo-fingerprint] [${file.filename}] pass 1 done in ${Date.now() - t0}ms — ${result.vertexCount} vertices, ${result.regionCount} modified. pass 2 — writing watermarked OBJ`);
+      const t1 = Date.now();
+
       // Write watermarked output via multipart upload (R2 put requires known length for streams)
       const watermarkedKey = `watermarks/${job.licenceId}/${file.id}.obj`;
       await putStreamMultipart(env.SCANS_BUCKET, watermarkedKey, result.outputStream, "application/obj");
+      console.log(`[geo-fingerprint] [${file.filename}] pass 2 done in ${Date.now() - t1}ms — uploaded to ${watermarkedKey}`);
 
       // Record fingerprint
       await db.insert(geometryFingerprints).values({
@@ -234,12 +244,13 @@ async function processJob(
       });
 
       filesDone++;
+      console.log(`[geo-fingerprint] [${file.filename}] done ✓ (${filesDone}/${objFiles.length}, total ${Date.now() - t0}ms)`);
       await db
         .update(geometryFingerprintJobs)
         .set({ filesDone })
         .where(eq(geometryFingerprintJobs.id, jobId));
     } catch (err) {
-      console.error(`[geo-fingerprint] error on file ${file.id}:`, err);
+      console.error(`[geo-fingerprint] [${file.filename}] FAILED:`, err);
       // Record failed fingerprint row so we know it was attempted
       await db.insert(geometryFingerprints).values({
         id: fingerprintId,
@@ -266,4 +277,5 @@ async function processJob(
     .update(geometryFingerprintJobs)
     .set({ status: "complete", completedAt: now, filesDone })
     .where(eq(geometryFingerprintJobs.id, jobId));
+  console.log(`[geo-fingerprint] job ${jobId} complete — ${filesDone}/${objFiles.length} files watermarked`);
 }
