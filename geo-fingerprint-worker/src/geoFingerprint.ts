@@ -273,23 +273,18 @@ export interface FingerprintMods {
   vertexCount: number;
 }
 
-// Pass 1 only: streams the R2 object to count vertices + compute bbox,
-// then derives the HMAC and returns the per-vertex modification map.
-// The caller handles pass 2 (applying mods + uploading) via streamModifyAndUpload.
-export async function computeFingerprintMods(
-  getBucketObject: () => Promise<{ body: ReadableStream<Uint8Array> }>,
+// Pure HMAC computation — no R2 access. Caller supplies vertexCount + diagonal
+// (obtained via range-based reading in index.ts to avoid loading the full file).
+export async function buildFingerprintMods(
+  vertexCount: number,
+  diagonal: number,
   params: FingerprintParams,
   secret: string,
   strength = 0.00001,
 ): Promise<FingerprintMods> {
-  const obj1 = await getBucketObject();
-  const { vertexCount, diagonal } = await streamCountAndBbox(obj1.body);
-
   if (vertexCount < 10) throw new Error("OBJ has too few vertices for fingerprinting");
-
   const { mods, bitsHex, payloadHash, regionCount } = await computeModifications(
     params, secret, vertexCount, diagonal, strength,
   );
-
   return { mods, fingerprintBitsHex: bitsHex, payloadHash, regionCount, vertexCount };
 }
