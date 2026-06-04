@@ -5,7 +5,7 @@
 // check so every compliance route enforces it identically.
 
 import { and, eq } from "drizzle-orm";
-import { licences, talentReps, users } from "@/lib/db/schema";
+import { licences, organisationMembers, talentReps, users } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 import type { SessionPayload } from "@/lib/auth/jwt";
 import { isAdmin } from "@/lib/auth/adminEmails";
@@ -120,7 +120,7 @@ export async function authorizeProducer(
 export async function authorizeScope(
   db: Db,
   session: SessionPayload,
-  scope: "licence" | "talent" | "production",
+  scope: "licence" | "talent" | "production" | "organisation",
   scopeId: string,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   if (!await isComplianceEnabled(db, session)) {
@@ -145,6 +145,18 @@ export async function authorizeScope(
       if (link) return { ok: true };
     }
     return { ok: false, status: 403, error: "Forbidden" };
+  }
+
+  if (scope === "organisation") {
+    const member = await db
+      .select({ userId: organisationMembers.userId })
+      .from(organisationMembers)
+      .where(and(
+        eq(organisationMembers.organisationId, scopeId),
+        eq(organisationMembers.userId, session.sub),
+      ))
+      .get();
+    return member ? { ok: true } : { ok: false, status: 403, error: "Forbidden" };
   }
 
   // production scope is admin-only (handled above)

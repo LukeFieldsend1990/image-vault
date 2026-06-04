@@ -811,7 +811,7 @@ export const complianceAttestations = sqliteTable("compliance_attestations", {
 
 export const complianceCertificates = sqliteTable("compliance_certificates", {
   id: text("id").primaryKey(),
-  scope: text("scope", { enum: ["licence", "talent", "production"] }).notNull(),
+  scope: text("scope", { enum: ["licence", "talent", "production", "organisation"] }).notNull(),
   scopeId: text("scope_id").notNull(),
   regime: text("regime").notNull().default("sag_aftra"),
   r2Key: text("r2_key").notNull(),
