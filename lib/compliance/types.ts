@@ -85,7 +85,10 @@ export interface EvaluatedEvent {
   scope?: ComplianceScope;
 }
 
-export type ObligationStatus = "met" | "gap" | "n/a";
+// "pending" = obligation exists but its clock hasn't started yet
+// (e.g. scrub attestation on an active licence, or transfer approval before any transfer is requested).
+// Pending items appear in the action queue but do NOT count against the health score.
+export type ObligationStatus = "met" | "gap" | "n/a" | "pending";
 
 export interface ObligationResult {
   id: string;

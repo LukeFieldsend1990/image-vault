@@ -3,6 +3,13 @@
 // Loads all licences for an org, evaluates SAG-AFTRA (or other regime) obligations
 // per production group, and returns health scores, obligation summaries, and a
 // prioritised action queue with deadline labels.
+//
+// Key design decisions:
+// - Each licence is evaluated INDEPENDENTLY; the production card shows the WORST
+//   status per obligation across all licences (one gap on one licence = production gap).
+// - A synthetic "scrub attestation" obligation is injected based on licence lifecycle:
+//   pending (active), gap (scrub period/expired/closed), met (attested), n/a (denied).
+// - "pending" obligations do NOT count against the health score.
 
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import {
@@ -17,7 +24,7 @@ import {
 import { evaluateObligations } from "./registry";
 import "./regimes";
 import type { getDb } from "@/lib/db";
-import type { EvaluatedEvent, LicenceLike, ObligationResult, RegimeId } from "./types";
+import type { ComplianceEventType, EvaluatedEvent, LicenceLike, ObligationResult, RegimeId } from "./types";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -42,6 +49,7 @@ export interface ObligationSummaryItem {
   metCount: number;
   gapCount: number;
   naCount: number;
+  pendingCount: number;
   progressPct: number;
 }
 
@@ -55,7 +63,7 @@ export interface ActionItem {
   severity: "required" | "recommended";
   action: string;
   actionOwner: "producer" | "talent" | "platform";
-  urgency: "critical" | "soon" | "upcoming" | "info";
+  urgency: "critical" | "soon" | "upcoming" | "info" | "pending";
   deadlineLabel: string | null;
 }
 
@@ -117,10 +125,13 @@ const REMEDIATION: Record<string, { action: string; owner: "producer" | "talent"
     action: "File written AI training-data licensing notice",
     owner: "producer",
   },
+  "platform-scrub-attestation": {
+    action: "Attest deletion of all replica assets after licence expiry",
+    owner: "producer",
+  },
 };
 
 // Days from licence creation (or first download) by which each obligation must be met.
-// Obligations not listed here have no hard deadline (urgency derived from severity only).
 const DEADLINE_DAYS: Record<string, number> = {
   "sag-39-b-consent": 0,              // must be in place before use
   "sag-39-e-biometric-isolation": 7,  // 7 days from licence grant
@@ -128,8 +139,11 @@ const DEADLINE_DAYS: Record<string, number> = {
   "sag-39-i-transfer-approval": 0,    // before transfer commences
 };
 
+// "pending" does NOT count against health score — it's a future obligation.
 function computeHealthScore(obligations: ObligationResult[]): number {
-  const required = obligations.filter((o) => o.severity === "required" && o.status !== "n/a");
+  const required = obligations.filter(
+    (o) => o.severity === "required" && o.status !== "n/a" && o.status !== "pending",
+  );
   if (required.length === 0) return 100;
   const met = required.filter((o) => o.status === "met").length;
   return Math.round((met / required.length) * 100);
@@ -152,7 +166,6 @@ function computeUrgency(
   const deadlineDays = DEADLINE_DAYS[obligationId];
 
   if (deadlineDays !== undefined) {
-    // 39.H clock starts from first download, not licence creation
     const startAt =
       obligationId === "sag-39-h-security-custody" && lastDownloadAt
         ? lastDownloadAt
@@ -170,40 +183,109 @@ function computeUrgency(
   return { urgency: "info", deadlineLabel: null };
 }
 
+// ── Scrub obligation ──────────────────────────────────────────────────────────
+//
+// Platform-level obligation: after a licence expires the producer must attest
+// they have deleted all replica assets (anything the render bridge didn't
+// automatically clean up). Tracked via licences.scrub_attested_at.
+//
+// Status derivation:
+//   scrubAttestedAt set  → met
+//   SCRUB_PERIOD / EXPIRED / CLOSED / REVOKED without attestation → gap
+//   DENIED → n/a (licence never activated, no assets in scope)
+//   anything else (active licence) → pending
+
+const SCRUB_OBLIGATION: Pick<ObligationResult, "id" | "clauseRef" | "title" | "severity" | "satisfiedBy"> = {
+  id: "platform-scrub-attestation",
+  clauseRef: "Scrub",
+  title: "Replica deletion & scrub attestation",
+  severity: "required",
+  satisfiedBy: ["replica.scrub_attested" as ComplianceEventType],
+};
+
+const SCRUB_ACTIVE_STATUSES = new Set(["SCRUB_PERIOD", "EXPIRED", "CLOSED", "REVOKED"]);
+
+function scrubObligationResult(licence: {
+  status: string;
+  scrubAttestedAt: number | null;
+}): ObligationResult {
+  if (licence.scrubAttestedAt) return { ...SCRUB_OBLIGATION, status: "met" };
+  if (licence.status === "DENIED") return { ...SCRUB_OBLIGATION, status: "n/a" };
+  if (SCRUB_ACTIVE_STATUSES.has(licence.status)) return { ...SCRUB_OBLIGATION, status: "gap" };
+  return { ...SCRUB_OBLIGATION, status: "pending" };
+}
+
+// ── Per-licence evaluation + worst-case merge ─────────────────────────────────
+//
+// Each licence in a production is evaluated independently. The production card
+// shows the WORST status per obligation across all licences, so one licence's
+// gap is never masked by another licence's met event.
+
+type LicenceRow = {
+  id: string;
+  licenceType: string | null;
+  permitAiTraining: boolean;
+  status: string;
+  scrubAttestedAt: number | null;
+  scrubDeadline: number | null;
+  createdAt: number;
+  lastDownloadAt: number | null;
+};
+
 type LicenceEventRow = { eventType: string; scopeJson: string };
 
-// Evaluate a set of licences as one production unit.
-// Events are already loaded — this is pure in-memory computation.
-function evaluateGroup(
-  licenceRows: Array<{ id: string; licenceType: string | null; permitAiTraining: boolean }>,
-  eventsByLicence: Map<string, LicenceEventRow[]>,
+// Status rank: gap beats pending beats met beats n/a
+const STATUS_RANK: Record<string, number> = { gap: 3, pending: 2, met: 1, "n/a": 0 };
+
+function evaluateLicence(
+  licence: LicenceRow,
+  events: LicenceEventRow[],
   regime: RegimeId,
 ): ObligationResult[] {
   const repLicence: LicenceLike = {
-    licenceType:
-      licenceRows.find((l) => l.licenceType === "ai_avatar" || l.licenceType === "training_data")
-        ?.licenceType ?? licenceRows[0]?.licenceType ?? null,
-    permitAiTraining: licenceRows.some((l) => l.permitAiTraining),
+    licenceType: licence.licenceType,
+    permitAiTraining: licence.permitAiTraining,
   };
+  const evaluated: EvaluatedEvent[] = events.map((e) => {
+    let scope: EvaluatedEvent["scope"] | undefined;
+    try { scope = JSON.parse(e.scopeJson) as EvaluatedEvent["scope"]; } catch { /* */ }
+    return { eventType: e.eventType as EvaluatedEvent["eventType"], scope };
+  });
 
-  const allEvents: EvaluatedEvent[] = [];
-  for (const l of licenceRows) {
-    for (const e of eventsByLicence.get(l.id) ?? []) {
-      let scope: EvaluatedEvent["scope"] | undefined;
-      try { scope = JSON.parse(e.scopeJson) as EvaluatedEvent["scope"]; } catch { /* ignore */ }
-      allEvents.push({ eventType: e.eventType as EvaluatedEvent["eventType"], scope });
+  const results = evaluateObligations(regime, repLicence, evaluated);
+  results.push(scrubObligationResult(licence));
+  return results;
+}
+
+// Merge per-licence results: worst status per obligation wins.
+function evaluateGroup(
+  licenceRows: LicenceRow[],
+  eventsByLicence: Map<string, LicenceEventRow[]>,
+  regime: RegimeId,
+): ObligationResult[] {
+  if (licenceRows.length === 0) return [];
+  const merged = new Map<string, ObligationResult>();
+
+  for (const licence of licenceRows) {
+    const results = evaluateLicence(licence, eventsByLicence.get(licence.id) ?? [], regime);
+    for (const o of results) {
+      const existing = merged.get(o.id);
+      if (!existing || (STATUS_RANK[o.status] ?? 0) > (STATUS_RANK[existing.status] ?? 0)) {
+        merged.set(o.id, { ...o });
+      }
     }
   }
 
-  return evaluateObligations(regime, repLicence, allEvents);
+  return [...merged.values()];
 }
+
+// ── Main export ───────────────────────────────────────────────────────────────
 
 export async function buildOrgDashboard(
   db: Db,
   orgId: string,
   regime: RegimeId,
 ): Promise<DashboardData | null> {
-  // Load org name
   const org = await db
     .select({ name: organisations.name })
     .from(organisations)
@@ -211,7 +293,7 @@ export async function buildOrgDashboard(
     .get();
   if (!org) return null;
 
-  // Load all licences for the org
+  // Include scrub fields in the query
   const licenceRows = await db
     .select({
       id: licences.id,
@@ -222,6 +304,8 @@ export async function buildOrgDashboard(
       status: licences.status,
       createdAt: licences.createdAt,
       lastDownloadAt: licences.lastDownloadAt,
+      scrubAttestedAt: licences.scrubAttestedAt,
+      scrubDeadline: licences.scrubDeadline,
     })
     .from(licences)
     .where(eq(licences.organisationId, orgId))
@@ -271,7 +355,7 @@ export async function buildOrgDashboard(
     eventsByLicence.set(e.licenceId, list);
   }
 
-  // Load production metadata for named productions
+  // Load production metadata
   const productionIds = [
     ...new Set(licenceRows.map((l) => l.productionId).filter(Boolean)),
   ] as string[];
@@ -308,7 +392,7 @@ export async function buildOrgDashboard(
     groups.get(key)!.licences.push(l);
   }
 
-  // Evaluate obligations per production group (pure in-memory)
+  // Evaluate obligations per production group (per-licence + worst-case merge)
   const productionResults: ProductionCompliance[] = [];
   for (const group of groups.values()) {
     const obligations = evaluateGroup(group.licences, eventsByLicence, regime);
@@ -328,10 +412,9 @@ export async function buildOrgDashboard(
     });
   }
 
-  // Sort: worst health score first so the dashboard shows what needs attention
   productionResults.sort((a, b) => a.healthScore - b.healthScore);
 
-  // Org-level health score: weighted average by licence count
+  // Org health score: weighted average by licence count
   const totalLicences = licenceRows.length;
   const weightedScore = productionResults.reduce(
     (sum, p) => sum + p.healthScore * p.licenceCount,
@@ -352,12 +435,14 @@ export async function buildOrgDashboard(
           metCount: 0,
           gapCount: 0,
           naCount: 0,
+          pendingCount: 0,
           progressPct: 0,
         });
       }
       const item = obligationMap.get(o.id)!;
       if (o.status === "met") item.metCount++;
       else if (o.status === "gap") item.gapCount++;
+      else if (o.status === "pending") item.pendingCount++;
       else item.naCount++;
     }
   }
@@ -369,46 +454,71 @@ export async function buildOrgDashboard(
     a.clauseRef.localeCompare(b.clauseRef),
   );
 
-  // Per-licence action items for every gap
+  // Per-licence action items for every gap or pending obligation
   const actionItems: ActionItem[] = [];
   for (const group of groups.values()) {
     for (const licence of group.licences) {
-      const obligations = evaluateGroup([licence], eventsByLicence, regime);
+      const obligations = evaluateLicence(
+        licence,
+        eventsByLicence.get(licence.id) ?? [],
+        regime,
+      );
+
       for (const o of obligations) {
-        if (o.status !== "gap") continue;
+        if (o.status !== "gap" && o.status !== "pending") continue;
         const rem = REMEDIATION[o.id];
         if (!rem) continue;
-        const { urgency, deadlineLabel } = computeUrgency(
-          o.id,
-          o.severity,
-          licence.createdAt,
-          licence.lastDownloadAt,
-        );
-        actionItems.push({
-          productionName: group.productionName,
-          licenceId: licence.id,
-          licenceProjectName: licence.projectName,
-          obligationId: o.id,
-          clauseRef: o.clauseRef,
-          title: o.title,
-          severity: o.severity,
-          action: rem.action,
-          actionOwner: rem.owner,
-          urgency,
-          deadlineLabel,
-        });
+
+        if (o.status === "pending") {
+          // Pending items: scrub attestation on active licences
+          actionItems.push({
+            productionName: group.productionName,
+            licenceId: licence.id,
+            licenceProjectName: licence.projectName,
+            obligationId: o.id,
+            clauseRef: o.clauseRef,
+            title: o.title,
+            severity: o.severity,
+            action: rem.action,
+            actionOwner: rem.owner,
+            urgency: "pending",
+            deadlineLabel: "Required on expiry",
+          });
+        } else {
+          const { urgency, deadlineLabel } = computeUrgency(
+            o.id,
+            o.severity,
+            licence.createdAt,
+            licence.lastDownloadAt,
+          );
+          actionItems.push({
+            productionName: group.productionName,
+            licenceId: licence.id,
+            licenceProjectName: licence.projectName,
+            obligationId: o.id,
+            clauseRef: o.clauseRef,
+            title: o.title,
+            severity: o.severity,
+            action: rem.action,
+            actionOwner: rem.owner,
+            urgency,
+            deadlineLabel,
+          });
+        }
       }
     }
   }
 
-  const urgencyOrder: Record<string, number> = { critical: 0, soon: 1, upcoming: 2, info: 3 };
+  const urgencyOrder: Record<string, number> = {
+    critical: 0, soon: 1, upcoming: 2, info: 3, pending: 4,
+  };
   actionItems.sort((a, b) => {
     const u = urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
     if (u !== 0) return u;
     return a.severity === "required" && b.severity !== "required" ? -1 : 1;
   });
 
-  // Active strikes scoped to this org (global + org-level)
+  // Active strikes scoped to this org
   const strikeRows = await db
     .select({ id: strikeLocks.id })
     .from(strikeLocks)
