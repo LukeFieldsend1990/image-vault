@@ -5,7 +5,7 @@
 // check so every compliance route enforces it identically.
 
 import { and, eq } from "drizzle-orm";
-import { licences, organisationMembers, talentReps, users } from "@/lib/db/schema";
+import { licences, organisationMembers, productions, talentReps, users } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 import type { SessionPayload } from "@/lib/auth/jwt";
 import { isAdmin } from "@/lib/auth/adminEmails";
@@ -159,6 +159,36 @@ export async function authorizeScope(
     return member ? { ok: true } : { ok: false, status: 403, error: "Forbidden" };
   }
 
-  // production scope is admin-only (handled above)
+  if (scope === "production") {
+    // Allow org members whose org owns this production.
+    const prod = await db
+      .select({ organisationId: productions.organisationId })
+      .from(productions)
+      .where(eq(productions.id, scopeId))
+      .get();
+
+    if (prod?.organisationId) {
+      const member = await db
+        .select({ userId: organisationMembers.userId })
+        .from(organisationMembers)
+        .where(and(
+          eq(organisationMembers.organisationId, prod.organisationId),
+          eq(organisationMembers.userId, session.sub),
+        ))
+        .get();
+      if (member) return { ok: true };
+    }
+
+    // Fallback: allow if the user holds at least one licence under this production
+    const lic = await db
+      .select({ id: licences.id })
+      .from(licences)
+      .where(and(eq(licences.productionId, scopeId), eq(licences.licenseeId, session.sub)))
+      .get();
+    if (lic) return { ok: true };
+
+    return { ok: false, status: 403, error: "Forbidden" };
+  }
+
   return { ok: false, status: 403, error: "Forbidden" };
 }
