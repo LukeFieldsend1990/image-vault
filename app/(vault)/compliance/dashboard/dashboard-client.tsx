@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem, LicenceSummary } from "@/lib/compliance/dashboard";
+import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem, LicenceSummary, ObligationResultWithEvidence } from "@/lib/compliance/dashboard";
 
 interface OrgOption {
   id: string;
@@ -254,12 +254,79 @@ const OBL_STATUS_ICON: Record<string, string> = { met: "✓", gap: "⚠", pendin
 const OBL_STATUS_COLOR: Record<string, string> = {
   met: "#1a7f37", gap: "#c0392b", pending: "#2563eb", "n/a": "#aaa",
 };
-const OBL_PROOF: Record<string, string> = {
-  met: "Evidence on ledger",
-  gap: "No satisfying event recorded",
-  pending: "Required on licence expiry",
-  "n/a": "Not applicable to this licence",
+
+// Human-friendly names for ledger event types shown in the modal
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  "consent.granted": "Consent granted",
+  "consent.dub_language_granted": "Dubbing consent granted",
+  "biometric.isolation_attested": "Biometric isolation attested",
+  "security.custody_attested": "Security custody attested",
+  "business_reason.recorded": "Business reason recorded",
+  "use.metered": "Use metered",
+  "transfer.approved": "Transfer approved",
+  "training.notice_filed": "Training notice filed",
+  "replica.scrub_attested": "Scrub / deletion attested",
 };
+
+function fmtEventDate(unix: number): string {
+  return new Date(unix * 1000).toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+}
+
+function formatScope(scope: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (typeof scope.useType === "string") parts.push(`use type: ${scope.useType.replace(/_/g, " ")}`);
+  if (typeof scope.territory === "string") parts.push(`territory: ${scope.territory}`);
+  if (typeof scope.language === "string") parts.push(`language: ${scope.language}`);
+  if (scope.scriptedAlterations === true) parts.push("scripted alterations: yes");
+  return parts.join("  ·  ");
+}
+
+function ObligationEvidenceDetail({ o }: { o: ObligationResultWithEvidence }) {
+  const ic = OBL_STATUS_COLOR[o.status] ?? "#aaa";
+
+  if (o.status === "met" && o.evidence) {
+    const ev = o.evidence;
+    const label = EVENT_TYPE_LABELS[ev.eventType] ?? ev.eventType.replace(/[._]/g, " ");
+    const scopeStr = formatScope(ev.scope);
+    return (
+      <div style={{ marginTop: "3px" }}>
+        <span className="font-mono text-[10px]" style={{ color: ic }}>
+          {label}
+        </span>
+        <span className="text-[10px]" style={{ color: "#999" }}>
+          {" "}· seq {ev.seq} · {fmtEventDate(ev.createdAt)} · <code style={{ fontFamily: "ui-monospace,monospace" }}>{ev.hash.slice(0, 12)}…</code>
+        </span>
+        {scopeStr && (
+          <p className="text-[10px] mt-0.5" style={{ color: "#aaa" }}>{scopeStr}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (o.status === "gap") {
+    const needed = o.satisfiedBy.map((t) => EVENT_TYPE_LABELS[t] ?? t.replace(/[._]/g, " ")).join(" or ");
+    return (
+      <div style={{ marginTop: "3px" }}>
+        <span className="text-[10px]" style={{ color: ic }}>
+          Requires: <em>{needed}</em>
+        </span>
+        <span className="text-[10px]" style={{ color: "#aaa" }}> — no matching event in ledger chain</span>
+      </div>
+    );
+  }
+
+  if (o.status === "pending") {
+    return (
+      <p className="text-[10px] mt-0.5" style={{ color: ic }}>
+        Not yet required — obligation triggered on licence expiry
+      </p>
+    );
+  }
+
+  return null;
+}
 
 function ProductionModal({
   prod,
@@ -387,9 +454,7 @@ function LicenceObligationPanel({ lic }: { lic: LicenceSummary }) {
                   <span className="font-mono mr-1.5" style={{ color: "var(--color-muted)" }}>{o.clauseRef}</span>
                   {o.title}
                 </p>
-                <p className="text-[11px] mt-0.5" style={{ color: ic, opacity: 0.85 }}>
-                  {OBL_PROOF[o.status] ?? o.status}
-                </p>
+                <ObligationEvidenceDetail o={o} />
               </div>
               <span className="text-[10px] uppercase tracking-widest shrink-0" style={{ color: "var(--color-muted)" }}>
                 {o.severity}
@@ -501,14 +566,10 @@ function ProductionCard({
   );
 }
 
-// Map obligation IDs to direct action URLs (producer-owned obligations only).
-// Talent-owned obligations (39.B, 39.D) have no licensee-accessible page.
+// Only link to pages that actually exist. /licences/[id] has no detail page —
+// only /scrub and /download exist — so 39.E/H/I/J have no linkable destination.
 const ACTION_LINKS: Record<string, (licenceId: string) => string> = {
   "platform-scrub-attestation": (id) => `/licences/${id}/scrub`,
-  "sag-39-e-biometric-isolation": (id) => `/licences/${id}`,
-  "sag-39-h-security-custody": (id) => `/licences/${id}`,
-  "sag-39-i-transfer-approval": (id) => `/licences/${id}`,
-  "sag-39-j-business-reason": (id) => `/licences/${id}`,
 };
 
 function ActionRow({ item }: { item: ActionItem }) {
