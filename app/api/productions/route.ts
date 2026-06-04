@@ -2,9 +2,9 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, organisations } from "@/lib/db/schema";
+import { productions, productionCompanies, organisations, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, like, desc } from "drizzle-orm";
+import { eq, like, desc, and } from "drizzle-orm";
 
 // GET /api/productions?q=search — autocomplete search
 export async function GET(req: NextRequest) {
@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
     vfxSupervisor?: string;
     notes?: string;
     organisationId?: string;
+    sagProjectNumber?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -80,6 +81,14 @@ export async function POST(req: NextRequest) {
 
   if (!body.name?.trim()) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  }
+
+  // Licensee role must supply an organisationId and be a member of it
+  if (session.role === "licensee" && !body.organisationId) {
+    return NextResponse.json(
+      { error: "Licensee users must provide an organisationId when creating a production" },
+      { status: 400 }
+    );
   }
 
   const db = getDb();
@@ -118,6 +127,26 @@ export async function POST(req: NextRequest) {
       .get();
     if (!org) return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
     orgId = org.id;
+
+    // If licensee, verify membership
+    if (session.role === "licensee") {
+      const membership = await db
+        .select({ memberRole: organisationMembers.memberRole })
+        .from(organisationMembers)
+        .where(
+          and(
+            eq(organisationMembers.organisationId, orgId),
+            eq(organisationMembers.userId, session.sub)
+          )
+        )
+        .get();
+      if (!membership) {
+        return NextResponse.json(
+          { error: "You are not a member of this organisation" },
+          { status: 403 }
+        );
+      }
+    }
   }
 
   const productionId = crypto.randomUUID();
@@ -134,6 +163,8 @@ export async function POST(req: NextRequest) {
     vfxSupervisor: body.vfxSupervisor ?? null,
     notes: body.notes ?? null,
     organisationId: orgId,
+    coordinatorId: session.sub,
+    sagProjectNumber: body.sagProjectNumber ?? null,
     createdAt: now,
     updatedAt: now,
   });

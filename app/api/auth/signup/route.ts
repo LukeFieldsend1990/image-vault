@@ -3,7 +3,7 @@ export const runtime = "edge";
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
-import { users, invites, talentReps } from "@/lib/db/schema";
+import { users, invites, talentReps, productionCast, licences, productions, organisations } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
@@ -136,6 +136,95 @@ export async function POST(req: NextRequest) {
         invitedBy: inviteRow.invitedBy,
         createdAt: now,
       });
+    }
+
+    // Auto-link production cast if this invite has a production_id and the role is talent
+    if (inviteRow.productionId && role === "talent") {
+      // Find the cast row for this invite
+      const castRow = await db
+        .select()
+        .from(productionCast)
+        .where(eq(productionCast.inviteId, inviteRow.id))
+        .get();
+
+      if (castRow && castRow.licenceTermsJson) {
+        try {
+          const terms = JSON.parse(castRow.licenceTermsJson) as {
+            intendedUse?: string;
+            validFrom?: number;
+            validTo?: number;
+            licenceType?: string;
+            territory?: string;
+            exclusivity?: string;
+            permitAiTraining?: boolean;
+            proposedFee?: number;
+            projectName?: string;
+            productionCompany?: string;
+          };
+
+          // Get production name for licence fields
+          const prod = await db
+            .select({ name: productions.name, organisationId: productions.organisationId })
+            .from(productions)
+            .where(eq(productions.id, inviteRow.productionId))
+            .get();
+
+          let companyName = terms.productionCompany ?? "Production Company";
+          if (prod?.organisationId) {
+            const org = await db
+              .select({ name: organisations.name })
+              .from(organisations)
+              .where(eq(organisations.id, prod.organisationId))
+              .get();
+            if (org) companyName = org.name;
+          }
+
+          const licenceId = crypto.randomUUID();
+          await db.insert(licences).values({
+            id: licenceId,
+            talentId: userId,
+            licenseeId: inviteRow.invitedBy,
+            projectName: prod?.name ?? terms.projectName ?? "Production",
+            productionCompany: companyName,
+            intendedUse: terms.intendedUse ?? "Production use",
+            validFrom: terms.validFrom ?? now,
+            validTo: terms.validTo ?? now + 365 * 24 * 60 * 60,
+            status: "AWAITING_PACKAGE",
+            licenceType: (terms.licenceType as typeof licences.$inferInsert["licenceType"]) ?? null,
+            territory: terms.territory ?? null,
+            exclusivity: (terms.exclusivity as typeof licences.$inferInsert["exclusivity"]) ?? "non_exclusive",
+            permitAiTraining: terms.permitAiTraining ?? false,
+            proposedFee: terms.proposedFee ?? null,
+            productionId: inviteRow.productionId,
+            createdAt: now,
+          });
+
+          // Update cast row: link talent, clear terms, set status = linked
+          await db
+            .update(productionCast)
+            .set({
+              talentId: userId,
+              licenceId,
+              linkedAt: now,
+              status: "linked",
+              licenceTermsJson: null,
+            })
+            .where(eq(productionCast.id, castRow.id));
+        } catch {
+          // If something goes wrong, still allow signup to complete
+          // The cast row will remain 'invited' and coordinator can retry
+        }
+      } else if (castRow) {
+        // Cast row exists but no licence terms — just link the talent
+        await db
+          .update(productionCast)
+          .set({
+            talentId: userId,
+            linkedAt: now,
+            status: "linked",
+          })
+          .where(eq(productionCast.id, castRow.id));
+      }
     }
   }
 

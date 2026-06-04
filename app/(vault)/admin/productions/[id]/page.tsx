@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, licences, scanPackages, users, organisations, organisationMembers } from "@/lib/db/schema";
+import { productions, productionCompanies, licences, scanPackages, users, organisations, organisationMembers, productionCast, talentProfiles, invites } from "@/lib/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -37,6 +37,49 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
     .all();
 
   if (!production) redirect("/admin/productions");
+
+  // Cast onboarding
+  const castRows = await db
+    .select({
+      id: productionCast.id,
+      talentId: productionCast.talentId,
+      inviteId: productionCast.inviteId,
+      licenceId: productionCast.licenceId,
+      characterName: productionCast.characterName,
+      department: productionCast.department,
+      sagMember: productionCast.sagMember,
+      status: productionCast.status,
+      addedAt: productionCast.addedAt,
+      linkedAt: productionCast.linkedAt,
+    })
+    .from(productionCast)
+    .where(eq(productionCast.productionId, id))
+    .orderBy(desc(productionCast.addedAt))
+    .all();
+
+  const castTalentIds = castRows.map((c) => c.talentId).filter(Boolean) as string[];
+  const castInviteIds = castRows.map((c) => c.inviteId).filter(Boolean) as string[];
+  const [castProfiles, castInvites] = await Promise.all([
+    castTalentIds.length > 0
+      ? db.select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName }).from(talentProfiles).where(inArray(talentProfiles.userId, castTalentIds)).all()
+      : Promise.resolve([]),
+    castInviteIds.length > 0
+      ? db.select({ id: invites.id, email: invites.email, expiresAt: invites.expiresAt, usedAt: invites.usedAt }).from(invites).where(inArray(invites.id, castInviteIds)).all()
+      : Promise.resolve([]),
+  ]);
+  const profileMap = new Map(castProfiles.map((p) => [p.userId, p.fullName]));
+  const inviteMap = new Map(castInvites.map((i) => [i.id, i]));
+
+  const CAST_STATUS_COLOR: Record<string, string> = {
+    invited: "#d97706", linked: "#2563eb", scan_uploaded: "#7c3aed", consented: "#059669", declined: "#dc2626",
+  };
+  const CAST_STATUS_LABEL: Record<string, string> = {
+    invited: "Invited", linked: "Linked", scan_uploaded: "Reviewing", consented: "Consented", declined: "Declined",
+  };
+
+  // Cast summary counts
+  const castConsented = castRows.filter((c) => c.status === "consented").length;
+  const castTotal = castRows.length;
 
   // Linked licences
   const linkedLicences = await db
@@ -122,6 +165,71 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
       </div>
 
       <ProductionEditForm production={production} />
+
+      {/* Cast Onboarding */}
+      {castRows.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Cast Onboarding ({castConsented}/{castTotal} consented)
+            </h2>
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${castTotal > 0 ? Math.round((castConsented / castTotal) * 100) : 0}%`,
+                    background: castConsented === castTotal ? "#059669" : "#d97706",
+                  }}
+                />
+              </div>
+              <span className="text-xs font-medium" style={{ color: castConsented === castTotal ? "#059669" : "#d97706" }}>
+                {castTotal > 0 ? Math.round((castConsented / castTotal) * 100) : 0}%
+              </span>
+            </div>
+          </div>
+          <div className="rounded border overflow-x-auto" style={{ borderColor: "var(--color-border)" }}>
+            <div
+              className="grid text-[10px] uppercase tracking-widest font-semibold px-4 py-2.5 min-w-[600px]"
+              style={{
+                gridTemplateColumns: "2fr 1.5fr 1fr 0.7fr 1fr 1fr",
+                color: "var(--color-muted)",
+                background: "var(--color-surface)",
+                borderBottom: "1px solid var(--color-border)",
+              }}
+            >
+              <span>Talent</span>
+              <span>Character</span>
+              <span>Dept</span>
+              <span>SAG</span>
+              <span>Status</span>
+              <span>Added</span>
+            </div>
+            {castRows.map((c) => {
+              const name = c.talentId ? (profileMap.get(c.talentId) ?? c.talentId.slice(0, 8)) : (inviteMap.get(c.inviteId ?? "")?.email ?? "—");
+              const statusColor = CAST_STATUS_COLOR[c.status] ?? "#6b7280";
+              return (
+                <div
+                  key={c.id}
+                  className="grid items-center px-4 py-3 border-b last:border-0 text-sm min-w-[600px]"
+                  style={{ gridTemplateColumns: "2fr 1.5fr 1fr 0.7fr 1fr 1fr", borderColor: "var(--color-border)" }}
+                >
+                  <span className="text-xs truncate" style={{ color: "var(--color-text)" }}>{name}</span>
+                  <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{c.characterName ?? "—"}</span>
+                  <span className="text-xs" style={{ color: "var(--color-muted)" }}>{c.department ?? "—"}</span>
+                  <span className="text-xs" style={{ color: "var(--color-muted)" }}>{c.sagMember ? "✓" : "—"}</span>
+                  <span>
+                    <span className="inline-flex text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded" style={{ background: `${statusColor}18`, color: statusColor }}>
+                      {CAST_STATUS_LABEL[c.status] ?? c.status}
+                    </span>
+                  </span>
+                  <span className="text-xs" style={{ color: "var(--color-muted)" }}>{ts(c.addedAt)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Linked licences */}
       {linkedLicences.length > 0 && (

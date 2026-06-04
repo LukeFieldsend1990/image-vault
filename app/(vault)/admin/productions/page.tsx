@@ -2,8 +2,8 @@ export const runtime = "edge";
 
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, licences } from "@/lib/db/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { productions, productionCompanies, licences, productionCast, organisations } from "@/lib/db/schema";
+import { eq, sql, desc, inArray } from "drizzle-orm";
 import Link from "next/link";
 import NewCompanyButton from "./new-company-button";
 
@@ -48,6 +48,8 @@ export default async function AdminProductionsPage() {
       type: productions.type,
       year: productions.year,
       status: productions.status,
+      sagProjectNumber: productions.sagProjectNumber,
+      organisationId: productions.organisationId,
       createdAt: productions.createdAt,
     })
     .from(productions)
@@ -55,13 +57,37 @@ export default async function AdminProductionsPage() {
     .orderBy(desc(productions.createdAt))
     .all();
 
-  // Licence counts per production
-  const licenceCounts = await db
-    .select({ productionId: licences.productionId, n: sql<number>`count(*)` })
-    .from(licences)
-    .groupBy(licences.productionId)
-    .all();
+  const productionIds = allProductions.map((p) => p.id);
+
+  // Licence counts, cast stats, org names — all batched
+  const [licenceCounts, castRows, orgRows] = await Promise.all([
+    db.select({ productionId: licences.productionId, n: sql<number>`count(*)` })
+      .from(licences).groupBy(licences.productionId).all(),
+    productionIds.length > 0
+      ? db.select({ productionId: productionCast.productionId, status: productionCast.status })
+          .from(productionCast).where(inArray(productionCast.productionId, productionIds)).all()
+      : Promise.resolve([]),
+    (() => {
+      const orgIds = [...new Set(allProductions.map((p) => p.organisationId).filter(Boolean))] as string[];
+      return orgIds.length > 0
+        ? db.select({ id: organisations.id, name: organisations.name }).from(organisations).where(inArray(organisations.id, orgIds)).all()
+        : Promise.resolve([]);
+    })(),
+  ]);
+
   const licenceCountMap = new Map(licenceCounts.map((l) => [l.productionId, l.n]));
+  const orgNameMap = new Map(orgRows.map((o) => [o.id, o.name]));
+
+  // Cast onboarding stats per production
+  const castStatMap = new Map<string, { total: number; consented: number; invited: number; linked: number }>();
+  for (const c of castRows) {
+    const cur = castStatMap.get(c.productionId) ?? { total: 0, consented: 0, invited: 0, linked: 0 };
+    cur.total++;
+    if (c.status === "consented") cur.consented++;
+    else if (c.status === "invited") cur.invited++;
+    else cur.linked++;
+    castStatMap.set(c.productionId, cur);
+  }
 
   // Also get all companies for the companies section
   const allCompanies = await db
@@ -102,42 +128,52 @@ export default async function AdminProductionsPage() {
       <p className="text-[10px] text-right sm:hidden mb-1" style={{ color: "var(--color-muted)" }}>Scroll for more →</p>
       <div className="rounded border overflow-x-auto mb-10" style={{ borderColor: "var(--color-border)" }}>
         <div
-          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[700px]"
+          className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[900px]"
           style={{
-            gridTemplateColumns: "2fr 1.5fr 1fr 0.7fr 1fr 0.7fr",
+            gridTemplateColumns: "2fr 1.2fr 0.8fr 0.6fr 0.9fr 0.7fr 1.2fr",
             color: "var(--color-muted)",
             background: "var(--color-surface)",
             borderBottom: "1px solid var(--color-border)",
           }}
         >
           <span>Name</span>
-          <span>Company</span>
+          <span>Organisation</span>
           <span>Type</span>
           <span>Year</span>
           <span>Status</span>
           <span>Licences</span>
+          <span>Cast Onboarding</span>
         </div>
 
         {allProductions.length === 0 && (
-          <p className="px-5 py-6 text-sm" style={{ color: "var(--color-muted)" }}>No productions yet. They are created when licensees submit licence requests.</p>
+          <p className="px-5 py-6 text-sm" style={{ color: "var(--color-muted)" }}>No productions yet.</p>
         )}
 
         {allProductions.map((p) => {
           const count = licenceCountMap.get(p.id) ?? 0;
+          const cast = castStatMap.get(p.id);
+          const castPct = cast && cast.total > 0 ? Math.round((cast.consented / cast.total) * 100) : null;
+          const castColor = castPct === null ? "var(--color-muted)" : castPct === 100 ? "#059669" : castPct > 50 ? "#d97706" : "#dc2626";
           const statusColor = p.status ? STATUS_COLOR[p.status] ?? "var(--color-muted)" : "var(--color-muted)";
+          const orgName = p.organisationId ? (orgNameMap.get(p.organisationId) ?? "—") : "—";
 
           return (
             <Link
               key={p.id}
               href={`/admin/productions/${p.id}`}
-              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[700px] transition hover:bg-[var(--color-surface)]"
+              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[900px] transition hover:bg-[var(--color-surface)]"
               style={{
-                gridTemplateColumns: "2fr 1.5fr 1fr 0.7fr 1fr 0.7fr",
+                gridTemplateColumns: "2fr 1.2fr 0.8fr 0.6fr 0.9fr 0.7fr 1.2fr",
                 borderColor: "var(--color-border)",
               }}
             >
-              <span className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{p.name}</span>
-              <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{p.companyName ?? "—"}</span>
+              <div className="min-w-0">
+                <span className="font-medium truncate block" style={{ color: "var(--color-ink)" }}>{p.name}</span>
+                {p.sagProjectNumber && (
+                  <span className="text-[10px] font-mono" style={{ color: "var(--color-muted)" }}>SAG {p.sagProjectNumber}</span>
+                )}
+              </div>
+              <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{orgName}</span>
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>
                 {p.type ? TYPE_LABEL[p.type] ?? p.type : "—"}
               </span>
@@ -155,6 +191,27 @@ export default async function AdminProductionsPage() {
                 )}
               </span>
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>{count > 0 ? count : "—"}</span>
+              <div>
+                {cast && cast.total > 0 ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium" style={{ color: castColor }}>{cast.consented}/{cast.total}</span>
+                      <span className="text-[10px]" style={{ color: castColor }}>{castPct}%</span>
+                    </div>
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+                      <div className="h-full rounded-full" style={{ width: `${castPct}%`, background: castColor }} />
+                    </div>
+                    {(cast.invited > 0 || cast.linked > 0) && (
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--color-muted)" }}>
+                        {cast.invited > 0 && `${cast.invited} invited `}
+                        {cast.linked > 0 && `${cast.linked} pending`}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
+                )}
+              </div>
             </Link>
           );
         })}

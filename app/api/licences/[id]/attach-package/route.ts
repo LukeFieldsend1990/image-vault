@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users, talentReps } from "@/lib/db/schema";
+import { licences, scanPackages, users, talentReps, productionCast } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -19,7 +19,12 @@ export async function PATCH(
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "talent" && session.role !== "rep" && session.role !== "admin") {
+  if (
+    session.role !== "talent" &&
+    session.role !== "rep" &&
+    session.role !== "admin" &&
+    session.role !== "licensee"
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -60,6 +65,8 @@ export async function PATCH(
       .get();
     if (!link) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   } else if (session.role === "talent" && licence.talentId !== session.sub) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  } else if (session.role === "licensee" && session.sub !== licence.licenseeId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -103,6 +110,21 @@ export async function PATCH(
     .update(licences)
     .set({ packageId, status: "PENDING" })
     .where(eq(licences.id, id));
+
+  // Update production_cast status if a cast row references this licence
+  void (async () => {
+    const castRow = await db
+      .select({ id: productionCast.id })
+      .from(productionCast)
+      .where(eq(productionCast.licenceId, id))
+      .get();
+    if (castRow) {
+      await db
+        .update(productionCast)
+        .set({ status: "scan_uploaded" })
+        .where(eq(productionCast.id, castRow.id));
+    }
+  })();
 
   void (async () => {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";

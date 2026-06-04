@@ -530,6 +530,82 @@ export interface ClonePackagesEmailParams {
   filesFailed: number;
 }
 
+// ── Production cast onboarding ────────────────────────────────────────────────
+
+export interface ProductionCastInviteEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  coordinatorEmail: string;
+  characterName?: string;
+  intendedUse: string;
+  validFrom: number;
+  validTo: number;
+  signupUrl: string;
+}
+
+export function productionCastInviteEmail(p: ProductionCastInviteEmailParams): { subject: string; html: string } {
+  const characterRow = p.characterName
+    ? `<div class="kv-row"><span class="kv-key">Character</span><span class="kv-val">${p.characterName}</span></div>`
+    : "";
+  return {
+    subject: `You've been invited to join the cast of ${p.productionName}`,
+    html: layout(`
+      <p>You've been invited to join the cast of <strong>${p.productionName}</strong> by ${p.companyName}.</p>
+      <p>By accepting this invite and approving the licence request, you consent to your scan being used for this production.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        ${characterRow}
+        <div class="kv-row"><span class="kv-key">Invited by</span><span class="kv-val">${p.coordinatorEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${p.intendedUse}</span></div>
+        <div class="kv-row"><span class="kv-key">Valid period</span><span class="kv-val">${formatDate(p.validFrom)} – ${formatDate(p.validTo)}</span></div>
+      </div>
+      <p>Create your Image Vault account to accept this invitation, upload your scan package, and manage licence approvals.</p>
+      <a class="btn" href="${p.signupUrl}">Accept invitation</a>
+      <p class="muted" style="margin-top: 24px;">You can review and decline the licence request at any time from your account. Your likeness data is always under your control.</p>
+    `),
+  };
+}
+
+export interface ProductionCastLinkedEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  coordinatorEmail: string;
+  characterName?: string;
+  intendedUse: string;
+  proposedFee?: number;
+  reviewUrl: string;
+}
+
+export function productionCastLinkedEmail(p: ProductionCastLinkedEmailParams): { subject: string; html: string } {
+  const characterRow = p.characterName
+    ? `<div class="kv-row"><span class="kv-key">Character</span><span class="kv-val">${p.characterName}</span></div>`
+    : "";
+  const feeRow = p.proposedFee != null
+    ? `<div class="kv-row"><span class="kv-key">Proposed fee</span><span class="kv-val">£${(p.proposedFee / 100).toFixed(2)}</span></div>`
+    : "";
+  return {
+    subject: `New licence request from ${p.productionName}`,
+    html: layout(`
+      <p>A licence request has been submitted for your scan package from the production <strong>${p.productionName}</strong>.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        ${characterRow}
+        <div class="kv-row"><span class="kv-key">Requested by</span><span class="kv-val">${p.coordinatorEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${p.intendedUse}</span></div>
+        ${feeRow}
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Awaiting your approval</span></span></div>
+      </div>
+      <p>Review the licence request in Image Vault. You can attach your scan package and approve or deny the request.</p>
+      <a class="btn" href="${p.reviewUrl}">Review licence request</a>
+      <p class="muted" style="margin-top: 24px;">You remain in full control of your likeness data. You can revoke access at any time.</p>
+    `),
+  };
+}
+
 export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: string; html: string } {
   const dt = new Date(p.ranAt * 1000).toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",

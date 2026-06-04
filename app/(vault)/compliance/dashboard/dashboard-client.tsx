@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem, LicenceSummary, ObligationResultWithEvidence } from "@/lib/compliance/dashboard";
+import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem, LicenceSummary, ObligationResultWithEvidence, CastOnboarding } from "@/lib/compliance/dashboard";
 
 interface OrgOption {
   id: string;
@@ -398,11 +398,17 @@ function ProductionModal({
             </h2>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
               {prod.type ?? "Production"} · {prod.licenceCount} licence{prod.licenceCount !== 1 ? "s" : ""}
+              {prod.sagProjectNumber && ` · SAG ${prod.sagProjectNumber}`}
               {" · "}
               <span style={{ color, fontWeight: 600 }}>
                 {prod.healthScore}% {STATUS_LABELS[prod.complianceStatus]}
               </span>
             </p>
+            {prod.castOnboarding && prod.castOnboarding.total > 0 && (
+              <div className="mt-2">
+                <CastOnboardingBar co={prod.castOnboarding} productionId={prod.id} />
+              </div>
+            )}
             {certError && (
               <p className="text-xs mt-1" style={{ color: "var(--color-accent)" }}>{certError}</p>
             )}
@@ -512,6 +518,50 @@ function LicenceObligationPanel({ lic }: { lic: LicenceSummary }) {
   );
 }
 
+function CastOnboardingBar({ co, productionId }: { co: CastOnboarding; productionId: string | null }) {
+  if (co.total === 0) return null;
+  const color = co.pct === 100 ? "#1a7f37" : co.pct > 50 ? "#b45309" : "#c0392b";
+  const pending = co.invited + co.linked;
+  return (
+    <div className="rounded p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] uppercase tracking-widest font-medium" style={{ color: "var(--color-muted)" }}>
+          Cast Onboarding
+        </span>
+        <span className="text-xs font-semibold tabular-nums" style={{ color }}>
+          {co.consented}/{co.total}
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+        <div className="h-full rounded-full transition-all" style={{ width: `${co.pct}%`, background: color }} />
+      </div>
+      {pending > 0 && (
+        <div className="flex gap-3 mt-1.5 flex-wrap">
+          {co.invited > 0 && (
+            <span className="text-[10px]" style={{ color: "#b45309" }}>
+              ⏳ {co.invited} invite{co.invited > 1 ? "s" : ""} pending
+            </span>
+          )}
+          {co.linked > 0 && (
+            <span className="text-[10px]" style={{ color: "#7c3aed" }}>
+              ⏳ {co.linked} awaiting scan / approval
+            </span>
+          )}
+          {productionId && (
+            <a href={`/productions/${productionId}`} className="text-[10px] ml-auto" style={{ color: "var(--color-accent)" }}
+               onClick={(e) => e.stopPropagation()}>
+              Manage →
+            </a>
+          )}
+        </div>
+      )}
+      {co.pct === 100 && (
+        <p className="text-[10px] mt-1" style={{ color: "#1a7f37" }}>✓ All cast onboarded</p>
+      )}
+    </div>
+  );
+}
+
 function ProductionCard({
   prod,
   onClick,
@@ -604,8 +654,12 @@ function ProductionCard({
         </div>
       </div>
 
+      {prod.castOnboarding && prod.castOnboarding.total > 0 && (
+        <CastOnboardingBar co={prod.castOnboarding} productionId={prod.id} />
+      )}
+
       <p className="text-[10px] uppercase tracking-widest" style={{ color: "var(--color-muted)", opacity: 0.7 }}>
-        Click for details →
+        {prod.licenceCount > 0 ? "Click for details →" : "Cast onboarding in progress"}
       </p>
     </button>
   );
