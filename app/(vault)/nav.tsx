@@ -288,11 +288,14 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean }) {
+export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   if (!inboundEnabled) {
     base = base.filter((item) => item.href !== "/inbox");
+  }
+  if (complianceEnabled === false) {
+    base = base.filter((item) => item.href !== "/compliance/dashboard");
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]

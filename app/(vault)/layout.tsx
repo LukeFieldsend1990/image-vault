@@ -142,17 +142,34 @@ async function getInboundEnabled(userId: string): Promise<boolean> {
   }
 }
 
+async function getComplianceEnabled(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const db = getDb();
+    const row = await db
+      .select({ complianceEnabled: users.complianceEnabled })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
+    // null/undefined → default true (mirrors the check in lib/compliance/access.ts)
+    return row?.complianceEnabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 export default async function VaultLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled, licenceAlert] = await Promise.all([
+  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
     getLicenceAlert(sub, role),
+    getComplianceEnabled(sub),
   ]);
 
   const homeHref = role === "licensee" ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
@@ -172,7 +189,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} />
+            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} />
           </div>
 
           <UserWidget
