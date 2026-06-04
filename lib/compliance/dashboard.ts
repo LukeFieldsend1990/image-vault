@@ -30,12 +30,24 @@ type Db = ReturnType<typeof getDb>;
 
 export type ComplianceStatus = "compliant" | "partial" | "gap" | "critical";
 
+export interface ObligationEvidence {
+  eventType: string;
+  seq: number;
+  createdAt: number;
+  hash: string;
+  scope: Record<string, unknown>;
+}
+
+export interface ObligationResultWithEvidence extends ObligationResult {
+  evidence: ObligationEvidence | null;  // satisfying event (met), null otherwise
+}
+
 export interface LicenceSummary {
   id: string;
   projectName: string;
   licenceType: string | null;
   status: string;
-  obligations: ObligationResult[];
+  obligations: ObligationResultWithEvidence[];
 }
 
 export interface ProductionCompliance {
@@ -241,7 +253,13 @@ type LicenceRow = {
   lastDownloadAt: number | null;
 };
 
-type LicenceEventRow = { eventType: string; scopeJson: string };
+type LicenceEventRow = {
+  eventType: string;
+  scopeJson: string;
+  seq: number;
+  createdAt: number;
+  hash: string;
+};
 
 // Status rank: gap beats pending beats met beats n/a
 const STATUS_RANK: Record<string, number> = { gap: 3, pending: 2, met: 1, "n/a": 0 };
@@ -250,7 +268,7 @@ function evaluateLicence(
   licence: LicenceRow,
   events: LicenceEventRow[],
   regime: RegimeId,
-): ObligationResult[] {
+): ObligationResultWithEvidence[] {
   const repLicence: LicenceLike = {
     licenceType: licence.licenceType,
     permitAiTraining: licence.permitAiTraining,
@@ -263,7 +281,26 @@ function evaluateLicence(
 
   const results = evaluateObligations(regime, repLicence, evaluated);
   results.push(scrubObligationResult(licence));
-  return results;
+
+  // Attach the satisfying ledger event to each met obligation
+  return results.map((o): ObligationResultWithEvidence => {
+    if (o.status !== "met") return { ...o, evidence: null };
+    const satisfyingTypes = new Set(o.satisfiedBy as string[]);
+    const match = events.find((e) => satisfyingTypes.has(e.eventType));
+    if (!match) return { ...o, evidence: null };
+    let scope: Record<string, unknown> = {};
+    try { scope = JSON.parse(match.scopeJson) as Record<string, unknown>; } catch { /* */ }
+    return {
+      ...o,
+      evidence: {
+        eventType: match.eventType,
+        seq: match.seq,
+        createdAt: match.createdAt,
+        hash: match.hash,
+        scope,
+      },
+    };
+  });
 }
 
 // Merge per-licence results: worst status per obligation wins.
@@ -273,7 +310,7 @@ function evaluateGroup(
   regime: RegimeId,
 ): ObligationResult[] {
   if (licenceRows.length === 0) return [];
-  const merged = new Map<string, ObligationResult>();
+  const merged = new Map<string, ObligationResultWithEvidence>();
 
   for (const licence of licenceRows) {
     const results = evaluateLicence(licence, eventsByLicence.get(licence.id) ?? [], regime);
@@ -350,6 +387,9 @@ export async function buildOrgDashboard(
       licenceId: complianceEvents.licenceId,
       eventType: complianceEvents.eventType,
       scopeJson: complianceEvents.scopeJson,
+      seq: complianceEvents.seq,
+      createdAt: complianceEvents.createdAt,
+      hash: complianceEvents.hash,
     })
     .from(complianceEvents)
     .where(inArray(complianceEvents.licenceId, licenceIds))
@@ -360,7 +400,13 @@ export async function buildOrgDashboard(
   for (const e of eventRows) {
     if (!e.licenceId) continue;
     const list = eventsByLicence.get(e.licenceId) ?? [];
-    list.push({ eventType: e.eventType, scopeJson: e.scopeJson });
+    list.push({
+      eventType: e.eventType,
+      scopeJson: e.scopeJson,
+      seq: e.seq,
+      createdAt: e.createdAt,
+      hash: e.hash,
+    });
     eventsByLicence.set(e.licenceId, list);
   }
 
