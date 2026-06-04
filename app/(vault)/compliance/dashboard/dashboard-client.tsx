@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem } from "@/lib/compliance/dashboard";
+import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem, LicenceSummary } from "@/lib/compliance/dashboard";
 
 interface OrgOption {
   id: string;
@@ -248,16 +248,181 @@ function ObligationBar({ item }: { item: ObligationSummaryItem }) {
   );
 }
 
-function ProductionCard({ prod }: { prod: ProductionCompliance }) {
+// ── Production detail modal ───────────────────────────────────────────────────
+
+const OBL_STATUS_ICON: Record<string, string> = { met: "✓", gap: "⚠", pending: "⏳", "n/a": "—" };
+const OBL_STATUS_COLOR: Record<string, string> = {
+  met: "#1a7f37", gap: "#c0392b", pending: "#2563eb", "n/a": "#aaa",
+};
+const OBL_PROOF: Record<string, string> = {
+  met: "Evidence on ledger",
+  gap: "No satisfying event recorded",
+  pending: "Required on licence expiry",
+  "n/a": "Not applicable to this licence",
+};
+
+function ProductionModal({
+  prod,
+  onClose,
+}: {
+  prod: ProductionCompliance;
+  onClose: () => void;
+}) {
   const color = STATUS_COLORS[prod.complianceStatus];
-  const bg = STATUS_BG[prod.complianceStatus];
-  const circ = 2 * Math.PI * 18;
-  const offset = circ * (1 - prod.healthScore / 100);
+
+  return (
+    <>
+      {/* backdrop */}
+      <div
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }}
+        onClick={onClose}
+      />
+      <div
+        style={{
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%,-50%)",
+          width: "min(92vw, 700px)",
+          maxHeight: "85vh",
+          overflowY: "auto",
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "10px",
+          zIndex: 41,
+          padding: "24px",
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h2 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
+              {prod.name}
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+              {prod.type ?? "Production"} · {prod.licenceCount} licence{prod.licenceCount !== 1 ? "s" : ""}
+              {" · "}
+              <span style={{ color, fontWeight: 600 }}>
+                {prod.healthScore}% {STATUS_LABELS[prod.complianceStatus]}
+              </span>
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--color-muted)",
+              cursor: "pointer",
+              fontSize: "20px",
+              lineHeight: 1,
+              padding: "0 4px",
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Per-licence breakdown */}
+        <div className="space-y-5">
+          {prod.licences.map((lic) => (
+            <LicenceObligationPanel key={lic.id} lic={lic} />
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function LicenceObligationPanel({ lic }: { lic: LicenceSummary }) {
+  const type = lic.licenceType?.replace(/_/g, " ") ?? "—";
+  const gaps = lic.obligations.filter((o) => o.severity === "required" && o.status === "gap").length;
 
   return (
     <div
-      className="rounded p-4 flex flex-col gap-3"
-      style={{ border: `1px solid ${color}22`, background: "var(--color-surface)" }}
+      style={{
+        border: "1px solid var(--color-border)",
+        borderRadius: "6px",
+        overflow: "hidden",
+      }}
+    >
+      {/* Licence header */}
+      <div
+        className="flex items-center justify-between px-3 py-2 gap-3"
+        style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-bg)" }}
+      >
+        <div>
+          <span className="text-xs font-mono" style={{ color: "var(--color-muted)" }}>
+            {lic.id.slice(0, 8)}
+          </span>
+          <span className="text-xs ml-2" style={{ color: "var(--color-text)" }}>
+            {lic.projectName}
+          </span>
+          <span className="text-xs ml-2" style={{ color: "var(--color-muted)" }}>
+            · {type} · {lic.status}
+          </span>
+        </div>
+        {gaps > 0 && (
+          <span className="text-[10px] font-medium" style={{ color: STATUS_COLORS.gap }}>
+            {gaps} gap{gaps !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Obligation rows */}
+      <div>
+        {lic.obligations.filter((o) => o.status !== "n/a").map((o) => {
+          const ic = OBL_STATUS_COLOR[o.status] ?? "#aaa";
+          return (
+            <div
+              key={o.id}
+              className="flex items-start gap-3 px-3 py-2"
+              style={{ borderBottom: "1px solid var(--color-border)" }}
+            >
+              <span className="text-sm mt-0.5 shrink-0 w-4 text-center" style={{ color: ic }}>
+                {OBL_STATUS_ICON[o.status] ?? "—"}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium" style={{ color: "var(--color-text)" }}>
+                  <span className="font-mono mr-1.5" style={{ color: "var(--color-muted)" }}>{o.clauseRef}</span>
+                  {o.title}
+                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: ic, opacity: 0.85 }}>
+                  {OBL_PROOF[o.status] ?? o.status}
+                </p>
+              </div>
+              <span className="text-[10px] uppercase tracking-widest shrink-0" style={{ color: "var(--color-muted)" }}>
+                {o.severity}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ProductionCard({
+  prod,
+  onClick,
+}: {
+  prod: ProductionCompliance;
+  onClick: () => void;
+}) {
+  const color = STATUS_COLORS[prod.complianceStatus];
+  const bg = STATUS_BG[prod.complianceStatus];
+  const circ = 2 * Math.PI * 22;
+  const offset = circ * (1 - prod.healthScore / 100);
+
+  return (
+    <button
+      onClick={onClick}
+      className="rounded p-4 flex flex-col gap-3 w-full text-left"
+      style={{
+        border: `1px solid ${color}33`,
+        background: "var(--color-surface)",
+        cursor: "pointer",
+      }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -276,25 +441,34 @@ function ProductionCard({ prod }: { prod: ProductionCompliance }) {
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
-        <svg width="44" height="44" viewBox="0 0 44 44">
-          <circle cx="22" cy="22" r="18" fill="none" stroke="var(--color-border)" strokeWidth="5" />
-          <circle
-            cx="22"
-            cy="22"
-            r="18"
-            fill="none"
-            stroke={color}
-            strokeWidth="5"
-            strokeDasharray={circ}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            transform="rotate(-90 22 22)"
-          />
-          <text x="22" y="26" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--color-text)">
+      {/* Health score — prominent % with ring */}
+      <div className="flex items-center gap-4">
+        <div className="relative flex items-center justify-center shrink-0">
+          <svg width="56" height="56" viewBox="0 0 56 56">
+            <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-border)" strokeWidth="5" />
+            <circle
+              cx="28" cy="28" r="22"
+              fill="none"
+              stroke={color}
+              strokeWidth="5"
+              strokeDasharray={circ}
+              strokeDashoffset={offset}
+              strokeLinecap="round"
+              transform="rotate(-90 28 28)"
+            />
+          </svg>
+          <span
+            style={{
+              position: "absolute",
+              fontSize: "13px",
+              fontWeight: 700,
+              color,
+              lineHeight: 1,
+            }}
+          >
             {prod.healthScore}%
-          </text>
-        </svg>
+          </span>
+        </div>
         <div className="flex-1 space-y-1">
           {prod.obligations
             .filter((o) => o.severity === "required" && o.status !== "n/a")
@@ -319,12 +493,28 @@ function ProductionCard({ prod }: { prod: ProductionCompliance }) {
           )}
         </div>
       </div>
-    </div>
+
+      <p className="text-[10px] uppercase tracking-widest" style={{ color: "var(--color-muted)", opacity: 0.7 }}>
+        Click for details →
+      </p>
+    </button>
   );
 }
 
+// Map obligation IDs to direct action URLs (producer-owned obligations only).
+// Talent-owned obligations (39.B, 39.D) have no licensee-accessible page.
+const ACTION_LINKS: Record<string, (licenceId: string) => string> = {
+  "platform-scrub-attestation": (id) => `/licences/${id}/scrub`,
+  "sag-39-e-biometric-isolation": (id) => `/licences/${id}`,
+  "sag-39-h-security-custody": (id) => `/licences/${id}`,
+  "sag-39-i-transfer-approval": (id) => `/licences/${id}`,
+  "sag-39-j-business-reason": (id) => `/licences/${id}`,
+};
+
 function ActionRow({ item }: { item: ActionItem }) {
   const urgColor = URGENCY_COLORS[item.urgency];
+  const linkFn = ACTION_LINKS[item.obligationId];
+  const href = linkFn ? linkFn(item.licenceId) : null;
 
   return (
     <div
@@ -345,9 +535,19 @@ function ActionRow({ item }: { item: ActionItem }) {
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
-          {item.action}
-        </p>
+        {href ? (
+          <a
+            href={href}
+            className="text-sm font-medium hover:underline"
+            style={{ color: "var(--color-text)" }}
+          >
+            {item.action} →
+          </a>
+        ) : (
+          <p className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+            {item.action}
+          </p>
+        )}
         <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
           {item.productionName} · {item.clauseRef} ·{" "}
           <span style={{ color: urgColor === "var(--color-muted)" ? "var(--color-muted)" : urgColor }}>
@@ -384,6 +584,7 @@ export default function ComplianceDashboardClient() {
   const [generatingCert, setGeneratingCert] = useState(false);
   const [certError, setCertError] = useState<string | null>(null);
   const [showAllActions, setShowAllActions] = useState(false);
+  const [modalProd, setModalProd] = useState<ProductionCompliance | null>(null);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
 
@@ -573,10 +774,15 @@ export default function ComplianceDashboardClient() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {data.productions.map((prod, i) => (
-              <ProductionCard key={prod.id ?? i} prod={prod} />
+              <ProductionCard key={prod.id ?? i} prod={prod} onClick={() => setModalProd(prod)} />
             ))}
           </div>
         </section>
+      )}
+
+      {/* Production detail modal */}
+      {modalProd && (
+        <ProductionModal prod={modalProd} onClose={() => setModalProd(null)} />
       )}
 
       {/* Action queue */}

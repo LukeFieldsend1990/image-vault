@@ -30,6 +30,14 @@ type Db = ReturnType<typeof getDb>;
 
 export type ComplianceStatus = "compliant" | "partial" | "gap" | "critical";
 
+export interface LicenceSummary {
+  id: string;
+  projectName: string;
+  licenceType: string | null;
+  status: string;
+  obligations: ObligationResult[];
+}
+
 export interface ProductionCompliance {
   id: string | null;
   name: string;
@@ -39,6 +47,7 @@ export interface ProductionCompliance {
   complianceStatus: ComplianceStatus;
   requiredGaps: number;
   obligations: ObligationResult[];
+  licences: LicenceSummary[];
 }
 
 export interface ObligationSummaryItem {
@@ -400,6 +409,13 @@ export async function buildOrgDashboard(
     const requiredGaps = obligations.filter(
       (o) => o.severity === "required" && o.status === "gap",
     ).length;
+    const licenceSummaries: LicenceSummary[] = group.licences.map((l) => ({
+      id: l.id,
+      projectName: l.projectName,
+      licenceType: l.licenceType,
+      status: l.status,
+      obligations: evaluateLicence(l, eventsByLicence.get(l.id) ?? [], regime),
+    }));
     productionResults.push({
       id: group.productionId,
       name: group.productionName,
@@ -409,6 +425,7 @@ export async function buildOrgDashboard(
       complianceStatus: scoreToStatus(healthScore),
       requiredGaps,
       obligations,
+      licences: licenceSummaries,
     });
   }
 
