@@ -330,12 +330,42 @@ function ObligationEvidenceDetail({ o }: { o: ObligationResultWithEvidence }) {
 
 function ProductionModal({
   prod,
+  regime,
   onClose,
 }: {
   prod: ProductionCompliance;
+  regime: string;
   onClose: () => void;
 }) {
   const color = STATUS_COLORS[prod.complianceStatus];
+  const [certBusy, setCertBusy] = useState(false);
+  const [certError, setCertError] = useState<string | null>(null);
+
+  async function generateProductionCert() {
+    if (!prod.id) return;
+    setCertError(null);
+    setCertBusy(true);
+    const win = window.open("", "_blank");
+    try {
+      const res = await fetch("/api/compliance/certificates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "production", scopeId: prod.id, regime }),
+      });
+      const json = await res.json() as { url?: string; error?: string };
+      if (!res.ok || json.error) {
+        win?.close();
+        setCertError(json.error ?? `Failed (${res.status})`);
+      } else if (win && json.url) {
+        win.location.href = json.url;
+      }
+    } catch (e) {
+      win?.close();
+      setCertError(e instanceof Error ? e.message : "Unexpected error");
+    } finally {
+      setCertBusy(false);
+    }
+  }
 
   return (
     <>
@@ -373,21 +403,36 @@ function ProductionModal({
                 {prod.healthScore}% {STATUS_LABELS[prod.complianceStatus]}
               </span>
             </p>
+            {certError && (
+              <p className="text-xs mt-1" style={{ color: "var(--color-accent)" }}>{certError}</p>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--color-muted)",
-              cursor: "pointer",
-              fontSize: "20px",
-              lineHeight: 1,
-              padding: "0 4px",
-            }}
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {prod.id && (
+              <button
+                onClick={generateProductionCert}
+                disabled={certBusy}
+                className="text-xs px-3 py-1.5 rounded disabled:opacity-50"
+                style={{ background: "var(--color-accent)", color: "#fff" }}
+              >
+                {certBusy ? "Generating…" : "Generate Certificate"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--color-muted)",
+                cursor: "pointer",
+                fontSize: "20px",
+                lineHeight: 1,
+                padding: "0 4px",
+              }}
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Per-licence breakdown */}
@@ -843,7 +888,7 @@ export default function ComplianceDashboardClient() {
 
       {/* Production detail modal */}
       {modalProd && (
-        <ProductionModal prod={modalProd} onClose={() => setModalProd(null)} />
+        <ProductionModal prod={modalProd} regime={data.regime} onClose={() => setModalProd(null)} />
       )}
 
       {/* Action queue */}
