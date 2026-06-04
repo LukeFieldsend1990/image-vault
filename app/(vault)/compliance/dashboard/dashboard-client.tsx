@@ -29,7 +29,7 @@ function OrgSwitcher({
         style={{
           background: "none",
           border: "none",
-          color: "var(--color-muted)",
+          color: "var(--color-accent)",
           fontSize: "inherit",
           letterSpacing: "inherit",
           textTransform: "inherit",
@@ -42,7 +42,7 @@ function OrgSwitcher({
         }}
       >
         {selected.name.toUpperCase()}
-        <svg width="7" height="4" viewBox="0 0 7 4" fill="currentColor" style={{ opacity: 0.6 }}>
+        <svg width="7" height="4" viewBox="0 0 7 4" fill="currentColor" style={{ opacity: 0.8 }}>
           <path d="M0 0l3.5 4L7 0H0z" />
         </svg>
       </button>
@@ -382,6 +382,7 @@ export default function ComplianceDashboardClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [generatingCert, setGeneratingCert] = useState(false);
+  const [certError, setCertError] = useState<string | null>(null);
   const [showAllActions, setShowAllActions] = useState(false);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
@@ -417,22 +418,37 @@ export default function ComplianceDashboardClient() {
 
   async function generateCertificate() {
     if (!data) return;
+    setCertError(null);
     setGeneratingCert(true);
+
+    // Open the window NOW while we're still inside the user gesture — browsers
+    // block window.open() called after an async gap (popup blocker).
+    const certWindow = window.open("", "_blank");
+
     try {
       const res = await fetch("/api/compliance/certificates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope: "organisation", scopeId: data.orgId, regime: data.regime }),
       });
-      if (res.ok) {
-        const cert = (await res.json()) as { id: string; url: string };
-        window.open(cert.url, "_blank");
-        const refreshUrl = selectedOrgId
-          ? `/api/compliance/dashboard?orgId=${encodeURIComponent(selectedOrgId)}`
-          : "/api/compliance/dashboard";
-        const refreshed = await fetch(refreshUrl).then((r) => r.json()) as DashboardData;
-        setData(refreshed);
+      const json = await res.json() as { id?: string; url?: string; error?: string };
+      if (!res.ok || json.error) {
+        certWindow?.close();
+        setCertError(json.error ?? `Generation failed (${res.status})`);
+        return;
       }
+      if (certWindow && json.url) {
+        certWindow.location.href = json.url;
+      }
+      // Refresh dashboard to show the new cert in the vault
+      const refreshUrl = selectedOrgId
+        ? `/api/compliance/dashboard?orgId=${encodeURIComponent(selectedOrgId)}`
+        : "/api/compliance/dashboard";
+      const refreshed = await fetch(refreshUrl).then((r) => r.json()) as DashboardData;
+      setData(refreshed);
+    } catch (e) {
+      certWindow?.close();
+      setCertError(e instanceof Error ? e.message : "Unexpected error");
     } finally {
       setGeneratingCert(false);
     }
@@ -491,14 +507,21 @@ export default function ComplianceDashboardClient() {
             )}
           </p>
         </div>
-        <button
-          onClick={generateCertificate}
-          disabled={generatingCert}
-          className="text-xs px-4 py-2 rounded disabled:opacity-50"
-          style={{ background: "var(--color-accent)", color: "#fff" }}
-        >
-          {generatingCert ? "Generating…" : "Generate Certificate"}
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={generateCertificate}
+            disabled={generatingCert}
+            className="text-xs px-4 py-2 rounded disabled:opacity-50"
+            style={{ background: "var(--color-accent)", color: "#fff" }}
+          >
+            {generatingCert ? "Generating…" : "Generate Certificate"}
+          </button>
+          {certError && (
+            <p className="text-xs" style={{ color: "var(--color-accent)" }}>
+              {certError}
+            </p>
+          )}
+        </div>
       </header>
 
       {/* Health score + stat cards */}
