@@ -469,7 +469,7 @@ function ProductionCard({
             {prod.healthScore}%
           </span>
         </div>
-        <div className="flex-1 space-y-1">
+        <div className="flex-1 min-w-0 space-y-1">
           {prod.obligations
             .filter((o) => o.severity === "required" && o.status !== "n/a")
             .slice(0, 4)
@@ -480,8 +480,8 @@ function ProductionCard({
                 STATUS_COLORS.gap;
               const icon = o.status === "met" ? "✓" : o.status === "pending" ? "⏳" : "⚠";
               return (
-                <div key={o.id} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
-                  <span style={{ color: iconColor }}>{icon}</span>
+                <div key={o.id} className="flex items-center gap-1.5 text-xs overflow-hidden" style={{ color: "var(--color-muted)" }}>
+                  <span className="shrink-0" style={{ color: iconColor }}>{icon}</span>
                   <span className="truncate">{o.clauseRef} {o.title}</span>
                 </div>
               );
