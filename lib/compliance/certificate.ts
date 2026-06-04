@@ -158,6 +158,7 @@ export async function generateCertificate(
   const profile =
     p.scope === "talent"       ? await loadTalentName(db, p.scopeId) :
     p.scope === "organisation" ? await loadOrgName(db, p.scopeId) :
+    p.scope === "production"   ? await loadProductionName(db, p.scopeId) :
                                  null;
 
   // Build production/licence breakdown for multi-licence scopes
@@ -481,6 +482,15 @@ async function loadOrgName(db: Db, orgId: string): Promise<string | null> {
   return row?.name ?? null;
 }
 
+async function loadProductionName(db: Db, productionId: string): Promise<string | null> {
+  const row = await db
+    .select({ name: productions.name })
+    .from(productions)
+    .where(eq(productions.id, productionId))
+    .get();
+  return row?.name ?? null;
+}
+
 function safeParse(json: string | null): Record<string, unknown> {
   if (!json) return {};
   try {
@@ -505,6 +515,63 @@ function fmtDate(unix: number): string {
   return new Date(unix * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Human-readable labels for ledger event types
+const EVENT_LABELS: Record<string, string> = {
+  "consent.granted": "Consent granted",
+  "consent.dub_language_granted": "Dubbing consent granted",
+  "consent.revoked": "Consent revoked",
+  "biometric.isolation_attested": "Biometric isolation attested",
+  "security.custody_attested": "Security custody attested",
+  "business_reason.recorded": "Business reason recorded",
+  "use.metered": "Use metered",
+  "transfer.requested": "Transfer requested",
+  "transfer.approved": "Transfer approved",
+  "transfer.denied": "Transfer denied",
+  "training.notice_filed": "Training notice filed",
+  "strike.declared": "Strike declared",
+  "strike.lifted": "Strike lifted",
+  "use.blocked_by_strike": "Use blocked by strike",
+  "replica.scrub_attested": "Scrub / deletion attested",
+};
+
+function fmtEventLabel(eventType: string): string {
+  return EVENT_LABELS[eventType] ?? eventType.replace(/[._]/g, " ");
+}
+
+function fmtScope(scope: EvaluatedEvent["scope"]): string {
+  if (!scope) return "";
+  const parts: string[] = [];
+  if (typeof scope.useType === "string") parts.push(`use type: ${scope.useType.replace(/_/g, " ")}`);
+  if (typeof scope.territory === "string") parts.push(`territory: ${scope.territory}`);
+  if (typeof scope.language === "string") parts.push(`language: ${scope.language}`);
+  if (scope.scriptedAlterations === true) parts.push("scripted alterations: yes");
+  return parts.join(" · ");
+}
+
+// Find the first ledger event that satisfies an obligation
+function findEvidenceEvent(o: ObligationResult, events: LedgerRow[]): LedgerRow | null {
+  if (o.status !== "met") return null;
+  const satisfyingTypes = new Set(o.satisfiedBy as string[]);
+  return events.find((e) => satisfyingTypes.has(e.eventType)) ?? null;
+}
+
+function evidenceDetailHtml(o: ObligationResult, events: LedgerRow[]): string {
+  if (o.status === "met") {
+    const ev = findEvidenceEvent(o, events);
+    if (!ev) return "";
+    const scopeStr = fmtScope(ev.scope);
+    return `<br><small style="color:#1a7f37;font-family:ui-monospace,monospace;font-size:11px">${esc(fmtEventLabel(ev.eventType))} · seq ${ev.seq} · ${esc(fmtDate(ev.createdAt))} · ${esc(ev.hash.slice(0, 12))}…</small>${scopeStr ? `<br><small style="color:#999;font-size:11px">${esc(scopeStr)}</small>` : ""}`;
+  }
+  if (o.status === "gap") {
+    const needed = o.satisfiedBy.map(fmtEventLabel).join(" or ");
+    return `<br><small style="color:#c0392b;font-size:11px">Requires: ${esc(needed)} — no matching event in ledger</small>`;
+  }
+  if (o.status === "pending") {
+    return `<br><small style="color:#2563eb;font-size:11px">Not yet required — obligation triggered on licence expiry</small>`;
+  }
+  return "";
+}
+
 function renderLicenceSection(lb: LicenceBreakdown): string {
   const d = lb.detail;
   const type = d.licenceType ? d.licenceType.replace(/_/g, " ") : "—";
@@ -512,11 +579,14 @@ function renderLicenceSection(lb: LicenceBreakdown): string {
   const validity = `${fmtDate(d.validFrom)} – ${fmtDate(d.validTo)}`;
 
   const obligationRows = lb.obligations
-    .map((o) => `<tr><td>${esc(o.clauseRef)}</td><td>${esc(o.title)}</td><td>${esc(o.severity)}</td><td>${statusBadge(o.status)}</td></tr>`)
+    .map((o) => `<tr><td>${esc(o.clauseRef)}</td><td>${esc(o.title)}${evidenceDetailHtml(o, lb.events)}</td><td>${esc(o.severity)}</td><td>${statusBadge(o.status)}</td></tr>`)
     .join("");
 
   const eventRows = lb.events
-    .map((e) => `<tr><td>${e.seq}</td><td>${esc(e.eventType)}</td><td>${esc(e.clauseRef ?? "")}</td><td><code>${esc(e.hash.slice(0, 16))}…</code></td></tr>`)
+    .map((e) => {
+      const scopeStr = fmtScope(e.scope);
+      return `<tr><td>${e.seq}</td><td>${esc(fmtDate(e.createdAt))}</td><td>${esc(fmtEventLabel(e.eventType))}</td><td>${esc(e.clauseRef ?? "")}</td><td>${scopeStr ? `<span style="color:#777">${esc(scopeStr)}</span>` : ""}</td><td><code>${esc(e.hash.slice(0, 12))}…</code></td></tr>`;
+    })
     .join("");
 
   const sa = lb.scrubAttestation;
@@ -542,7 +612,7 @@ function renderLicenceSection(lb: LicenceBreakdown): string {
   <tbody>${obligationRows || '<tr><td colspan="4" class="muted">No obligations.</td></tr>'}</tbody></table>
   ${lb.events.length > 0 ? `
   <p class="sub-header">Ledger (${lb.events.length} event${lb.events.length !== 1 ? "s" : ""})</p>
-  <table><thead><tr><th>#</th><th>Event</th><th>Clause</th><th>Hash</th></tr></thead>
+  <table><thead><tr><th>#</th><th>Date</th><th>Event</th><th>Clause</th><th>Scope</th><th>Hash</th></tr></thead>
   <tbody>${eventRows}</tbody></table>` : `<p class="muted" style="margin-top:6px">No ledger events.</p>`}
   ${scrubSection}
 </div>`;
