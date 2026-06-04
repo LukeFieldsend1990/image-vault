@@ -16,8 +16,10 @@ import {
   licences,
   organisations,
   productions,
+  scrubAttestations,
   talentProfiles,
   usageEvents,
+  users,
 } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 import type { HashedEvent, EvaluatedEvent, ObligationResult, RegimeId } from "./types";
@@ -255,11 +257,22 @@ interface LicenceDetail {
   talentId: string;
 }
 
+export interface ScrubAttestationRecord {
+  id: string;
+  attestedAt: number;
+  attestedByEmail: string | null;
+  attestationText: string;
+  devicesScrubbed: string[];
+  bridgeCachePurged: boolean;
+  additionalNotes: string | null;
+}
+
 export interface LicenceBreakdown {
   detail: LicenceDetail;
   talentName: string | null;
   obligations: ObligationResult[];
   events: LedgerRow[];
+  scrubAttestation: ScrubAttestationRecord | null;
 }
 
 export interface ProductionGroup {
@@ -310,6 +323,56 @@ async function loadProductionMeta(
   return new Map(rows.map((r) => [r.id, { name: r.name, type: r.type }]));
 }
 
+async function loadScrubAttestations(
+  db: Db,
+  licenceIds: string[],
+): Promise<Map<string, ScrubAttestationRecord>> {
+  if (licenceIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      id: scrubAttestations.id,
+      licenceId: scrubAttestations.licenceId,
+      attestedAt: scrubAttestations.attestedAt,
+      attestedBy: scrubAttestations.attestedBy,
+      attestationText: scrubAttestations.attestationText,
+      devicesScrubbed: scrubAttestations.devicesScrubbed,
+      bridgeCachePurged: scrubAttestations.bridgeCachePurged,
+      additionalNotes: scrubAttestations.additionalNotes,
+    })
+    .from(scrubAttestations)
+    .where(inArray(scrubAttestations.licenceId, licenceIds))
+    .all();
+
+  // Load attesting users' emails in one query
+  const userIds = [...new Set(rows.map((r) => r.attestedBy))];
+  const userEmails =
+    userIds.length > 0
+      ? await db
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(inArray(users.id, userIds))
+          .all()
+      : [];
+  const emailMap = new Map(userEmails.map((u) => [u.id, u.email]));
+
+  const result = new Map<string, ScrubAttestationRecord>();
+  for (const row of rows) {
+    let devices: string[] = [];
+    try { devices = JSON.parse(row.devicesScrubbed ?? "[]") as string[]; } catch { /* */ }
+    result.set(row.licenceId, {
+      id: row.id,
+      attestedAt: row.attestedAt,
+      attestedByEmail: emailMap.get(row.attestedBy) ?? null,
+      attestationText: row.attestationText,
+      devicesScrubbed: devices,
+      bridgeCachePurged: row.bridgeCachePurged,
+      additionalNotes: row.additionalNotes ?? null,
+    });
+  }
+  return result;
+}
+
 async function buildProductionBreakdown(
   db: Db,
   licenceIds: string[],
@@ -321,6 +384,7 @@ async function buildProductionBreakdown(
   const talentNames = await loadTalentNames(db, details.map((d) => d.talentId));
   const prodIds = details.map((d) => d.productionId).filter(Boolean) as string[];
   const productionMeta = await loadProductionMeta(db, prodIds);
+  const scrubMap = await loadScrubAttestations(db, licenceIds);
 
   // Build per-licence breakdown (events + obligations)
   const licenceBreakdowns: LicenceBreakdown[] = [];
@@ -334,6 +398,7 @@ async function buildProductionBreakdown(
       talentName: talentNames.get(detail.talentId) ?? null,
       obligations,
       events,
+      scrubAttestation: scrubMap.get(detail.id) ?? null,
     });
   }
 
@@ -454,6 +519,19 @@ function renderLicenceSection(lb: LicenceBreakdown): string {
     .map((e) => `<tr><td>${e.seq}</td><td>${esc(e.eventType)}</td><td>${esc(e.clauseRef ?? "")}</td><td><code>${esc(e.hash.slice(0, 16))}…</code></td></tr>`)
     .join("");
 
+  const sa = lb.scrubAttestation;
+  const scrubSection = sa ? `
+  <div class="scrub-block">
+    <p class="sub-header">Scrub &amp; Deletion Attestation</p>
+    <table style="margin-bottom:8px">
+      <tr><th style="width:160px">Submitted</th><td>${esc(fmtDate(sa.attestedAt))}${sa.attestedByEmail ? ` by ${esc(sa.attestedByEmail)}` : ""}</td></tr>
+      <tr><th>Devices scrubbed</th><td>${sa.devicesScrubbed.length > 0 ? sa.devicesScrubbed.map(esc).join(", ") : "—"}</td></tr>
+      <tr><th>Bridge cache purged</th><td>${sa.bridgeCachePurged ? "✓ Yes" : "No"}</td></tr>
+      ${sa.additionalNotes ? `<tr><th>Additional notes</th><td>${esc(sa.additionalNotes)}</td></tr>` : ""}
+    </table>
+    <p style="font-size:11px;color:#555;background:#fafafa;padding:8px 10px;border-left:2px solid #ddd;margin:0">${esc(sa.attestationText)}</p>
+  </div>` : "";
+
   return `
 <div class="licence-block">
   <p class="licence-title">
@@ -466,6 +544,7 @@ function renderLicenceSection(lb: LicenceBreakdown): string {
   <p class="sub-header">Ledger (${lb.events.length} event${lb.events.length !== 1 ? "s" : ""})</p>
   <table><thead><tr><th>#</th><th>Event</th><th>Clause</th><th>Hash</th></tr></thead>
   <tbody>${eventRows}</tbody></table>` : `<p class="muted" style="margin-top:6px">No ledger events.</p>`}
+  ${scrubSection}
 </div>`;
 }
 
@@ -533,6 +612,7 @@ function renderCertificateHtml(d: {
   .licence-title{font-size:12px;font-weight:600;margin:0 0 8px;color:#333}
   .licence-meta{font-weight:400;color:#777}
   .sub-header{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#999;margin:12px 0 4px}
+  .scrub-block{margin-top:12px;padding:10px 12px;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:4px}
 </style></head><body>
 <h1>SAG-AFTRA Compliance Certificate</h1>
 <p class="muted">${esc(d.regime)} · ${esc(d.scope)} ${esc(d.talentName ?? d.scopeId)}${d.licenceCount > 1 ? ` · ${d.licenceCount} licences` : ""} · generated ${esc(when)}</p>
