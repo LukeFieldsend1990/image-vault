@@ -17,6 +17,7 @@ import {
   complianceEvents,
   licences,
   organisations,
+  productionCast,
   productions,
   replicaTransfers,
   strikeLocks,
@@ -50,16 +51,26 @@ export interface LicenceSummary {
   obligations: ObligationResultWithEvidence[];
 }
 
+export interface CastOnboarding {
+  total: number;       // all cast rows for this production
+  consented: number;   // licence APPROVED — fully onboarded
+  linked: number;      // account exists but licence pending/awaiting package
+  invited: number;     // invite sent, no account yet
+  pct: number;         // consented / total * 100 (0 if total=0 treated as n/a)
+}
+
 export interface ProductionCompliance {
   id: string | null;
   name: string;
   type: string | null;
+  sagProjectNumber: string | null;
   licenceCount: number;
   healthScore: number;
   complianceStatus: ComplianceStatus;
   requiredGaps: number;
   obligations: ObligationResult[];
   licences: LicenceSummary[];
+  castOnboarding: CastOnboarding | null;  // null if no production_cast rows
 }
 
 export interface ObligationSummaryItem {
@@ -358,23 +369,71 @@ export async function buildOrgDashboard(
     .all();
 
   if (licenceRows.length === 0) {
+    // Even with no licences, show productions that have cast in onboarding
+    const castOnlyProductions: ProductionCompliance[] = [];
+    for (const prod of orgOwnedProductions) {
+      const castRows2 = await db
+        .select({ status: productionCast.status })
+        .from(productionCast)
+        .where(eq(productionCast.productionId, prod.id))
+        .all();
+      if (castRows2.length === 0) continue;
+      const co: CastOnboarding = { total: castRows2.length, consented: 0, linked: 0, invited: 0, pct: 0 };
+      for (const c of castRows2) {
+        if (c.status === "consented") co.consented++;
+        else if (c.status === "linked" || c.status === "scan_uploaded") co.linked++;
+        else if (c.status === "invited") co.invited++;
+      }
+      co.pct = co.total > 0 ? Math.round((co.consented / co.total) * 100) : 100;
+      castOnlyProductions.push({
+        id: prod.id,
+        name: prod.name,
+        type: prod.type,
+        sagProjectNumber: prod.sagProjectNumber,
+        licenceCount: 0,
+        healthScore: 0,
+        complianceStatus: "critical",
+        requiredGaps: 0,
+        obligations: [],
+        licences: [],
+        castOnboarding: co,
+      });
+    }
+    const castActionItems: ActionItem[] = [];
+    for (const p of castOnlyProductions) {
+      if (p.castOnboarding && p.castOnboarding.invited > 0) {
+        castActionItems.push({
+          productionName: p.name,
+          licenceId: "",
+          licenceProjectName: p.name,
+          obligationId: "platform-cast-invite-pending",
+          clauseRef: "Onboarding",
+          title: "Cast members awaiting vault account",
+          severity: "required",
+          action: `${p.castOnboarding.invited} cast member${p.castOnboarding.invited > 1 ? "s have" : " has"} not yet created a vault account.`,
+          actionOwner: "talent",
+          urgency: "soon",
+          deadlineLabel: null,
+        });
+      }
+    }
     return {
       orgId,
       orgName: org.name,
       regime,
-      healthScore: 100,
-      complianceStatus: "compliant",
+      healthScore: castOnlyProductions.length > 0 ? 0 : 100,
+      complianceStatus: castOnlyProductions.length > 0 ? "critical" : "compliant",
       summary: {
-        totalProductions: 0,
+        totalProductions: castOnlyProductions.length,
         compliantProductions: 0,
         totalLicences: 0,
         requiredGapsTotal: 0,
         activeStrikes: 0,
         pendingTransfers: 0,
       },
-      productions: [],
+      productions: castOnlyProductions,
       obligationSummary: [],
-      actionItems: [],
+      actionItems: castActionItems,
       recentCertificates: [],
     };
   }
@@ -410,25 +469,59 @@ export async function buildOrgDashboard(
     eventsByLicence.set(e.licenceId, list);
   }
 
-  // Load production metadata
-  const productionIds = [
+  // Load production metadata (from licences) + all org-owned productions
+  const licenceProductionIds = [
     ...new Set(licenceRows.map((l) => l.productionId).filter(Boolean)),
   ] as string[];
+
+  // Also load productions directly owned by this org (may have cast but no licences yet)
+  const orgOwnedProductions = await db
+    .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
+    .from(productions)
+    .where(eq(productions.organisationId, orgId))
+    .all();
+
+  const allProductionIds = [...new Set([...licenceProductionIds, ...orgOwnedProductions.map((p) => p.id)])];
+
   const productionMeta =
-    productionIds.length > 0
+    allProductionIds.length > 0
       ? await db
-          .select({ id: productions.id, name: productions.name, type: productions.type })
+          .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
           .from(productions)
-          .where(inArray(productions.id, productionIds))
+          .where(inArray(productions.id, allProductionIds))
           .all()
       : [];
   const productionMap = new Map(productionMeta.map((p) => [p.id, p]));
+
+  // Load cast onboarding stats for all relevant productions (batch, no N+1)
+  const castStatsByProduction = new Map<string, CastOnboarding>();
+  if (allProductionIds.length > 0) {
+    const castRows = await db
+      .select({ productionId: productionCast.productionId, status: productionCast.status })
+      .from(productionCast)
+      .where(inArray(productionCast.productionId, allProductionIds))
+      .all();
+    for (const c of castRows) {
+      const cur = castStatsByProduction.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, pct: 0 };
+      cur.total++;
+      if (c.status === "consented") cur.consented++;
+      else if (c.status === "linked" || c.status === "scan_uploaded") cur.linked++;
+      else if (c.status === "invited") cur.invited++;
+      castStatsByProduction.set(c.productionId, cur);
+    }
+    // Compute pct
+    for (const [pid, stats] of castStatsByProduction) {
+      stats.pct = stats.total > 0 ? Math.round((stats.consented / stats.total) * 100) : 100;
+      castStatsByProduction.set(pid, stats);
+    }
+  }
 
   // Group licences by production (productionId → group; no productionId → per projectName)
   type LicenceGroup = {
     productionId: string | null;
     productionName: string;
     productionType: string | null;
+    productionSagNumber: string | null;
     licences: typeof licenceRows;
   };
 
@@ -441,6 +534,7 @@ export async function buildOrgDashboard(
         productionId: l.productionId,
         productionName: prod?.name ?? l.projectName,
         productionType: prod?.type ?? null,
+        productionSagNumber: prod?.sagProjectNumber ?? null,
         licences: [],
       });
     }
@@ -449,6 +543,8 @@ export async function buildOrgDashboard(
 
   // Evaluate obligations per production group (per-licence + worst-case merge)
   const productionResults: ProductionCompliance[] = [];
+  const seenProductionIds = new Set<string>();
+
   for (const group of groups.values()) {
     const obligations = evaluateGroup(group.licences, eventsByLicence, regime);
     const healthScore = computeHealthScore(obligations);
@@ -462,16 +558,41 @@ export async function buildOrgDashboard(
       status: l.status,
       obligations: evaluateLicence(l, eventsByLicence.get(l.id) ?? [], regime),
     }));
+    const castOnboarding = group.productionId ? (castStatsByProduction.get(group.productionId) ?? null) : null;
     productionResults.push({
       id: group.productionId,
       name: group.productionName,
       type: group.productionType,
+      sagProjectNumber: group.productionSagNumber,
       licenceCount: group.licences.length,
       healthScore,
       complianceStatus: scoreToStatus(healthScore),
       requiredGaps,
       obligations,
       licences: licenceSummaries,
+      castOnboarding,
+    });
+    if (group.productionId) seenProductionIds.add(group.productionId);
+  }
+
+  // Add org-owned productions that have cast but no licences yet — visible in dashboard
+  // even before any licence is created, so coordinators can track onboarding progress.
+  for (const prod of orgOwnedProductions) {
+    if (seenProductionIds.has(prod.id)) continue;
+    const castOnboarding = castStatsByProduction.get(prod.id) ?? null;
+    if (!castOnboarding) continue; // no cast rows either — skip
+    productionResults.push({
+      id: prod.id,
+      name: prod.name,
+      type: prod.type,
+      sagProjectNumber: prod.sagProjectNumber,
+      licenceCount: 0,
+      healthScore: 0,
+      complianceStatus: castOnboarding.consented === castOnboarding.total && castOnboarding.total > 0 ? "partial" : "critical",
+      requiredGaps: 0,
+      obligations: [],
+      licences: [],
+      castOnboarding,
     });
   }
 
@@ -569,6 +690,42 @@ export async function buildOrgDashboard(
           });
         }
       }
+    }
+  }
+
+  // Cast onboarding action items — injected for any production with incomplete onboarding
+  for (const prod of productionResults) {
+    if (!prod.castOnboarding || prod.castOnboarding.total === 0) continue;
+    const co = prod.castOnboarding;
+    if (co.invited > 0) {
+      actionItems.push({
+        productionName: prod.name,
+        licenceId: "",
+        licenceProjectName: prod.name,
+        obligationId: "platform-cast-invite-pending",
+        clauseRef: "Onboarding",
+        title: "Cast members awaiting vault account",
+        severity: "required",
+        action: `${co.invited} cast member${co.invited > 1 ? "s have" : " has"} not yet created a vault account. Resend invites.`,
+        actionOwner: "talent",
+        urgency: co.invited > 0 ? "soon" : "upcoming",
+        deadlineLabel: null,
+      });
+    }
+    if (co.linked > 0) {
+      actionItems.push({
+        productionName: prod.name,
+        licenceId: "",
+        licenceProjectName: prod.name,
+        obligationId: "platform-cast-scan-pending",
+        clauseRef: "Onboarding",
+        title: "Cast members awaiting scan upload or approval",
+        severity: "required",
+        action: `${co.linked} cast member${co.linked > 1 ? "s have" : " has"} signed up but not yet uploaded a scan or approved their licence.`,
+        actionOwner: "talent",
+        urgency: "upcoming",
+        deadlineLabel: null,
+      });
     }
   }
 

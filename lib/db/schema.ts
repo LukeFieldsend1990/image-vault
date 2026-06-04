@@ -199,6 +199,7 @@ export const invites = sqliteTable("invites", {
   usedAt: integer("used_at"), // null = not yet used (unix timestamp)
   expiresAt: integer("expires_at").notNull(), // unix timestamp
   createdAt: integer("created_at").notNull(), // unix timestamp
+  productionId: text("production_id").references(() => productions.id),
 });
 
 export const scanLocations = sqliteTable("scan_locations", {
@@ -325,6 +326,8 @@ export const productions = sqliteTable("productions", {
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
   organisationId: text("organisation_id").references(() => organisations.id),
+  coordinatorId: text("coordinator_id").references(() => users.id),
+  sagProjectNumber: text("sag_project_number"),
 });
 
 export const downloadEvents = sqliteTable("download_events", {
@@ -618,6 +621,8 @@ export const organisations = sqliteTable("organisations", {
   createdBy: text("created_by").notNull().references(() => users.id),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
+  // values: production_company | studio | vfx_vendor | advertising_agency | brand | publisher | game_studio | ai_company | broadcaster | scan_service | other
+  orgType: text("org_type").notNull().default("production_company"),
 });
 
 export const organisationMembers = sqliteTable("organisation_members", {
@@ -821,4 +826,23 @@ export const complianceCertificates = sqliteTable("compliance_certificates", {
   eventCount: integer("event_count").notNull().default(0),
   generatedBy: text("generated_by").notNull().references(() => users.id),
   generatedAt: integer("generated_at").notNull(),
+});
+
+// ── Production cast onboarding ────────────────────────────────────────────────
+
+export const productionCast = sqliteTable("production_cast", {
+  id: text("id").primaryKey(),
+  productionId: text("production_id").notNull().references(() => productions.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").references(() => users.id),
+  inviteId: text("invite_id").references(() => invites.id),
+  licenceId: text("licence_id").references(() => licences.id),
+  characterName: text("character_name"),
+  department: text("department"),
+  sagMember: integer("sag_member", { mode: "boolean" }).notNull().default(false),
+  status: text("status").notNull().default("invited"),
+  // invited | linked | scan_uploaded | consented | declined
+  licenceTermsJson: text("licence_terms_json"), // stored until talent registers; then licence created
+  addedBy: text("added_by").notNull().references(() => users.id),
+  addedAt: integer("added_at").notNull(),
+  linkedAt: integer("linked_at"),
 });
