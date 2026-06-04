@@ -15,6 +15,7 @@ import {
   downloadEvents,
   licences,
   organisations,
+  productions,
   talentProfiles,
   usageEvents,
 } from "@/lib/db/schema";
@@ -157,6 +158,11 @@ export async function generateCertificate(
     p.scope === "organisation" ? await loadOrgName(db, p.scopeId) :
                                  null;
 
+  // Build production/licence breakdown for multi-licence scopes
+  const breakdown = licenceIds.length > 1
+    ? await buildProductionBreakdown(db, licenceIds, regime)
+    : null;
+
   const ledgerTipHash = await computeScopeTip(perLicence);
 
   const id = crypto.randomUUID();
@@ -174,6 +180,7 @@ export async function generateCertificate(
     downloads,
     talentName: profile,
     licenceCount: licenceIds.length,
+    breakdown,
   });
 
   const r2Key = `compliance-certs/${id}.html`;
@@ -234,6 +241,123 @@ export async function verifyCertificate(db: Db, certificateId: string): Promise<
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
+
+// ── Per-licence / production breakdown ───────────────────────────────────────
+
+interface LicenceDetail {
+  id: string;
+  projectName: string;
+  productionId: string | null;
+  licenceType: string | null;
+  status: string;
+  validFrom: number;
+  validTo: number;
+  talentId: string;
+}
+
+export interface LicenceBreakdown {
+  detail: LicenceDetail;
+  talentName: string | null;
+  obligations: ObligationResult[];
+  events: LedgerRow[];
+}
+
+export interface ProductionGroup {
+  productionId: string | null;
+  productionName: string;
+  productionType: string | null;
+  licences: LicenceBreakdown[];
+}
+
+async function loadLicenceDetails(db: Db, licenceIds: string[]): Promise<LicenceDetail[]> {
+  if (licenceIds.length === 0) return [];
+  return db
+    .select({
+      id: licences.id,
+      projectName: licences.projectName,
+      productionId: licences.productionId,
+      licenceType: licences.licenceType,
+      status: licences.status,
+      validFrom: licences.validFrom,
+      validTo: licences.validTo,
+      talentId: licences.talentId,
+    })
+    .from(licences)
+    .where(inArray(licences.id, licenceIds))
+    .all();
+}
+
+async function loadTalentNames(db: Db, talentIds: string[]): Promise<Map<string, string>> {
+  if (talentIds.length === 0) return new Map();
+  const rows = await db
+    .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName })
+    .from(talentProfiles)
+    .where(inArray(talentProfiles.userId, [...new Set(talentIds)]))
+    .all();
+  return new Map(rows.map((r) => [r.userId, r.fullName]));
+}
+
+async function loadProductionMeta(
+  db: Db,
+  productionIds: string[],
+): Promise<Map<string, { name: string; type: string | null }>> {
+  if (productionIds.length === 0) return new Map();
+  const rows = await db
+    .select({ id: productions.id, name: productions.name, type: productions.type })
+    .from(productions)
+    .where(inArray(productions.id, [...new Set(productionIds)]))
+    .all();
+  return new Map(rows.map((r) => [r.id, { name: r.name, type: r.type }]));
+}
+
+async function buildProductionBreakdown(
+  db: Db,
+  licenceIds: string[],
+  regime: RegimeId,
+): Promise<ProductionGroup[]> {
+  if (licenceIds.length === 0) return [];
+
+  const details = await loadLicenceDetails(db, licenceIds);
+  const talentNames = await loadTalentNames(db, details.map((d) => d.talentId));
+  const prodIds = details.map((d) => d.productionId).filter(Boolean) as string[];
+  const productionMeta = await loadProductionMeta(db, prodIds);
+
+  // Build per-licence breakdown (events + obligations)
+  const licenceBreakdowns: LicenceBreakdown[] = [];
+  for (const detail of details) {
+    const events = await loadChainEvents(db, detail.id);
+    const repLicence = { licenceType: detail.licenceType, permitAiTraining: false };
+    const evaluated = events.map((e) => ({ eventType: e.eventType, scope: e.scope }));
+    const obligations = evaluateObligations(regime, repLicence, evaluated);
+    licenceBreakdowns.push({
+      detail,
+      talentName: talentNames.get(detail.talentId) ?? null,
+      obligations,
+      events,
+    });
+  }
+
+  // Group by production, then loose licences
+  const groups = new Map<string, ProductionGroup>();
+  for (const lb of licenceBreakdowns) {
+    const key = lb.detail.productionId ?? `__loose__${lb.detail.projectName}`;
+    if (!groups.has(key)) {
+      const prod = lb.detail.productionId ? productionMeta.get(lb.detail.productionId) : null;
+      groups.set(key, {
+        productionId: lb.detail.productionId,
+        productionName: prod?.name ?? lb.detail.projectName,
+        productionType: prod?.type ?? null,
+        licences: [],
+      });
+    }
+    groups.get(key)!.licences.push(lb);
+  }
+
+  // Named productions first, then loose licences
+  const named = [...groups.values()].filter((g) => g.productionId !== null);
+  const loose = [...groups.values()].filter((g) => g.productionId === null);
+  return [...named, ...loose];
+}
 
 async function loadLicenceMeta(db: Db, licenceIds: string[]) {
   if (licenceIds.length === 0) return { anyAi: false, anyPermit: false, firstType: null as string | null };
@@ -307,9 +431,61 @@ const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
 
 function statusBadge(status: string): string {
-  const map: Record<string, string> = { met: "#1a7f37", gap: "#c0392b", "n/a": "#888" };
-  const label: Record<string, string> = { met: "✓ MET", gap: "⚠ GAP", "n/a": "N/A" };
+  const map: Record<string, string> = { met: "#1a7f37", gap: "#c0392b", "n/a": "#888", pending: "#2563eb" };
+  const label: Record<string, string> = { met: "✓ MET", gap: "⚠ GAP", "n/a": "N/A", pending: "⏳ PENDING" };
   return `<span style="color:${map[status] ?? "#888"};font-weight:600">${label[status] ?? status}</span>`;
+}
+
+function fmtDate(unix: number): string {
+  return new Date(unix * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function renderLicenceSection(lb: LicenceBreakdown): string {
+  const d = lb.detail;
+  const type = d.licenceType ? d.licenceType.replace(/_/g, " ") : "—";
+  const talent = lb.talentName ?? d.talentId.slice(0, 8);
+  const validity = `${fmtDate(d.validFrom)} – ${fmtDate(d.validTo)}`;
+
+  const obligationRows = lb.obligations
+    .map((o) => `<tr><td>${esc(o.clauseRef)}</td><td>${esc(o.title)}</td><td>${esc(o.severity)}</td><td>${statusBadge(o.status)}</td></tr>`)
+    .join("");
+
+  const eventRows = lb.events
+    .map((e) => `<tr><td>${e.seq}</td><td>${esc(e.eventType)}</td><td>${esc(e.clauseRef ?? "")}</td><td><code>${esc(e.hash.slice(0, 16))}…</code></td></tr>`)
+    .join("");
+
+  return `
+<div class="licence-block">
+  <p class="licence-title">
+    Licence <code>${esc(d.id.slice(0, 8))}</code>
+    <span class="licence-meta"> · ${esc(type)} · ${esc(talent)} · ${esc(d.status)} · ${esc(validity)}</span>
+  </p>
+  <table><thead><tr><th>Clause</th><th>Obligation</th><th>Severity</th><th>Status</th></tr></thead>
+  <tbody>${obligationRows || '<tr><td colspan="4" class="muted">No obligations.</td></tr>'}</tbody></table>
+  ${lb.events.length > 0 ? `
+  <p class="sub-header">Ledger (${lb.events.length} event${lb.events.length !== 1 ? "s" : ""})</p>
+  <table><thead><tr><th>#</th><th>Event</th><th>Clause</th><th>Hash</th></tr></thead>
+  <tbody>${eventRows}</tbody></table>` : `<p class="muted" style="margin-top:6px">No ledger events.</p>`}
+</div>`;
+}
+
+function renderBreakdownSection(breakdown: ProductionGroup[]): string {
+  if (breakdown.length === 0) return "";
+
+  const sections = breakdown.map((group) => {
+    const isLoose = group.productionId === null;
+    const header = isLoose
+      ? `Ungrouped Licences`
+      : `${esc(group.productionName)}${group.productionType ? ` <span class="licence-meta">· ${esc(group.productionType.replace(/_/g, " "))}</span>` : ""}`;
+    const count = group.licences.length;
+    return `
+<div class="prod-group">
+  <div class="prod-header">${header} <span class="licence-meta">(${count} licence${count !== 1 ? "s" : ""})</span></div>
+  ${group.licences.map(renderLicenceSection).join("")}
+</div>`;
+  }).join("");
+
+  return `<h2>Production Breakdown</h2>${sections}`;
 }
 
 function renderCertificateHtml(d: {
@@ -325,6 +501,7 @@ function renderCertificateHtml(d: {
   downloads: number;
   talentName: string | null;
   licenceCount: number;
+  breakdown: ProductionGroup[] | null;
 }): string {
   const when = new Date(d.generatedAt * 1000).toISOString();
   const obligationRows = d.obligations
@@ -344,18 +521,23 @@ function renderCertificateHtml(d: {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <title>Compliance Certificate ${esc(d.id)}</title>
 <style>
-  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.5}
-  h1{font-size:22px;margin:0 0 4px} h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:#666;margin:28px 0 8px}
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;max-width:900px;margin:40px auto;padding:0 24px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px} h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#666;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid #e5e5e5}
   .muted{color:#777;font-size:13px} table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
   th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eee} th{color:#888;font-weight:600;font-size:11px;text-transform:uppercase}
   .seal{margin-top:24px;padding:12px;border:1px solid #ddd;border-radius:6px;background:#fafafa;font-size:12px}
-  code{font-family:ui-monospace,monospace;font-size:12px}
-  .accent{color:#c0392b}
+  code{font-family:ui-monospace,monospace;font-size:12px} .accent{color:#c0392b}
+  .prod-group{margin:0 0 24px}
+  .prod-header{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px;background:#f5f5f5;border-left:3px solid #c0392b;margin-bottom:0}
+  .licence-block{padding:12px 12px 16px;border:1px solid #eee;border-top:none;margin-bottom:8px}
+  .licence-title{font-size:12px;font-weight:600;margin:0 0 8px;color:#333}
+  .licence-meta{font-weight:400;color:#777}
+  .sub-header{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#999;margin:12px 0 4px}
 </style></head><body>
 <h1>SAG-AFTRA Compliance Certificate</h1>
 <p class="muted">${esc(d.regime)} · ${esc(d.scope)} ${esc(d.talentName ?? d.scopeId)}${d.licenceCount > 1 ? ` · ${d.licenceCount} licences` : ""} · generated ${esc(when)}</p>
 
-<h2>Article 39 Obligations</h2>
+<h2>Article 39 Obligations — Summary</h2>
 <table><thead><tr><th>Clause</th><th>Obligation</th><th>Severity</th><th>Status</th></tr></thead>
 <tbody>${obligationRows || '<tr><td colspan="4" class="muted">No obligations in scope.</td></tr>'}</tbody></table>
 
@@ -365,9 +547,10 @@ function renderCertificateHtml(d: {
 <h2>Strike History (39.G)</h2>
 <p class="muted">${strikes.length === 0 ? "No strike events affecting this scope." : `${strikes.length} strike-related event(s) recorded.`}</p>
 
+${d.breakdown ? renderBreakdownSection(d.breakdown) : `
 <h2>Ledger (${d.events.length} events)</h2>
 <table><thead><tr><th>#</th><th>Event</th><th>Clause</th><th>Hash</th></tr></thead>
-<tbody>${eventRows || '<tr><td colspan="4" class="muted">No ledger events.</td></tr>'}</tbody></table>
+<tbody>${eventRows || '<tr><td colspan="4" class="muted">No ledger events.</td></tr>'}</tbody></table>`}
 
 <div class="seal">
   <strong>Tamper seal.</strong> Ledger tip hash: <code class="accent">${esc(d.ledgerTipHash || "(empty)")}</code><br/>
