@@ -155,6 +155,7 @@ export default function AdminComplianceClient() {
             <option value="licence">licence</option>
             <option value="talent">talent</option>
             <option value="production">production</option>
+            <option value="organisation">organisation</option>
           </select>
           <input className={input} style={inputStyle} placeholder={`${certScope} id`} value={certScopeId} onChange={(e) => setCertScopeId(e.target.value)} />
           <button className={btn} style={primary} disabled={busy === "cert" || !certScopeId} onClick={generateCert}>

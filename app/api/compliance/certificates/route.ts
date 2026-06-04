@@ -8,7 +8,7 @@ import { authorizeScope } from "@/lib/compliance/access";
 import { generateCertificate, type CertBucket, type CertScope } from "@/lib/compliance/certificate";
 import type { RegimeId } from "@/lib/compliance/types";
 
-const SCOPES: CertScope[] = ["licence", "talent", "production"];
+const SCOPES: CertScope[] = ["licence", "talent", "production", "organisation"];
 
 // POST /api/compliance/certificates — generate a Compliance Certificate (the hero).
 export async function POST(req: NextRequest) {
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const scope = body.scope as CertScope;
   const scopeId = typeof body.scopeId === "string" ? body.scopeId.trim() : "";
   if (!SCOPES.includes(scope) || !scopeId) {
-    return NextResponse.json({ error: "scope (licence|talent|production) and scopeId are required" }, { status: 400 });
+    return NextResponse.json({ error: "scope (licence|talent|production|organisation) and scopeId are required" }, { status: 400 });
   }
 
   const db = getDb();

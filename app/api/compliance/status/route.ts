@@ -7,7 +7,7 @@ import { authorizeScope } from "@/lib/compliance/access";
 import { evaluateScope, type CertScope } from "@/lib/compliance/certificate";
 import type { RegimeId } from "@/lib/compliance/types";
 
-const SCOPES: CertScope[] = ["licence", "talent", "production"];
+const SCOPES: CertScope[] = ["licence", "talent", "production", "organisation"];
 
 // GET /api/compliance/status?scope=&id=&regime= — obligation matrix for a scope
 // (no certificate generated). Powers the producer panel + admin overview.
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const scopeId = sp.get("id") ?? "";
   const regime = (sp.get("regime") as RegimeId) ?? "sag_aftra";
   if (!SCOPES.includes(scope) || !scopeId) {
-    return NextResponse.json({ error: "scope (licence|talent|production) and id are required" }, { status: 400 });
+    return NextResponse.json({ error: "scope (licence|talent|production|organisation) and id are required" }, { status: 400 });
   }
 
   const db = getDb();

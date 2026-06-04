@@ -14,6 +14,7 @@ import {
   complianceEvents,
   downloadEvents,
   licences,
+  organisations,
   talentProfiles,
   usageEvents,
 } from "@/lib/db/schema";
@@ -26,7 +27,7 @@ export interface CertBucket {
   put(key: string, value: string, opts?: unknown): Promise<unknown>;
 }
 
-export type CertScope = "licence" | "talent" | "production";
+export type CertScope = "licence" | "talent" | "production" | "organisation";
 
 interface LedgerRow extends HashedEvent {
   scope: EvaluatedEvent["scope"];
@@ -61,7 +62,10 @@ export async function computeScopeTip(perLicence: Array<{ licenceId: string; tip
 
 async function resolveLicenceIds(db: Db, scope: CertScope, scopeId: string): Promise<string[]> {
   if (scope === "licence") return [scopeId];
-  const col = scope === "talent" ? licences.talentId : licences.productionId;
+  const col =
+    scope === "talent"       ? licences.talentId :
+    scope === "organisation" ? licences.organisationId :
+                               licences.productionId;
   const rows = await db.select({ id: licences.id }).from(licences).where(eq(col, scopeId)).all();
   return rows.map((r) => r.id);
 }
@@ -148,7 +152,10 @@ export async function generateCertificate(
 
   const usage = await loadUsageSummary(db, licenceIds);
   const downloads = await loadDownloadCount(db, licenceIds);
-  const profile = p.scope === "talent" ? await loadTalentName(db, p.scopeId) : null;
+  const profile =
+    p.scope === "talent"       ? await loadTalentName(db, p.scopeId) :
+    p.scope === "organisation" ? await loadOrgName(db, p.scopeId) :
+                                 null;
 
   const ledgerTipHash = await computeScopeTip(perLicence);
 
@@ -166,6 +173,7 @@ export async function generateCertificate(
     usage,
     downloads,
     talentName: profile,
+    licenceCount: licenceIds.length,
   });
 
   const r2Key = `compliance-certs/${id}.html`;
@@ -275,6 +283,15 @@ async function loadTalentName(db: Db, talentId: string): Promise<string | null> 
   return row?.fullName ?? null;
 }
 
+async function loadOrgName(db: Db, orgId: string): Promise<string | null> {
+  const row = await db
+    .select({ name: organisations.name })
+    .from(organisations)
+    .where(eq(organisations.id, orgId))
+    .get();
+  return row?.name ?? null;
+}
+
 function safeParse(json: string | null): Record<string, unknown> {
   if (!json) return {};
   try {
@@ -307,6 +324,7 @@ function renderCertificateHtml(d: {
   usage: { count: number; grossPence: number; talentPence: number };
   downloads: number;
   talentName: string | null;
+  licenceCount: number;
 }): string {
   const when = new Date(d.generatedAt * 1000).toISOString();
   const obligationRows = d.obligations
@@ -335,7 +353,7 @@ function renderCertificateHtml(d: {
   .accent{color:#c0392b}
 </style></head><body>
 <h1>SAG-AFTRA Compliance Certificate</h1>
-<p class="muted">${esc(d.regime)} · ${esc(d.scope)} ${esc(d.talentName ?? d.scopeId)} · generated ${esc(when)}</p>
+<p class="muted">${esc(d.regime)} · ${esc(d.scope)} ${esc(d.talentName ?? d.scopeId)}${d.licenceCount > 1 ? ` · ${d.licenceCount} licences` : ""} · generated ${esc(when)}</p>
 
 <h2>Article 39 Obligations</h2>
 <table><thead><tr><th>Clause</th><th>Obligation</th><th>Severity</th><th>Status</th></tr></thead>
