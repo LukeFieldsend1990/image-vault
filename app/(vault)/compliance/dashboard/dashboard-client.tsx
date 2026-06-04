@@ -3,6 +3,105 @@
 import { useEffect, useState } from "react";
 import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem } from "@/lib/compliance/dashboard";
 
+interface OrgOption {
+  id: string;
+  name: string;
+  memberRole: string;
+}
+
+function OrgSwitcher({
+  orgs,
+  selectedId,
+  onSelect,
+}: {
+  orgs: OrgOption[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = orgs.find((o) => o.id === selectedId) ?? orgs[0];
+  if (!selected || orgs.length < 2) return null;
+
+  return (
+    <span style={{ position: "relative", display: "inline-block" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          background: "none",
+          border: "none",
+          color: "var(--color-muted)",
+          fontSize: "inherit",
+          letterSpacing: "inherit",
+          textTransform: "inherit",
+          fontWeight: "inherit",
+          cursor: "pointer",
+          padding: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "4px",
+        }}
+      >
+        {selected.name.toUpperCase()}
+        <svg width="7" height="4" viewBox="0 0 7 4" fill="currentColor" style={{ opacity: 0.6 }}>
+          <path d="M0 0l3.5 4L7 0H0z" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          {/* click-outside overlay */}
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 9 }}
+            onClick={() => setOpen(false)}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              left: 0,
+              background: "var(--color-surface)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "6px",
+              minWidth: "180px",
+              zIndex: 10,
+              overflow: "hidden",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            }}
+          >
+            {orgs.map((o) => (
+              <button
+                key={o.id}
+                onClick={() => { onSelect(o.id); setOpen(false); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  textAlign: "left",
+                  background: o.id === selectedId ? "var(--color-border)" : "transparent",
+                  border: "none",
+                  color: "var(--color-text)",
+                  fontSize: "13px",
+                  padding: "9px 14px",
+                  cursor: "pointer",
+                  gap: "8px",
+                }}
+              >
+                <span>{o.name}</span>
+                {o.id === selectedId && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
 // ── colour helpers ────────────────────────────────────────────────────────────
 
 type ComplianceStatus = "compliant" | "partial" | "gap" | "critical";
@@ -284,9 +383,28 @@ export default function ComplianceDashboardClient() {
   const [error, setError] = useState<string | null>(null);
   const [generatingCert, setGeneratingCert] = useState(false);
   const [showAllActions, setShowAllActions] = useState(false);
+  const [orgs, setOrgs] = useState<OrgOption[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
 
+  // Load user's org list on mount — populates the switcher
   useEffect(() => {
-    fetch("/api/compliance/dashboard")
+    fetch("/api/organisations")
+      .then((r) => r.json())
+      .then((raw) => {
+        const r = raw as { organisations?: OrgOption[] };
+        setOrgs(r.organisations ?? []);
+      })
+      .catch(() => {/* switcher simply won't render */});
+  }, []);
+
+  // Re-fetch dashboard whenever the selected org changes (null = API auto-resolves)
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    const url = selectedOrgId
+      ? `/api/compliance/dashboard?orgId=${encodeURIComponent(selectedOrgId)}`
+      : "/api/compliance/dashboard";
+    fetch(url)
       .then((r) => r.json())
       .then((raw) => {
         const d = raw as DashboardData | { error: string };
@@ -295,7 +413,7 @@ export default function ComplianceDashboardClient() {
       })
       .catch(() => setError("Failed to load compliance data."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedOrgId]);
 
   async function generateCertificate() {
     if (!data) return;
@@ -309,8 +427,10 @@ export default function ComplianceDashboardClient() {
       if (res.ok) {
         const cert = (await res.json()) as { id: string; url: string };
         window.open(cert.url, "_blank");
-        // Refresh to show new cert
-        const refreshed = await fetch("/api/compliance/dashboard").then((r) => r.json()) as DashboardData;
+        const refreshUrl = selectedOrgId
+          ? `/api/compliance/dashboard?orgId=${encodeURIComponent(selectedOrgId)}`
+          : "/api/compliance/dashboard";
+        const refreshed = await fetch(refreshUrl).then((r) => r.json()) as DashboardData;
         setData(refreshed);
       }
     } finally {
@@ -358,7 +478,17 @@ export default function ComplianceDashboardClient() {
             Compliance Control Centre
           </h1>
           <p className="text-xs mt-1 tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
-            {REGIME_LABELS[data.regime] ?? data.regime} · {data.orgName}
+            {REGIME_LABELS[data.regime] ?? data.regime}
+            {" · "}
+            {orgs.length > 1 ? (
+              <OrgSwitcher
+                orgs={orgs}
+                selectedId={selectedOrgId ?? data.orgId}
+                onSelect={(id) => { setSelectedOrgId(id); setShowAllActions(false); }}
+              />
+            ) : (
+              data.orgName
+            )}
           </p>
         </div>
         <button
