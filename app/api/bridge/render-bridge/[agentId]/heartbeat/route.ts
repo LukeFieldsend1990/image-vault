@@ -39,7 +39,7 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { status?: string; publishedPackages?: string[] };
+  let body: { status?: string; publishedPackages?: string[]; version?: string };
   try {
     body = await req.json() as typeof body;
   } catch {
@@ -61,6 +61,9 @@ export async function POST(
 
   const action = agent.pendingAction ?? null;
   const publishedPackagesJson = JSON.stringify(body.publishedPackages ?? []);
+  const revisionUpdate = typeof body.version === "string" && body.version.length > 0
+    ? { buildRevision: body.version }
+    : {};
 
   let newToken: string | null = null;
 
@@ -70,13 +73,13 @@ export async function POST(
     const tokenExpiresAt = now + 365 * 86400;
     await db
       .update(renderBridgeAgents)
-      .set({ lastHeartbeatAt: now, publishedPackagesJson, serviceTokenHash: tokenHash, tokenExpiresAt, pendingAction: null })
+      .set({ lastHeartbeatAt: now, publishedPackagesJson, serviceTokenHash: tokenHash, tokenExpiresAt, pendingAction: null, ...revisionUpdate })
       .where(eq(renderBridgeAgents.id, agentId));
     newToken = rawToken;
   } else {
     await db
       .update(renderBridgeAgents)
-      .set({ lastHeartbeatAt: now, publishedPackagesJson, pendingAction: null })
+      .set({ lastHeartbeatAt: now, publishedPackagesJson, pendingAction: null, ...revisionUpdate })
       .where(eq(renderBridgeAgents.id, agentId));
   }
 

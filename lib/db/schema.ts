@@ -651,6 +651,7 @@ export const renderBridgeAgents = sqliteTable("render_bridge_agents", {
   lastHeartbeatAt: integer("last_heartbeat_at"),
   publishedPackagesJson: text("published_packages_json").notNull().default("[]"),
   pendingAction: text("pending_action"),               // null | purge | publish | rotate-token
+  buildRevision: text("build_revision"),               // git SHA from heartbeat; null = pre-versioning container
   revokedAt: integer("revoked_at"),
   createdAt: integer("created_at").notNull(),
 });

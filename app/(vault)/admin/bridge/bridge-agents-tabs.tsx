@@ -11,6 +11,7 @@ interface Agent {
   publishedIds: string[];
   pubPkgNames: Record<string, string>;
   pendingAction: string | null;
+  buildRevision: string | null;
   lastHeartbeatAt: number | null;
   tokenExpiresAt: number | null;
   revokedAt: number | null;
@@ -178,6 +179,13 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
                 </span>
               )}
             </DetailField>
+            {a.buildRevision && (
+              <DetailField label="Build">
+                <span className="font-mono text-xs" style={{ color: "var(--color-ink)" }}>
+                  rev {a.buildRevision.slice(0, 7)}
+                </span>
+              </DetailField>
+            )}
             <DetailField label="Token Expires">
               <span
                 className="text-xs"

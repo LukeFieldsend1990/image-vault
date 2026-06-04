@@ -51,6 +51,7 @@ export async function GET(
       status: renderBridgeAgents.status,
       lastHeartbeatAt: renderBridgeAgents.lastHeartbeatAt,
       publishedPackagesJson: renderBridgeAgents.publishedPackagesJson,
+      buildRevision: renderBridgeAgents.buildRevision,
       revokedAt: renderBridgeAgents.revokedAt,
     })
     .from(renderBridgeAgents)
@@ -136,6 +137,7 @@ export async function GET(
     agentOnline,
     lastHeartbeatAt: agent.lastHeartbeatAt,
     publishedPackages,
+    buildRevision: agent.buildRevision ?? null,
     revokedAt: agent.revokedAt,
   });
 }
