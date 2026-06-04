@@ -33,6 +33,15 @@ const URGENCY_COLORS: Record<string, string> = {
   soon: "#b45309",
   upcoming: "#7c6d0a",
   info: "var(--color-muted)",
+  pending: "#2563eb",  // blue — obligation exists but clock hasn't started
+};
+
+const URGENCY_LABELS: Record<string, string> = {
+  critical: "Critical",
+  soon: "Soon",
+  upcoming: "Upcoming",
+  info: "Info",
+  pending: "Pending",
 };
 
 // ── sub-components ────────────────────────────────────────────────────────────
@@ -94,6 +103,7 @@ function ObligationBar({ item }: { item: ObligationSummaryItem }) {
   const assessed = item.metCount + item.gapCount;
   const pct = item.progressPct;
   const hasGap = item.gapCount > 0;
+  const hasPending = (item.pendingCount ?? 0) > 0;
   const color = item.severity === "required"
     ? (hasGap ? STATUS_COLORS.gap : STATUS_COLORS.compliant)
     : (hasGap ? "#b45309" : STATUS_COLORS.compliant);
@@ -121,13 +131,19 @@ function ObligationBar({ item }: { item: ObligationSummaryItem }) {
         </div>
       </div>
       <span className="text-xs tabular-nums w-16 text-right shrink-0" style={{ color: "var(--color-muted)" }}>
-        {assessed > 0 ? `${item.metCount}/${assessed}` : "—"}
+        {assessed > 0 ? `${item.metCount}/${assessed}` : hasPending ? "—" : "—"}
       </span>
       <span
-        className="text-[10px] uppercase tracking-widest w-20 text-right shrink-0 font-medium"
-        style={{ color }}
+        className="text-[10px] uppercase tracking-widest w-24 text-right shrink-0 font-medium"
+        style={{ color: hasGap ? color : hasPending ? URGENCY_COLORS.pending : color }}
       >
-        {pct === 100 ? "✓ Met" : hasGap ? `⚠ ${item.gapCount} gap${item.gapCount > 1 ? "s" : ""}` : "—"}
+        {hasGap
+          ? `⚠ ${item.gapCount} gap${item.gapCount > 1 ? "s" : ""}`
+          : hasPending
+          ? `⏳ ${item.pendingCount} pending`
+          : pct === 100
+          ? "✓ Met"
+          : "—"}
       </span>
     </div>
   );
@@ -183,15 +199,20 @@ function ProductionCard({ prod }: { prod: ProductionCompliance }) {
         <div className="flex-1 space-y-1">
           {prod.obligations
             .filter((o) => o.severity === "required" && o.status !== "n/a")
-            .slice(0, 3)
-            .map((o) => (
-              <div key={o.id} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
-                <span style={{ color: o.status === "met" ? STATUS_COLORS.compliant : STATUS_COLORS.gap }}>
-                  {o.status === "met" ? "✓" : "⚠"}
-                </span>
-                <span className="truncate">{o.clauseRef} {o.title}</span>
-              </div>
-            ))}
+            .slice(0, 4)
+            .map((o) => {
+              const iconColor =
+                o.status === "met" ? STATUS_COLORS.compliant :
+                o.status === "pending" ? URGENCY_COLORS.pending :
+                STATUS_COLORS.gap;
+              const icon = o.status === "met" ? "✓" : o.status === "pending" ? "⏳" : "⚠";
+              return (
+                <div key={o.id} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
+                  <span style={{ color: iconColor }}>{icon}</span>
+                  <span className="truncate">{o.clauseRef} {o.title}</span>
+                </div>
+              );
+            })}
           {prod.requiredGaps > 0 && (
             <p className="text-xs font-medium" style={{ color: STATUS_COLORS.gap }}>
               {prod.requiredGaps} required gap{prod.requiredGaps !== 1 ? "s" : ""}
@@ -216,7 +237,7 @@ function ActionRow({ item }: { item: ActionItem }) {
           className="text-[10px] uppercase tracking-widest font-semibold"
           style={{ color: urgColor }}
         >
-          {item.urgency}
+          {URGENCY_LABELS[item.urgency] ?? item.urgency}
         </span>
         {item.deadlineLabel && (
           <span className="text-[10px]" style={{ color: urgColor }}>
