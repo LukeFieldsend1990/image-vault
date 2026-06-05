@@ -350,6 +350,14 @@ export async function buildOrgDashboard(
     .get();
   if (!org) return null;
 
+  // Productions directly owned by this org — needed for both the early-return
+  // path (cast-only) and the main path (all-productions coverage).
+  const orgOwnedProductions = await db
+    .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
+    .from(productions)
+    .where(eq(productions.organisationId, orgId))
+    .all();
+
   // Include scrub fields in the query
   const licenceRows = await db
     .select({
@@ -473,13 +481,6 @@ export async function buildOrgDashboard(
   const licenceProductionIds = [
     ...new Set(licenceRows.map((l) => l.productionId).filter(Boolean)),
   ] as string[];
-
-  // Also load productions directly owned by this org (may have cast but no licences yet)
-  const orgOwnedProductions = await db
-    .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
-    .from(productions)
-    .where(eq(productions.organisationId, orgId))
-    .all();
 
   const allProductionIds = [...new Set([...licenceProductionIds, ...orgOwnedProductions.map((p) => p.id)])];
 
