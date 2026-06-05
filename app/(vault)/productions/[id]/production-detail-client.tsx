@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -118,7 +118,6 @@ const defaultTerms: LicenceTerms = {
 
 export default function ProductionDetailClient() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
 
   const [production, setProduction] = useState<Production | null>(null);
   const [cast, setCast] = useState<CastRow[]>([]);
@@ -166,11 +165,11 @@ export default function ProductionDetailClient() {
         fetch(`/api/productions/${id}/cast`),
       ]);
       if (prodRes.ok) {
-        const d = await prodRes.json();
+        const d = await prodRes.json() as { production: Production };
         setProduction(d.production);
       }
       if (castRes.ok) {
-        const d = await castRes.json();
+        const d = await castRes.json() as { cast: CastRow[]; castTotal: number; consentedCount: number; invitedCount: number };
         setCast(d.cast ?? []);
         setCastTotal(d.castTotal ?? 0);
         setConsentedCount(d.consentedCount ?? 0);
@@ -455,7 +454,7 @@ export default function ProductionDetailClient() {
                         checked={tmdbSelected.has(m.tmdbId)}
                         onChange={(e) => {
                           const s = new Set(tmdbSelected);
-                          e.target.checked ? s.add(m.tmdbId) : s.delete(m.tmdbId);
+                          if (e.target.checked) { s.add(m.tmdbId); } else { s.delete(m.tmdbId); }
                           setTmdbSelected(s);
                         }}
                       />
