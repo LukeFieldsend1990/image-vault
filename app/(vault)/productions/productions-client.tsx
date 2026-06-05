@@ -50,7 +50,7 @@ export default function ProductionsClient() {
 
   useEffect(() => {
     fetch("/api/productions/list")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ productions?: Production[] }>)
       .then((d) => setProductions(d.productions ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));

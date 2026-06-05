@@ -87,7 +87,7 @@ export default function NewProductionClient() {
 
   useEffect(() => {
     fetch("/api/organisations")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ organisations?: Organisation[] }>)
       .then((d) => {
         const eligible = (d.organisations ?? []).filter(
           (o: Organisation) => o.memberRole === "owner" || o.memberRole === "admin"
@@ -109,7 +109,7 @@ export default function NewProductionClient() {
       setTmdbSearching(true);
       try {
         const r = await fetch(`/api/onboarding/search?q=${encodeURIComponent(q)}&type=multi`);
-        const d = await r.json();
+        const d = await r.json() as { results?: TmdbResult[] };
         setTmdbResults((d.results ?? []).filter((x: TmdbResult) => x.media_type === "movie" || x.media_type === "tv").slice(0, 8));
       } catch {
         setTmdbResults([]);
@@ -153,7 +153,7 @@ export default function NewProductionClient() {
           imdbId: form.imdbId.trim() || undefined,
         }),
       });
-      const d = await r.json();
+      const d = await r.json() as { error?: string; id?: string };
       if (!r.ok) { setError(d.error ?? "Failed to create production."); return; }
       router.push(`/productions/${d.id}`);
     } catch {
