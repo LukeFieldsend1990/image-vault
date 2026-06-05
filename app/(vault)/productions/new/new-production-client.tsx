@@ -108,7 +108,7 @@ export default function NewProductionClient() {
     tmdbTimeout.current = setTimeout(async () => {
       setTmdbSearching(true);
       try {
-        const r = await fetch(`/api/onboarding/search?q=${encodeURIComponent(q)}&type=multi`);
+        const r = await fetch(`/api/productions/tmdb-search?q=${encodeURIComponent(q)}`);
         const d = await r.json() as { results?: TmdbResult[] };
         setTmdbResults((d.results ?? []).filter((x: TmdbResult) => x.media_type === "movie" || x.media_type === "tv").slice(0, 8));
       } catch {
@@ -164,7 +164,7 @@ export default function NewProductionClient() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-10">
+    <div className="p-8 max-w-2xl">
       <div className="mb-8">
         <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>
           Productions
