@@ -1,7 +1,6 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { productions, organisationMembers, talentProfiles, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
@@ -84,14 +83,7 @@ export async function GET(
     }
   }
 
-  // Resolve TMDB API key
-  let tmdbKey: string | undefined;
-  try {
-    tmdbKey = getRequestContext().env.TMDB_API_KEY;
-  } catch {
-    // getRequestContext not available in local dev
-  }
-  tmdbKey = tmdbKey ?? process.env.TMDB_API_KEY;
+  const tmdbKey = process.env.TMDB_API_KEY;
 
   if (!tmdbKey) {
     return NextResponse.json({ error: "TMDB API key not configured" }, { status: 503 });
