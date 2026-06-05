@@ -27,8 +27,12 @@ interface Props {
   proposedFee: number | null;
 }
 
-function formatPence(pence: number): string {
-  return `\u00a3${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
+function formatDollars(cents: number): string {
+  return `$${Math.round(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+}
+
+function stripMarkdownFences(s: string): string {
+  return s.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
 }
 
 function parseGuidance(data: unknown): FeeGuidance | null {
@@ -121,14 +125,14 @@ export default function FeeGuidanceCard({ licenceType, territory, exclusivity, p
       </p>
 
       <p className="text-sm leading-relaxed" style={{ color: "var(--color-ink)" }}>
-        {guidance.text}
+        {stripMarkdownFences(guidance.text)}
       </p>
 
       <div className="text-xs space-y-0.5 pt-1" style={{ color: "var(--color-ink)" }}>
         <p>
-          Typical range: {formatPence(guidance.p25)} &ndash; {formatPence(guidance.p75)}
+          Typical range: {formatDollars(guidance.p25)} &ndash; {formatDollars(guidance.p75)}
         </p>
-        <p>Median: {formatPence(guidance.median)}</p>
+        <p>Median: {formatDollars(guidance.median)}</p>
         <p style={{ color: "var(--color-muted)" }}>
           Based on {guidance.count} comparable licence{guidance.count === 1 ? "" : "s"}
         </p>

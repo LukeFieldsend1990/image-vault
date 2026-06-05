@@ -304,7 +304,7 @@ export async function POST(
           intendedUse: member.intendedUse,
           validFrom: member.validFrom,
           validTo: member.validTo,
-          status: "PENDING",
+          status: "AWAITING_PACKAGE",
           licenceType: (member.licenceType as typeof licences.$inferInsert["licenceType"]) ?? null,
           territory: member.territory ?? null,
           exclusivity: (member.exclusivity as typeof licences.$inferInsert["exclusivity"]) ?? "non_exclusive",
