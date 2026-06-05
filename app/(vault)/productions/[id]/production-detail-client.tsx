@@ -187,7 +187,7 @@ export default function ProductionDetailClient() {
     setTmdbLoading(true);
     try {
       const r = await fetch(`/api/productions/${id}/cast/tmdb`);
-      const d = await r.json();
+      const d = await r.json() as { cast?: TmdbCastMember[] };
       const members: TmdbCastMember[] = d.cast ?? [];
       setTmdbCast(members);
       // Pre-select matched members
@@ -273,7 +273,7 @@ export default function ProductionDetailClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ members }),
       });
-      const d = await r.json();
+      const d = await r.json() as { error?: string; created?: number };
       if (!r.ok) { setSubmitError(d.error ?? "Failed to add cast members."); return; }
       setShowAddPanel(false);
       setManualQueue([]);
