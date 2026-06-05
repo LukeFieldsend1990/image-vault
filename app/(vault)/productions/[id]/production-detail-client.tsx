@@ -76,6 +76,16 @@ const CAST_STATUS_LABEL: Record<string, string> = {
   declined: "Declined",
 };
 
+const TERRITORY_OPTIONS = [
+  "Worldwide",
+  "United Kingdom",
+  "United States",
+  "European Union",
+  "North America",
+  "Asia Pacific",
+  "Other",
+];
+
 const LICENCE_TYPE_OPTIONS = [
   { value: "", label: "Select type…" },
   { value: "film_double", label: "Film / Double" },
@@ -643,10 +653,13 @@ export default function ProductionDetailClient() {
               </div>
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Territory</label>
-                <input type="text" value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={inputStyle} placeholder="e.g. Worldwide" />
+                <select value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={{ ...inputStyle }}>
+                  <option value="">Select territory…</option>
+                  {TERRITORY_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
               <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Proposed Fee (£)</label>
+                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Proposed Fee ($)</label>
                 <input type="number" min={0} value={terms.proposedFee} onChange={(e) => setTerms((t) => ({ ...t, proposedFee: e.target.value }))} style={inputStyle} placeholder="0" />
               </div>
               <div className="col-span-2 flex items-center gap-2">
@@ -730,9 +743,15 @@ export default function ProductionDetailClient() {
                   </td>
                   <td className="px-4 py-3">
                     {row.licence ? (
-                      <Link href={`/licences/${row.licence.id}`} className="text-xs" style={{ color: "var(--color-accent)" }}>
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded font-medium"
+                        style={{
+                          background: row.licence.status === "APPROVED" ? "rgba(22,101,52,0.1)" : row.licence.status === "DENIED" ? "rgba(153,27,27,0.1)" : "rgba(180,83,9,0.1)",
+                          color: row.licence.status === "APPROVED" ? "#166534" : row.licence.status === "DENIED" ? "#991b1b" : "#b45309",
+                        }}
+                      >
                         {row.licence.status}
-                      </Link>
+                      </span>
                     ) : (
                       <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
                     )}
