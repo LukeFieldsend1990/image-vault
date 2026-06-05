@@ -22,6 +22,7 @@ interface Licence {
   proposedFee: number | null; // pence
   agencySharePct: number | null;
   talentSharePct: number | null;
+  productionId: string | null;
 }
 
 const LICENCE_TYPE_LABELS: Record<string, string> = {
@@ -50,21 +51,58 @@ function fmtGBP(pence: number) {
 
 export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
   const [requests, setRequests] = useState<Licence[]>([]);
+  const [awaitingPackage, setAwaitingPackage] = useState<Licence[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState("");
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [packages, setPackages] = useState<{ id: string; name: string }[]>([]);
+  const [attachingId, setAttachingId] = useState<string | null>(null);
+  const [selectedPkg, setSelectedPkg] = useState<Record<string, string>>({});
+  const [attachError, setAttachError] = useState<Record<string, string>>({});
 
   async function load() {
-    const r = await fetch("/api/licences?status=PENDING");
-    const d = await r.json() as { licences?: Licence[] };
-    setRequests(d.licences ?? []);
+    const [r1, r2] = await Promise.all([
+      fetch("/api/licences?status=PENDING"),
+      fetch("/api/licences?status=AWAITING_PACKAGE"),
+    ]);
+    const d1 = await r1.json() as { licences?: Licence[] };
+    const d2 = await r2.json() as { licences?: Licence[] };
+    setRequests(d1.licences ?? []);
+    setAwaitingPackage(d2.licences ?? []);
     setLoading(false);
+  }
+
+  async function loadPackages() {
+    if (packages.length > 0) return;
+    const r = await fetch("/api/vault/packages");
+    const d = await r.json() as { packages?: { id: string; name: string }[] };
+    setPackages((d.packages ?? []).filter(p => (p as { status?: string }).status === "ready"));
+  }
+
+  async function attachPackage(licenceId: string) {
+    const pkgId = selectedPkg[licenceId];
+    if (!pkgId) return;
+    setAttachingId(licenceId);
+    const r = await fetch(`/api/licences/${licenceId}/attach-package`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ packageId: pkgId }),
+    });
+    const d = await r.json() as { error?: string };
+    if (!r.ok) {
+      setAttachError(prev => ({ ...prev, [licenceId]: d.error ?? "Failed to attach package" }));
+    } else {
+      await load();
+    }
+    setAttachingId(null);
   }
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => { if (awaitingPackage.length > 0) void loadPackages(); }, [awaitingPackage]);
 
   async function approve(id: string) {
     setActionId(id);
@@ -99,8 +137,107 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
 
       {loading && <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>}
 
-      {!loading && requests.length === 0 && (
+      {!loading && requests.length === 0 && awaitingPackage.length === 0 && (
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>No pending requests.</p>
+      )}
+
+      {/* ── AWAITING_PACKAGE: Cast Invitations ──────────────────────────── */}
+      {awaitingPackage.length > 0 && (
+        <div className="space-y-4 mb-6">
+          {awaitingPackage.map((r) => (
+            <div
+              key={r.id}
+              className="rounded border"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+            >
+              <div className="p-5">
+                {/* Cast invitation badge */}
+                <div className="mb-3">
+                  <span
+                    className="rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-widest"
+                    style={{ background: "var(--color-accent)", color: "#fff" }}
+                  >
+                    Cast Invitation
+                  </span>
+                </div>
+
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-sm" style={{ color: "var(--color-ink)" }}>
+                        {r.projectName}
+                      </p>
+                      {r.licenceType && (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{ background: "var(--color-border)", color: "var(--color-muted)" }}
+                        >
+                          {LICENCE_TYPE_LABELS[r.licenceType] ?? r.licenceType}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+                      {r.productionCompany}
+                      {r.territory ? ` · ${r.territory}` : ""}
+                    </p>
+                    {r.proposedFee && (
+                      <p className="text-xs mt-1 font-medium" style={{ color: "var(--color-accent)" }}>
+                        Proposed fee: {fmtGBP(r.proposedFee)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Package selector */}
+                <div
+                  className="mt-4 rounded border p-3 space-y-3"
+                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                >
+                  <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                    To proceed, select a scan package to share with this production.
+                  </p>
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <select
+                      value={selectedPkg[r.id] ?? ""}
+                      onChange={(e) => setSelectedPkg(prev => ({ ...prev, [r.id]: e.target.value }))}
+                      className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+                    >
+                      <option value="">— select a package —</option>
+                      {packages.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => void attachPackage(r.id)}
+                      disabled={!selectedPkg[r.id] || attachingId === r.id}
+                      className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                      style={{ background: "var(--color-accent)" }}
+                    >
+                      {attachingId === r.id ? "Attaching…" : "Attach Package"}
+                    </button>
+                  </div>
+                  {attachError[r.id] && (
+                    <p className="text-xs" style={{ color: "#dc2626" }}>{attachError[r.id]}</p>
+                  )}
+                </div>
+
+                {/* Decline */}
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => void deny(r.id)}
+                    disabled={actionId === r.id}
+                    className="text-xs transition disabled:opacity-60"
+                    style={{ color: "var(--color-muted)" }}
+                  >
+                    Decline invitation
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="space-y-4">
