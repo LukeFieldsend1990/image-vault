@@ -57,7 +57,7 @@ export default function ProductionsClient() {
   }, []);
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="p-8 max-w-5xl">
       <div className="flex items-center justify-between mb-8">
         <div>
           <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>

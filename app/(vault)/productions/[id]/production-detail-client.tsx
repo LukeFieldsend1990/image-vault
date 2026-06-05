@@ -139,6 +139,10 @@ export default function ProductionDetailClient() {
   const [tmdbFetched, setTmdbFetched] = useState(false);
   const [tmdbEmails, setTmdbEmails] = useState<Record<number, string>>({});
   const [tmdbSelected, setTmdbSelected] = useState<Set<number>>(new Set());
+  // TMDB title search (shown when credits are empty)
+  const [tmdbSearchQ, setTmdbSearchQ] = useState("");
+  const [tmdbSearchResults, setTmdbSearchResults] = useState<{ id: number; title: string; mediaType: string; year: number | null }[]>([]);
+  const [tmdbSearching, setTmdbSearching] = useState(false);
 
   // Manual entry
   const [manualEmail, setManualEmail] = useState("");
@@ -191,6 +195,35 @@ export default function ProductionDetailClient() {
       const members: TmdbCastMember[] = d.cast ?? [];
       setTmdbCast(members);
       // Pre-select matched members
+      setTmdbSelected(new Set(members.filter((m) => m.matched).map((m) => m.tmdbId)));
+      setTmdbFetched(true);
+    } finally {
+      setTmdbLoading(false);
+    }
+  }
+
+  async function searchTmdbTitles() {
+    if (!tmdbSearchQ.trim()) return;
+    setTmdbSearching(true);
+    setTmdbSearchResults([]);
+    try {
+      const r = await fetch(`/api/productions/${id}/cast/tmdb/search?q=${encodeURIComponent(tmdbSearchQ)}`);
+      const d = await r.json() as { results?: typeof tmdbSearchResults };
+      setTmdbSearchResults(d.results ?? []);
+    } finally {
+      setTmdbSearching(false);
+    }
+  }
+
+  async function selectTmdbTitle(tmdbId: number) {
+    setTmdbSearchResults([]);
+    setTmdbSearchQ("");
+    setTmdbLoading(true);
+    try {
+      const r = await fetch(`/api/productions/${id}/cast/tmdb?overrideTmdbId=${tmdbId}`);
+      const d = await r.json() as { cast?: TmdbCastMember[] };
+      const members: TmdbCastMember[] = d.cast ?? [];
+      setTmdbCast(members);
       setTmdbSelected(new Set(members.filter((m) => m.matched).map((m) => m.tmdbId)));
       setTmdbFetched(true);
     } finally {
@@ -311,7 +344,7 @@ export default function ProductionDetailClient() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-10 space-y-4">
+      <div className="p-8 max-w-5xl space-y-4">
         {[0, 1, 2].map((i) => <div key={i} className="rounded animate-pulse" style={{ height: 60, background: "var(--color-surface)", border: "1px solid var(--color-border)" }} />)}
       </div>
     );
@@ -319,7 +352,7 @@ export default function ProductionDetailClient() {
 
   if (!production) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-10">
+      <div className="p-8 max-w-5xl">
         <p style={{ color: "var(--color-muted)" }}>Production not found.</p>
         <Link href="/productions" className="text-sm mt-2 block" style={{ color: "var(--color-accent)" }}>← Back to Productions</Link>
       </div>
@@ -330,7 +363,7 @@ export default function ProductionDetailClient() {
   const circumference = 2 * Math.PI * 28;
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="p-8 max-w-5xl">
       {/* Header */}
       <div className="mb-2">
         <Link href="/productions" className="text-xs" style={{ color: "var(--color-muted)" }}>← Productions</Link>
@@ -444,7 +477,46 @@ export default function ProductionDetailClient() {
                   </button>
                 </div>
               ) : tmdbCast.length === 0 ? (
-                <p className="text-sm" style={{ color: "var(--color-muted)" }}>No TMDB credits found for this production.</p>
+                <div className="space-y-3">
+                  <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                    No TMDB credits found for this production. Search for the correct title to try again.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={tmdbSearchQ}
+                      onChange={(e) => setTmdbSearchQ(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") void searchTmdbTitles(); }}
+                      placeholder="Search TMDB title…"
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => void searchTmdbTitles()}
+                      disabled={tmdbSearching || !tmdbSearchQ.trim()}
+                      className="rounded px-3 py-1.5 text-xs font-medium text-white shrink-0"
+                      style={{ background: tmdbSearching || !tmdbSearchQ.trim() ? "var(--color-muted)" : "var(--color-accent)", cursor: tmdbSearching ? "not-allowed" : "pointer" }}
+                    >
+                      {tmdbSearching ? "Searching…" : "Search"}
+                    </button>
+                  </div>
+                  {tmdbSearchResults.length > 0 && (
+                    <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                      {tmdbSearchResults.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => void selectTmdbTitle(r.id)}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors border-b last:border-0"
+                          style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+                        >
+                          <span className="font-medium">{r.title}</span>
+                          <span className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>
+                            {r.mediaType === "tv" ? "TV" : "Film"}{r.year ? ` · ${r.year}` : ""}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                   {tmdbCast.map((m) => (

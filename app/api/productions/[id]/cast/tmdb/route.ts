@@ -57,7 +57,10 @@ export async function GET(
     return NextResponse.json({ error: "Production not found" }, { status: 404 });
   }
 
-  if (!production.tmdbId) {
+  const overrideParam = new URL(req.url).searchParams.get("overrideTmdbId");
+  const tmdbId = overrideParam ? parseInt(overrideParam) : production.tmdbId;
+
+  if (!tmdbId) {
     return NextResponse.json({ error: "Production has no TMDB ID" }, { status: 422 });
   }
 
@@ -92,7 +95,7 @@ export async function GET(
   // Determine endpoint: movie or tv
   const isTv = production.type === "tv_series";
   const mediaType = isTv ? "tv" : "movie";
-  const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${production.tmdbId}/credits?api_key=${tmdbKey}`;
+  const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/credits?api_key=${tmdbKey}`;
 
   let tmdbData: TmdbCreditsResponse;
   try {
