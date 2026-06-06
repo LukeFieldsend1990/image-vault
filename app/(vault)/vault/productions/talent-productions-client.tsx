@@ -112,6 +112,7 @@ function StatusDot({ status }: { status: LicenceStatus }) {
 }
 
 function ProductionCard({ group }: { group: ProductionGroup }) {
+  const [collapsed, setCollapsed] = useState(false);
   const primary = primaryLicence(group.licences);
   const isActive = ACTIVE_STATUSES.has(primary.status);
   const past = group.licences.filter(
@@ -130,10 +131,13 @@ function ProductionCard({ group }: { group: ProductionGroup }) {
         opacity: isActive ? 1 : 0.65,
       }}
     >
-      {/* Header band */}
+      {/* Header band — click to collapse/expand */}
       <div
-        className="px-6 pt-6 pb-5"
-        style={{ borderBottom: "1px solid var(--color-border)" }}
+        className="px-6 pt-6 pb-5 cursor-pointer select-none"
+        style={{ borderBottom: collapsed ? "none" : "1px solid var(--color-border)" }}
+        onClick={() => setCollapsed((v) => !v)}
+        role="button"
+        aria-expanded={!collapsed}
       >
         {/* Eyebrow row */}
         <div className="flex items-start justify-between gap-4 mb-4">
@@ -148,7 +152,20 @@ function ProductionCard({ group }: { group: ProductionGroup }) {
               {year}
             </span>
           </div>
-          <StatusDot status={primary.status} />
+          <div className="flex items-center gap-3">
+            <StatusDot status={primary.status} />
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{
+                color: "var(--color-muted)",
+                transform: collapsed ? "rotate(0deg)" : "rotate(180deg)",
+                transition: "transform 0.2s",
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
         </div>
 
         {/* Title + fee */}
@@ -174,8 +191,8 @@ function ProductionCard({ group }: { group: ProductionGroup }) {
         </div>
       </div>
 
-      {/* Terms + details */}
-      <div className="px-6 py-4">
+      {/* Terms + details — hidden when collapsed */}
+      {!collapsed && <div className="px-6 py-4">
         {/* Tags row */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {primary.licenceType && (
@@ -255,10 +272,10 @@ function ProductionCard({ group }: { group: ProductionGroup }) {
             View licence agreement →
           </Link>
         </div>
-      </div>
+      </div>}
 
       {/* Past agreements */}
-      {past.length > 0 && (
+      {!collapsed && past.length > 0 && (
         <div
           className="px-6 py-3"
           style={{ borderTop: "1px solid var(--color-border)", background: "var(--color-bg)" }}
