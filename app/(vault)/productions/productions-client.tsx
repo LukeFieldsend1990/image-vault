@@ -14,6 +14,7 @@ interface Production {
   organisationId: string | null;
   createdAt: number;
   licenceCount: number;
+  cast: { total: number; consented: number; invited: number; linked: number } | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -140,9 +141,35 @@ export default function ProductionsClient() {
                     <span className="text-xs" style={{ color: "var(--color-muted)" }}>
                       {p.licenceCount} licence{p.licenceCount !== 1 ? "s" : ""}
                     </span>
+                    {p.cast ? (
+                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                        {p.cast.total} cast
+                        {p.cast.total > 0 && (
+                          <span style={{ color: p.cast.consented === p.cast.total ? "#166534" : "var(--color-muted)" }}>
+                            {" "}· {p.cast.consented}/{p.cast.total} consented
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(180,83,9,0.08)", color: "#b45309" }}>
+                        No cast added yet
+                      </span>
+                    )}
                   </div>
+                  {p.cast && p.cast.total > 0 && (() => {
+                    const pct = Math.round((p.cast.consented / p.cast.total) * 100);
+                    const colour = pct === 100 ? "#166534" : pct > 50 ? "#b45309" : "#c0392b";
+                    return (
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: colour }} />
+                        </div>
+                        <span className="text-[10px] font-medium tabular-nums shrink-0" style={{ color: colour }}>{pct}%</span>
+                      </div>
+                    );
+                  })()}
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-3 shrink-0 self-start">
                   {p.status && (
                     <span
                       className="text-xs px-2 py-0.5 rounded-full font-medium"
