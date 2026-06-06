@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import UploadModal from "../../upload-modal";
 import { FadeImage } from "@/app/(vault)/fade-image";
@@ -1158,7 +1159,15 @@ function RevenueTab({ talentId }: { talentId: string }) {
 
 type Tab = "vault" | "licences" | "permissions" | "revenue" | "monitor" | "compliance" | "productions";
 
+const VALID_TABS = new Set<Tab>(["vault", "licences", "productions", "compliance", "permissions", "revenue", "monitor"]);
+
 export default function RepVaultClient({ talentId }: { talentId: string }) {
+  const searchParams = useSearchParams();
+  const initialTab = useMemo<Tab>(() => {
+    const t = searchParams.get("tab") as Tab | null;
+    return t && VALID_TABS.has(t) ? t : "vault";
+  }, [searchParams]);
+
   const [packages, setPackages] = useState<ScanPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [talent, setTalent] = useState<TalentInfo | null>(null);
@@ -1166,7 +1175,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [addFilesPackageId, setAddFilesPackageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notAllowed, setNotAllowed] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("vault");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   const fetchPackages = useCallback(async () => {
     try {
