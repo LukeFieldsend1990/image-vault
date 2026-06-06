@@ -47,6 +47,20 @@ interface TmdbCastMember {
   talentEmail?: string;
 }
 
+interface LicenceSummary {
+  id: string;
+  talentName: string | null;
+  talentEmail: string | null;
+  status: string;
+  licenceType: string | null;
+  validFrom: number;
+  validTo: number;
+  agreedFee: number | null;
+  proposedFee: number | null;
+  packageName: string | null;
+  productionId: string | null;
+}
+
 interface LicenceTerms {
   intendedUse: string;
   validFrom: string;
@@ -166,6 +180,8 @@ export default function ProductionDetailClient() {
   const [csvRows, setCsvRows] = useState<{ email: string; characterName?: string; department?: string; sagMember: boolean }[]>([]);
   const [csvError, setCsvError] = useState("");
 
+  const [licences, setLicences] = useState<LicenceSummary[]>([]);
+
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -174,9 +190,10 @@ export default function ProductionDetailClient() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [prodRes, castRes] = await Promise.all([
+      const [prodRes, castRes, licRes] = await Promise.all([
         fetch(`/api/productions/${id}`),
         fetch(`/api/productions/${id}/cast`),
+        fetch(`/api/licences`),
       ]);
       if (prodRes.ok) {
         const d = await prodRes.json() as { production: Production };
@@ -188,6 +205,10 @@ export default function ProductionDetailClient() {
         setCastTotal(d.castTotal ?? 0);
         setConsentedCount(d.consentedCount ?? 0);
         setInvitedCount(d.invitedCount ?? 0);
+      }
+      if (licRes.ok) {
+        const d = await licRes.json() as { licences?: LicenceSummary[] };
+        setLicences((d.licences ?? []).filter((l) => l.productionId === id));
       }
     } finally {
       setLoading(false);
@@ -411,8 +432,8 @@ export default function ProductionDetailClient() {
                 stroke={pct === 100 ? "#166534" : "var(--color-accent)"}
                 strokeWidth="6"
                 strokeLinecap="round"
-                strokeDasharray={`${circumference * pct / 100} ${circumference}`}
-                strokeDashoffset={circumference * 0.25}
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * (1 - pct / 100)}
                 transform="rotate(-90 32 32)"
               />
               <text x="32" y="37" textAnchor="middle" fontSize="14" fontWeight="600" fill="var(--color-text)">{pct}%</text>
@@ -786,6 +807,65 @@ export default function ProductionDetailClient() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Licences */}
+      {licences.length > 0 && (
+        <div className="mt-8">
+          <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
+            Licences · {licences.length}
+          </p>
+          <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
+                  {["Talent", "Type", "Status", "Valid To", "Fee"].map((h) => (
+                    <th key={h} className="text-left px-4 py-2.5 text-xs font-medium tracking-wider uppercase" style={{ color: "var(--color-muted)" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {licences.map((lic, i) => {
+                  const licColour: Record<string, string> = {
+                    APPROVED: "#166534", PENDING: "#b45309", AWAITING_PACKAGE: "#7c3aed",
+                    DENIED: "#991b1b", REVOKED: "#6b7280", EXPIRED: "#6b7280",
+                  };
+                  const colour = licColour[lic.status] ?? "#6b7280";
+                  return (
+                    <tr key={lic.id} style={{ borderBottom: i < licences.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
+                      <td className="px-4 py-3">
+                        <Link href={`/licences/${lic.id}`} style={{ color: "var(--color-accent)" }}>
+                          <span className="text-sm font-medium">{lic.talentName ?? lic.talentEmail ?? "—"}</span>
+                        </Link>
+                        {lic.packageName && <span className="text-xs block" style={{ color: "var(--color-muted)" }}>{lic.packageName}</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                          {lic.licenceType ? lic.licenceType.replace(/_/g, " ") : "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${colour}18`, color: colour }}>
+                          {lic.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                          {new Date(lic.validTo * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                          {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

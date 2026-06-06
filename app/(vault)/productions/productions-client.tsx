@@ -14,6 +14,7 @@ interface Production {
   organisationId: string | null;
   createdAt: number;
   licenceCount: number;
+  cast: { total: number; consented: number; invited: number; linked: number } | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -208,22 +209,35 @@ export default function ProductionsClient() {
               </div>
             </div>
 
-            {/* Footer band — SAG + type chips */}
-            <div className="px-6 py-3 flex items-center gap-2 flex-wrap" style={{ background: "var(--color-bg)" }}>
-              {p.sagProjectNumber && (
+            {/* Footer band — SAG + cast progress */}
+            <div className="px-6 py-3 flex items-center gap-3 flex-wrap" style={{ background: "var(--color-bg)" }}>
+              {p.sagProjectNumber ? (
                 <span
                   className="inline-flex text-[10px] font-mono font-semibold px-2 py-0.5 rounded"
                   style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}
                 >
                   SAG-AFTRA · {p.sagProjectNumber}
                 </span>
-              )}
-              {!p.sagProjectNumber && (
+              ) : (
                 <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>
                   No SAG-AFTRA project number
                 </span>
               )}
-              {p.licenceCount === 0 && (
+              {p.cast && p.cast.total > 0 ? (() => {
+                const pct = Math.round((p.cast.consented / p.cast.total) * 100);
+                const colour = pct === 100 ? "#166534" : pct > 50 ? "#b45309" : "#c0392b";
+                return (
+                  <span className="ml-auto flex items-center gap-2">
+                    <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>
+                      {p.cast.consented}/{p.cast.total} cast consented
+                    </span>
+                    <span className="inline-flex w-20 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+                      <span className="h-full rounded-full" style={{ width: `${pct}%`, background: colour }} />
+                    </span>
+                    <span className="text-[10px] font-semibold tabular-nums" style={{ color: colour }}>{pct}%</span>
+                  </span>
+                );
+              })() : (
                 <span
                   className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded ml-auto"
                   style={{ background: "rgba(180,83,9,0.08)", color: "#b45309" }}
