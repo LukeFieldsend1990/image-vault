@@ -117,13 +117,19 @@ export async function POST(req: NextRequest) {
       } catch (e) { errors.push(`${l.id} 39.H: ${String(e)}`); }
     }
 
-    // 39.J — business reason from licence form
-    if (!hasEvent.has(`${l.id}:business_reason.recorded`) && l.intendedUse) {
+    // 39.J — the licence itself (projectName + licenceType) is the recorded business reason.
+    //         Fire regardless of intendedUse — the licence IS the business reason.
+    if (!hasEvent.has(`${l.id}:business_reason.recorded`)) {
       try {
         await appendEvent(db, {
           chainKey: chain, eventType: "business_reason.recorded", clauseRef: "39.J",
           licenceId: l.id, talentId: l.talentId, actorId: adminId,
-          payload: { projectName: l.projectName, productionCompany: l.productionCompany, intendedUse: l.intendedUse },
+          payload: {
+            projectName: l.projectName,
+            productionCompany: l.productionCompany,
+            licenceType: l.licenceType,
+            ...(l.intendedUse ? { intendedUse: l.intendedUse } : {}),
+          },
         });
         appended++;
       } catch (e) { errors.push(`${l.id} 39.J: ${String(e)}`); }

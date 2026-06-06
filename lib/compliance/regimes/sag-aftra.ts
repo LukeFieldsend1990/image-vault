@@ -15,7 +15,9 @@ const obligations: ComplianceObligation[] = [
     clauseRef: "39.B",
     title: "Performer consent to the digital replica",
     description:
-      "A consent exists covering the replica's use. Script-described alterations are tracked via the consent's scriptedAlterations scope flag.",
+      "Talent approving the licence constitutes the base consent to the digital replica use for that project and territory. " +
+      "Additional consents (cross-language dubs, alternate territories, rescripted alterations) can be added separately " +
+      "via the compliance dashboard and are tracked as supplementary ledger entries.",
     satisfiedBy: ["consent.granted"],
     severity: "required",
   },
@@ -25,7 +27,9 @@ const obligations: ComplianceObligation[] = [
     clauseRef: "39.C",
     title: "ICDR minimum payments & residuals metered",
     description:
-      "Independently Created Digital Replica uses are metered for minimums/residuals (Live Royalty Meter, §15).",
+      "Only applies to AI-bearing licences (licence type: ai_avatar or training_data, or permit-AI-training flag set). " +
+      "For those licences, Independently Created Digital Replica uses must be metered for minimums and residuals " +
+      "via the Live Royalty Meter (§15). Not required — and shown as n/a — for all other licence types.",
     satisfiedBy: ["use.metered"],
     appliesWhen: isAiBearing,
     severity: "required",
@@ -76,7 +80,9 @@ const obligations: ComplianceObligation[] = [
     regime: "sag_aftra",
     clauseRef: "39.J",
     title: "Articulable business reason recorded",
-    description: "A business reason for requesting the scan/licence is captured in-platform.",
+    description:
+      "The licence itself (project name, production company, and licence type) constitutes the recorded business reason. " +
+      "This event is auto-fired at licence approval — no separate action required.",
     satisfiedBy: ["business_reason.recorded"],
     severity: "recommended",
   },
