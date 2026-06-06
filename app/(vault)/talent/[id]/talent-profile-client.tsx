@@ -164,6 +164,7 @@ export default function TalentProfileClient({
   permissions,
   capabilities,
   packages,
+  viewerRole,
 }: {
   talentId: string;
   talent: { id: string; email: string };
@@ -171,6 +172,7 @@ export default function TalentProfileClient({
   permissions: PermissionRow[];
   capabilities: string[];
   packages: ScanPackage[];
+  viewerRole?: string;
 }) {
   const [openPreview, setOpenPreview] = useState<string | null>(null);
 
@@ -354,13 +356,15 @@ export default function TalentProfileClient({
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                           </svg>
                         </button>
-                        <Link
-                          href={`/licences/request/${pkg.id}`}
-                          className="rounded px-3.5 py-1.5 text-xs font-medium text-white transition hover:opacity-80"
-                          style={{ background: "var(--color-accent)" }}
-                        >
-                          Request Licence
-                        </Link>
+                        {viewerRole !== "rep" && (
+                          <Link
+                            href={`/licences/request/${pkg.id}`}
+                            className="rounded px-3.5 py-1.5 text-xs font-medium text-white transition hover:opacity-80"
+                            style={{ background: "var(--color-accent)" }}
+                          >
+                            Request Licence
+                          </Link>
+                        )}
                       </div>
                     </div>
 
