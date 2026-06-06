@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LicenceStatus = "APPROVED" | "PENDING";
-type ViewType = "vault" | "licences" | "download" | "rep-roster" | "rep-detail" | "productions-list" | "add-cast" | "incoming-request" | "compliance-dashboard";
+type ViewType = "vault" | "licences" | "download" | "rep-roster" | "rep-detail" | "productions-list" | "add-cast" | "incoming-request" | "compliance-dashboard" | "compliance-modal";
 type RepTab = "vault" | "licences" | "permissions" | "revenue" | "deepscan";
 type SidebarRole = "talent" | "licensee" | "rep" | "production";
 type DemoMode = "talent" | "rep" | "production";
@@ -542,8 +542,16 @@ const PRODUCTION_SCENES: Scene[] = [
     view: "compliance-dashboard",
     expandedLic: null,
     sidebarRole: "production",
-    headline: "Compliance view breakdown",
-    body: "Aquaman: Deep Dark is 100% compliant. Mortal Kombat 2 is 85% — one security custody gap. The Batman Sequel sits at 68% with two required gaps and 40% cast onboarding. Not everything is green.",
+    headline: "SAG-AFTRA Article 39 — every obligation tracked",
+    body: "39.B performer consent, 39.E biometric isolation, 39.H security custody, 39.J articulable business reason — each clause maps to a compliance event. Gaps and pending obligations surface automatically across every production.",
+  },
+  {
+    id: "prod-compliance-modal",
+    view: "compliance-modal",
+    expandedLic: null,
+    sidebarRole: "production",
+    headline: "Obligation met — hash-linked at every beat",
+    body: "Aquaman: Deep Dark — 39.B consent at seq 0, 39.E biometric isolation at seq 1, 39.H custody confirmed at seq 2, 39.J business reason at seq 3. Each event hash-linked to the last. Scrub attestation triggers on licence expiry under 39.G.",
   },
 ];
 
@@ -1943,7 +1951,7 @@ function IncomingRequestView() {
 
 // ─── Production: Compliance Dashboard ────────────────────────────────────────
 
-function ComplianceDashboardView() {
+function ComplianceDashboardView({ showModal = false }: { showModal?: boolean }) {
   const overallScore = 82;
   const overallColor = "#b45309"; // partial — has gaps
   const circ52 = 2 * Math.PI * 52;
@@ -1951,7 +1959,8 @@ function ComplianceDashboardView() {
   const overallOffset = circ52 * (1 - overallScore / 100);
 
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+    <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
+    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem", filter: showModal ? "brightness(0.35)" : "none", transition: "filter 0.2s ease" }}>
       <div style={{ maxWidth: "56rem" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
           <div>
@@ -2065,6 +2074,70 @@ function ComplianceDashboardView() {
           })}
         </div>
       </div>
+    </div>
+
+    {showModal && (
+      <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "relative", width: "min(92%, 680px)", maxHeight: "82vh", overflowY: "auto", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "10px", padding: "1.5rem", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
+          {/* Modal header */}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1.25rem" }}>
+            <div>
+              <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--color-ink)", margin: "0 0 0.25rem" }}>Aquaman: Deep Dark</h2>
+              <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>
+                film · 3 licences ·{" "}
+                <span style={{ color: "#1a7f37", fontWeight: 600 }}>100% Compliant</span>
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+              <button style={{ padding: "0.375rem 0.875rem", fontSize: "0.75rem", fontWeight: 500, background: "var(--color-accent)", color: "#fff", border: "none", borderRadius: "4px", cursor: "default" }}>
+                Generate Certificate
+              </button>
+              <span style={{ fontSize: "1.25rem", color: "var(--color-muted)", lineHeight: 1, padding: "0 4px", cursor: "default" }}>×</span>
+            </div>
+          </div>
+
+          {/* Licence panel */}
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: "6px", overflow: "hidden" }}>
+            {/* Licence header */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.875rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
+              <span style={{ fontSize: "0.75rem", fontFamily: "monospace", color: "var(--color-muted)" }}>ef94ea37</span>
+              <span style={{ fontSize: "0.75rem", color: "var(--color-text)" }}>Aquaman: Deep Dark</span>
+              <span style={{ fontSize: "0.75rem", color: "var(--color-muted)" }}>· film double · APPROVED</span>
+            </div>
+
+            {/* Obligation rows */}
+            {PROD_MODAL_OBLIGATIONS.map((o) => {
+              const ic = o.status === "met" ? "#1a7f37" : o.status === "pending" ? "#2563eb" : "#c0392b";
+              const icon = o.status === "met" ? "✓" : o.status === "pending" ? "⏳" : "⚠";
+              return (
+                <div key={o.clause} style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", padding: "0.75rem 0.875rem", borderBottom: "1px solid var(--color-border)" }}>
+                  <span style={{ fontSize: "0.9375rem", color: ic, flexShrink: 0, width: "1.25rem", textAlign: "center", marginTop: "0.125rem" }}>{icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--color-text)", margin: "0 0 0.25rem" }}>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--color-muted)", marginRight: "0.5rem" }}>{o.clause}</span>
+                      {o.title}
+                    </p>
+                    {o.status === "met" && o.eventLabel && (
+                      <div>
+                        <span style={{ fontFamily: "monospace", fontSize: "0.6875rem", color: ic }}>{o.eventLabel}</span>
+                        <span style={{ fontSize: "0.6875rem", color: "#999" }}>
+                          {" "}· seq {o.seq} · {o.date} · <code style={{ fontFamily: "ui-monospace,monospace" }}>{o.hash}…</code>
+                        </span>
+                        {o.meta && <p style={{ fontSize: "0.6875rem", color: "#aaa", margin: "0.2rem 0 0" }}>{o.meta}</p>}
+                      </div>
+                    )}
+                    {o.status === "pending" && (
+                      <p style={{ fontSize: "0.6875rem", color: ic, margin: "0.2rem 0 0" }}>{o.meta}</p>
+                    )}
+                  </div>
+                  <span style={{ fontSize: "0.625rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-muted)", flexShrink: 0 }}>{o.severity}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
@@ -2230,7 +2303,7 @@ function activeNavId(scene: Scene): NavId {
   if (scene.view === "rep-roster" || scene.view === "rep-detail") return "roster";
   if (scene.view === "vault") return "vault";
   if (scene.view === "productions-list" || scene.view === "add-cast") return "productions";
-  if (scene.view === "compliance-dashboard") return "compliance";
+  if (scene.view === "compliance-dashboard" || scene.view === "compliance-modal") return "compliance";
   return "licences";
 }
 
@@ -2290,6 +2363,7 @@ export default function DemoClient() {
           {scene.view === "add-cast" && <AddCastView />}
           {scene.view === "incoming-request" && <IncomingRequestView />}
           {scene.view === "compliance-dashboard" && <ComplianceDashboardView />}
+          {scene.view === "compliance-modal" && <ComplianceDashboardView showModal />}
         </div>
 
         <TourCard
