@@ -187,7 +187,52 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                       </p>
                     )}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                    className="flex-shrink-0 flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs transition hover:bg-opacity-80"
+                    style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}
+                  >
+                    Details
+                    <svg
+                      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      style={{ transform: expandedId === r.id ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
                 </div>
+
+                {/* Expanded details for cast invitation */}
+                {expandedId === r.id && (
+                  <div
+                    className="mt-4 rounded border divide-y text-xs"
+                    style={{ borderColor: "var(--color-border)" }}
+                  >
+                    {[
+                      ["Licence period", `${formatDate(r.validFrom)} – ${formatDate(r.validTo)}`],
+                      r.exclusivity ? ["Exclusivity", EXCLUSIVITY_LABELS[r.exclusivity] ?? r.exclusivity] : null,
+                      r.intendedUse ? ["Intended use", r.intendedUse] : null,
+                      ["AI processing", r.permitAiTraining ? "⚠ Requested" : "Not requested"],
+                    ]
+                      .filter((row): row is [string, string] => row !== null)
+                      .map(([key, value]) => (
+                        <div key={key} className="flex justify-between gap-4 px-3 py-2">
+                          <span style={{ color: "var(--color-muted)" }}>{key}</span>
+                          <span
+                            className="font-medium text-right"
+                            style={{
+                              color: key === "AI processing" && r.permitAiTraining ? "#dc2626" : "var(--color-ink)",
+                            }}
+                          >
+                            {value}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
 
                 {/* Package selector (if existing scan available) */}
                 {packages.length > 0 && (
