@@ -5,11 +5,11 @@ import { useState, useEffect } from "react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type LicenceStatus = "APPROVED" | "PENDING";
-type ViewType = "vault" | "licences" | "download" | "rep-roster" | "rep-detail";
+type ViewType = "vault" | "licences" | "download" | "rep-roster" | "rep-detail" | "productions-list" | "add-cast" | "incoming-request" | "compliance-dashboard";
 type RepTab = "vault" | "licences" | "permissions" | "revenue" | "deepscan";
-type SidebarRole = "talent" | "licensee" | "rep";
-type DemoMode = "talent" | "rep";
-type NavId = "vault" | "licences" | "directory" | "settings" | "roster";
+type SidebarRole = "talent" | "licensee" | "rep" | "production";
+type DemoMode = "talent" | "rep" | "production";
+type NavId = "vault" | "licences" | "directory" | "settings" | "roster" | "productions" | "compliance";
 type PermissionStatus = "allowed" | "approval_required" | "blocked";
 
 interface FakePkg {
@@ -433,6 +433,89 @@ const REP_SCENES: Scene[] = [
   },
 ];
 
+// ─── Production fake data ─────────────────────────────────────────────────────
+
+const PROD_PRODUCTIONS = [
+  { id: "p1", name: "Untitled The Batman Sequel", company: "Warner Bros", type: "Feature Film", year: 2027, status: "pre_production", licenceCount: 0, sagNumber: null as string | null, castTotal: 0, castConsented: 0 },
+  { id: "p2", name: "Venom 4", company: null as string | null, type: null as string | null, year: null as number | null, status: null as string | null, licenceCount: 4, sagNumber: null as string | null, castTotal: 1, castConsented: 1 },
+];
+
+const BATMAN_CAST = [
+  { id: "rp", name: "Robert Pattinson", character: "Bruce Wayne / The Batman", checked: false },
+  { id: "jw", name: "Jeffrey Wright", character: "Lt. James Gordon", checked: false },
+  { id: "as", name: "Andy Serkis", character: "Alfred", checked: true },
+  { id: "cf", name: "Colin Farrell", character: "Oz / The Penguin", checked: false },
+  { id: "jl", name: "Jayme Lawson", character: "Bella Real", checked: true },
+];
+
+const PROD_STATUS_COLOURS: Record<string, string> = {
+  pre_production: "#b45309", production: "#166534", post_production: "#7c3aed",
+  development: "#6b7280", released: "#0891b2", cancelled: "#374151",
+};
+
+const PROD_STATUS_LABELS: Record<string, string> = {
+  pre_production: "Pre-Production", production: "In Production",
+  post_production: "Post-Production", development: "Development",
+};
+
+const PROD_OBLIGATIONS = [
+  { clauseRef: "39.B", title: "Performer consent to the digital replica", count: "4/4", met: true, pending: 0 },
+  { clauseRef: "39.E", title: "Biometric data isolation", count: "4/4", met: true, pending: 0 },
+  { clauseRef: "39.H", title: "Replica security & custody", count: "4/4", met: true, pending: 0 },
+  { clauseRef: "39.I", title: "Union-approved transfer", count: "—", met: true, pending: 0 },
+  { clauseRef: "39.J", title: "Articulable business reason recorded", count: "4/4", met: true, pending: 0 },
+  { clauseRef: "Scrub", title: "Replica deletion & scrub attestation", count: "—", met: false, pending: 4 },
+];
+
+const PROD_COMPLIANCE_PRODS = [
+  { name: "Venom 4", type: "Production", licences: 1, castConsented: 1, castTotal: 1 },
+  { name: "Calamity Hustle", type: "film", licences: 1, castConsented: 1, castTotal: 1 },
+  { name: "ATB Series 2", type: "Production", licences: 2, castConsented: 2, castTotal: 2 },
+];
+
+const PROD_MODAL_OBLIGATIONS = [
+  { clause: "39.B", title: "Performer consent to the digital replica", severity: "REQUIRED", status: "met" as const, eventLabel: "Consent granted", seq: 0, date: "31 May 2026", hash: "5c333f062995", meta: "use type: film double · territory: Worldwide" },
+  { clause: "39.E", title: "Biometric data isolation", severity: "REQUIRED", status: "met" as const, eventLabel: "Biometric isolation attested", seq: 1, date: "31 May 2026", hash: "a968821d4005", meta: null },
+  { clause: "39.H", title: "Replica security & custody", severity: "REQUIRED", status: "met" as const, eventLabel: "Security custody attested", seq: 2, date: "31 May 2026", hash: "616f027a13bd", meta: null },
+  { clause: "39.J", title: "Articulable business reason recorded", severity: "RECOMMENDED", status: "met" as const, eventLabel: "Business reason recorded", seq: 3, date: "31 May 2026", hash: "d934fdaaa30e", meta: null },
+  { clause: "Scrub", title: "Replica deletion & scrub attestation", severity: "REQUIRED", status: "pending" as const, eventLabel: null, seq: null, date: null, hash: null, meta: "Not yet required — obligation triggered on licence expiry" },
+];
+
+const PRODUCTION_SCENES: Scene[] = [
+  {
+    id: "prod-productions-list",
+    view: "productions-list",
+    expandedLic: null,
+    sidebarRole: "production",
+    headline: "Production selected",
+    body: "Warner Bros. creates Blade Runner 3 in pre-production — no cast yet, no licences running. Venom 4 already has full cast consent and 4 active licences.",
+  },
+  {
+    id: "prod-add-cast",
+    view: "add-cast",
+    expandedLic: null,
+    sidebarRole: "production",
+    headline: "Talent selected and onboarded",
+    body: "The TMDB cast list imports in one click. Select the actors, add their emails — invites go out instantly, tied to the production's compliance regime and licence terms.",
+  },
+  {
+    id: "prod-incoming-request",
+    view: "incoming-request",
+    expandedLic: null,
+    sidebarRole: "talent",
+    headline: "Talent receives cast licence request",
+    body: "Emma Richardson sees the Calamity Hustle invitation — Film / Double, $220,000 proposed fee. She can attach an existing scan or accept and get scanned on set.",
+  },
+  {
+    id: "prod-compliance",
+    view: "compliance-dashboard",
+    expandedLic: null,
+    sidebarRole: "production",
+    headline: "Compliance view breakdown",
+    body: "The Compliance Control Centre shows every SAG-AFTRA Article 39 obligation across all productions. Consent, biometric isolation, security custody — all met. Scrub pending on licence expiry.",
+  },
+];
+
 const AUTO_MS = 6000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -535,6 +618,56 @@ const TALENT_NAV = [
   },
 ];
 
+const PRODUCTION_NAV = [
+  {
+    id: "directory" as NavId,
+    label: "Directory",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+    ),
+  },
+  {
+    id: "productions" as NavId,
+    label: "Productions",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="15" rx="2" /><polyline points="16 2 12 7 8 2" />
+      </svg>
+    ),
+  },
+  {
+    id: "licences" as NavId,
+    label: "Licences",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+      </svg>
+    ),
+  },
+  {
+    id: "compliance" as NavId,
+    label: "Compliance",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    ),
+  },
+  {
+    id: "settings" as NavId,
+    label: "Settings",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    ),
+  },
+];
+
 const LICENSEE_NAV = [
   {
     id: "directory" as const,
@@ -614,12 +747,14 @@ function DemoSidebar({
   role: SidebarRole;
   activeNavId: NavId;
 }) {
-  const nav = role === "talent" ? TALENT_NAV : role === "rep" ? REP_NAV : LICENSEE_NAV;
+  const nav = role === "talent" ? TALENT_NAV : role === "rep" ? REP_NAV : role === "production" ? PRODUCTION_NAV : LICENSEE_NAV;
   const user =
     role === "talent"
       ? { initials: "ER", name: "Emma Richardson", subtitle: "Talent" }
       : role === "rep"
       ? { initials: "AG", name: "Ari Gold", subtitle: "Representative" }
+      : role === "production"
+      ? { initials: "WB", name: "Warner Bros.", subtitle: "Production Co." }
       : { initials: "WB", name: "Warner Bros.", subtitle: "Licensee" };
 
   return (
@@ -1536,6 +1671,362 @@ function RepDetailLayout({ tab }: { tab: RepTab }) {
   );
 }
 
+// ─── Production: Productions List ────────────────────────────────────────────
+
+function ProductionsListView() {
+  return (
+    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+      <div style={{ maxWidth: "48rem" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "2.5rem" }}>
+          <div>
+            <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-accent)", margin: "0 0 0.25rem" }}>Your Productions</p>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.25rem" }}>Productions</h1>
+            <p style={{ fontSize: "0.9375rem", color: "var(--color-muted)", margin: 0 }}>Manage cast, licences, and compliance for each production.</p>
+          </div>
+          <button style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", fontSize: "0.875rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", borderRadius: "4px", cursor: "default", flexShrink: 0 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Production
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {PROD_PRODUCTIONS.map((p) => {
+            const sc = p.status ? PROD_STATUS_COLOURS[p.status] : null;
+            const sl = p.status ? PROD_STATUS_LABELS[p.status] : null;
+            const castPct = p.castTotal > 0 ? Math.round((p.castConsented / p.castTotal) * 100) : 0;
+            const castColour = castPct === 100 ? "#166534" : "#b45309";
+            return (
+              <div key={p.id} style={{ borderRadius: "8px", overflow: "hidden", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+                <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      {p.type && <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)" }}>{p.type}</span>}
+                      {p.type && p.year && <span style={{ fontSize: "0.625rem", color: "var(--color-border)" }}>·</span>}
+                      {p.year && <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)" }}>{p.year}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+                      {sc && sl && (
+                        <span style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+                          <span style={{ width: "0.5rem", height: "0.5rem", borderRadius: "50%", background: sc, display: "inline-block" }} />
+                          <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: sc }}>{sl}</span>
+                        </span>
+                      )}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "1.5rem" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <h2 style={{ fontSize: "1.25rem", fontWeight: 700, letterSpacing: "-0.01em", color: "var(--color-ink)", margin: "0 0 0.375rem" }}>{p.name}</h2>
+                      {p.company && <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: 0 }}>{p.company}</p>}
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <p style={{ fontSize: "1.375rem", fontWeight: 700, color: "var(--color-ink)", margin: "0 0 0.125rem", lineHeight: 1 }}>{p.licenceCount}</p>
+                      <p style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>Licences</p>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ padding: "0.625rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", background: "var(--color-bg)" }}>
+                  <span style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>
+                    {p.sagNumber ? `SAG-AFTRA · ${p.sagNumber}` : "No SAG-AFTRA project number"}
+                  </span>
+                  {p.castTotal > 0 ? (
+                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <span style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>{p.castConsented}/{p.castTotal} cast consented</span>
+                      <span style={{ display: "inline-flex", width: "5rem", height: "0.25rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
+                        <span style={{ height: "100%", borderRadius: "9999px", width: `${castPct}%`, background: castColour }} />
+                      </span>
+                      <span style={{ fontSize: "0.625rem", fontWeight: 700, color: castColour }}>{castPct}%</span>
+                    </span>
+                  ) : (
+                    <span style={{ marginLeft: "auto", fontSize: "0.625rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "4px", background: "rgba(180,83,9,0.08)", color: "#b45309" }}>No cast added yet</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Production: Add Cast ─────────────────────────────────────────────────────
+
+function AddCastView() {
+  return (
+    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+      <div style={{ maxWidth: "40rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "var(--color-muted)", marginBottom: "1.25rem", cursor: "default" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Productions
+        </div>
+        <div style={{ marginBottom: "1.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.375rem" }}>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>Untitled The Batman Sequel</h1>
+            <span style={{ fontSize: "0.6875rem", fontWeight: 600, padding: "0.15rem 0.5rem", borderRadius: "9999px", background: "rgba(192,57,43,0.1)", color: "var(--color-accent)", border: "1px solid rgba(192,57,43,0.2)" }}>film</span>
+          </div>
+          <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: 0 }}>Warner Bros · 2027 · Dir. Matt Reeves</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+          <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>
+            Cast&nbsp;&nbsp;<span style={{ fontWeight: 400 }}>0 Members</span>
+          </p>
+          <button style={{ display: "flex", alignItems: "center", gap: "0.375rem", padding: "0.375rem 0.875rem", fontSize: "0.8125rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", borderRadius: "4px", cursor: "default" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Cast
+          </button>
+        </div>
+
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", marginBottom: "1.5rem" }}>
+          <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+            <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.75rem" }}>Add Cast Members</p>
+            <div style={{ display: "flex", gap: "0.375rem" }}>
+              {["Manual Entry", "TMDB Import", "CSV Upload"].map((tab) => (
+                <button key={tab} style={{ padding: "0.3rem 0.75rem", fontSize: "0.8125rem", fontWeight: 500, borderRadius: "4px", cursor: "default", ...(tab === "TMDB Import" ? { background: "var(--color-accent)", color: "#fff", border: "none" } : { background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }) }}>
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
+          {BATMAN_CAST.map((actor, i) => (
+            <div key={actor.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: i < BATMAN_CAST.length - 1 ? "1px solid var(--color-border)" : "none", background: actor.checked ? "rgba(192,57,43,0.025)" : "var(--color-bg)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+                <div style={{ width: "1rem", height: "1rem", borderRadius: "3px", border: `2px solid ${actor.checked ? "var(--color-accent)" : "var(--color-border)"}`, background: actor.checked ? "var(--color-accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {actor.checked && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+                <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{actor.name}</span>
+                <span style={{ fontSize: "0.875rem", color: "var(--color-muted)" }}>as {actor.character}</span>
+              </div>
+              {actor.checked && (
+                <div style={{ flexShrink: 0, padding: "0.375rem 0.625rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)", fontSize: "0.8125rem", color: "var(--color-muted)", width: "11rem" }}>
+                  Email address
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.25rem" }}>Licence Terms</p>
+          <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>These terms apply to all members in this batch. Terms copy forward from your previous entry.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-muted)", marginBottom: "0.375rem" }}>Intended Use *</label>
+              <div style={{ padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-muted)" }}>e.g. Digital double for VFX sequences</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              {["Valid From *", "Valid To *"].map((l) => (
+                <div key={l}>
+                  <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-muted)", marginBottom: "0.375rem" }}>{l}</label>
+                  <div style={{ padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-muted)" }}>dd/mm/yyyy</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              {[["Licence Type", "Film / Double"], ["Exclusivity", "Non-exclusive"]].map(([l, v]) => (
+                <div key={l}>
+                  <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-muted)", marginBottom: "0.375rem" }}>{l}</label>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-ink)" }}>
+                    <span>{v}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-muted)", marginBottom: "0.375rem" }}>Territory</label>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-muted)" }}>
+                  <span>Select territory...</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", color: "var(--color-muted)", marginBottom: "0.375rem" }}>Proposed Fee ($)</label>
+                <div style={{ padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-muted)" }}>0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Production: Incoming Request ─────────────────────────────────────────────
+
+function IncomingRequestView() {
+  return (
+    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+      <div style={{ maxWidth: "48rem" }}>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.375rem" }}>Incoming Requests</h1>
+        <p style={{ fontSize: "0.9375rem", color: "var(--color-muted)", margin: "0 0 2rem" }}>Review and approve or deny licence requests from production companies.</p>
+
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", background: "var(--color-surface)" }}>
+          <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+              <div>
+                <span style={{ display: "inline-flex", alignItems: "center", padding: "0.25rem 0.75rem", borderRadius: "9999px", background: "var(--color-accent)", color: "#fff", fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.06em", marginBottom: "0.875rem" }}>
+                  CAST INVITATION
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.25rem" }}>
+                  <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--color-ink)", margin: 0 }}>Calamity Hustle</h2>
+                  <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>Film / Double</span>
+                </div>
+                <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>Production Company · Worldwide</p>
+                <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-accent)", margin: 0 }}>Proposed fee: $220,000</p>
+              </div>
+              <button style={{ display: "flex", alignItems: "center", gap: "0.375rem", padding: "0.375rem 0.75rem", fontSize: "0.875rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-muted)", cursor: "default", flexShrink: 0 }}>
+                Details
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div style={{ padding: "1.25rem 1.5rem", background: "var(--color-bg)" }}>
+            <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
+              Attach an existing scan package, or accept and get scanned as part of the production.
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem" }}>
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.625rem 0.875rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-surface)", fontSize: "0.9375rem", color: "var(--color-muted)" }}>
+                <span>— select a package —</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <button style={{ padding: "0.625rem 1rem", fontSize: "0.875rem", fontWeight: 500, borderRadius: "4px", border: "none", background: "rgba(192,57,43,0.4)", color: "#fff", cursor: "default" }}>
+                Attach Package
+              </button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+              <button style={{ padding: "0.625rem 1.25rem", fontSize: "0.9375rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", borderRadius: "4px", cursor: "default" }}>
+                Accept — get scanned later
+              </button>
+              <button style={{ fontSize: "0.9375rem", color: "var(--color-muted)", background: "none", border: "none", cursor: "default" }}>
+                Decline invitation
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Production: Compliance Dashboard ────────────────────────────────────────
+
+function ComplianceDashboardView() {
+  const color = "#1a7f37";
+  const circ52 = 2 * Math.PI * 52;
+  const circ22 = 2 * Math.PI * 22;
+
+  return (
+    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+      <div style={{ maxWidth: "56rem" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+          <div>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.375rem" }}>Compliance Control Centre</h1>
+            <p style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>
+              SAG-AFTRA Article 39&nbsp;&nbsp;·&nbsp;&nbsp;2026 TV/Theatrical AI&nbsp;&nbsp;·&nbsp;&nbsp;
+              <span style={{ color: "var(--color-accent)" }}>RUMBLE POST +</span>
+            </p>
+          </div>
+          <button style={{ padding: "0.5rem 1rem", fontSize: "0.8125rem", fontWeight: 500, background: "var(--color-accent)", color: "#fff", border: "none", borderRadius: "4px", cursor: "default", flexShrink: 0 }}>
+            Generate Certificate
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", padding: "1.25rem 1.5rem", border: "1px solid var(--color-border)", borderRadius: "8px", background: "var(--color-surface)", marginBottom: "1.5rem" }}>
+          <div style={{ flexShrink: 0 }}>
+            <svg width="96" height="96" viewBox="0 0 128 128">
+              <circle cx="64" cy="64" r="52" fill="none" stroke="var(--color-border)" strokeWidth="8" />
+              <circle cx="64" cy="64" r="52" fill="none" stroke={color} strokeWidth="8" strokeDasharray={circ52} strokeDashoffset={0} strokeLinecap="round" transform="rotate(-90 64 64)" />
+              <text x="64" y="60" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-text)">100%</text>
+              <text x="64" y="78" textAnchor="middle" fontSize="10" fill={color} style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>Compliant</text>
+            </svg>
+          </div>
+          <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap" }}>
+            {[["5", "Licences"], ["4/4", "Productions"], ["0", "Required Gaps"], ["0", "Active Strikes"], ["0", "Pending Transfers"]].map(([v, l]) => (
+              <div key={l} style={{ border: "1px solid var(--color-border)", borderRadius: "4px", padding: "0.75rem 1rem", background: "var(--color-bg)", minWidth: "5rem" }}>
+                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-ink)", margin: "0 0 0.125rem", lineHeight: 1 }}>{v}</p>
+                <p style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>{l}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Obligation progress */}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", background: "var(--color-surface)", marginBottom: "1.5rem" }}>
+          <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--color-border)", margin: 0 }}>Obligation Progress</p>
+          <div style={{ padding: "0 1.25rem" }}>
+            {PROD_OBLIGATIONS.map((ob) => (
+              <div key={ob.clauseRef} style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "0.625rem 0", borderBottom: "1px solid var(--color-border)" }}>
+                <span style={{ fontSize: "0.75rem", fontFamily: "monospace", width: "3rem", flexShrink: 0, color: "var(--color-muted)" }}>{ob.clauseRef}</span>
+                <span style={{ fontSize: "0.875rem", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-text)" }}>{ob.title}</span>
+                <div style={{ width: "8rem", flexShrink: 0 }}>
+                  <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
+                    {ob.met && ob.count !== "—" && <div style={{ height: "100%", width: "100%", borderRadius: "9999px", background: color }} />}
+                  </div>
+                </div>
+                <span style={{ fontSize: "0.75rem", width: "2.5rem", textAlign: "right", flexShrink: 0, color: "var(--color-muted)" }}>{ob.count}</span>
+                <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", width: "6rem", textAlign: "right", flexShrink: 0, color: ob.met ? color : "#2563eb" }}>
+                  {ob.met ? "✓ Met" : `⏳ ${ob.pending} pending`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Productions */}
+        <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.75rem" }}>
+          Productions ({PROD_COMPLIANCE_PRODS.length})
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
+          {PROD_COMPLIANCE_PRODS.map((prod) => (
+            <div key={prod.name} style={{ border: `1px solid ${color}33`, borderRadius: "4px", background: "var(--color-surface)", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", cursor: "default" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text)", margin: "0 0 0.125rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{prod.name}</p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>{prod.type} · {prod.licences} licence{prod.licences !== 1 ? "s" : ""}</p>
+                </div>
+                <span style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "0.2rem 0.5rem", borderRadius: "4px", background: "rgba(26,127,55,0.08)", color, border: `1px solid ${color}44`, flexShrink: 0 }}>
+                  Compliant
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
+                  <svg width="56" height="56" viewBox="0 0 56 56">
+                    <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-border)" strokeWidth="5" />
+                    <circle cx="28" cy="28" r="22" fill="none" stroke={color} strokeWidth="5" strokeDasharray={circ22} strokeDashoffset={0} strokeLinecap="round" transform="rotate(-90 28 28)" />
+                  </svg>
+                  <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8125rem", fontWeight: 700, color, lineHeight: 1 }}>100%</span>
+                </div>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                  {["39.B Performer consent to the di...", "39.E Biometric data isolation", "39.H Replica security & custody", "⏳ Scrub Replica deletion & scrub a..."].map((line) => (
+                    <div key={line} style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.75rem", color: "var(--color-muted)", overflow: "hidden" }}>
+                      <span style={{ flexShrink: 0, color: line.startsWith("⏳") ? "#2563eb" : color }}>{line.startsWith("⏳") ? "⏳" : "✓"}</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{line.startsWith("⏳") ? line.slice(2) : line}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.375rem" }}>
+                  <span style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)" }}>Cast Onboarding</span>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color }}>{prod.castConsented}/{prod.castTotal}</span>
+                </div>
+                <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
+                  <div style={{ height: "100%", width: "100%", borderRadius: "9999px", background: color }} />
+                </div>
+                <p style={{ fontSize: "0.625rem", color, margin: "0.375rem 0 0" }}>✓ All cast onboarded</p>
+              </div>
+              <p style={{ fontSize: "0.625rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-muted)", opacity: 0.7, margin: 0 }}>Click for details →</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tour card ────────────────────────────────────────────────────────────────
 
 function TourCard({
@@ -1583,12 +2074,12 @@ function TourCard({
     >
       {/* Mode switcher */}
       <div style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem", justifyContent: "center" }}>
-        {(["talent", "rep"] as DemoMode[]).map((m) => (
+        {([["talent", "Talent"], ["rep", "Rep"], ["production", "Production"]] as [DemoMode, string][]).map(([m, label]) => (
           <button
             key={m}
             onClick={() => onModeChange(m)}
             style={{
-              padding: "0.3rem 1rem",
+              padding: "0.3rem 0.875rem",
               fontSize: "0.6875rem",
               fontWeight: 600,
               borderRadius: "4px",
@@ -1598,11 +2089,10 @@ function TourCard({
               color: mode === m ? "#fff" : "rgba(255,255,255,0.45)",
               cursor: "pointer",
               letterSpacing: "0.04em",
-              textTransform: "capitalize",
               transition: "all 0.15s ease",
             }}
           >
-            {m === "talent" ? "Talent" : "Rep"}
+            {label}
           </button>
         ))}
       </div>
@@ -1697,6 +2187,8 @@ function MobileGate() {
 function activeNavId(scene: Scene): NavId {
   if (scene.view === "rep-roster" || scene.view === "rep-detail") return "roster";
   if (scene.view === "vault") return "vault";
+  if (scene.view === "productions-list" || scene.view === "add-cast") return "productions";
+  if (scene.view === "compliance-dashboard") return "compliance";
   return "licences";
 }
 
@@ -1710,19 +2202,18 @@ export default function DemoClient() {
   const [sceneIndex, setSceneIndex] = useState(0);
   const [paused, setPaused] = useState(false);
 
+  const scenes = mode === "talent" ? SCENES : mode === "rep" ? REP_SCENES : PRODUCTION_SCENES;
+
   useEffect(() => {
     if (isMobile !== false || paused) return;
-    const currentScenes = mode === "talent" ? SCENES : REP_SCENES;
     const t = setTimeout(() => {
-      setSceneIndex((i) => (i + 1) % currentScenes.length);
+      setSceneIndex((i) => (i + 1) % scenes.length);
     }, AUTO_MS);
     return () => clearTimeout(t);
-  }, [sceneIndex, paused, mode, isMobile]);
+  }, [sceneIndex, paused, mode, isMobile, scenes.length]);
 
   if (isMobile === null) return null;
   if (isMobile) return <MobileGate />;
-
-  const scenes = mode === "talent" ? SCENES : REP_SCENES;
   const scene = scenes[sceneIndex];
 
   const handleModeChange = (m: DemoMode) => {
@@ -1753,6 +2244,10 @@ export default function DemoClient() {
           {scene.view === "download" && <DualCustodyDownloadView />}
           {scene.view === "rep-roster" && <RosterView />}
           {scene.view === "rep-detail" && <RepDetailLayout tab={scene.repTab ?? "vault"} />}
+          {scene.view === "productions-list" && <ProductionsListView />}
+          {scene.view === "add-cast" && <AddCastView />}
+          {scene.view === "incoming-request" && <IncomingRequestView />}
+          {scene.view === "compliance-dashboard" && <ComplianceDashboardView />}
         </div>
 
         <TourCard
