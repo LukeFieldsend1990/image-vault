@@ -393,7 +393,7 @@ const REP_SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "rep",
     headline: "Talent roster",
-    body: "Richard Robinson manages Channing Tatum across all licence requests, approvals and downloads. One view for every active deal.",
+    body: "The rep manages Channing Tatum across all licence requests, approvals and downloads. One view for every active deal.",
   },
   {
     id: "rep-vault",
@@ -411,7 +411,7 @@ const REP_SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "rep",
     headline: "Approve on behalf of talent",
-    body: "Calamity Hustle is awaiting approval. Richard can approve or deny licence requests directly on Channing's behalf.",
+    body: "Calamity Hustle is awaiting approval. The rep can approve or deny licence requests directly on Channing's behalf.",
   },
   {
     id: "rep-permissions",
@@ -420,7 +420,7 @@ const REP_SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "rep",
     headline: "Usage permissions",
-    body: "AI avatars are blocked, commercial requires approval. Richard sets usage rules to protect Channing's likeness across all future requests.",
+    body: "AI avatars are blocked, commercial requires approval. Usage rules are set here to protect Channing's likeness across all future requests.",
   },
   {
     id: "rep-revenue",
@@ -619,7 +619,7 @@ function DemoSidebar({
     role === "talent"
       ? { initials: "ER", name: "Emma Richardson", subtitle: "Talent" }
       : role === "rep"
-      ? { initials: "RR", name: "RR", subtitle: "Representative" }
+      ? { initials: "AG", name: "Ari Gold", subtitle: "Representative" }
       : { initials: "WB", name: "Warner Bros.", subtitle: "Licensee" };
 
   return (
