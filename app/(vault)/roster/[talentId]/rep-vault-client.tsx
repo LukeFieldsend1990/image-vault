@@ -7,6 +7,8 @@ import { FadeImage } from "@/app/(vault)/fade-image";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 import MonitorClient from "../../vault/monitor/monitor-client";
 import type { TalentIdentityForMonitor } from "../../vault/monitor/page";
+import ComplianceClient from "../../compliance/compliance-client";
+import TalentProductionsClient from "../../vault/productions/talent-productions-client";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1154,7 +1156,7 @@ function RevenueTab({ talentId }: { talentId: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-type Tab = "vault" | "licences" | "permissions" | "revenue" | "monitor";
+type Tab = "vault" | "licences" | "permissions" | "revenue" | "monitor" | "compliance" | "productions";
 
 export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [packages, setPackages] = useState<ScanPackage[]>([]);
@@ -1227,6 +1229,8 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
   const TABS: { id: Tab; label: string }[] = [
     { id: "vault", label: "Vault" },
     { id: "licences", label: "Licences" },
+    { id: "productions", label: "Productions" },
+    { id: "compliance", label: "Compliance" },
     { id: "permissions", label: "Permissions" },
     { id: "revenue", label: "Revenue" },
     { id: "monitor", label: "DeepScan" },
@@ -1358,6 +1362,8 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
         )}
 
         {activeTab === "licences" && <LicencesTab talentId={talentId} />}
+        {activeTab === "productions" && <TalentProductionsClient talentId={talentId} />}
+        {activeTab === "compliance" && <ComplianceClient talentId={talentId} />}
         {activeTab === "permissions" && <PermissionsTab talentId={talentId} />}
         {activeTab === "revenue" && <RevenueTab talentId={talentId} />}
         {activeTab === "monitor" && (() => {

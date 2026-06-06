@@ -313,13 +313,13 @@ function ProductionCard({ group }: { group: ProductionGroup }) {
   );
 }
 
-export default function TalentProductionsClient() {
+export default function TalentProductionsClient({ talentId }: { talentId?: string }) {
   const [groups, setGroups] = useState<ProductionGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    fetch("/api/licences")
+    fetch(talentId ? `/api/licences?talentId=${encodeURIComponent(talentId)}` : "/api/licences")
       .then((r) => r.json())
       .then((d) => {
         const data = d as { licences?: Licence[] };
@@ -350,7 +350,7 @@ export default function TalentProductionsClient() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [talentId]);
 
   return (
     <div className="p-8 max-w-3xl">
