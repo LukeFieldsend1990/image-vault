@@ -63,22 +63,18 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
   const [attachError, setAttachError] = useState<Record<string, string>>({});
 
   async function load() {
-    const [r1, r2] = await Promise.all([
+    const [r1, r2, r3] = await Promise.all([
       fetch("/api/licences?status=PENDING"),
       fetch("/api/licences?status=AWAITING_PACKAGE"),
+      fetch("/api/vault/packages"),
     ]);
     const d1 = await r1.json() as { licences?: Licence[] };
     const d2 = await r2.json() as { licences?: Licence[] };
+    const d3 = await r3.json() as { packages?: { id: string; name: string; status?: string }[] };
     setRequests(d1.licences ?? []);
     setAwaitingPackage(d2.licences ?? []);
+    setPackages((d3.packages ?? []).filter(p => p.status === "ready"));
     setLoading(false);
-  }
-
-  async function loadPackages() {
-    if (packages.length > 0) return;
-    const r = await fetch("/api/vault/packages");
-    const d = await r.json() as { packages?: { id: string; name: string }[] };
-    setPackages((d.packages ?? []).filter(p => (p as { status?: string }).status === "ready"));
   }
 
   async function attachPackage(licenceId: string) {
@@ -101,8 +97,6 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, []);
-
-  useEffect(() => { if (awaitingPackage.length > 0) void loadPackages(); }, [awaitingPackage]);
 
   async function approve(id: string) {
     setActionId(id);
