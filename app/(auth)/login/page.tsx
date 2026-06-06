@@ -177,7 +177,7 @@ function LoginInner() {
               <p className="mt-8 text-xs text-[--color-muted]">
                 Don&apos;t have an account?{" "}
                 <a
-                  href="/signup"
+                  href="/register-interest"
                   className="font-medium text-[--color-ink] underline underline-offset-2"
                 >
                   Request access
