@@ -276,6 +276,11 @@ type LicenceEventRow = {
 // Status rank: gap beats pending beats met beats n/a
 const STATUS_RANK: Record<string, number> = { gap: 3, pending: 2, met: 1, "n/a": 0 };
 
+// Licences in these statuses are void — their obligations are all n/a and they
+// do not contribute to the production health score. They still appear in the
+// detail modal so the talent can see the full history.
+const VOID_STATUSES = new Set(["REVOKED", "DENIED"]);
+
 function evaluateLicence(
   licence: LicenceRow,
   events: LicenceEventRow[],
@@ -293,6 +298,12 @@ function evaluateLicence(
 
   const results = evaluateObligations(regime, repLicence, evaluated);
   results.push(scrubObligationResult(licence));
+
+  // Void licences: contract is void, obligations don't apply. Mark all n/a so
+  // the modal displays cleanly without any misleading gap indicators.
+  if (VOID_STATUSES.has(licence.status)) {
+    return results.map((o) => ({ ...o, status: "n/a" as const, evidence: null }));
+  }
 
   // Attach the satisfying ledger event to each met obligation
   return results.map((o): ObligationResultWithEvidence => {
@@ -316,15 +327,18 @@ function evaluateLicence(
 }
 
 // Merge per-licence results: worst status per obligation wins.
+// Void licences (REVOKED / DENIED) are excluded from the merge — they must not
+// drag down the production health score since the contract is no longer active.
 function evaluateGroup(
   licenceRows: LicenceRow[],
   eventsByLicence: Map<string, LicenceEventRow[]>,
   regime: RegimeId,
 ): ObligationResult[] {
-  if (licenceRows.length === 0) return [];
+  const activeLicences = licenceRows.filter((l) => !VOID_STATUSES.has(l.status));
+  if (activeLicences.length === 0) return [];
   const merged = new Map<string, ObligationResultWithEvidence>();
 
-  for (const licence of licenceRows) {
+  for (const licence of activeLicences) {
     const results = evaluateLicence(licence, eventsByLicence.get(licence.id) ?? [], regime);
     for (const o of results) {
       const existing = merged.get(o.id);
