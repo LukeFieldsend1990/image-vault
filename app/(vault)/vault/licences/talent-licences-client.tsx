@@ -240,6 +240,9 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LicenceTab>("active");
   const [scrubDataById, setScrubDataById] = useState<Record<string, ScrubData | "loading">>({});
+  const [packages, setPackages] = useState<{ id: string; name: string }[]>([]);
+  const [attachingPkg, setAttachingPkg] = useState<Record<string, string>>({});
+  const [attachingId, setAttachingId] = useState<string | null>(null);
 
   // Download Requests tab state
   const [pendingDownloads, setPendingDownloads] = useState<PendingDownload[]>([]);
@@ -256,6 +259,30 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   }
 
   useEffect(() => { void load(); }, []);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    fetch("/api/vault/packages")
+      .then((r) => r.json())
+      .then((d) => {
+        const data = d as { packages?: { id: string; name: string; status?: string }[] };
+        setPackages((data.packages ?? []).filter((p) => p.status === "ready"));
+      })
+      .catch(() => {/* non-fatal */});
+  }, []);
+
+  async function attachPackage(licenceId: string) {
+    const pkgId = attachingPkg[licenceId];
+    if (!pkgId) return;
+    setAttachingId(licenceId);
+    await fetch(`/api/licences/${licenceId}/attach-package`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ packageId: pkgId }),
+    });
+    await load();
+    setAttachingId(null);
+  }
 
   async function loadRequests() {
     if (requestsLoaded) return;
@@ -578,6 +605,39 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                         )}
                       </div>
                     </div>
+
+                    {/* ── Attach scan for APPROVED production licences with no package ── */}
+                    {l.status === "APPROVED" && l.productionId && !l.packageName && packages.length > 0 && (
+                      <div
+                        className="mt-3 rounded border p-3 space-y-2"
+                        style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                      >
+                        <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                          This production licence has no scan attached.
+                        </p>
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <select
+                            value={attachingPkg[l.id] ?? ""}
+                            onChange={(e) => setAttachingPkg((prev) => ({ ...prev, [l.id]: e.target.value }))}
+                            className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+                          >
+                            <option value="">— select a package —</option>
+                            {packages.map((p) => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => void attachPackage(l.id)}
+                            disabled={!attachingPkg[l.id] || attachingId === l.id}
+                            className="rounded px-3 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                            style={{ background: "var(--color-accent)" }}
+                          >
+                            {attachingId === l.id ? "Attaching…" : "Attach"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* ── Expanded details ─────────────────────────────────── */}
                     {expanded && (

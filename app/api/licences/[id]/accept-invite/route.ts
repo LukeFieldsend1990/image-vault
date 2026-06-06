@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, users, talentReps } from "@/lib/db/schema";
+import { licences, users, talentReps, productionCast } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -70,6 +70,23 @@ export async function POST(
     .update(licences)
     .set({ status: "APPROVED", approvedBy: session.sub, approvedAt: now, agreedFee, platformFee })
     .where(eq(licences.id, id));
+
+  // Mark productionCast row as consented (fire-and-forget, non-fatal)
+  void (async () => {
+    try {
+      const castRow = await db
+        .select({ id: productionCast.id })
+        .from(productionCast)
+        .where(eq(productionCast.licenceId, id))
+        .get();
+      if (castRow) {
+        await db
+          .update(productionCast)
+          .set({ status: "consented", linkedAt: now })
+          .where(eq(productionCast.id, castRow.id));
+      }
+    } catch { /* non-fatal */ }
+  })();
 
   // Record consent in compliance ledger (fire-and-forget, non-fatal)
   void (async () => {

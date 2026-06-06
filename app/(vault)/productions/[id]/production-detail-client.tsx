@@ -378,7 +378,7 @@ export default function ProductionDetailClient() {
       <div className="mb-2">
         <Link href="/productions" className="text-xs" style={{ color: "var(--color-muted)" }}>← Productions</Link>
       </div>
-      <div className="flex items-start justify-between mb-8 gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:justify-between mb-8 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h1 className="text-2xl font-semibold" style={{ color: "var(--color-text)" }}>{production.name}</h1>
@@ -402,7 +402,7 @@ export default function ProductionDetailClient() {
 
         {/* Compliance ring */}
         {castTotal > 0 && (
-          <div className="flex items-center gap-3 shrink-0 rounded p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <div className="flex items-center gap-3 self-start sm:shrink-0 rounded p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
             <svg width="64" height="64" viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="28" fill="none" stroke="var(--color-border)" strokeWidth="6" />
               <circle
@@ -696,8 +696,8 @@ export default function ProductionDetailClient() {
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>Use the Add Cast button to import from TMDB, enter manually, or upload a CSV.</p>
         </div>
       ) : (
-        <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
-          <table className="w-full text-sm">
+        <div className="rounded overflow-x-auto" style={{ border: "1px solid var(--color-border)" }}>
+          <table className="w-full text-sm" style={{ minWidth: 700 }}>
             <thead>
               <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
                 {["Talent", "Character", "Dept", "SAG", "Status", "Licence", ""].map((h) => (

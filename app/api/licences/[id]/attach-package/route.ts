@@ -2,7 +2,8 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users, talentReps, productionCast } from "@/lib/db/schema";
+import { licences, scanPackages, users, talentReps, productionCast, geometryFingerprintJobs } from "@/lib/db/schema";
+import { getRequestContext } from "@cloudflare/next-on-pages";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -41,6 +42,7 @@ export async function PATCH(
   }
 
   const db = getDb();
+  const now = Math.floor(Date.now() / 1000);
 
   const [licence] = await db
     .select({
@@ -128,6 +130,26 @@ export async function PATCH(
         .set({ status: "scan_uploaded" })
         .where(eq(productionCast.id, castRow.id));
     }
+  })();
+
+  // Trigger geo-fingerprint job for APPROVED licences (fire-and-forget)
+  void (async () => {
+    if (licence.status !== "APPROVED") return;
+    try {
+      const talentUser = await db
+        .select({ geoFingerprintEnabled: users.geoFingerprintEnabled })
+        .from(users)
+        .where(eq(users.id, licence.talentId))
+        .get();
+      if (!talentUser?.geoFingerprintEnabled) return;
+      const jobId = crypto.randomUUID();
+      await db.insert(geometryFingerprintJobs).values({
+        id: jobId, licenceId: id, packageId, status: "queued", createdAt: now,
+      });
+      const { env } = getRequestContext();
+      const queue = (env as unknown as Record<string, Queue>)["GEO_FINGERPRINT_QUEUE"];
+      if (queue) await queue.send({ jobId });
+    } catch { /* non-fatal */ }
   })();
 
   void (async () => {
