@@ -70,9 +70,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (licence.status !== "AWAITING_PACKAGE") {
+  if (licence.status !== "AWAITING_PACKAGE" && licence.status !== "PENDING" && licence.status !== "APPROVED") {
     return NextResponse.json(
-      { error: "Licence is not awaiting a package" },
+      { error: "Cannot attach a package to a licence in this state" },
       { status: 409 }
     );
   }
@@ -108,7 +108,11 @@ export async function PATCH(
 
   await db
     .update(licences)
-    .set({ packageId, status: "PENDING" })
+    .set({
+      packageId,
+      // Only advance status for AWAITING_PACKAGE; PENDING/APPROVED already past that gate
+      ...(licence.status === "AWAITING_PACKAGE" ? { status: "PENDING" as const } : {}),
+    })
     .where(eq(licences.id, id));
 
   // Update production_cast status if a cast row references this licence
