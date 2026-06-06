@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productionCast, productions, organisationMembers, invites } from "@/lib/db/schema";
+import { productionCast, productions, organisationMembers, invites, licences } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and } from "drizzle-orm";
@@ -73,6 +73,14 @@ export async function DELETE(
       .update(invites)
       .set({ usedAt: now })
       .where(eq(invites.id, castRow.inviteId));
+  }
+
+  // Revoke the associated licence so it doesn't linger in the talent's inbox
+  if (castRow.licenceId) {
+    await db
+      .update(licences)
+      .set({ status: "REVOKED", revokedAt: now })
+      .where(eq(licences.id, castRow.licenceId));
   }
 
   // Delete the cast row
