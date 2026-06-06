@@ -743,7 +743,7 @@ const REGIME_LABELS: Record<string, string> = {
   bipa: "BIPA — Illinois Biometric",
 };
 
-export default function ComplianceClient() {
+export default function ComplianceClient({ talentId }: { talentId?: string }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -752,8 +752,12 @@ export default function ComplianceClient() {
   const [showAllActions, setShowAllActions] = useState(false);
   const [modalProd, setModalProd] = useState<ProductionCompliance | null>(null);
 
+  const dashboardUrl = talentId
+    ? `/api/compliance/talent-dashboard?talentId=${encodeURIComponent(talentId)}`
+    : "/api/compliance/talent-dashboard";
+
   useEffect(() => {
-    fetch("/api/compliance/talent-dashboard")
+    fetch(dashboardUrl)
       .then((r) => r.json())
       .then((raw) => {
         const d = raw as DashboardData | { error: string };
@@ -762,7 +766,7 @@ export default function ComplianceClient() {
       })
       .catch(() => setError("Failed to load compliance data."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [dashboardUrl]);
 
   async function generateCertificate() {
     if (!data) return;
@@ -782,7 +786,7 @@ export default function ComplianceClient() {
         return;
       }
       if (certWindow && json.url) certWindow.location.href = json.url;
-      const refreshed = await fetch("/api/compliance/talent-dashboard").then((r) => r.json()) as DashboardData;
+      const refreshed = await fetch(dashboardUrl).then((r) => r.json()) as DashboardData;
       setData(refreshed);
     } catch (e) {
       certWindow?.close();
