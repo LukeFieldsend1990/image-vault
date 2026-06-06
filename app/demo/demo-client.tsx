@@ -436,8 +436,9 @@ const REP_SCENES: Scene[] = [
 // ─── Production fake data ─────────────────────────────────────────────────────
 
 const PROD_PRODUCTIONS = [
-  { id: "p1", name: "Untitled The Batman Sequel", company: "Warner Bros", type: "Feature Film", year: 2027, status: "pre_production", licenceCount: 0, sagNumber: null as string | null, castTotal: 0, castConsented: 0 },
-  { id: "p2", name: "Venom 4", company: null as string | null, type: null as string | null, year: null as number | null, status: null as string | null, licenceCount: 4, sagNumber: null as string | null, castTotal: 1, castConsented: 1 },
+  { id: "p1", name: "Untitled The Batman Sequel", company: "Warner Bros. Pictures", type: "Feature Film", year: 2027, status: "pre_production", licenceCount: 0, sagNumber: null as string | null, castTotal: 0, castConsented: 0 },
+  { id: "p2", name: "Aquaman: Deep Dark", company: "Warner Bros. Pictures", type: "Feature Film", year: 2026, status: "production", licenceCount: 3, sagNumber: "SAG-2025-0082" as string | null, castTotal: 1, castConsented: 1 },
+  { id: "p3", name: "Mortal Kombat 2", company: "Warner Bros. Pictures", type: "Feature Film", year: 2026, status: "post_production", licenceCount: 4, sagNumber: null as string | null, castTotal: 4, castConsented: 3 },
 ];
 
 const BATMAN_CAST = [
@@ -459,18 +460,48 @@ const PROD_STATUS_LABELS: Record<string, string> = {
 };
 
 const PROD_OBLIGATIONS = [
-  { clauseRef: "39.B", title: "Performer consent to the digital replica", count: "4/4", met: true, pending: 0 },
-  { clauseRef: "39.E", title: "Biometric data isolation", count: "4/4", met: true, pending: 0 },
-  { clauseRef: "39.H", title: "Replica security & custody", count: "4/4", met: true, pending: 0 },
-  { clauseRef: "39.I", title: "Union-approved transfer", count: "—", met: true, pending: 0 },
-  { clauseRef: "39.J", title: "Articulable business reason recorded", count: "4/4", met: true, pending: 0 },
-  { clauseRef: "Scrub", title: "Replica deletion & scrub attestation", count: "—", met: false, pending: 4 },
+  { clauseRef: "39.B", title: "Performer consent to the digital replica", count: "9/11", pct: 82, barColor: "#c0392b", statusLabel: "⚠ 2 gaps", statusColor: "#c0392b" },
+  { clauseRef: "39.E", title: "Biometric data isolation", count: "11/11", pct: 100, barColor: "#1a7f37", statusLabel: "✓ Met", statusColor: "#1a7f37" },
+  { clauseRef: "39.H", title: "Replica security & custody", count: "10/11", pct: 91, barColor: "#c0392b", statusLabel: "⚠ 1 gap", statusColor: "#c0392b" },
+  { clauseRef: "39.I", title: "Union-approved transfer", count: "—", pct: 100, barColor: "#1a7f37", statusLabel: "✓ Met", statusColor: "#1a7f37" },
+  { clauseRef: "39.J", title: "Articulable business reason recorded", count: "9/11", pct: 82, barColor: "#2563eb", statusLabel: "⏳ 2 pending", statusColor: "#2563eb" },
+  { clauseRef: "Scrub", title: "Replica deletion & scrub attestation", count: "—", pct: 0, barColor: "#2563eb", statusLabel: "⏳ 5 pending", statusColor: "#2563eb" },
 ];
 
 const PROD_COMPLIANCE_PRODS = [
-  { name: "Venom 4", type: "Production", licences: 1, castConsented: 1, castTotal: 1 },
-  { name: "Calamity Hustle", type: "film", licences: 1, castConsented: 1, castTotal: 1 },
-  { name: "ATB Series 2", type: "Production", licences: 2, castConsented: 2, castTotal: 2 },
+  {
+    name: "Aquaman: Deep Dark", type: "film", licences: 3, score: 100,
+    color: "#1a7f37", bg: "rgba(26,127,55,0.08)", border: "rgba(26,127,55,0.2)", statusLabel: "Compliant",
+    castConsented: 1, castTotal: 1, castPct: 100,
+    obligations: [
+      { icon: "✓", color: "#1a7f37", label: "39.B Performer consent to the di..." },
+      { icon: "✓", color: "#1a7f37", label: "39.E Biometric data isolation" },
+      { icon: "✓", color: "#1a7f37", label: "39.H Replica security & custody" },
+      { icon: "⏳", color: "#2563eb", label: "Scrub Replica deletion & scrub a..." },
+    ],
+  },
+  {
+    name: "Mortal Kombat 2", type: "film", licences: 4, score: 85,
+    color: "#b45309", bg: "rgba(180,83,9,0.08)", border: "rgba(180,83,9,0.2)", statusLabel: "Partial",
+    castConsented: 3, castTotal: 4, castPct: 75,
+    obligations: [
+      { icon: "✓", color: "#1a7f37", label: "39.B Performer consent to the di..." },
+      { icon: "✓", color: "#1a7f37", label: "39.E Biometric data isolation" },
+      { icon: "⚠", color: "#c0392b", label: "39.H Replica security & custody" },
+      { icon: "⏳", color: "#2563eb", label: "Scrub Replica deletion & scrub a..." },
+    ],
+  },
+  {
+    name: "The Batman Sequel", type: "film", licences: 4, score: 68,
+    color: "#c0392b", bg: "rgba(192,57,43,0.08)", border: "rgba(192,57,43,0.2)", statusLabel: "Gap",
+    castConsented: 2, castTotal: 5, castPct: 40,
+    obligations: [
+      { icon: "⚠", color: "#c0392b", label: "39.B Performer consent to the di..." },
+      { icon: "✓", color: "#1a7f37", label: "39.E Biometric data isolation" },
+      { icon: "⚠", color: "#c0392b", label: "39.H Replica security & custody" },
+      { icon: "⏳", color: "#2563eb", label: "Scrub Replica deletion & scrub a..." },
+    ],
+  },
 ];
 
 const PROD_MODAL_OBLIGATIONS = [
@@ -488,7 +519,7 @@ const PRODUCTION_SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "production",
     headline: "Production selected",
-    body: "Warner Bros. creates Blade Runner 3 in pre-production — no cast yet, no licences running. Venom 4 already has full cast consent and 4 active licences.",
+    body: "Warner Bros. manages three active productions. The Batman Sequel is in pre-production with no cast yet. Aquaman: Deep Dark is in production with full consent. Mortal Kombat 2 is post-production with 3/4 cast consented.",
   },
   {
     id: "prod-add-cast",
@@ -504,7 +535,7 @@ const PRODUCTION_SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "talent",
     headline: "Talent receives cast licence request",
-    body: "Emma Richardson sees the Calamity Hustle invitation — Film / Double, $220,000 proposed fee. She can attach an existing scan or accept and get scanned on set.",
+    body: "Emma Richardson receives the Batman Sequel cast invitation — Film / Digital Double, $350,000 proposed fee. She can attach an existing scan package or accept and get scanned as part of production.",
   },
   {
     id: "prod-compliance",
@@ -512,7 +543,7 @@ const PRODUCTION_SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "production",
     headline: "Compliance view breakdown",
-    body: "The Compliance Control Centre shows every SAG-AFTRA Article 39 obligation across all productions. Consent, biometric isolation, security custody — all met. Scrub pending on licence expiry.",
+    body: "Aquaman: Deep Dark is 100% compliant. Mortal Kombat 2 is 85% — one security custody gap. The Batman Sequel sits at 68% with two required gaps and 40% cast onboarding. Not everything is green.",
   },
 ];
 
@@ -1869,11 +1900,11 @@ function IncomingRequestView() {
                   CAST INVITATION
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.25rem" }}>
-                  <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--color-ink)", margin: 0 }}>Calamity Hustle</h2>
-                  <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>Film / Double</span>
+                  <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--color-ink)", margin: 0 }}>Untitled The Batman Sequel</h2>
+                  <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>Film / Digital Double</span>
                 </div>
-                <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>Production Company · Worldwide</p>
-                <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-accent)", margin: 0 }}>Proposed fee: $220,000</p>
+                <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>Warner Bros. Pictures · Worldwide</p>
+                <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-accent)", margin: 0 }}>Proposed fee: $350,000</p>
               </div>
               <button style={{ display: "flex", alignItems: "center", gap: "0.375rem", padding: "0.375rem 0.75rem", fontSize: "0.875rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-muted)", cursor: "default", flexShrink: 0 }}>
                 Details
@@ -1913,9 +1944,11 @@ function IncomingRequestView() {
 // ─── Production: Compliance Dashboard ────────────────────────────────────────
 
 function ComplianceDashboardView() {
-  const color = "#1a7f37";
+  const overallScore = 82;
+  const overallColor = "#b45309"; // partial — has gaps
   const circ52 = 2 * Math.PI * 52;
   const circ22 = 2 * Math.PI * 22;
+  const overallOffset = circ52 * (1 - overallScore / 100);
 
   return (
     <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
@@ -1938,18 +1971,20 @@ function ComplianceDashboardView() {
           <div style={{ flexShrink: 0 }}>
             <svg width="96" height="96" viewBox="0 0 128 128">
               <circle cx="64" cy="64" r="52" fill="none" stroke="var(--color-border)" strokeWidth="8" />
-              <circle cx="64" cy="64" r="52" fill="none" stroke={color} strokeWidth="8" strokeDasharray={circ52} strokeDashoffset={0} strokeLinecap="round" transform="rotate(-90 64 64)" />
-              <text x="64" y="60" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-text)">100%</text>
-              <text x="64" y="78" textAnchor="middle" fontSize="10" fill={color} style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>Compliant</text>
+              <circle cx="64" cy="64" r="52" fill="none" stroke={overallColor} strokeWidth="8" strokeDasharray={circ52} strokeDashoffset={overallOffset} strokeLinecap="round" transform="rotate(-90 64 64)" />
+              <text x="64" y="60" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-text)">{overallScore}%</text>
+              <text x="64" y="78" textAnchor="middle" fontSize="10" fill={overallColor} style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>Partial</text>
             </svg>
           </div>
           <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap" }}>
-            {[["5", "Licences"], ["4/4", "Productions"], ["0", "Required Gaps"], ["0", "Active Strikes"], ["0", "Pending Transfers"]].map(([v, l]) => (
+            {[["11", "Licences"], ["3/3", "Productions"], ["2", "Required Gaps"], ["0", "Active Strikes"], ["1", "Pending Transfers"]].map(([v, l]) => {
+              const warn = (l === "Required Gaps" || l === "Pending Transfers") && v !== "0";
+              return (
               <div key={l} style={{ border: "1px solid var(--color-border)", borderRadius: "4px", padding: "0.75rem 1rem", background: "var(--color-bg)", minWidth: "5rem" }}>
-                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-ink)", margin: "0 0 0.125rem", lineHeight: 1 }}>{v}</p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: warn ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem", lineHeight: 1 }}>{v}</p>
                 <p style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>{l}</p>
               </div>
-            ))}
+            );})}
           </div>
         </div>
 
@@ -1963,12 +1998,12 @@ function ComplianceDashboardView() {
                 <span style={{ fontSize: "0.875rem", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-text)" }}>{ob.title}</span>
                 <div style={{ width: "8rem", flexShrink: 0 }}>
                   <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
-                    {ob.met && ob.count !== "—" && <div style={{ height: "100%", width: "100%", borderRadius: "9999px", background: color }} />}
+                    {ob.count !== "—" && ob.pct > 0 && <div style={{ height: "100%", width: `${ob.pct}%`, borderRadius: "9999px", background: ob.barColor }} />}
                   </div>
                 </div>
                 <span style={{ fontSize: "0.75rem", width: "2.5rem", textAlign: "right", flexShrink: 0, color: "var(--color-muted)" }}>{ob.count}</span>
-                <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", width: "6rem", textAlign: "right", flexShrink: 0, color: ob.met ? color : "#2563eb" }}>
-                  {ob.met ? "✓ Met" : `⏳ ${ob.pending} pending`}
+                <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", width: "6rem", textAlign: "right", flexShrink: 0, color: ob.statusColor }}>
+                  {ob.statusLabel}
                 </span>
               </div>
             ))}
@@ -1980,47 +2015,54 @@ function ComplianceDashboardView() {
           Productions ({PROD_COMPLIANCE_PRODS.length})
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
-          {PROD_COMPLIANCE_PRODS.map((prod) => (
-            <div key={prod.name} style={{ border: `1px solid ${color}33`, borderRadius: "4px", background: "var(--color-surface)", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", cursor: "default" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text)", margin: "0 0 0.125rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{prod.name}</p>
-                  <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>{prod.type} · {prod.licences} licence{prod.licences !== 1 ? "s" : ""}</p>
+          {PROD_COMPLIANCE_PRODS.map((prod) => {
+            const ringOffset = circ22 * (1 - prod.score / 100);
+            const castColour = prod.castPct === 100 ? "#1a7f37" : prod.castPct > 50 ? "#b45309" : "#c0392b";
+            return (
+              <div key={prod.name} style={{ border: `1px solid ${prod.border}`, borderRadius: "4px", background: "var(--color-surface)", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", cursor: "default" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text)", margin: "0 0 0.125rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{prod.name}</p>
+                    <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>{prod.type} · {prod.licences} licence{prod.licences !== 1 ? "s" : ""}</p>
+                  </div>
+                  <span style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "0.2rem 0.5rem", borderRadius: "4px", background: prod.bg, color: prod.color, border: `1px solid ${prod.border}`, flexShrink: 0 }}>
+                    {prod.statusLabel}
+                  </span>
                 </div>
-                <span style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "0.2rem 0.5rem", borderRadius: "4px", background: "rgba(26,127,55,0.08)", color, border: `1px solid ${color}44`, flexShrink: 0 }}>
-                  Compliant
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
+                    <svg width="56" height="56" viewBox="0 0 56 56">
+                      <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-border)" strokeWidth="5" />
+                      <circle cx="28" cy="28" r="22" fill="none" stroke={prod.color} strokeWidth="5" strokeDasharray={circ22} strokeDashoffset={ringOffset} strokeLinecap="round" transform="rotate(-90 28 28)" />
+                    </svg>
+                    <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8125rem", fontWeight: 700, color: prod.color, lineHeight: 1 }}>{prod.score}%</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                    {prod.obligations.map((ob) => (
+                      <div key={ob.label} style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.75rem", color: "var(--color-muted)", overflow: "hidden" }}>
+                        <span style={{ flexShrink: 0, color: ob.color }}>{ob.icon}</span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ob.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.375rem" }}>
+                    <span style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)" }}>Cast Onboarding</span>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: castColour }}>{prod.castConsented}/{prod.castTotal}</span>
+                  </div>
+                  <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
+                    <div style={{ height: "100%", width: `${prod.castPct}%`, borderRadius: "9999px", background: castColour }} />
+                  </div>
+                  {prod.castPct === 100
+                    ? <p style={{ fontSize: "0.625rem", color: "#1a7f37", margin: "0.375rem 0 0" }}>✓ All cast onboarded</p>
+                    : <p style={{ fontSize: "0.625rem", color: castColour, margin: "0.375rem 0 0" }}>⏳ {prod.castTotal - prod.castConsented} invite{prod.castTotal - prod.castConsented !== 1 ? "s" : ""} pending</p>
+                  }
+                </div>
+                <p style={{ fontSize: "0.625rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-muted)", opacity: 0.7, margin: 0 }}>Click for details →</p>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
-                  <svg width="56" height="56" viewBox="0 0 56 56">
-                    <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-border)" strokeWidth="5" />
-                    <circle cx="28" cy="28" r="22" fill="none" stroke={color} strokeWidth="5" strokeDasharray={circ22} strokeDashoffset={0} strokeLinecap="round" transform="rotate(-90 28 28)" />
-                  </svg>
-                  <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8125rem", fontWeight: 700, color, lineHeight: 1 }}>100%</span>
-                </div>
-                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                  {["39.B Performer consent to the di...", "39.E Biometric data isolation", "39.H Replica security & custody", "⏳ Scrub Replica deletion & scrub a..."].map((line) => (
-                    <div key={line} style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.75rem", color: "var(--color-muted)", overflow: "hidden" }}>
-                      <span style={{ flexShrink: 0, color: line.startsWith("⏳") ? "#2563eb" : color }}>{line.startsWith("⏳") ? "⏳" : "✓"}</span>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{line.startsWith("⏳") ? line.slice(2) : line}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.375rem" }}>
-                  <span style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)" }}>Cast Onboarding</span>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color }}>{prod.castConsented}/{prod.castTotal}</span>
-                </div>
-                <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
-                  <div style={{ height: "100%", width: "100%", borderRadius: "9999px", background: color }} />
-                </div>
-                <p style={{ fontSize: "0.625rem", color, margin: "0.375rem 0 0" }}>✓ All cast onboarded</p>
-              </div>
-              <p style={{ fontSize: "0.625rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-muted)", opacity: 0.7, margin: 0 }}>Click for details →</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
