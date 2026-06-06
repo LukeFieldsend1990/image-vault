@@ -276,10 +276,12 @@ type LicenceEventRow = {
 // Status rank: gap beats pending beats met beats n/a
 const STATUS_RANK: Record<string, number> = { gap: 3, pending: 2, met: 1, "n/a": 0 };
 
-// Licences in these statuses are void — their obligations are all n/a and they
-// do not contribute to the production health score. They still appear in the
-// detail modal so the talent can see the full history.
-const VOID_STATUSES = new Set(["REVOKED", "DENIED"]);
+// Licences in these statuses do not contribute to the production health score.
+// REVOKED / DENIED — contract is void, obligations never completed.
+// SCRUB_PERIOD / EXPIRED / CLOSED — contract completed normally; scrub attestation
+//   is a producer obligation the talent cannot action, so it must not count against
+//   their compliance record. All obligations show n/a; history remains visible in modal.
+const VOID_STATUSES = new Set(["REVOKED", "DENIED", "SCRUB_PERIOD", "EXPIRED", "CLOSED"]);
 
 function evaluateLicence(
   licence: LicenceRow,

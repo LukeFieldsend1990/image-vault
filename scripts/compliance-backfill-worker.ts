@@ -114,12 +114,15 @@ export default {
     let appended = 0;
     const errors: string[] = [];
 
-    // All approved licences
+    // All licences that were ever active (approved, or completed/ended).
+    // SCRUB_PERIOD / EXPIRED / CLOSED passed through an approved state so their
+    // obligations should have been recorded; backfill any that are missing.
     const { results: licences } = await db
       .prepare(
         `SELECT id, talent_id, licence_type, territory, project_name,
                 production_company, intended_use
-         FROM licences WHERE status = 'APPROVED'`,
+         FROM licences
+         WHERE status IN ('APPROVED','SCRUB_PERIOD','EXPIRED','CLOSED')`,
       )
       .all<{
         id: string;
