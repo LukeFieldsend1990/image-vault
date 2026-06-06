@@ -35,8 +35,9 @@ export default async function CompliancePage() {
   // Licensees access compliance through their licence panel, not this page
   if (role === "licensee") redirect("/dashboard");
 
-  // Admins always have access; non-admins check the DB flag
-  if (!isAdmin(email ?? "")) {
+  // Reps always have access (they view their talent's compliance, not their own flag)
+  // Admins always have access; for talent check the per-user DB flag
+  if (role !== "rep" && !isAdmin(email ?? "")) {
     const db = getDb();
     const row = await db
       .select({ complianceEnabled: users.complianceEnabled })
