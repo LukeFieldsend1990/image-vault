@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, organisationMembers, licences } from "@/lib/db/schema";
+import { productions, productionCompanies, organisationMembers, licences, productionCast } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, inArray, count, desc } from "drizzle-orm";
@@ -68,23 +68,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Batch-fetch licence counts
   const ids = productionRows.map((p) => p.id);
-  const licenceCounts =
+
+  const [licenceCounts, castRows] = await Promise.all([
     ids.length > 0
-      ? await db
-          .select({ productionId: licences.productionId, count: count() })
-          .from(licences)
-          .where(inArray(licences.productionId, ids))
-          .groupBy(licences.productionId)
-          .all()
-      : [];
+      ? db.select({ productionId: licences.productionId, count: count() })
+          .from(licences).where(inArray(licences.productionId, ids)).groupBy(licences.productionId).all()
+      : Promise.resolve([]),
+    ids.length > 0
+      ? db.select({ productionId: productionCast.productionId, status: productionCast.status })
+          .from(productionCast).where(inArray(productionCast.productionId, ids)).all()
+      : Promise.resolve([]),
+  ]);
 
   const countMap = new Map(licenceCounts.map((r) => [r.productionId, r.count]));
+
+  const castMap = new Map<string, { total: number; consented: number; invited: number; linked: number }>();
+  for (const c of castRows) {
+    const cur = castMap.get(c.productionId) ?? { total: 0, consented: 0, invited: 0, linked: 0 };
+    cur.total++;
+    if (c.status === "consented") cur.consented++;
+    else if (c.status === "invited") cur.invited++;
+    else cur.linked++;
+    castMap.set(c.productionId, cur);
+  }
 
   const result = productionRows.map((p) => ({
     ...p,
     licenceCount: countMap.get(p.id) ?? 0,
+    cast: castMap.get(p.id) ?? null,
   }));
 
   return NextResponse.json({ productions: result });
