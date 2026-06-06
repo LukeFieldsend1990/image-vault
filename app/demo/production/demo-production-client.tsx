@@ -130,8 +130,8 @@ const PRODUCTION_SCENES: Scene[] = [
   },
   {
     id: "add-cast", view: "add-cast", role: "production", activeNav: "productions",
-    headline: "Import cast direct from TMDB",
-    body: "Select actors from the TMDB cast list, check the ones you need, add email addresses. Invites fire instantly — each tied to the production's compliance regime and licence terms.",
+    headline: "Import cast from the web",
+    body: "Search for the production online and import the cast list. Check the ones you need, add email addresses. Invites fire instantly — each tied to the production's compliance regime and licence terms.",
   },
 ];
 
@@ -374,8 +374,8 @@ function AddCastView() {
           <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
             <p className="text-[10px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--color-muted)" }}>Add Cast Members</p>
             <div className="flex gap-2">
-              {["Manual Entry", "TMDB Import", "CSV Upload"].map((tab) => (
-                <button key={tab} className="rounded px-3 py-1.5 text-sm font-medium cursor-default" style={tab === "TMDB Import" ? { background: "var(--color-accent)", color: "#fff", border: "none" } : { background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
+              {["Manual Entry", "Web Import", "CSV Upload"].map((tab) => (
+                <button key={tab} className="rounded px-3 py-1.5 text-sm font-medium cursor-default" style={tab === "Web Import" ? { background: "var(--color-accent)", color: "#fff", border: "none" } : { background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
                   {tab}
                 </button>
               ))}

@@ -527,7 +527,7 @@ const PRODUCTION_SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "production",
     headline: "Talent selected and onboarded",
-    body: "The TMDB cast list imports in one click. Select the actors, add their emails — invites go out instantly, tied to the production's compliance regime and licence terms.",
+    body: "Import cast from the web in one click. Select the actors, add their emails — invites go out instantly, tied to the production's compliance regime and licence terms.",
   },
   {
     id: "prod-incoming-request",
@@ -1811,8 +1811,8 @@ function AddCastView() {
           <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
             <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.75rem" }}>Add Cast Members</p>
             <div style={{ display: "flex", gap: "0.375rem" }}>
-              {["Manual Entry", "TMDB Import", "CSV Upload"].map((tab) => (
-                <button key={tab} style={{ padding: "0.3rem 0.75rem", fontSize: "0.8125rem", fontWeight: 500, borderRadius: "4px", cursor: "default", ...(tab === "TMDB Import" ? { background: "var(--color-accent)", color: "#fff", border: "none" } : { background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }) }}>
+              {["Manual Entry", "Web Import", "CSV Upload"].map((tab) => (
+                <button key={tab} style={{ padding: "0.3rem 0.75rem", fontSize: "0.8125rem", fontWeight: 500, borderRadius: "4px", cursor: "default", ...(tab === "Web Import" ? { background: "var(--color-accent)", color: "#fff", border: "none" } : { background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }) }}>
                   {tab}
                 </button>
               ))}
