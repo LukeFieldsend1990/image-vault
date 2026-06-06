@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import OrgMembersPanel from "./org-members-panel";
 
@@ -230,7 +230,7 @@ function RenderBridgePanel({ agent, licencePackageId }: { agent: BridgeAgentStat
   );
 }
 
-export default function TalentLicencesClient({ role = "talent" }: { role?: string }) {
+export default function TalentLicencesClient({ role = "talent", highlight = null }: { role?: string; highlight?: string | null }) {
   const [licences, setLicences] = useState<Licence[]>([]);
   const [loading, setLoading] = useState(true);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -251,6 +251,8 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
 
   const agentsByLicence = useBridgeAgents(licences);
 
+  const highlightedRef = useRef(false);
+
   async function load() {
     const r = await fetch("/api/licences");
     const d = await r.json() as { licences?: Licence[] };
@@ -259,6 +261,32 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   }
 
   useEffect(() => { void load(); }, []);
+
+  // Scroll to + expand the highlighted licence once licences are loaded
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!highlight || licences.length === 0 || highlightedRef.current) return;
+    highlightedRef.current = true;
+
+    const target = licences.find((l) => l.id === highlight);
+    if (!target) return;
+
+    const ts = Math.floor(Date.now() / 1000);
+    let tab: LicenceTab = "active";
+    if (target.status === "APPROVED" && target.validTo + 86400 > ts) {
+      tab = "active";
+    } else if (target.status === "EXPIRED" || (target.status === "APPROVED" && target.validTo + 86400 <= ts)) {
+      tab = "expired";
+    } else if (["DENIED", "REVOKED", "SCRUB_PERIOD", "OVERDUE", "CLOSED"].includes(target.status)) {
+      tab = "history";
+    }
+
+    setActiveTab(tab);
+    setExpandedId(highlight);
+    setTimeout(() => {
+      document.getElementById(`licence-${highlight}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+  }, [highlight, licences]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
@@ -486,7 +514,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
               const isExpired = l.validTo + 86400 <= now || l.status === "EXPIRED";
 
               return (
-                <div key={l.id} className="rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+                <div key={l.id} id={`licence-${l.id}`} className="rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", scrollMarginTop: 80 }}>
                   <div className="p-5">
                     {/* ── Summary row ─────────────────────────────────────── */}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
