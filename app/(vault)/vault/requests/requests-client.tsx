@@ -95,6 +95,13 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
     setAttachingId(null);
   }
 
+  async function acceptInvite(licenceId: string) {
+    setActionId(licenceId);
+    await fetch(`/api/licences/${licenceId}/accept-invite`, { method: "POST" });
+    await load();
+    setActionId(null);
+  }
+
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, []);
 
@@ -182,42 +189,53 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                   </div>
                 </div>
 
-                {/* Package selector */}
-                <div
-                  className="mt-4 rounded border p-3 space-y-3"
-                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
-                >
-                  <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                    To proceed, select a scan package to share with this production.
-                  </p>
-                  <div className="flex gap-2 items-center flex-wrap">
-                    <select
-                      value={selectedPkg[r.id] ?? ""}
-                      onChange={(e) => setSelectedPkg(prev => ({ ...prev, [r.id]: e.target.value }))}
-                      className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
-                      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
-                    >
-                      <option value="">— select a package —</option>
-                      {packages.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => void attachPackage(r.id)}
-                      disabled={!selectedPkg[r.id] || attachingId === r.id}
-                      className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
-                      style={{ background: "var(--color-accent)" }}
-                    >
-                      {attachingId === r.id ? "Attaching…" : "Attach Package"}
-                    </button>
+                {/* Package selector (if existing scan available) */}
+                {packages.length > 0 && (
+                  <div
+                    className="mt-4 rounded border p-3 space-y-3"
+                    style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                  >
+                    <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                      Attach an existing scan package, or accept and get scanned as part of the production.
+                    </p>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <select
+                        value={selectedPkg[r.id] ?? ""}
+                        onChange={(e) => setSelectedPkg(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                        style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+                      >
+                        <option value="">— select a package —</option>
+                        {packages.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => void attachPackage(r.id)}
+                        disabled={!selectedPkg[r.id] || attachingId === r.id}
+                        className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                        style={{ background: "var(--color-accent)" }}
+                      >
+                        {attachingId === r.id ? "Attaching…" : "Attach Package"}
+                      </button>
+                    </div>
+                    {attachError[r.id] && (
+                      <p className="text-xs" style={{ color: "#dc2626" }}>{attachError[r.id]}</p>
+                    )}
                   </div>
-                  {attachError[r.id] && (
-                    <p className="text-xs" style={{ color: "#dc2626" }}>{attachError[r.id]}</p>
-                  )}
-                </div>
+                )}
 
-                {/* Decline */}
-                <div className="mt-3">
+                {/* Accept / Decline */}
+                <div className="mt-3 flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => void acceptInvite(r.id)}
+                    disabled={actionId === r.id}
+                    className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                    style={{ background: "var(--color-accent)" }}
+                  >
+                    {actionId === r.id ? "Accepting…" : "Accept — get scanned later"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => void deny(r.id)}
@@ -393,6 +411,42 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                           <span style={{ color: "var(--color-accent)" }}>{fmtGBP(netEarnings)}</span>
                         </div>
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Package selector for production licences with no scan yet ── */}
+                {r.productionId && !r.packageName && packages.length > 0 && (
+                  <div
+                    className="mt-4 rounded border p-3 space-y-2"
+                    style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                  >
+                    <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                      Attach a scan package to this production licence (optional — you can approve now and attach later).
+                    </p>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <select
+                        value={selectedPkg[r.id] ?? ""}
+                        onChange={(e) => setSelectedPkg(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                        style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+                      >
+                        <option value="">— select a package —</option>
+                        {packages.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => void attachPackage(r.id)}
+                        disabled={!selectedPkg[r.id] || attachingId === r.id}
+                        className="rounded px-3 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                        style={{ background: "var(--color-accent)" }}
+                      >
+                        {attachingId === r.id ? "Attaching…" : "Attach"}
+                      </button>
+                    </div>
+                    {attachError[r.id] && (
+                      <p className="text-xs" style={{ color: "#dc2626" }}>{attachError[r.id]}</p>
                     )}
                   </div>
                 )}
