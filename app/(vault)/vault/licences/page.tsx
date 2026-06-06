@@ -12,7 +12,11 @@ async function getRole(): Promise<string | null> {
   } catch { return null; }
 }
 
-export default async function TalentLicencesPage() {
-  const role = await getRole();
-  return <TalentLicencesClient role={role ?? "talent"} />;
+export default async function TalentLicencesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ highlight?: string }>;
+}) {
+  const [role, { highlight }] = await Promise.all([getRole(), searchParams]);
+  return <TalentLicencesClient role={role ?? "talent"} highlight={highlight ?? null} />;
 }

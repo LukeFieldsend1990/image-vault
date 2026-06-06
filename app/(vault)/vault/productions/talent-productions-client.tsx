@@ -236,7 +236,7 @@ function ProductionCard({ group }: { group: ProductionGroup }) {
               No scan package attached — you may be scanned as part of production.
             </p>
             <Link
-              href={`/licences/${primary.id}`}
+              href={`/vault/licences?highlight=${primary.id}`}
               className="text-xs font-semibold whitespace-nowrap"
               style={{ color: "#b45309" }}
             >
@@ -248,7 +248,7 @@ function ProductionCard({ group }: { group: ProductionGroup }) {
         {/* CTA */}
         <div className="flex items-center justify-end">
           <Link
-            href={`/licences/${primary.id}`}
+            href={`/vault/licences?highlight=${primary.id}`}
             className="text-xs font-semibold tracking-wide hover:opacity-70 transition-opacity"
             style={{ color: "var(--color-accent)" }}
           >
@@ -281,7 +281,7 @@ function ProductionCard({ group }: { group: ProductionGroup }) {
                   </span>
                 </div>
                 <Link
-                  href={`/licences/${l.id}`}
+                  href={`/vault/licences?highlight=${l.id}`}
                   className="text-[11px] font-medium"
                   style={{ color: "var(--color-muted)" }}
                 >
