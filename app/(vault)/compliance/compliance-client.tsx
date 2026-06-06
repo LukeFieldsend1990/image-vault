@@ -346,6 +346,16 @@ function LicenceObligationPanel({ lic }: { lic: LicenceSummary }) {
 
 // ── Consent management panel ──────────────────────────────────────────────────
 
+const TERRITORY_OPTIONS = [
+  "Worldwide",
+  "United Kingdom",
+  "United States",
+  "European Union",
+  "North America",
+  "Asia Pacific",
+  "Other",
+];
+
 interface ConsentRecord {
   id: string;
   useType: string;
@@ -360,7 +370,7 @@ function LicenceConsentSection({ licenceId, licenceType }: { licenceId: string; 
   const [busy, setBusy] = useState<string | null>(null);
   const [form, setForm] = useState({
     useType: licenceType ?? "",
-    territory: "",
+    territory: "Worldwide",
     language: "",
     scriptedAlterations: false,
   });
@@ -385,7 +395,7 @@ function LicenceConsentSection({ licenceId, licenceType }: { licenceId: string; 
         body: JSON.stringify({
           licenceId,
           useType: form.useType || licenceType || "commercial",
-          territory: form.territory || undefined,
+          territory: form.territory,
           language: form.language || undefined,
           scriptedAlterations: form.scriptedAlterations,
         }),
@@ -472,13 +482,16 @@ function LicenceConsentSection({ licenceId, licenceType }: { licenceId: string; 
             value={form.useType}
             onChange={(e) => setForm({ ...form, useType: e.target.value })}
           />
-          <input
+          <select
             className={inputCls}
-            style={inputStyle}
-            placeholder="territory (e.g. worldwide)"
+            style={{ ...inputStyle, appearance: "auto" }}
             value={form.territory}
             onChange={(e) => setForm({ ...form, territory: e.target.value })}
-          />
+          >
+            {TERRITORY_OPTIONS.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
           <input
             className={inputCls}
             style={inputStyle}
