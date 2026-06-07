@@ -341,7 +341,7 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
     base = base.filter((item) => item.href !== "/inbox");
   }
   if (complianceEnabled === false) {
-    base = base.filter((item) => item.href !== "/compliance/dashboard");
+    base = base.filter((item) => !item.href.startsWith("/compliance"));
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]
