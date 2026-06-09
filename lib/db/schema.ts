@@ -187,6 +187,7 @@ export const talentProfiles = sqliteTable("talent_profiles", {
   knownFor: text("known_for").notNull().default("[]"), // JSON: [{title, year, type}]
   popularity: real("popularity"),
   onboardedAt: integer("onboarded_at").notNull(), // unix timestamp
+  pitchVignettesEnabled: integer("pitch_vignettes_enabled", { mode: "boolean" }).notNull().default(true),
 });
 
 export const invites = sqliteTable("invites", {
@@ -830,6 +831,30 @@ export const complianceCertificates = sqliteTable("compliance_certificates", {
 });
 
 // ── Production cast onboarding ────────────────────────────────────────────────
+
+// ── Pitch Vignettes ────────────────────────────────────────────────────────────
+
+export const pitchVignettes = sqliteTable("pitch_vignettes", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull(),
+  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  createdBy: text("created_by").notNull(),
+  productionName: text("production_name").notNull(),
+  characterDescription: text("character_description").notNull(),
+  tone: text("tone").notNull().default("dramatic"),
+  includeAudio: integer("include_audio", { mode: "boolean" }).notNull().default(false),
+  sourceImageKeys: text("source_image_keys").notNull().default("[]"),  // JSON string[]
+  generatedPrompt: text("generated_prompt"),
+  higgsfield_job_id: text("higgsfield_job_id"),
+  status: text("status").notNull().default("pending"),
+  // pending | prompt_crafting | submitting | generating | complete | failed
+  output_r2_key: text("output_r2_key"),
+  output_duration_s: integer("output_duration_s"),
+  error_text: text("error_text"),
+  createdAt: integer("created_at").notNull(),
+  completedAt: integer("completed_at"),
+  deletedAt: integer("deleted_at"),
+});
 
 export const productionCast = sqliteTable("production_cast", {
   id: text("id").primaryKey(),
