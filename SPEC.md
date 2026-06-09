@@ -22,6 +22,7 @@
 14. [Trial Production — End-to-End Proving Ground](#14-trial-production--end-to-end-proving-ground)
 15. [Live Royalty Meter — Pay-As-You-Go Likeness Usage Feed](#15-live-royalty-meter--pay-as-you-go-likeness-usage-feed)
 16. [Compliance Layer — SAG-AFTRA Article 39 & Multi-Regime Consent Ledger](#16-compliance-layer--sag-aftra-article-39--multi-regime-consent-ledger)
+17. [Higgs Field — AI Pitch Vignette Generator](#17-higgs-field--ai-pitch-vignette-generator)
 
 ---
 
@@ -3723,3 +3724,296 @@ Given/When/Then acceptance criteria (each becomes a `__tests__/domain/*` case):
 - **E-signature integration** (DocuSign/Adobe) — decision is eventing-based consent; e-sign is a future option if a tenant's counsel requires it.
 - **Union API integration** — 39.L training notices and 39.I approvals are captured in-platform; automated filing to a SAG-AFTRA endpoint is a later phase and gated on Union endorsement (§6.10.3).
 - **Path 4 (AI Training Data Brokerage)** — the opt-in registry remains a separate, adversarial initiative; this section only captures the 39.L `training.notice_filed` record.
+
+---
+
+## 17. Higgs Field — AI Pitch Vignette Generator
+
+### 17.1 Overview
+
+Reps feed a talent's scan package (preview images from 3D scans + TMDB profile metadata) into **[Higgsfield AI](https://higgsfield.ai)** to generate a short cinematic video vignette pitched at a specific role. The output is a 10–30 second bespoke clip that shows the talent visually inhabiting the character context — going far beyond a static headshot by leveraging vault-origin 3D scan data.
+
+**Value proposition:** a reference image from Google Images can be found by anyone. A Higgsfield vignette synthesised from exclusive scan previews is provably vault-origin — it demonstrates Image Vault's value at the exact moment of a casting pitch.
+
+Higgsfield is a professional AI media platform (4.5M+ video generations/day) supporting image-to-video with models including Kling 3.0, Google Veo 3, and Sora 2, with a full REST API and webhook support.
+
+---
+
+### 17.2 User Flow (Rep)
+
+1. Rep opens a processed scan package → **Pitches** tab (new, alongside Files and Activity)
+2. Click **New Pitch**
+3. Fill the generation form:
+   - **Production** — e.g. `The Crown — Season 7`
+   - **Character** — name + 1–3 sentence description (e.g. `Lady Edith, late 40s, British aristocrat, emotionally reserved, conflicted`)
+   - **Tone** — dropdown: `Dramatic | Thriller | Period | Sci-Fi | Comedy | Action | Commercial`
+   - **Audio** — toggle: `None | Ambient score | AI voiceover`
+4. System shows which scan preview images will be used; rep can deselect individual frames
+5. Claude Haiku drafts a Higgsfield-optimised cinematic video prompt from the role + talent metadata
+6. Rep reviews and can edit the draft prompt inline before confirming
+7. **Generate** → async job queued; status pill cycles: `Crafting prompt → Submitting → Generating → Done`
+8. On completion: inline video player renders in the Pitches tab
+9. Actions: **Download** / **Share with licensee** (token-gated link, no login required) / **Attach to licence** / **Archive**
+
+---
+
+### 17.3 Data Model
+
+```sql
+-- Migration: 0031_pitch_vignettes.sql
+CREATE TABLE pitch_vignettes (
+  id                    TEXT PRIMARY KEY,
+  talent_id             TEXT NOT NULL,
+  package_id            TEXT NOT NULL REFERENCES scan_packages(id),
+  created_by            TEXT NOT NULL,         -- rep userId
+  production_name       TEXT NOT NULL,
+  character_description TEXT NOT NULL,
+  tone                  TEXT NOT NULL,
+  include_audio         INTEGER NOT NULL DEFAULT 0,
+  source_image_keys     TEXT NOT NULL,         -- JSON array of R2 keys used as input
+  generated_prompt      TEXT,                  -- Claude-crafted Higgsfield prompt
+  higgsfield_job_id     TEXT,
+  status                TEXT NOT NULL DEFAULT 'pending',
+  -- pending | prompt_crafting | submitting | generating | complete | failed
+  output_r2_key         TEXT,                  -- pitch/{id}/vignette.mp4
+  output_duration_s     INTEGER,
+  error_text            TEXT,
+  created_at            INTEGER NOT NULL,
+  completed_at          INTEGER,
+  deleted_at            INTEGER                -- soft delete
+);
+
+CREATE INDEX idx_pitch_vignettes_package ON pitch_vignettes(package_id, deleted_at);
+CREATE INDEX idx_pitch_vignettes_talent  ON pitch_vignettes(talent_id, deleted_at);
+```
+
+**`talent_profiles` addition:**
+
+```sql
+ALTER TABLE talent_profiles ADD COLUMN pitch_vignettes_enabled INTEGER NOT NULL DEFAULT 1;
+```
+
+---
+
+### 17.4 API Routes
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/pitch/generate` | rep | Create vignette record + queue job |
+| `GET` | `/api/pitch` | rep | List vignettes for a package (`?packageId=`) |
+| `GET` | `/api/pitch/:id` | rep/talent | Get vignette details + current status |
+| `GET` | `/api/pitch/:id/stream` | share token | Token-gated MP4 proxy from R2 |
+| `DELETE` | `/api/pitch/:id` | rep | Soft-delete vignette |
+| `POST` | `/api/pitch/webhook` | HMAC | Higgsfield job completion callback |
+
+**POST `/api/pitch/generate` body:**
+
+```typescript
+{
+  packageId: string;
+  productionName: string;
+  characterDescription: string;
+  tone: "dramatic" | "thriller" | "period" | "sci-fi" | "comedy" | "action" | "commercial";
+  includeAudio: boolean;
+  sourceImageKeys: string[];  // R2 keys of preview images to use (1–4)
+}
+```
+
+**GET `/api/pitch/:id/stream`** — requires `?token=<shareToken>` (KV-backed, 7-day TTL). Streams R2 object with `Content-Type: video/mp4` and `Content-Disposition: inline`.
+
+---
+
+### 17.5 Worker Architecture
+
+New worker: **`higgs-worker`** — isolated from `ai-worker` to separate Higgsfield billing, rate limits, and failure modes.
+
+```
+POST /api/pitch/generate
+  → insert pitch_vignettes row (status: pending)
+  → PITCH_QUEUE.send({ pitchId })
+  → return { id, status: "pending" }
+
+higgs-worker consumes pitch-jobs queue:
+  1. status → prompt_crafting
+  2. Fetch source image R2 keys → presign temporary read URLs (1h TTL)
+  3. Call Anthropic Haiku → craft Higgsfield prompt (see §17.6)
+  4. Save generated_prompt to DB
+  5. status → submitting
+  6. POST to Higgsfield image-to-video API with images + prompt + model
+  7. Store higgsfield_job_id, status → generating
+  8. Poll GET /generations/{jobId} every 15s (or receive webhook at /api/pitch/webhook)
+  9. On complete: fetch output video URL → stream into R2 at pitch/{pitchId}/vignette.mp4
+  10. status → complete, set completed_at, output_r2_key, output_duration_s
+  11. Insert notification: "Pitch vignette for [talent] ready — [production name]"
+  On error: status → failed, set error_text; create error notification
+```
+
+**`wrangler.toml` additions:**
+
+```toml
+[[queues.consumers]]
+queue = "pitch-jobs"
+max_batch_size = 5
+max_batch_timeout = 30
+
+[[queues.producers]]
+binding = "PITCH_QUEUE"
+queue = "pitch-jobs"
+```
+
+**New secret:** `HIGGSFIELD_API_KEY` (`wrangler secret put HIGGSFIELD_API_KEY`)
+
+**New env var (non-secret, in `[vars]`):**
+
+```toml
+HIGGSFIELD_MODEL = "kling-3.0"
+```
+
+---
+
+### 17.6 Higgsfield API Integration
+
+> **Note:** Exact request schema TBC pending API key provisioning. The pattern below matches Higgsfield's documented REST API (image-to-video endpoint).
+
+```typescript
+// lib/higgs/client.ts
+export const runtime = "edge";
+
+export async function submitVignetteJob(env: CloudflareEnv, params: {
+  imageUrls: string[];
+  prompt: string;
+  durationSeconds?: number;
+}): Promise<{ jobId: string }> {
+  const res = await fetch("https://api.higgsfield.ai/v1/generations/image-to-video", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.HIGGSFIELD_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      images: params.imageUrls,
+      prompt: params.prompt,
+      duration: params.durationSeconds ?? 10,
+      model: env.HIGGSFIELD_MODEL ?? "kling-3.0",
+      training: false,    // never permit training on scan data
+    }),
+  });
+  if (!res.ok) throw new Error(`Higgsfield submit: ${res.status} ${await res.text()}`);
+  return res.json() as Promise<{ jobId: string }>;
+}
+
+export async function pollVignetteJob(env: CloudflareEnv, jobId: string): Promise<{
+  status: "pending" | "processing" | "complete" | "failed";
+  videoUrl?: string;
+}> {
+  const res = await fetch(`https://api.higgsfield.ai/v1/generations/${jobId}`, {
+    headers: { Authorization: `Bearer ${env.HIGGSFIELD_API_KEY}` },
+  });
+  if (!res.ok) throw new Error(`Higgsfield poll: ${res.status}`);
+  return res.json();
+}
+```
+
+- `training: false` is sent on every request — scan data must never feed Higgsfield model training.
+- Model selection defaults to `kling-3.0`; Veo 3 available as an upgrade option in Phase 2.
+
+---
+
+### 17.7 Prompt Engineering
+
+Claude Haiku receives:
+- Talent full name + known roles (from `talent_profiles.knownFor` JSON)
+- Character name + description from rep
+- Tone/genre
+- Instruction to produce a Higgsfield-optimised **cinematic video direction** — not a photo description; a motion direction.
+
+**System prompt:**
+
+> You are an AI film director. Given a talent profile and a character brief, write a 2–3 sentence Higgsfield AI video generation prompt. Requirements: include camera movement (push-in, arc, drift, dolly), lighting quality (overcast diffused, dramatic side-key, golden-hour rim, practical interior), atmosphere and texture, and the character's inner emotional state as revealed through micro-expression. The prompt must make the talent feel like they are inhabiting the role, not posing. Output only the prompt text — no preamble, no quotes.
+
+**Example output for a period drama brief:**
+
+> *Slow push-in on a composed British aristocrat, late 40s, cool grey eyes holding layers of grief behind formal composure. English estate exterior, soft overcast light diffused through tall windows, shallow depth of field. Camera drifts from near-profile to three-quarter reveal as a faint tension crosses the jaw — restrained power at the edge of fracture. Muted desaturated palette, period drama register.*
+
+---
+
+### 17.8 UI — Pitches Tab
+
+New tab on `app/(vault)/vault/packages/[packageId]/page.tsx` alongside Files and Activity.
+
+- **Empty state:** `"No pitches yet — generate one to show [talent name] in context for a specific role."`
+- **Vignette card:** production name, character name, tone badge (styled pill), status pill, created-by rep, elapsed time
+- **Generating:** animated stepped progress bar with the current status label
+- **Complete:** inline `<video>` element with controls, muted autoplay on hover; Download / Share / Attach buttons below
+- **Share modal:** generates a `pitch_share:{uuid}` KV token (7-day TTL) → `https://imagevault.io/p/:token` shareable URL, no auth required
+- **Design language:** United Agents aesthetic — black/white/grey, `--color-accent` red on active pills, `text-xs font-medium tracking-widest uppercase` section headers
+
+---
+
+### 17.9 Cost Model & Feature Flag
+
+| Component | Estimated cost |
+|-----------|---------------|
+| Higgsfield Kling 3.0 (10s video) | ~$0.10–$0.50 per generation (TBC from Higgsfield sales) |
+| Claude Haiku prompt crafting | ~$0.001 per generation |
+| R2 storage (MP4 ~15–50 MB each) | $0.015/GB/month |
+
+- Costs logged via `logAiCost(db, { feature: "pitch_vignette", provider: "higgsfield", ... })`
+- Feature flag: `pitch_vignettes` in `aiSettings` — off by default, toggled per-agency by admin
+- Higgsfield spend tracked separately from Anthropic `checkBudget()` ceiling (different API, different ceiling)
+- Future: per-generation credit deducted from agency subscription allowance
+
+---
+
+### 17.10 Consent & Permissions
+
+- Rep can only generate pitches for talent they manage — gated by `talent_reps` delegation check (same as all rep-scoped routes)
+- Talent opts out via `talent_profiles.pitch_vignettes_enabled = 0` — Settings → "Allow reps to generate AI pitch vignettes"
+- `training: false` flag sent to Higgsfield on every request — scan likeness data is never used for third-party model training
+- Sharing a vignette creates an audit log entry: `{ eventType: "pitch.shared", pitchId, sharedBy, recipientEmail }`
+- Vignette output stored under talent's R2 namespace; accessible only via time-limited share token or authenticated stream
+- Vignettes may reference TMDB profile metadata — no additional consent required as TMDB data is already stored during onboarding
+
+---
+
+### 17.11 Phase Breakdown
+
+#### MVP (Phase 17.1)
+
+- [ ] `drizzle/migrations/0031_pitch_vignettes.sql`
+- [ ] `lib/higgs/client.ts` — Higgsfield submit + poll functions
+- [ ] `higgs-worker/` — queue consumer with full job lifecycle
+- [ ] `app/api/pitch/generate/route.ts` + `app/api/pitch/[id]/route.ts`
+- [ ] Pitches tab on package page (card list + status polling + inline player)
+- [ ] Prompt engineering (Haiku system prompt + role brief → cinematic prompt)
+- [ ] Feature flag: `pitch_vignettes`
+- [ ] No audio (Phase 2)
+- [ ] `HIGGSFIELD_API_KEY` secret
+
+#### Phase 2
+
+- [ ] Webhook receiver (`/api/pitch/webhook`) — replace polling loop
+- [ ] Audio toggle — ambient score via Higgsfield audio generation
+- [ ] Share token + `/p/:token` shareable URL for licensees
+- [ ] Attach-to-licence: link vignette to `licences` record for audit trail
+- [ ] Veo 3 model option (higher quality, higher cost)
+
+#### Phase 3 (Deferred)
+
+- [ ] Talent self-serve pitch generation from `/vault/packages/[id]`
+- [ ] Licensee-initiated pitch request from the licence wizard
+- [ ] Batch pitches: one-click generate for every package on a rep's roster
+- [ ] Model selector UI per vignette
+- [ ] ElevenLabs voiceover integration (alt to Higgsfield-native audio)
+
+---
+
+### 17.12 Open Questions
+
+| Question | Owner | Status |
+|----------|-------|--------|
+| Higgsfield exact API request schema (endpoint, field names, image format) | Luke | Pending API key |
+| Higgsfield pricing tier for agency volume (est. 100–500 gens/month) | Luke | Contact Higgsfield sales |
+| Does talent need per-vignette approval, or is the global `pitch_vignettes_enabled` toggle sufficient? | Product | Open |
+| Audio: Higgsfield-native audio generation, or ElevenLabs for voiceover? | Product | Deferred to Phase 2 |
+| Model selection: expose Kling vs Veo vs Sora to reps in UI, or keep configurable by admin only? | Product | Open |

@@ -1,0 +1,9 @@
+{
+  "name": "image-vault-higgs-worker",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --config higgs-worker/wrangler.toml",
+    "deploy": "wrangler deploy --config higgs-worker/wrangler.toml",
+    "cf-typegen": "wrangler types --config higgs-worker/wrangler.toml --output higgs-worker/worker-env.d.ts"
+  }
+}
