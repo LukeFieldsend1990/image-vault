@@ -261,4 +261,4 @@ export default {
       }
     }
   },
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<Env, PitchMessage>;
