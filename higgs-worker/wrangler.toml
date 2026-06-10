@@ -2,8 +2,8 @@ name = "image-vault-higgs-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
-# Video generation takes 30s–10min — unbound removes the default CPU/duration cap
-usage_model = "unbound"
+[limits]
+cpu_ms = 900000
 
 # -------------------------------------------------------------------
 # Queue consumer — one pitch job at a time (video gen can take 30–120s)
