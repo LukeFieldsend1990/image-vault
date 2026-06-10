@@ -20,7 +20,6 @@ interface Vignette {
 
 interface PitchesTabProps {
   packageId: string;
-  talentId: string;
   sessionRole: string;
 }
 
@@ -52,7 +51,7 @@ function isActive(status: string): boolean {
   return ["pending", "prompt_crafting", "submitting", "generating"].includes(status);
 }
 
-export default function PitchesTab({ packageId, talentId, sessionRole }: PitchesTabProps) {
+export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) {
   const [vignettes, setVignettes] = useState<Vignette[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);

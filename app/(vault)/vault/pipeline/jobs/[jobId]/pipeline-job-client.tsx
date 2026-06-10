@@ -300,7 +300,6 @@ export default function PipelineJobClient({ jobId, sessionRole }: { jobId: strin
       {job.status === "complete" && (
         <PitchesTab
           packageId={job.packageId}
-          talentId=""
           sessionRole={sessionRole ?? "talent"}
         />
       )}
