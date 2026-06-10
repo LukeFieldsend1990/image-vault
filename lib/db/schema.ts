@@ -187,7 +187,7 @@ export const talentProfiles = sqliteTable("talent_profiles", {
   knownFor: text("known_for").notNull().default("[]"), // JSON: [{title, year, type}]
   popularity: real("popularity"),
   onboardedAt: integer("onboarded_at").notNull(), // unix timestamp
-  pitchVignettesEnabled: integer("pitch_vignettes_enabled", { mode: "boolean" }).notNull().default(true),
+  pitchVignettesEnabled: integer("pitch_vignettes_enabled", { mode: "boolean" }).notNull().default(false),
 });
 
 export const invites = sqliteTable("invites", {
