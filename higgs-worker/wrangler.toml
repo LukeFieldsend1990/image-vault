@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 [limits]
-cpu_ms = 900000
+cpu_ms = 300000
 
 # -------------------------------------------------------------------
 # Queue consumer — one pitch job at a time (video gen can take 30–120s)
