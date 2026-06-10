@@ -25,4 +25,5 @@ CREATE INDEX IF NOT EXISTS idx_pitch_vignettes_talent  ON pitch_vignettes(talent
 CREATE INDEX IF NOT EXISTS idx_pitch_vignettes_status  ON pitch_vignettes(status);
 
 -- Opt-out flag on talent_profiles (default 1 = enabled)
-ALTER TABLE talent_profiles ADD COLUMN pitch_vignettes_enabled INTEGER NOT NULL DEFAULT 1;
+-- Default 0 = off; talent must explicitly opt in via Settings
+ALTER TABLE talent_profiles ADD COLUMN pitch_vignettes_enabled INTEGER NOT NULL DEFAULT 0;
