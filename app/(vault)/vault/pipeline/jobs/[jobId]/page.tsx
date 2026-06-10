@@ -2,6 +2,7 @@ export const runtime = "edge";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import PipelineJobClient from "./pipeline-job-client";
 
 async function getSessionInfo(): Promise<{ sub: string; role: string } | null> {
@@ -9,9 +10,10 @@ async function getSessionInfo(): Promise<{ sub: string; role: string } | null> {
   const session = cookieStore.get("session")?.value;
   if (!session) return null;
   try {
-    const payload = JSON.parse(atob(session.split(".")[1])) as { sub?: string; role?: string };
+    const payload = JSON.parse(atob(session.split(".")[1])) as { sub?: string; role?: string; email?: string };
     if (!payload.sub) return null;
-    return { sub: payload.sub, role: payload.role ?? "talent" };
+    const role = isAdmin(payload.email ?? "") ? "admin" : (payload.role ?? "talent");
+    return { sub: payload.sub, role };
   } catch {
     return null;
   }
