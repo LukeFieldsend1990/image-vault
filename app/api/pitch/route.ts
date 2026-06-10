@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "rep" && session.role !== "admin") {
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (session.role !== "rep" && !admin) {
     return NextResponse.json({ error: "Only reps can generate pitch vignettes" }, { status: 403 });
   }
 
@@ -75,7 +76,6 @@ export async function POST(req: NextRequest) {
   }
 
   const db = getDb();
-  const admin = session.role === "admin" || isAdmin(session.email);
 
   const pkg = await db.select({ talentId: scanPackages.talentId })
     .from(scanPackages)
