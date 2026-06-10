@@ -52,7 +52,7 @@ export default async function AdminUsersPage() {
 
   // Talent profiles
   const profiles = await db
-    .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName, profileImageUrl: talentProfiles.profileImageUrl })
+    .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName, profileImageUrl: talentProfiles.profileImageUrl, pitchVignettesEnabled: talentProfiles.pitchVignettesEnabled })
     .from(talentProfiles)
     .all();
   const profileMap = new Map(profiles.map((p) => [p.userId, p]));
@@ -227,6 +227,7 @@ export default async function AdminUsersPage() {
                 geoFingerprintEnabled={!!u.geoFingerprintEnabled}
                 royaltyMeterEnabled={u.royaltyMeterEnabled !== false}
                 complianceEnabled={u.complianceEnabled !== false}
+                pitchVignettesEnabled={!!(profileMap.get(u.id)?.pitchVignettesEnabled)}
               />
             </div>
           );
