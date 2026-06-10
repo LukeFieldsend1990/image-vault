@@ -15,7 +15,8 @@ npm run lint             # eslint
 npm run cf-typegen       # regenerate CloudflareEnv types from wrangler.toml
 npm run deploy:worker    # deploy pipeline-worker
 npm run deploy:ai-worker # deploy ai-worker
-npm run deploy:ai-cron   # deploy ai-cron-worker
+npm run deploy:ai-cron         # deploy ai-cron-worker
+npm run deploy:higgs-worker    # deploy higgs-worker (pitch vignette generation)
 ```
 
 Type-check: `npx tsc --noEmit` — ignore errors in `.next/types/` (pre-existing Next.js async params issue) and `__tests__/` (known body-type issues).
