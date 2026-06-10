@@ -478,65 +478,118 @@ async function stage3Assemble(
   );
 }
 
-// Build a ZIP in memory from a list of named files fetched from R2
-// For very large archives this uses R2 multipart upload to avoid memory limits
+// Stream-build a ZIP using R2 multipart upload.
+// Never allocates more than PART_SIZE (8MB) + CHUNK_SIZE (8MB) in memory at once.
+// Uses R2 Range reads to stream large files chunk-by-chunk.
+// Lessons from geo-fingerprint-worker: no full-file arrayBuffer(), no concat-then-put.
+const PART_SIZE  = 8 * 1024 * 1024; // 8MB per multipart part (R2 min is 5MB)
+const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB range reads
+
 async function buildAndUploadZip(
   env: Env,
   sourceFiles: { zipPath: string; r2Key: string; content?: Uint8Array }[],
   outputKey: string,
 ): Promise<number> {
-  // For manageable SKU sizes, buffer the full ZIP in memory.
-  // Phase 2: switch to multipart upload for VFX SKUs > 1GB.
   const enc = new TextEncoder();
-  const chunks: Uint8Array[] = [];
-  const entries: ZipEntry[] = [];
-  let offset = 0;
 
-  for (const file of sourceFiles) {
-    let data: Uint8Array;
-    if (file.content) {
-      data = file.content;
-    } else {
-      const obj = await env.SCANS_BUCKET.get(file.r2Key);
-      if (!obj) continue; // skip missing files gracefully
-      data = new Uint8Array(await obj.arrayBuffer());
-    }
-
-    const nameBytes = enc.encode(file.zipPath);
-    const localHdr = localFileHeader(nameBytes, data.byteLength);
-    const crc = updateCrc(0, data);
-    const dd = dataDescriptor(crc, data.byteLength);
-
-    entries.push({ name: file.zipPath, size: data.byteLength, crc32: crc, offset });
-    offset += localHdr.byteLength + data.byteLength + dd.byteLength;
-
-    chunks.push(localHdr, data, dd);
-  }
-
-  // Central directory
-  const cdStart = offset;
-  for (const entry of entries) {
-    const nameBytes = enc.encode(entry.name);
-    chunks.push(centralDirRecord(entry, nameBytes));
-    offset += 46 + nameBytes.length;
-  }
-  const cdSize = offset - cdStart;
-  chunks.push(endOfCentralDir(entries.length, cdStart, cdSize));
-
-  // Concatenate all chunks
-  const totalSize = chunks.reduce((s, c) => s + c.byteLength, 0);
-  const zip = new Uint8Array(totalSize);
-  let pos = 0;
-  for (const c of chunks) {
-    zip.set(c, pos);
-    pos += c.byteLength;
-  }
-
-  await env.PIPELINE_BUCKET.put(outputKey, zip, {
+  const upload = await env.PIPELINE_BUCKET.createMultipartUpload(outputKey, {
     httpMetadata: { contentType: "application/zip" },
   });
 
-  return totalSize;
+  const uploadedParts: R2UploadedPart[] = [];
+  let partBuf = new Uint8Array(PART_SIZE);
+  let partPos = 0;
+  let totalBytes = 0;
+  let archiveOffset = 0;
+  const entries: ZipEntry[] = [];
+
+  async function flushPart(isFinal = false) {
+    if (partPos === 0 && !isFinal) return;
+    const slice = partBuf.subarray(0, partPos);
+    const part = await upload.uploadPart(uploadedParts.length + 1, slice);
+    uploadedParts.push(part);
+    partBuf = new Uint8Array(PART_SIZE);
+    partPos = 0;
+  }
+
+  async function writeBytes(bytes: Uint8Array) {
+    let written = 0;
+    while (written < bytes.length) {
+      const space = PART_SIZE - partPos;
+      const take = Math.min(space, bytes.length - written);
+      partBuf.set(bytes.subarray(written, written + take), partPos);
+      partPos += take;
+      totalBytes += take;
+      written += take;
+      if (partPos === PART_SIZE) await flushPart();
+    }
+  }
+
+  for (const file of sourceFiles) {
+    if (file.content) {
+      // Small in-memory file (manifests, README) — write directly
+      const nameBytes = enc.encode(file.zipPath);
+      const fileSize = file.content.byteLength;
+      const crc = updateCrc(0, file.content);
+
+      await writeBytes(localFileHeader(nameBytes, fileSize));
+      await writeBytes(file.content);
+      await writeBytes(dataDescriptor(crc, fileSize));
+
+      entries.push({ name: file.zipPath, size: fileSize, crc32: crc, offset: archiveOffset });
+      archiveOffset += 30 + nameBytes.length + fileSize + 16;
+    } else {
+      // Large R2 object — stream in 8MB Range chunks
+      const head = await env.SCANS_BUCKET.head(file.r2Key);
+      if (!head) continue;
+
+      const fileSize = head.size;
+      const nameBytes = enc.encode(file.zipPath);
+      await writeBytes(localFileHeader(nameBytes, fileSize));
+
+      let bytesRead = 0;
+      let crc = 0;
+      while (bytesRead < fileSize) {
+        const rangeLen = Math.min(CHUNK_SIZE, fileSize - bytesRead);
+        const chunk = await env.SCANS_BUCKET.get(file.r2Key, {
+          range: { offset: bytesRead, length: rangeLen },
+        });
+        if (!chunk) break;
+        // Decode in 256KB sub-batches — same lesson as geo worker to prevent V8 heap residuals
+        const raw = await chunk.arrayBuffer();
+        const SUB = 256 * 1024;
+        let subPos = 0;
+        while (subPos < raw.byteLength) {
+          const subChunk = new Uint8Array(raw, subPos, Math.min(SUB, raw.byteLength - subPos));
+          crc = updateCrc(crc, subChunk);
+          await writeBytes(subChunk);
+          subPos += subChunk.byteLength;
+        }
+        bytesRead += rangeLen;
+      }
+
+      await writeBytes(dataDescriptor(crc, fileSize));
+
+      entries.push({ name: file.zipPath, size: fileSize, crc32: crc, offset: archiveOffset });
+      archiveOffset += 30 + nameBytes.length + fileSize + 16;
+    }
+  }
+
+  // Central directory
+  const cdStart = archiveOffset;
+  for (const entry of entries) {
+    const nameBytes = enc.encode(entry.name);
+    const cdRec = centralDirRecord(entry, nameBytes);
+    await writeBytes(cdRec);
+    archiveOffset += cdRec.byteLength;
+  }
+  const cdSize = archiveOffset - cdStart;
+  await writeBytes(endOfCentralDir(entries.length, cdStart, cdSize));
+
+  await flushPart(true);
+  await upload.complete(uploadedParts);
+
+  return totalBytes;
 }
 
 async function stage4Bundle(
