@@ -2,6 +2,8 @@ name = "image-vault-pipeline-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+# Large scan packages (20GB+) require the unbound model — default CPU cap kills bundle stage
+usage_model = "unbound"
 
 # -------------------------------------------------------------------
 # Queue consumer
