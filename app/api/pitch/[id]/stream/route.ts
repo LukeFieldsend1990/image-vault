@@ -17,8 +17,8 @@ export async function GET(
   const { id } = await params;
   const db = getDb();
   const { env } = getRequestContext();
-  const kv = (env as Record<string, unknown>).SESSIONS_KV as KVNamespace;
-  const bucket = (env as Record<string, unknown>).SCANS_BUCKET as R2Bucket;
+  const kv = env.SESSIONS_KV;
+  const bucket = (env as unknown as { SCANS_BUCKET: R2Bucket }).SCANS_BUCKET;
 
   // ── Auth: share token OR session ──────────────────────────────────
   const shareToken = req.nextUrl.searchParams.get("token");

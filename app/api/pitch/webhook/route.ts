@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   const bodyText = await req.text();
 
   const { env } = getRequestContext();
-  const webhookSecret = (env as Record<string, unknown>).HIGGSFIELD_WEBHOOK_SECRET as string | undefined;
+  const webhookSecret = (env as unknown as { HIGGSFIELD_WEBHOOK_SECRET?: string }).HIGGSFIELD_WEBHOOK_SECRET;
 
   if (webhookSecret) {
     const valid = await verifySignature(req, webhookSecret, bodyText);
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
 
   if (status === "complete" && videoUrl) {
     // Fetch video and store in R2
-    const bucket = (env as Record<string, unknown>).SCANS_BUCKET as R2Bucket;
+    const bucket = (env as unknown as { SCANS_BUCKET: R2Bucket }).SCANS_BUCKET;
     const videoRes = await fetch(videoUrl);
     if (videoRes.ok) {
       const outputKey = `pitch/${pitch.id}/vignette.mp4`;
