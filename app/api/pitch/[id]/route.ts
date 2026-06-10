@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { pitchVignettes, scanPackages, talentReps } from "@/lib/db/schema";
+import { pitchVignettes, talentReps } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 async function authorisePitchAccess(
@@ -59,7 +59,7 @@ export async function DELETE(
   const db = getDb();
   const admin = session.role === "admin" || isAdmin(session.email);
 
-  const vignette = await db.select({ id: pitchVignettes.id, talentId: pitchVignettes.talentId, createdBy: pitchVignettes.createdBy })
+  const vignette = await db.select({ id: pitchVignettes.id, talentId: pitchVignettes.talentId, createdBy: pitchVignettes.createdBy, deletedAt: pitchVignettes.deletedAt })
     .from(pitchVignettes)
     .where(eq(pitchVignettes.id, id)).get();
 
