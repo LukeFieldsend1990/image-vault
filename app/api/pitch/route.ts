@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
 
   // Enqueue to higgs-worker
   const { env } = getRequestContext();
-  const queue = (env as Record<string, unknown>).PITCH_QUEUE as Queue | undefined;
+  const queue = (env as unknown as { PITCH_QUEUE?: Queue }).PITCH_QUEUE;
   if (queue) {
     await queue.send({ pitchId: id });
   }
