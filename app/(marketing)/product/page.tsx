@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { VaultMockup, LicenceMockup, InboxMockup, RoyaltiesMockup } from "./mockups";
+import { VaultMockup, LicenceMockup, InboxMockup, RoyaltiesMockup, ComplianceMockup } from "./mockups";
 
 export const metadata: Metadata = {
   title: "Image Vault — Your likeness. Your terms.",
   description:
-    "A zero-knowledge vault for actors to store, manage, and license high-fidelity likeness scans. Client-side encryption, dual-custody 2FA downloads, and a full audit trail.",
+    "A secure vault for actors to store, manage, and license high-fidelity likeness scans. Dual-custody 2FA release, a tamper-evident audit ledger, and SAG-AFTRA Article 39 compliance built in.",
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -41,7 +41,8 @@ export default function ProductPage() {
             Productions increasingly need high-fidelity scans of real people — and
             talent needs control over where their digital likeness goes. Image Vault
             is the secure middle ground: an encrypted archive where actors store scan
-            packages and license access to production companies on their own terms.
+            packages from 200 GB to a full terabyte, and license access to production
+            companies on their own terms.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Link
@@ -73,10 +74,10 @@ export default function ProductPage() {
       <section className="border-y" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px px-6 py-10 md:grid-cols-4">
           {[
-            ["Zero-knowledge", "Files are encrypted in your browser. We never hold plaintext."],
             ["Dual-custody", "Two parties, two factors. No single person can release files."],
-            ["Full audit trail", "Every request, approval, and download is logged forever."],
-            ["AI-assisted", "Inbound email triaged, classified, and turned into actions."],
+            ["Tamper-evident", "Every event sealed into a hash-chained ledger that holds up under legal challenge."],
+            ["SAG-AFTRA ready", "Article 39 consent records, strike locks, and one-click compliance certificates."],
+            ["AI-assisted", "Inbound email triaged, deals benchmarked, misuse flagged — automatically."],
           ].map(([title, body]) => (
             <div key={title} className="px-2 py-2 md:px-4">
               <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
@@ -115,16 +116,17 @@ export default function ProductPage() {
                 Approve every use, explicitly
               </h3>
               <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
-                Production companies request access with defined scope, territory, and
-                term. Nothing moves until the talent (or their rep, with delegated
-                authority) approves — and even then, release requires a second factor
-                from the licensee at download time. That&apos;s dual custody: no single
-                party can ever exfiltrate a scan.
+                Six standard licence types — commercial, film double, game character,
+                AI avatar, training data, and monitoring reference — turn one-off
+                negotiations into a clear product menu. Nothing moves until the talent
+                (or their rep, with delegated authority) approves, and release still
+                requires a second factor from the licensee at download time. That&apos;s
+                dual custody: no single party can ever exfiltrate a scan.
               </p>
               <ul className="mt-6 space-y-2.5">
                 {[
-                  "Scoped licences: production, territory, term, usage type",
-                  "Vault lock — freeze all access instantly",
+                  "Auto-generated PDF contract with every licence",
+                  "Strike lock — freeze usage at any scope, instantly",
                   "Expiry handled automatically, renewals one click",
                 ].map((item) => (
                   <li key={item} className="flex gap-3 text-sm" style={{ color: "var(--color-text)" }}>
@@ -178,13 +180,14 @@ export default function ProductPage() {
               <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
                 Every licence carries its commercial terms with it. The Royalty Hub
                 gives talent and their representatives a live view of earnings across
-                productions — renewals, extensions, and new deals as they land.
+                productions — and usage-metered licences accrue as each generation or
+                render happens, so a likeness earns continuously rather than once.
               </p>
               <ul className="mt-6 space-y-2.5">
                 {[
                   "Live earnings feed across all active licences",
-                  "Per-production and per-package breakdowns",
-                  "Configurable splits between talent, agency, and platform",
+                  "Pay-per-use metering with configurable talent / agency / platform splits",
+                  "AI fee guidance benchmarks every proposal against real approved deals",
                 ].map((item) => (
                   <li key={item} className="flex gap-3 text-sm" style={{ color: "var(--color-text)" }}>
                     <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full" style={{ background: "var(--color-accent)" }} />
@@ -194,6 +197,38 @@ export default function ProductPage() {
               </ul>
             </div>
             <RoyaltiesMockup />
+          </div>
+
+          {/* Compliance */}
+          <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
+            <div className="md:order-2">
+              <SectionLabel>Compliance</SectionLabel>
+              <h3 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+                Proof that holds up
+              </h3>
+              <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
+                Every consent, approval, transfer, and download is appended to a
+                hash-chained ledger — each event seals the one before it, so the
+                record can&apos;t be quietly rewritten. SAG-AFTRA Article 39 obligations
+                map directly onto ledger events, and a sealed compliance certificate
+                is generated on demand.
+              </p>
+              <ul className="mt-6 space-y-2.5">
+                {[
+                  "One-click SAG-AFTRA Article 39 compliance certificate",
+                  "Printable chain-of-custody timeline per package",
+                  "Covers GDPR Article 9, BIPA, and EU AI Act transparency",
+                ].map((item) => (
+                  <li key={item} className="flex gap-3 text-sm" style={{ color: "var(--color-text)" }}>
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full" style={{ background: "var(--color-accent)" }} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="md:order-1">
+              <ComplianceMockup />
+            </div>
           </div>
         </div>
       </section>
@@ -217,40 +252,52 @@ export default function ProductPage() {
           <div className="grid gap-px sm:grid-cols-2 lg:grid-cols-3" style={{ background: "var(--color-border)" }}>
             {[
               [
-                "Client-side encryption",
-                "Scan packages are encrypted in the browser before upload. Keys never leave your device — a true zero-knowledge architecture.",
+                "Licence catalogue",
+                "Six standard licence types — commercial, film double, game character, AI avatar, training data, monitoring reference — each with an auto-generated PDF contract.",
               ],
               [
                 "Dual-custody downloads",
-                "Releasing files requires talent approval and a fresh 2FA confirmation from the licensee. No single point of compromise.",
+                "Releasing files requires talent-side approval and a fresh 2FA confirmation from the licensee. No single point of compromise.",
               ],
               [
-                "Licence lifecycle",
-                "Request, negotiate, approve, deliver, renew, expire — the full agreement lifecycle tracked in one system of record.",
+                "Strike lock",
+                "Freeze usage instantly at global, organisation, production, or licence scope — SAG-AFTRA strike protection built into the platform.",
               ],
               [
-                "Processing pipeline",
-                "Uploads are validated, classified, and assembled into delivery-ready bundles automatically on a global edge network.",
+                "Render Bridge DRM",
+                "Licensed assets flow into Unreal and Maya under signed, expiring manifests — revocable per device, with tamper and copy events logged.",
               ],
               [
-                "Rep delegation",
-                "Agents and managers see their whole roster, act with delegated authority, and never need the talent's credentials.",
+                "Geometry fingerprinting",
+                "Scan geometry is watermarked so leaked or pirated assets can be traced back to the exact licence that released them.",
               ],
               [
-                "Talent directory",
-                "Licensed productions browse a permissioned directory of available talent and request exactly the package they need.",
+                "Deepfake monitoring",
+                "A dedicated monitoring-reference licence gives detection services a clean legal channel — without handing them production rights.",
               ],
               [
-                "Immutable audit log",
-                "Every session, request, approval, and download is recorded. Compliance reviews take minutes, not weeks.",
+                "Anomaly detection",
+                "AI watches download and render events for unusual volume, new IPs, and tamper signals — and alerts talent in near real time.",
               ],
               [
-                "Bookings & scheduling",
-                "Coordinate scan sessions and capture dates alongside the packages they produce.",
+                "Tamper-evident ledger",
+                "Every consent, access, and transfer is sealed into a hash-chained audit ledger. Compliance reviews take minutes, not weeks.",
               ],
               [
-                "Render Bridge",
-                "Signed, token-scoped API access lets approved pipelines pull licensed assets directly — no email attachments, ever.",
+                "AI training registry",
+                "Training-data use is blocked unless explicitly opted in — then brokered at the talent's price, with the union notice filed automatically.",
+              ],
+              [
+                "Rep action feed",
+                "A nightly AI pass ranks expiring licences, stalled deals, and anomalies into a prioritised to-do list — proactive, not reactive.",
+              ],
+              [
+                "AI fee guidance",
+                "Every proposed fee is benchmarked against historical approved deals, flagging below-market offers before they're signed.",
+              ],
+              [
+                "Smart cataloguing",
+                "A vision model tags every scan package by type, quality, and angle — so a growing roster library stays searchable with zero manual effort.",
               ],
             ].map(([title, body]) => (
               <div key={title} className="p-6" style={{ background: "var(--color-bg)" }}>
@@ -281,24 +328,26 @@ export default function ProductPage() {
                 className="text-3xl font-semibold tracking-tight md:text-4xl"
                 style={{ color: "var(--color-sidebar-fg)" }}
               >
-                Designed so we can&apos;t betray you
+                No one acts alone.
+                <br />
+                Nothing goes unrecorded.
               </h2>
               <p className="mt-6 text-base leading-relaxed" style={{ color: "var(--color-sidebar-muted)" }}>
                 A likeness archive is only as trustworthy as its worst day. Image
-                Vault is built on the assumption that servers get breached, insiders
-                go rogue, and emails lie — and is architected so that none of those
-                events can release your files.
+                Vault is built on the assumption that insiders go rogue, emails lie,
+                and assets leak — and is architected so that no single party, the
+                platform included, can release a likeness alone.
               </p>
             </div>
             <div className="space-y-8">
               {[
                 [
-                  "Zero-knowledge storage",
-                  "Encryption and decryption happen in the client. A full database and storage breach yields ciphertext, nothing more.",
+                  "Managed encryption",
+                  "AES-256 encryption at rest, TLS 1.3 in transit, and P-256-signed delivery manifests — without putting an irreplaceable terabyte one forgotten passphrase away from loss.",
                 ],
                 [
                   "Dual-custody release",
-                  "File release requires approval from the talent side and a time-boxed 2FA confirmation from the receiving side.",
+                  "File release requires approval from the talent side and a time-boxed 2FA confirmation from the receiving side. That gate is structural, not policy.",
                 ],
                 [
                   "Untrusted by default",
@@ -306,7 +355,7 @@ export default function ProductPage() {
                 ],
                 [
                   "Everything on the record",
-                  "An append-only audit trail covers every access decision, so disputes are settled by evidence rather than memory.",
+                  "A hash-chained, append-only ledger covers every consent, access, and key use — so disputes are settled by evidence rather than memory.",
                 ],
               ].map(([title, body]) => (
                 <div key={title}>
@@ -339,7 +388,7 @@ export default function ProductPage() {
             [
               "01",
               "Archive",
-              "After a capture session, the scan package is encrypted in your browser and sealed into the vault.",
+              "After a capture session, the scan package — up to a full terabyte — is sealed into the vault under encryption at rest and dual-custody access.",
             ],
             [
               "02",

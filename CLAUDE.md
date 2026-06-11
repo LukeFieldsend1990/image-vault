@@ -1,6 +1,6 @@
 # Image Vault — Agent Guide
 
-Secure biometric likeness archive for actors. Talent stores scan packages, licenses access to production companies via dual-custody 2FA download. Zero-knowledge platform (client-side encryption).
+Secure biometric likeness archive for actors. Talent stores scan packages, licenses access to production companies via dual-custody 2FA download. Managed encryption (R2 AES-256 at rest, TLS 1.3 in transit) + dual-custody access control — the earlier zero-knowledge / client-side encryption model was dropped and is not being pursued (scaffolding remains in `lib/crypto/`).
 
 ## Commands
 

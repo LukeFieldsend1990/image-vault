@@ -289,10 +289,10 @@ function LoginInner() {
           style={{ color: "var(--color-sidebar-muted)" }}
         >
           <span className="font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
-            End-to-end encrypted.
+            Dual-custody secured.
           </span>{" "}
-          Files are encrypted in your browser before upload. The platform never
-          holds your plaintext data.
+          No single party — the platform included — can release your files
+          alone. Every access is sealed into a tamper-evident ledger.
         </div>
       </div>
     </div>

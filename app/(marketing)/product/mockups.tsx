@@ -177,7 +177,7 @@ export function VaultMockup() {
               className="h-1.5 w-1.5 rounded-full royalty-live-dot"
               style={{ background: "var(--color-accent)" }}
             />
-            Files were encrypted in your browser before upload — the platform never sees plaintext.
+            Dual-custody active — no release without 2FA from both sides. AES-256 at rest.
           </div>
         </div>
       </div>
@@ -347,6 +347,74 @@ export function InboxMockup() {
             </p>
           </div>
           <span className="btn-accent px-3 py-1.5 text-[10px] font-medium text-white">Run</span>
+        </div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
+/* ── Compliance ledger ── */
+export function ComplianceMockup() {
+  const events = [
+    ["consent.recorded", "Digital replica consent — Article 39.B", "#8f3a…2c1d"],
+    ["licence.approved", "Talent + rep sign-off, scope sealed", "#b27e…9e44"],
+    ["download.issued", "Dual-custody verified, token expires 15m", "#e91d…077a"],
+    ["bridge.manifest_signed", "Render Bridge — P-256 signature", "#41c8…d3b2"],
+  ];
+  return (
+    <BrowserFrame url="vault.imagevault.app/compliance">
+      <div className="p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p
+              className="text-[9px] font-medium tracking-widest uppercase"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Compliance Ledger
+            </p>
+            <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Chain of custody — Principal v3
+            </p>
+          </div>
+          <Chip label="Hash-chained" />
+        </div>
+        <div
+          className="divide-y"
+          style={{
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius)",
+            borderColor: "var(--color-border)",
+          }}
+        >
+          {events.map(([event, detail, hash]) => (
+            <div
+              key={event}
+              className="flex items-center justify-between gap-3 px-3 py-2.5"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] font-medium" style={{ color: "var(--color-ink)" }}>
+                  {event}
+                </p>
+                <p className="truncate text-[10px]" style={{ color: "var(--color-muted)" }}>
+                  {detail}
+                </p>
+              </div>
+              <span className="shrink-0 font-mono text-[9px]" style={{ color: "var(--color-muted)" }}>
+                {hash}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Chip label="Article 39" accent />
+            <Chip label="GDPR Art. 9" />
+            <Chip label="EU AI Act" />
+          </div>
+          <span className="btn-accent px-3 py-1.5 text-[10px] font-medium text-white">
+            Generate certificate
+          </span>
         </div>
       </div>
     </BrowserFrame>
