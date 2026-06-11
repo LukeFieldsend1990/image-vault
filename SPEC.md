@@ -33,7 +33,9 @@ Image Vault is a B2B SaaS platform allowing talent (actors) and their representa
 - Manage access controls and licences for production companies
 - Distribute licensed access to scans via a dual-custody, time-limited download flow
 
-All data is client-side encrypted before leaving the browser. The platform holds **zero plaintext access** to scan files.
+Uploads and downloads are **server-mediated** — scan bytes pass through the Cloudflare Worker/edge to and from R2. Files are protected by storage-provider encryption at rest plus strict access control (authentication, dual-custody 2FA, time-limited download tokens, and audit logging).
+
+> ⚠️ **Not zero-knowledge / not zero-trust.** Earlier drafts of this spec described a client-side zero-knowledge encryption model in which keys never reached the server and the platform held "zero plaintext access." **That approach is no longer being pursued and is explicitly out of scope** (see §5.3). The platform is server-mediated and can technically access stored content; do not reintroduce zero-knowledge / end-to-end-encryption claims in product copy, code, or docs.
 
 **Stack:** Next.js 16 (App Router) · Cloudflare Pages · Cloudflare R2 · Cloudflare D1 · Cloudflare KV · Wrangler
 
@@ -72,13 +74,13 @@ All data is client-side encrypted before leaving the browser. The platform holds
 - [ ] Chunked multipart upload directly to R2 via presigned URLs (never routed through Worker) — *current impl buffers 50 MB chunks through Worker (supports ~500 GB); presigned URL path needed for full 1 TB support*
 - [x] Resumable uploads — status API (`GET /api/vault/upload/status`), resume modal (skips completed parts by filename+size match), "Resume" button on in-progress packages in dashboard
 - [x] Upload progress UI with per-chunk status and overall ETA
-- [ ] Client-side AES-256-GCM encryption of each chunk before upload — *deferred (zero-knowledge layer)*
+- [ ] ~~Client-side AES-256-GCM encryption of each chunk before upload~~ — **out of scope (zero-knowledge model dropped, see §5.3).** Files are encrypted at rest by the storage provider (R2), not client-side.
 - [ ] Integrity verification — SHA-256 hash per chunk and full file, verified post-upload
 - [x] Upload session management — upload_sessions table tracks multipart state; incomplete uploads can be resumed
 - [x] Multi-file upload — a scan package may contain multiple files (body, face, hands, etc.)
 
 ### 3.4 Large File Download (for licensees)
-- [ ] Chunked download with reassembly and decryption in-browser
+- [ ] Chunked download with reassembly in-browser — *no in-browser decryption; files are served from R2 via the server-mediated token flow (zero-knowledge model dropped, see §5.3)*
 - [ ] Parallel chunk download for maximum throughput
 - [ ] Download progress UI with speed meter
 - [ ] Resume interrupted downloads
@@ -151,7 +153,7 @@ Browser
 | **Cloudflare R2** | Scan file storage | Free 10GB, then $0.015/GB (no egress fees) |
 | **Cloudflare D1** | Relational metadata, users, licences, audit log | Free (5GB) |
 | **Cloudflare KV** | Sessions, download tokens, upload state | Free (1GB) |
-| **Cloudflare Access** | Zero Trust identity layer (optional layer 2) | Free up to 50 users |
+| **Cloudflare Access** | Optional network-level identity layer (layer 2) | Free up to 50 users |
 | **Resend** | Transactional email | Free 3k/month |
 | **Twilio** | SMS 2FA | Pay-per-use |
 
@@ -162,15 +164,14 @@ Cloudflare Workers have a 128 MB request body limit. Files up to 1 TB must be up
 
 > **Current implementation note:** V1 routes 50 MB chunks through the Worker via `multipartUpload.uploadPart()`. This works for files up to ~500 GB (50 MB × 10,000 parts = 500 GB). For full 1 TB support, true presigned multipart URLs (bypassing the Worker) are required — tracked in §3.3.
 
-**Why client-side encryption?**
-The platform operates with zero-knowledge of file contents. Each scan is encrypted with a per-file AES-256-GCM key in the browser before any bytes are sent to R2. The platform never holds the plaintext.
+**Storage & encryption model (server-mediated — NOT zero-knowledge):**
+File bytes are handled by the platform. Uploads pass through the Cloudflare Worker/edge to R2, and downloads are served back the same way. Encryption at rest is provided by the storage layer (R2), and the platform can technically access stored content. Confidentiality is enforced by **access control**, not by the platform being unable to read files:
+- Authentication + mandatory TOTP 2FA on every account
+- Dual-custody download — both the licensee and the talent/rep must complete 2FA before a download token is issued
+- Time-limited, single-purpose download tokens (KV-backed, 48h TTL)
+- Vault lock, licence revocation, and tamper-evident audit logging
 
-**Key management (high level):**
-- Each scan has a unique Content Encryption Key (CEK)
-- CEKs are encrypted with the talent's Key Encryption Key (KEK)
-- KEKs are derived from the talent's passphrase using PBKDF2 (never sent to server)
-- For licensed access, a CEK is re-encrypted with the licensee's public key and stored in D1
-- This is an **end-to-end encrypted key exchange** — the platform sees only encrypted key material
+> 🚫 **Zero-knowledge / end-to-end-encrypted key exchange is out of scope (see §5.3).** A previous design proposed per-file Content Encryption Keys (CEKs) wrapped by a talent Key Encryption Key (KEK) derived client-side via PBKDF2, with CEKs re-encrypted to a licensee public key — so the platform would only ever see ciphertext and encrypted key material. **This is not being built.** Do not treat client-side key custody as a current or planned guarantee.
 
 ### 4.4 CI/CD — Cloudflare Pages Native
 
@@ -194,12 +195,14 @@ GitHub repo (main branch)
 
 ## 5. Security Model
 
+> ⚠️ **Scope note:** This platform is **server-mediated, not zero-knowledge** (see §5.3). The threat model below reflects that: the platform *can* technically access stored content, so protections rest on access control, dual-custody, and provider encryption at rest — not on the platform being cryptographically unable to read files.
+
 ### 5.1 Threat Model
-- **Platform compromise:** Cloudflare R2/D1 breach exposes only ciphertext. No plaintext file data at rest on server.
-- **Rogue admin:** Admins cannot access scan files (no key material server-side).
+- **Platform compromise:** R2/D1 data is encrypted at rest by the storage provider, but the platform is server-mediated — a sufficiently deep compromise of platform credentials/infrastructure could expose file content. Blast radius is limited by access control, audit logging, and per-licence scoping rather than by client-held keys.
+- **Rogue admin:** Mitigated by audit logging, least-privilege access, and the admin-email whitelist — **not** by an inability to access files. (Under the dropped zero-knowledge model, admins would have had no key material; that guarantee no longer applies.)
 - **Credential theft:** TOTP 2FA + short-lived sessions limit blast radius.
-- **Insider threat (licensee):** Dual-custody download ensures Talent/Rep participates in every download. Download URLs expire. All downloads are logged.
-- **Link sharing:** Presigned URLs are bound to the requesting licensee's IP (where feasible) and expire.
+- **Insider threat (licensee):** Dual-custody download ensures Talent/Rep participates in every download. Download tokens expire. All downloads are logged.
+- **Link sharing:** Download tokens are single-purpose, time-limited (48h TTL), and bound to the issuing licence/file; bound to requesting IP where feasible.
 - **Scan exfiltration:** Watermarking metadata can be embedded into download packages for forensic traceability.
 
 ### 5.2 Compliance Considerations (TBD — see §8)
@@ -207,6 +210,17 @@ GitHub repo (main branch)
 - CCPA — California residents
 - UK GDPR
 - Biometric data legislation (Illinois BIPA, Texas CUBI, etc.)
+
+### 5.3 Out of Scope — Zero-Knowledge / Zero-Trust Encryption (Deprecated)
+
+**Client-side zero-knowledge encryption is NOT being pursued and is not part of the product.** This section exists so the decision is explicit and is not silently reintroduced by future contributors or AI agents.
+
+- ❌ **No client-side encryption** of scan files before upload. Bytes are uploaded in the clear to the platform and stored with provider-managed encryption at rest.
+- ❌ **No client-held key custody.** There is no talent-derived KEK, no per-file CEK wrapping, and no licensee public-key re-encryption. The platform does not operate "zero-knowledge."
+- ❌ **Not "end-to-end encrypted"** and **not "zero-trust"** in the cryptographic sense. Do not use these terms in marketing copy, UI, code comments, or docs.
+- ✅ **What actually protects scans:** authentication + mandatory TOTP 2FA, dual-custody download approval, time-limited download tokens, vault lock, licence revocation, audit logging, and storage-provider encryption at rest.
+
+**Rationale:** A true zero-knowledge model is incompatible with the server-mediated upload/download, large-file streaming, and operational/recovery requirements the product needs in V1. If this is ever revisited it must be re-proposed as a new initiative — until then, treat any "zero-knowledge"/"zero-trust" claim as a bug to be corrected.
 
 ---
 
@@ -628,14 +642,14 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [x] Database schema: scan_packages, scan_files, upload_sessions
 - [x] Talent vault dashboard with expandable package cards + file list
 - [x] Multipart upload orchestration API — initiate, upload part (via Worker), complete; upload-complete triggers email to talent
-- [ ] Client-side AES-256-GCM chunk encryption (deferred — zero-knowledge layer)
+- [ ] ~~Client-side AES-256-GCM chunk encryption~~ — **out of scope; zero-knowledge model dropped (see §5.3).** Encryption at rest is handled by R2.
 - [x] Upload progress UI with per-file progress bars
 - [x] Resumable uploads — GET /api/vault/upload/status; resume modal skips completed parts; dashboard "Resume" button on in-progress packages
 
 ### ✅ Phase 3 — Download
 - [x] R2 → browser streaming download per file
 - [x] Expandable package cards with per-file download buttons
-- [ ] Chunked download with in-browser AES-256-GCM decryption (deferred — tied to encryption)
+- [ ] ~~Chunked download with in-browser AES-256-GCM decryption~~ — **out of scope; zero-knowledge model dropped (see §5.3).** Downloads are served server-mediated from R2.
 - [ ] Download speed / progress meter
 - [ ] Branded download page per agency (deferred to Phase 5)
 
