@@ -1,4 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// Tool modules transitively import edge-only modules; registry tests never execute them
+vi.mock("@cloudflare/next-on-pages", () => ({
+  getRequestContext: () => {
+    throw new Error("no request context in tests");
+  },
+}));
 import { getAllMcpTools, getMcpTool } from "@/lib/mcp/registry";
 import { CONCEPTS, getConcept } from "@/lib/mcp/semantic-layer";
 import { redactParams } from "@/lib/mcp/audit";
@@ -17,10 +24,17 @@ describe("mcp tool registry", () => {
     // Corrective
     expect(names).toContain("set_user_flag");
     expect(names).toContain("revoke_mcp_token");
+    // Onboarding
+    expect(names).toContain("invite_user");
+    expect(names).toContain("create_production");
+    expect(names).toContain("create_licence_request");
   });
 
   it("marks corrective tools as mutating and visibility tools as not", () => {
-    for (const name of ["set_user_flag", "set_user_role", "set_user_suspended", "restore_package", "revoke_mcp_token"]) {
+    for (const name of [
+      "set_user_flag", "set_user_role", "set_user_suspended", "restore_package", "revoke_mcp_token",
+      "invite_user", "create_production", "create_licence_request",
+    ]) {
       expect(getMcpTool(name)?.mutating, name).toBe(true);
     }
     for (const name of ["get_platform_overview", "list_users", "list_licences", "list_packages", "get_ai_costs", "list_concepts"]) {

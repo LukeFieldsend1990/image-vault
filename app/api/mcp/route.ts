@@ -32,9 +32,10 @@ const SERVER_INSTRUCTIONS =
   "Image Vault admin MCP server. Image Vault is a secure biometric likeness archive for actors: " +
   "talent stores scan packages and licenses access to production companies via dual-custody 2FA download. " +
   "Call list_concepts / explain_concept first to orient yourself, and get_platform_overview for current state. " +
-  "Read tools are safe; mutating tools (set_user_flag, set_user_role, set_user_suspended, restore_package, revoke_mcp_token) " +
-  "require an admin-scope token and a fresh 6-digit TOTP code in the totp_code argument — ask the admin for the code " +
-  "from their authenticator app at the moment of the call; codes are single-window and never stored. " +
+  "Read tools are safe; mutating tools (marked MUTATING in their descriptions, e.g. user changes, invites, " +
+  "productions, licence requests) require an admin-scope token and a fresh 6-digit TOTP code in the totp_code " +
+  "argument — ask the admin for the code from their authenticator app at the moment of the call; codes are " +
+  "single-window and never stored. " +
   "Admin accounts themselves can never be modified through this integration.";
 
 interface JsonRpcRequest {
