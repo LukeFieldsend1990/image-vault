@@ -311,9 +311,10 @@ function SignupForm() {
           style={{ color: "var(--color-sidebar-muted)" }}
         >
           <span className="font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
-            Zero-knowledge platform.
+            Dual-custody access control.
           </span>{" "}
-          Encryption keys never leave your device. We cannot access your files.
+          Every download requires both you and the licensee to approve via 2FA,
+          with time-limited access and a full audit trail.
         </div>
       </div>
     </div>
