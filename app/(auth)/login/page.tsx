@@ -289,10 +289,10 @@ function LoginInner() {
           style={{ color: "var(--color-sidebar-muted)" }}
         >
           <span className="font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
-            Dual-custody secured.
+            Secured by dual-custody access.
           </span>{" "}
-          No single party — the platform included — can release your files
-          alone. Every access is sealed into a tamper-evident ledger.
+          Files are encrypted at rest and every download is gated by 2FA from
+          both parties, time-limited, and fully audited.
         </div>
       </div>
     </div>

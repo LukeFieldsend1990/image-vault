@@ -1,6 +1,8 @@
 # Image Vault — Agent Guide
 
-Secure biometric likeness archive for actors. Talent stores scan packages, licenses access to production companies via dual-custody 2FA download. Managed encryption (R2 AES-256 at rest, TLS 1.3 in transit) + dual-custody access control — the earlier zero-knowledge / client-side encryption model was dropped and is not being pursued (scaffolding remains in `lib/crypto/`).
+Secure biometric likeness archive for actors. Talent stores scan packages, licenses access to production companies via dual-custody 2FA download. Uploads are server-mediated through the Worker/edge; access is gated by dual-custody 2FA and time-limited download tokens.
+
+> **Not zero-knowledge / not zero-trust.** Client-side zero-knowledge encryption (keys never reaching the server) is **explicitly out of scope and not being pursued.** Do not describe the platform as "zero-knowledge", "zero-trust", or "end-to-end encrypted", and do not reintroduce those claims in code, copy, or docs. The platform is server-mediated: the Worker handles file bytes and the platform can technically access stored content. Security rests on access control (auth, dual-custody 2FA, time-limited tokens, audit logging) and storage-provider encryption at rest — not on the platform being unable to read files.
 
 ## Commands
 
