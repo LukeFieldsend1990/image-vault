@@ -104,10 +104,16 @@ function LoginInner() {
       {/* ── Left panel ── */}
       <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
         {/* Wordmark */}
-        <div>
+        <div className="flex items-center justify-between">
           <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-ink]">
             Image Vault
           </span>
+          <a
+            href="/product"
+            className="text-xs font-medium text-[--color-muted] hover:text-[--color-ink] transition"
+          >
+            Explore the platform →
+          </a>
         </div>
 
         {/* Form block */}
