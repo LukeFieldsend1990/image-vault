@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type Step = "credentials" | "totp";
@@ -14,6 +14,13 @@ function LoginInner() {
   const [totpCode, setTotpCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const codeInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus the code field as soon as the 2FA step appears, so the cursor is
+  // already in the input and the user can type without clicking first.
+  useEffect(() => {
+    if (step === "totp") codeInputRef.current?.focus();
+  }, [step]);
 
   async function handleCredentials(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -209,6 +216,7 @@ function LoginInner() {
                     Authentication code
                   </label>
                   <input
+                    ref={codeInputRef}
                     id="code"
                     name="code"
                     type="text"
