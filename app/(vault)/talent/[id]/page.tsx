@@ -1,10 +1,10 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { users, scanPackages, scanFiles, talentProfiles, talentLicencePermissions, packageTags } from "@/lib/db/schema";
 import { eq, sql, and, desc, isNull, inArray } from "drizzle-orm";
+import { getServerSession } from "@/lib/auth/serverSession";
 import TalentProfileClient from "./talent-profile-client";
 
 const LICENCE_TYPES = [
@@ -29,12 +29,9 @@ const PERMISSION_DEFAULTS: Record<LicenceType, Permission> = {
 };
 
 async function getSession() {
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
+  const session = await getServerSession();
   if (!session) return null;
-  try {
-    return JSON.parse(atob(session.split(".")[1])) as { sub: string; role: string };
-  } catch { return null; }
+  return { sub: session.sub, role: session.role };
 }
 
 export default async function TalentProfilePage({

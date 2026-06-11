@@ -1,21 +1,17 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { scanPackages, talentSettings } from "@/lib/db/schema";
 import { eq, and, sql, isNull, desc } from "drizzle-orm";
 import { pipelineJobs } from "@/lib/db/schema";
+import { getServerSession } from "@/lib/auth/serverSession";
 import PipelineSelectClient from "./pipeline-select-client";
 
 async function getSession(): Promise<{ userId: string; role: string } | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
+  const session = await getServerSession();
   if (!session) return null;
-  try {
-    const p = JSON.parse(atob(session.split(".")[1])) as { sub?: string; role?: string };
-    return { userId: p.sub ?? "", role: p.role ?? "" };
-  } catch { return null; }
+  return { userId: session.sub, role: session.role ?? "" };
 }
 
 export default async function PipelinePage() {

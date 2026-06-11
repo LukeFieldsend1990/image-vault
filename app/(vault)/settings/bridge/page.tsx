@@ -1,6 +1,6 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
+import { getServerSession } from "@/lib/auth/serverSession";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { bridgeTokens, bridgeDevices, bridgeGrants, licences, organisationMembers, organisations, productions, scanPackages } from "@/lib/db/schema";
@@ -8,18 +8,9 @@ import { eq, isNull, and, gt, inArray } from "drizzle-orm";
 import BridgeSettingsClient from "./bridge-client";
 
 async function getSessionData() {
-  try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
-    if (!session) return null;
-    const payload = JSON.parse(atob(session.split(".")[1])) as {
-      sub?: string;
-      role?: string;
-    };
-    return { userId: payload.sub ?? "", role: payload.role ?? "talent" };
-  } catch {
-    return null;
-  }
+  const session = await getServerSession();
+  if (!session) return null;
+  return { userId: session.sub, role: session.role ?? "talent" };
 }
 
 export default async function BridgeSettingsPage() {

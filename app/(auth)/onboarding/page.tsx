@@ -1,25 +1,16 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { talentProfiles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getServerSession } from "@/lib/auth/serverSession";
 import OnboardingClient from "./onboarding-client";
 
 async function getSessionInfo(): Promise<{ userId: string; role: string } | null> {
-  try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
-    if (!session) return null;
-    const payload = JSON.parse(atob(session.split(".")[1])) as {
-      sub?: string;
-      role?: string;
-    };
-    return { userId: payload.sub ?? "", role: payload.role ?? "" };
-  } catch {
-    return null;
-  }
+  const session = await getServerSession();
+  if (!session) return null;
+  return { userId: session.sub, role: session.role ?? "" };
 }
 
 export default async function OnboardingPage({

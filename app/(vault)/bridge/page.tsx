@@ -1,20 +1,12 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getServerSession } from "@/lib/auth/serverSession";
 import BridgeClient from "./bridge-client";
 
-async function getRole(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
-  if (!session) return null;
-  try {
-    return (JSON.parse(atob(session.split(".")[1])) as { role?: string }).role ?? null;
-  } catch { return null; }
-}
-
 export default async function BridgePage() {
-  const role = await getRole();
+  const session = await getServerSession();
+  const role = session?.role ?? null;
   if (!role || (role !== "licensee" && role !== "talent" && role !== "rep" && role !== "admin")) {
     redirect("/dashboard");
   }

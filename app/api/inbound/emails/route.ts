@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { receivedEmails, aiTriageResults } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 
 // GET /api/inbound/emails — list received emails for current user
 export async function GET(req: NextRequest) {
@@ -28,17 +28,15 @@ export async function GET(req: NextRequest) {
   // Fetch latest triage results for each email
   const emailIds = emails.map((e) => e.id);
   const triageRows = emailIds.length > 0
-    ? await db.select().from(aiTriageResults).all()
+    ? await db.select().from(aiTriageResults).where(inArray(aiTriageResults.emailId, emailIds)).all()
     : [];
 
   // Group by emailId, pick latest
   const triageByEmail = new Map<string, typeof triageRows[0]>();
   for (const tr of triageRows) {
-    if (emailIds.includes(tr.emailId)) {
-      const existing = triageByEmail.get(tr.emailId);
-      if (!existing || tr.createdAt > existing.createdAt) {
-        triageByEmail.set(tr.emailId, tr);
-      }
+    const existing = triageByEmail.get(tr.emailId);
+    if (!existing || tr.createdAt > existing.createdAt) {
+      triageByEmail.set(tr.emailId, tr);
     }
   }
 

@@ -11,6 +11,21 @@ function formatDate(unix: number): string {
   });
 }
 
+/**
+ * Escape user-controlled text before interpolating into email HTML.
+ * Free-text fields (project/company/character names, intended use, reasons,
+ * messages, addresses, etc.) originate from untrusted input and must never be
+ * rendered as raw HTML.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ── Shared layout wrapper ────────────────────────────────────────────────────
 
 function layout(content: string): string {
@@ -95,7 +110,7 @@ export function uploadCompleteEmail(p: UploadCompleteParams): { subject: string;
     html: layout(`
       ${intro}
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
         <div class="kv-row"><span class="kv-key">Files</span><span class="kv-val">${p.fileCount} file${p.fileCount !== 1 ? "s" : ""}</span></div>
         ${failureRow}
         <div class="kv-row"><span class="kv-key">Total size</span><span class="kv-val">${fmt(p.totalSizeBytes)}</span></div>
@@ -120,9 +135,9 @@ export function downloadRequestEmail(p: DownloadRequestParams): { subject: strin
     html: layout(`
       <p>A licensee is waiting for your authorisation to complete a dual-custody download. Please verify your identity to release the download.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
-        <div class="kv-row"><span class="kv-key">Licensee</span><span class="kv-val">${p.licenseeEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Licensee</span><span class="kv-val">${escapeHtml(p.licenseeEmail)}</span></div>
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Awaiting your approval</span></span></div>
       </div>
       <p>This request will expire in 1 hour.</p>
@@ -149,11 +164,11 @@ export function licenceRequestedEmail(p: LicenceRequestedParams): { subject: str
     html: layout(`
       <p>A new licence request has been submitted for your scan package.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.productionCompany}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
-        <div class="kv-row"><span class="kv-key">Requestor</span><span class="kv-val">${p.licenseeEmail}</span></div>
-        <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${p.intendedUse}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${escapeHtml(p.productionCompany)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Requestor</span><span class="kv-val">${escapeHtml(p.licenseeEmail)}</span></div>
+        <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${escapeHtml(p.intendedUse)}</span></div>
         <div class="kv-row"><span class="kv-key">Valid period</span><span class="kv-val">${formatDate(p.validFrom)} – ${formatDate(p.validTo)}</span></div>
       </div>
       <p>Review and approve or deny this request in Image Vault.</p>
@@ -177,8 +192,8 @@ export function placeholderLicenceCreatedEmail(p: PlaceholderLicenceCreatedParam
     html: layout(`
       <p>A licence has been set up for your production. Scans are not yet available and will be attached once the capture session is complete.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.productionCompany}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${escapeHtml(p.productionCompany)}</span></div>
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val">Awaiting scan capture</span></div>
         <div class="kv-row"><span class="kv-key">Valid period</span><span class="kv-val">${formatDate(p.validFrom)} – ${formatDate(p.validTo)}</span></div>
       </div>
@@ -205,8 +220,8 @@ export function packageAttachedEmail(p: PackageAttachedParams): { subject: strin
     html: layout(`
       ${body}
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
       </div>
       <a class="btn" href="${p.viewUrl}">Open in Image Vault</a>
     `),
@@ -228,8 +243,8 @@ export function licenceApprovedEmail(p: LicenceApprovedParams): { subject: strin
     html: layout(`
       <p>Your licence request has been approved. You may now initiate a dual-custody download.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-approved">Approved</span></span></div>
         <div class="kv-row"><span class="kv-key">Valid period</span><span class="kv-val">${formatDate(p.validFrom)} – ${formatDate(p.validTo)}</span></div>
       </div>
@@ -251,10 +266,10 @@ export function licenceDeniedEmail(p: LicenceDeniedParams): { subject: string; h
     html: layout(`
       <p>Your licence request was reviewed and has not been approved at this time.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-denied">Not approved</span></span></div>
-        ${p.reason ? `<div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val">${p.reason}</span></div>` : ""}
+        ${p.reason ? `<div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val">${escapeHtml(p.reason)}</span></div>` : ""}
       </div>
       <p class="muted">If you believe this decision was made in error, please contact the talent's representative directly.</p>
     `),
@@ -273,8 +288,8 @@ export function licenceRevokedEmail(p: LicenceRevokedParams): { subject: string;
     html: layout(`
       <p>A previously approved licence has been revoked. Any active download sessions for this licence have been terminated.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-revoked">Revoked</span></span></div>
       </div>
       <p class="muted">Please cease all use of any previously downloaded assets under this licence. Contact the rights holder if you have questions.</p>
@@ -304,11 +319,11 @@ export function inviteEmail(p: InviteEmailParams): { subject: string; html: stri
     html: layout(`
       <p>You have been invited to join Image Vault as a <strong>${roleLabel}</strong>.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Invited by</span><span class="kv-val">${p.inviterEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Invited by</span><span class="kv-val">${escapeHtml(p.inviterEmail)}</span></div>
         <div class="kv-row"><span class="kv-key">Account type</span><span class="kv-val">${roleLabel}</span></div>
         <div class="kv-row"><span class="kv-key">Expires</span><span class="kv-val">${formatDate(p.expiresAt)}</span></div>
       </div>
-      ${p.message ? `<p><em>${p.message}</em></p>` : ""}
+      ${p.message ? `<p><em>${escapeHtml(p.message)}</em></p>` : ""}
       <p>Click the button below to create your account. This invite link expires in 7 days.</p>
       <a class="btn" href="${p.signupUrl}">Accept invitation</a>
     `),
@@ -335,10 +350,10 @@ export function scanBookingConfirmedEmail(p: ScanBookingConfirmedParams): { subj
   return {
     subject: `Scan session confirmed — ${p.locationName}, ${dt.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`,
     html: layout(`
-      <p>Your scan session at ${p.locationName} is confirmed. We look forward to seeing you.</p>
+      <p>Your scan session at ${escapeHtml(p.locationName)} is confirmed. We look forward to seeing you.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Location</span><span class="kv-val">${p.locationName}, ${p.city}</span></div>
-        <div class="kv-row"><span class="kv-key">Address</span><span class="kv-val">${p.address}</span></div>
+        <div class="kv-row"><span class="kv-key">Location</span><span class="kv-val">${escapeHtml(p.locationName)}, ${escapeHtml(p.city)}</span></div>
+        <div class="kv-row"><span class="kv-key">Address</span><span class="kv-val">${escapeHtml(p.address)}</span></div>
         <div class="kv-row"><span class="kv-key">Date</span><span class="kv-val">${dateStr}</span></div>
         <div class="kv-row"><span class="kv-key">Time</span><span class="kv-val">${timeStr} – ${endTime}</span></div>
         <div class="kv-row"><span class="kv-key">Duration</span><span class="kv-val">${p.durationMins} minutes</span></div>
@@ -369,7 +384,7 @@ export function scanBookingCancelledEmail(p: ScanBookingCancelledParams): { subj
     html: layout(`
       <p>Your scan session has been cancelled. The slot has been released.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Location</span><span class="kv-val">${p.locationName}, ${p.city}</span></div>
+        <div class="kv-row"><span class="kv-key">Location</span><span class="kv-val">${escapeHtml(p.locationName)}, ${escapeHtml(p.city)}</span></div>
         <div class="kv-row"><span class="kv-key">Date</span><span class="kv-val">${dateStr}</span></div>
         <div class="kv-row"><span class="kv-key">Time</span><span class="kv-val">${timeStr}</span></div>
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-revoked">Cancelled</span></span></div>
@@ -417,12 +432,12 @@ export function downloadCompleteEmail(p: DownloadCompleteParams): { subject: str
     html: layout(`
       <p>${intro}</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
-        <div class="kv-row"><span class="kv-key">Licensee</span><span class="kv-val">${p.licenseeEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Licensee</span><span class="kv-val">${escapeHtml(p.licenseeEmail)}</span></div>
         <div class="kv-row"><span class="kv-key">Files</span><span class="kv-val">${p.fileCount} file${p.fileCount !== 1 ? "s" : ""}</span></div>
         <div class="kv-row"><span class="kv-key">Date &amp; time</span><span class="kv-val">${formatDate(p.downloadedAt)}</span></div>
-        ${p.ip ? `<div class="kv-row"><span class="kv-key">IP address</span><span class="kv-val" style="font-family:monospace">${p.ip}</span></div>` : ""}
+        ${p.ip ? `<div class="kv-row"><span class="kv-key">IP address</span><span class="kv-val" style="font-family:monospace">${escapeHtml(p.ip)}</span></div>` : ""}
       </div>
       <p class="muted">This record forms part of the chain of custody for this package.</p>
     `),
@@ -449,8 +464,8 @@ export function licenceEndedAttestationEmail(
     html: layout(`
       <p>A licence you held has ended. Under the terms of the licence you must delete all copies of the scan data from your systems and confirm that deletion here.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-revoked">${reasonLabel}</span></span></div>
         <div class="kv-row"><span class="kv-key">Confirm by</span><span class="kv-val">${formatDate(p.scrubDeadline)}</span></div>
       </div>
@@ -477,9 +492,9 @@ export function attestationSubmittedEmail(
     html: layout(`
       <p>The licensee has attested that all copies of the scan data have been deleted from their systems.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
-        <div class="kv-row"><span class="kv-key">Licensee</span><span class="kv-val">${p.licenseeEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Licensee</span><span class="kv-val">${escapeHtml(p.licenseeEmail)}</span></div>
         <div class="kv-row"><span class="kv-key">Attested at</span><span class="kv-val">${formatDate(p.attestedAt)}</span></div>
         <div class="kv-row"><span class="kv-key">Devices</span><span class="kv-val">${p.devicesCount} device${p.devicesCount !== 1 ? "s" : ""} listed</span></div>
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-approved">Closed</span></span></div>
@@ -506,11 +521,11 @@ export function attestationExtendedEmail(
     html: layout(`
       <p>An administrator has extended the deadline for your deletion attestation.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
-        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
+        <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${escapeHtml(p.projectName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${escapeHtml(p.packageName)}</span></div>
         <div class="kv-row"><span class="kv-key">Extended by</span><span class="kv-val">${p.additionalDays} day${p.additionalDays !== 1 ? "s" : ""}</span></div>
         <div class="kv-row"><span class="kv-key">New deadline</span><span class="kv-val">${formatDate(p.newDeadline)}</span></div>
-        <div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val">${p.reason}</span></div>
+        <div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val">${escapeHtml(p.reason)}</span></div>
       </div>
       <p class="muted">You still need to submit the attestation before the new deadline to close this licence cleanly.</p>
     `),
@@ -546,19 +561,19 @@ export interface ProductionCastInviteEmailParams {
 
 export function productionCastInviteEmail(p: ProductionCastInviteEmailParams): { subject: string; html: string } {
   const characterRow = p.characterName
-    ? `<div class="kv-row"><span class="kv-key">Character</span><span class="kv-val">${p.characterName}</span></div>`
+    ? `<div class="kv-row"><span class="kv-key">Character</span><span class="kv-val">${escapeHtml(p.characterName)}</span></div>`
     : "";
   return {
     subject: `You've been invited to join the cast of ${p.productionName}`,
     html: layout(`
-      <p>You've been invited to join the cast of <strong>${p.productionName}</strong> by ${p.companyName}.</p>
+      <p>You've been invited to join the cast of <strong>${escapeHtml(p.productionName)}</strong> by ${escapeHtml(p.companyName)}.</p>
       <p>By accepting this invite and approving the licence request, you consent to your scan being used for this production.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
-        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${escapeHtml(p.productionName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${escapeHtml(p.companyName)}</span></div>
         ${characterRow}
-        <div class="kv-row"><span class="kv-key">Invited by</span><span class="kv-val">${p.coordinatorEmail}</span></div>
-        <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${p.intendedUse}</span></div>
+        <div class="kv-row"><span class="kv-key">Invited by</span><span class="kv-val">${escapeHtml(p.coordinatorEmail)}</span></div>
+        <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${escapeHtml(p.intendedUse)}</span></div>
         <div class="kv-row"><span class="kv-key">Valid period</span><span class="kv-val">${formatDate(p.validFrom)} – ${formatDate(p.validTo)}</span></div>
       </div>
       <p>Create your Image Vault account to accept this invitation, upload your scan package, and manage licence approvals.</p>
@@ -581,7 +596,7 @@ export interface ProductionCastLinkedEmailParams {
 
 export function productionCastLinkedEmail(p: ProductionCastLinkedEmailParams): { subject: string; html: string } {
   const characterRow = p.characterName
-    ? `<div class="kv-row"><span class="kv-key">Character</span><span class="kv-val">${p.characterName}</span></div>`
+    ? `<div class="kv-row"><span class="kv-key">Character</span><span class="kv-val">${escapeHtml(p.characterName)}</span></div>`
     : "";
   const feeRow = p.proposedFee != null
     ? `<div class="kv-row"><span class="kv-key">Proposed fee</span><span class="kv-val">£${(p.proposedFee / 100).toFixed(2)}</span></div>`
@@ -589,13 +604,13 @@ export function productionCastLinkedEmail(p: ProductionCastLinkedEmailParams): {
   return {
     subject: `New licence request from ${p.productionName}`,
     html: layout(`
-      <p>A licence request has been submitted for your scan package from the production <strong>${p.productionName}</strong>.</p>
+      <p>A licence request has been submitted for your scan package from the production <strong>${escapeHtml(p.productionName)}</strong>.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
-        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${escapeHtml(p.productionName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${escapeHtml(p.companyName)}</span></div>
         ${characterRow}
-        <div class="kv-row"><span class="kv-key">Requested by</span><span class="kv-val">${p.coordinatorEmail}</span></div>
-        <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${p.intendedUse}</span></div>
+        <div class="kv-row"><span class="kv-key">Requested by</span><span class="kv-val">${escapeHtml(p.coordinatorEmail)}</span></div>
+        <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${escapeHtml(p.intendedUse)}</span></div>
         ${feeRow}
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Awaiting your approval</span></span></div>
       </div>
@@ -616,9 +631,9 @@ export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: stri
     html: layout(`
       <p>A clone packages operation was triggered by an administrator. Review the details below.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Triggered by</span><span class="kv-val">${p.triggeredBy}</span></div>
-        <div class="kv-row"><span class="kv-key">Source</span><span class="kv-val">${p.sourceEmail}</span></div>
-        <div class="kv-row"><span class="kv-key">Target</span><span class="kv-val">${p.targetEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Triggered by</span><span class="kv-val">${escapeHtml(p.triggeredBy)}</span></div>
+        <div class="kv-row"><span class="kv-key">Source</span><span class="kv-val">${escapeHtml(p.sourceEmail)}</span></div>
+        <div class="kv-row"><span class="kv-key">Target</span><span class="kv-val">${escapeHtml(p.targetEmail)}</span></div>
         <div class="kv-row"><span class="kv-key">Ran at</span><span class="kv-val">${dt}</span></div>
         <div class="kv-row"><span class="kv-key">Packages</span><span class="kv-val">${p.packages}</span></div>
         <div class="kv-row"><span class="kv-key">Files copied</span><span class="kv-val">${p.files}</span></div>
@@ -650,12 +665,12 @@ export function registerInterestEmail(p: RegisterInterestParams): { subject: str
     html: layout(`
       <p>A new access request has been submitted via the Image Vault registration page.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Name</span><span class="kv-val">${p.name}</span></div>
-        <div class="kv-row"><span class="kv-key">Email</span><span class="kv-val">${p.email}</span></div>
-        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.company}</span></div>
-        <div class="kv-row"><span class="kv-key">Company type</span><span class="kv-val">${p.companyType}</span></div>
-        ${p.phone ? `<div class="kv-row"><span class="kv-key">Phone</span><span class="kv-val">${p.phone}</span></div>` : ""}
-        ${p.message ? `<div class="kv-row"><span class="kv-key">Message</span><span class="kv-val">${p.message}</span></div>` : ""}
+        <div class="kv-row"><span class="kv-key">Name</span><span class="kv-val">${escapeHtml(p.name)}</span></div>
+        <div class="kv-row"><span class="kv-key">Email</span><span class="kv-val">${escapeHtml(p.email)}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${escapeHtml(p.company)}</span></div>
+        <div class="kv-row"><span class="kv-key">Company type</span><span class="kv-val">${escapeHtml(p.companyType)}</span></div>
+        ${p.phone ? `<div class="kv-row"><span class="kv-key">Phone</span><span class="kv-val">${escapeHtml(p.phone)}</span></div>` : ""}
+        ${p.message ? `<div class="kv-row"><span class="kv-key">Message</span><span class="kv-val">${escapeHtml(p.message)}</span></div>` : ""}
         <div class="kv-row"><span class="kv-key">Submitted</span><span class="kv-val">${dt}</span></div>
       </div>
       <p class="muted">Reply directly to this email to follow up with the applicant.</p>

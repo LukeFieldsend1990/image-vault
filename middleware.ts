@@ -11,33 +11,30 @@ function getSecret(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-type AuthStatus = "ok" | "refresh" | "none";
+type Auth =
+  | { status: "ok"; email: string | null; role: string | null }
+  | { status: "refresh" }
+  | { status: "none" };
 
-async function getAuthStatus(req: NextRequest): Promise<AuthStatus> {
+async function getAuth(req: NextRequest): Promise<Auth> {
   const token = req.cookies.get("session")?.value;
   const hasRefresh = !!req.cookies.get("refresh")?.value;
 
-  if (!token) return hasRefresh ? "refresh" : "none";
+  if (!token) return { status: hasRefresh ? "refresh" : "none" };
 
   try {
-    await jwtVerify(token, getSecret(), {
+    const { payload } = await jwtVerify(token, getSecret(), {
       issuer: "image-vault",
       audience: "image-vault-app",
+      algorithms: ["HS256"],
     });
-    return "ok";
+    return {
+      status: "ok",
+      email: (payload.email as string | undefined) ?? null,
+      role: (payload.role as string | undefined) ?? null,
+    };
   } catch {
-    return hasRefresh ? "refresh" : "none";
-  }
-}
-
-function getTokenPayload(req: NextRequest): { email: string | null; role: string | null } {
-  try {
-    const token = req.cookies.get("session")?.value;
-    if (!token) return { email: null, role: null };
-    const payload = JSON.parse(atob(token.split(".")[1])) as { email?: string; role?: string };
-    return { email: payload.email ?? null, role: payload.role ?? null };
-  } catch {
-    return { email: null, role: null };
+    return { status: hasRefresh ? "refresh" : "none" };
   }
 }
 
@@ -62,19 +59,19 @@ export async function middleware(req: NextRequest) {
   const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p));
 
   if (isProtected || isAuthPage) {
-    const status = await getAuthStatus(req);
+    const auth = await getAuth(req);
+    const status = auth.status;
 
     // Admin whitelist — must be authenticated AND email must be in ADMIN_EMAILS
     if (pathname.startsWith("/admin")) {
-      if (status !== "ok") {
+      if (auth.status !== "ok") {
         const loginUrl = req.nextUrl.clone();
         loginUrl.pathname = "/login";
         loginUrl.search = "";
         loginUrl.searchParams.set("next", pathname);
         return NextResponse.redirect(loginUrl);
       }
-      const { email } = getTokenPayload(req);
-      if (!email || !ADMIN_EMAILS.includes(email)) {
+      if (!auth.email || !ADMIN_EMAILS.includes(auth.email)) {
         const dashUrl = req.nextUrl.clone();
         dashUrl.pathname = "/dashboard";
         dashUrl.search = "";
@@ -107,8 +104,8 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(refreshUrl);
     }
 
-    if (isAuthPage && status === "ok") {
-      const { role } = getTokenPayload(req);
+    if (isAuthPage && auth.status === "ok") {
+      const role = auth.role;
       const dashUrl = req.nextUrl.clone();
       dashUrl.pathname = ROLE_HOME[role ?? "talent"] ?? "/dashboard";
       dashUrl.search = "";
@@ -116,8 +113,8 @@ export async function middleware(req: NextRequest) {
     }
 
     // Role-based route protection — redirect to role home if accessing a disallowed route
-    if (isProtected && status === "ok") {
-      const { role } = getTokenPayload(req);
+    if (isProtected && auth.status === "ok") {
+      const role = auth.role;
       if (role && role !== "admin") {
         const allowed = ROLE_ALLOWED_PREFIXES[role];
         if (allowed && !allowed.some((prefix) => pathname.startsWith(prefix))) {

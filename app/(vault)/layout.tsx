@@ -1,6 +1,6 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
+import { getServerSession } from "@/lib/auth/serverSession";
 import { NavLinks } from "./nav";
 import UserWidget from "./user-widget";
 import SidebarShell from "./sidebar-shell";
@@ -18,27 +18,17 @@ interface SessionData {
 }
 
 async function getSessionData(): Promise<SessionData> {
-  try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
-    if (!session) return { sub: "", email: "", role: "talent", initials: "??" };
-    const payload = JSON.parse(atob(session.split(".")[1])) as {
-      sub?: string;
-      email?: string;
-      role?: Role;
-    };
-    const email = payload.email ?? "";
-    const initials =
-      email
-        .split("@")[0]
-        .split(/[._-]/)
-        .slice(0, 2)
-        .map((p: string) => p[0]?.toUpperCase() ?? "")
-        .join("") || "??";
-    return { sub: payload.sub ?? "", email, role: payload.role ?? "talent", initials };
-  } catch {
-    return { sub: "", email: "", role: "talent", initials: "??" };
-  }
+  const session = await getServerSession();
+  if (!session) return { sub: "", email: "", role: "talent", initials: "??" };
+  const email = session.email ?? "";
+  const initials =
+    email
+      .split("@")[0]
+      .split(/[._-]/)
+      .slice(0, 2)
+      .map((p: string) => p[0]?.toUpperCase() ?? "")
+      .join("") || "??";
+  return { sub: session.sub, email, role: (session.role as Role) ?? "talent", initials };
 }
 
 export interface TalentIdentity {

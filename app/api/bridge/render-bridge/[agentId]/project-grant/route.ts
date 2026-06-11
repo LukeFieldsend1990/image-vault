@@ -147,12 +147,18 @@ export async function GET(
 
       let scopedFiles = completedFiles;
       if (licence.fileScope && licence.fileScope !== "all") {
+        let scopeIds: string[] = [];
         try {
-          const scopeIds = JSON.parse(licence.fileScope) as string[];
-          scopedFiles = completedFiles.filter(f => scopeIds.includes(f.id));
+          const parsed = JSON.parse(licence.fileScope);
+          if (!Array.isArray(parsed)) throw new Error("fileScope is not an array");
+          scopeIds = parsed as string[];
         } catch {
-          // malformed fileScope — fall back to all completed files
+          // Malformed fileScope on a restricted licence: fail closed (serve no
+          // files) rather than leaking the full package.
+          console.error(`[project-grant] Malformed fileScope on licence ${licence.id} — serving no files`);
+          scopeIds = [];
         }
+        scopedFiles = completedFiles.filter(f => scopeIds.includes(f.id));
       }
 
       const files = await Promise.all(

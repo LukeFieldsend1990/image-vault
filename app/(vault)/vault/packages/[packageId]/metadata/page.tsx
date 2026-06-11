@@ -1,28 +1,20 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { scanPackages, talentReps } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
+import { getServerSession } from "@/lib/auth/serverSession";
 import PackageMetadataForm from "./package-metadata-form";
 
 export default async function PackageMetadataPage({ params }: { params: Promise<{ packageId: string }> }) {
   const { packageId: id } = await params;
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
+  const session = await getServerSession();
   if (!session) redirect("/login");
 
-  let payload: { sub?: string; role?: string; email?: string };
-  try {
-    payload = JSON.parse(atob(session.split(".")[1]));
-  } catch {
-    redirect("/login");
-  }
-
-  const userId = payload.sub ?? "";
-  const role = payload.role ?? "";
+  const userId = session.sub;
+  const role = session.role ?? "";
 
   const db = getDb();
   const [pkg] = await db

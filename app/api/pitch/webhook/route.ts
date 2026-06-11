@@ -52,16 +52,42 @@ function normaliseStatus(raw: string): string {
   return "generating";
 }
 
+/**
+ * Only fetch completion videos from trusted Higgsfield hosts over HTTPS.
+ * Guards against SSRF where a (spoofed or compromised) payload points the
+ * server at an internal or attacker-controlled URL. Additional hosts can be
+ * allow-listed via HIGGSFIELD_OUTPUT_HOSTS (comma-separated).
+ */
+function isAllowedVideoUrl(raw: string, extraHosts: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  const allowed = [
+    "higgsfield.ai",
+    ...extraHosts.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean),
+  ];
+  const host = url.hostname.toLowerCase();
+  return allowed.some((a) => host === a || host.endsWith(`.${a}`));
+}
+
 export async function POST(req: NextRequest) {
   const bodyText = await req.text();
 
   const { env } = getRequestContext();
   const webhookSecret = (env as unknown as { HIGGSFIELD_WEBHOOK_SECRET?: string }).HIGGSFIELD_WEBHOOK_SECRET;
 
-  if (webhookSecret) {
-    const valid = await verifySignature(req, webhookSecret, bodyText);
-    if (!valid) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  if (!webhookSecret) {
+    // Fail closed: without the signing secret we cannot authenticate the caller.
+    console.error("[pitch-webhook] HIGGSFIELD_WEBHOOK_SECRET not configured — rejecting request");
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
   }
+
+  const valid = await verifySignature(req, webhookSecret, bodyText);
+  if (!valid) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 
   let payload: HiggsWebhookPayload;
   try { payload = JSON.parse(bodyText); } catch {
@@ -84,9 +110,18 @@ export async function POST(req: NextRequest) {
   const videoUrl = payload.video_url ?? payload.videoUrl ?? payload.output?.url;
 
   if (status === "complete" && videoUrl) {
+    const extraHosts = (env as unknown as { HIGGSFIELD_OUTPUT_HOSTS?: string }).HIGGSFIELD_OUTPUT_HOSTS ?? "";
+    if (!isAllowedVideoUrl(videoUrl, extraHosts)) {
+      console.error(`[pitch-webhook] Rejected video URL for pitch ${pitch.id}`);
+      await db.update(pitchVignettes).set({
+        status: "failed",
+        error_text: "Rejected video URL host",
+      }).where(eq(pitchVignettes.id, pitch.id));
+      return NextResponse.json({ ok: true });
+    }
     // Fetch video and store in R2
     const bucket = (env as unknown as { SCANS_BUCKET: R2Bucket }).SCANS_BUCKET;
-    const videoRes = await fetch(videoUrl);
+    const videoRes = await fetch(videoUrl, { redirect: "error" });
     if (videoRes.ok) {
       const outputKey = `pitch/${pitch.id}/vignette.mp4`;
       await bucket.put(outputKey, videoRes.body!, {

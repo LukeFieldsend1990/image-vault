@@ -36,6 +36,7 @@ export async function verifySessionJwt(
     const { payload } = await jwtVerify(token, getSecret(secret), {
       issuer: ISSUER,
       audience: AUDIENCE,
+      algorithms: ["HS256"],
     });
     return {
       sub: payload.sub as string,

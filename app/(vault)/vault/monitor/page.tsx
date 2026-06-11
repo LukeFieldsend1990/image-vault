@@ -1,6 +1,6 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
+import { getServerSession } from "@/lib/auth/serverSession";
 import { getDb } from "@/lib/db";
 import { talentProfiles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -20,11 +20,8 @@ export interface TalentIdentityForMonitor {
 
 async function getTalentIdentity(): Promise<TalentIdentityForMonitor | null> {
   try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
-    if (!session) return null;
-    const payload = JSON.parse(atob(session.split(".")[1])) as { sub?: string; role?: string };
-    if (!payload.sub || payload.role !== "talent") return null;
+    const session = await getServerSession();
+    if (!session || session.role !== "talent") return null;
 
     const db = getDb();
     const row = await db
@@ -34,7 +31,7 @@ async function getTalentIdentity(): Promise<TalentIdentityForMonitor | null> {
         knownFor: talentProfiles.knownFor,
       })
       .from(talentProfiles)
-      .where(eq(talentProfiles.userId, payload.sub))
+      .where(eq(talentProfiles.userId, session.sub))
       .get();
 
     if (!row) return null;

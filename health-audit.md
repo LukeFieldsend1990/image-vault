@@ -22,6 +22,51 @@ the **Suggested remediation order** at the bottom.
 
 ---
 
+## Remediation status (this branch)
+
+Most findings have been fixed on `claude/system-security-audit-5z6dj6`. Type-check is
+clean and the full test suite shows no new failures (12 pre-existing failures in
+`__tests__/domain/compliance-*` and `render-bridge-project-grant` are unrelated — they
+fail identically on the base commit; see CLAUDE.md's note on known `__tests__` issues).
+
+**Fixed:**
+- **AUTH-1 / AUTH-2 / AUTH-5** — Added `lib/auth/serverSession.ts` (`getServerSession`,
+  signature-verified). All 18 server pages and `requireAdmin()` now verify the JWT
+  instead of decoding with `atob`. `middleware.ts` refactored to reuse its already-
+  verified payload (no unverified decode anywhere). `verifySessionJwt` and the
+  middleware now pin `algorithms: ["HS256"]`.
+- **API-1** — Added `lib/auth/packageAccess.ts` (`canAccessPackage`); applied ownership
+  checks to GET/POST `package-tags/[packageId]` **and** the sibling tag PATCH/DELETE
+  route (same IDOR, not in the original report).
+- **API-2** — Triage query now filtered with `inArray(... emailIds)`.
+- **EMAIL-1** — Added `escapeHtml()` and applied it to all user-controlled text in
+  every template (subjects/URLs left as-is — not HTML-body XSS vectors).
+- **AI-1** — Triage prompt now wraps untrusted headers/body in explicit BEGIN/END
+  data markers.
+- **WEBHOOK-1** — Resend webhook now fails closed (500) when the secret is unset. The
+  **pitch webhook had the same bug** and was fixed the same way.
+- **API-3** — Pitch webhook now validates `videoUrl` against an https + `*.higgsfield.ai`
+  allow-list (env-extensible via `HIGGSFIELD_OUTPUT_HOSTS`) and fetches with
+  `redirect: "error"`.
+- **BRIDGE-1** — Malformed `fileScope` now fails **closed** (serves no files) instead of
+  falling back to the full package, and validates the parsed value is an array.
+- **AUTH-3** — Added IP rate limiting (60/60s) to `/api/auth/refresh`.
+- **AI-2** — Budget ceiling and `max_security_alerts_per_day` parsing now reject
+  NaN/negative and fail safe to defaults.
+- **DATA-1** — Wrapped the unguarded `clone-packages` KV `JSON.parse` in try/catch.
+  (The `audit/events` parse flagged by the sweep was already inside a try/catch.)
+
+**Deferred (intentionally not changed — see notes):**
+- **AUTH-4** — Kept `SameSite=Lax` + conditional `Secure`. `Lax` is a standard secure
+  default; forcing `Strict` risks breaking email-link auth flows. Revisit if desired.
+- **DATA-2** — Pricing map left as-is: the `includes("haiku")` logic is correct for the
+  only two models actually in use (Haiku + free Llama). Worth generalising before
+  adding a third paid model.
+- **AI-3** (budget race) and **WORKER-1** (pipeline AI-failure surfacing) — need design
+  decisions (atomic reservation / job-status semantics) rather than a mechanical fix.
+
+---
+
 ## Summary
 
 | ID | Severity | Status | Location | Issue |

@@ -5,32 +5,17 @@ import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { cookies } from "next/headers";
+import { getServerSession } from "@/lib/auth/serverSession";
 import ComplianceClient from "./compliance-client";
 import RepComplianceOverview from "./rep-compliance-overview";
 
 export default async function CompliancePage() {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("session")?.value;
+  const session = await getServerSession();
+  if (!session) redirect("/login");
 
-  let role: string | null = null;
-  let userId: string | null = null;
-  let email: string | null = null;
-
-  if (sessionCookie) {
-    try {
-      const payload = JSON.parse(atob(sessionCookie.split(".")[1])) as {
-        role?: string;
-        sub?: string;
-        email?: string;
-      };
-      role  = payload.role ?? null;
-      userId = payload.sub ?? null;
-      email  = payload.email ?? null;
-    } catch { /* malformed JWT — will redirect below */ }
-  }
-
-  if (!userId) redirect("/login");
+  const role = session.role ?? null;
+  const userId = session.sub;
+  const email = session.email ?? null;
 
   // Licensees access compliance through their licence panel, not this page
   if (role === "licensee") redirect("/dashboard");

@@ -77,17 +77,22 @@ export async function POST(req: NextRequest) {
     webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
   }
 
-  if (webhookSecret) {
-    const valid = await verifyWebhookSignature(rawBody, {
-      svixId: req.headers.get("svix-id"),
-      svixTimestamp: req.headers.get("svix-timestamp"),
-      svixSignature: req.headers.get("svix-signature"),
-    }, webhookSecret);
+  if (!webhookSecret) {
+    // Fail closed: without the signing secret we cannot authenticate the sender,
+    // so inbound email must be rejected rather than trusted.
+    console.error("[webhook] RESEND_WEBHOOK_SECRET not configured — rejecting request");
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+  }
 
-    if (!valid) {
-      console.error("[webhook] Invalid Resend webhook signature");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
+  const valid = await verifyWebhookSignature(rawBody, {
+    svixId: req.headers.get("svix-id"),
+    svixTimestamp: req.headers.get("svix-timestamp"),
+    svixSignature: req.headers.get("svix-signature"),
+  }, webhookSecret);
+
+  if (!valid) {
+    console.error("[webhook] Invalid Resend webhook signature");
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   // 2. Parse event

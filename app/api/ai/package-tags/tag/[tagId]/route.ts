@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { canAccessPackage } from "@/lib/auth/packageAccess";
 import { triggerReindex } from "@/lib/search/reindex";
 import { eq } from "drizzle-orm";
 
@@ -37,7 +38,7 @@ export async function PATCH(
     .where(eq(packageTags.id, tagId))
     .get();
 
-  if (!existing) {
+  if (!existing || !(await canAccessPackage(session, existing.packageId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -72,7 +73,7 @@ export async function DELETE(
     .where(eq(packageTags.id, tagId))
     .get();
 
-  if (!existing) {
+  if (!existing || !(await canAccessPackage(session, existing.packageId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

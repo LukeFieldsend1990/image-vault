@@ -55,7 +55,12 @@ export async function checkBudget(
   ]);
 
   const spent = spentRow?.total ?? 0;
-  const ceiling = ceilingOverride ?? parseFloat(ceilingRow?.value ?? "1.00");
+  // Guard against a corrupt/non-numeric ceiling: NaN would make `spent >= ceiling`
+  // always false and silently disable the budget cap. Fail safe to the default.
+  const parsedCeiling = parseFloat(ceilingRow?.value ?? "1.00");
+  const ceiling =
+    ceilingOverride ??
+    (Number.isFinite(parsedCeiling) && parsedCeiling >= 0 ? parsedCeiling : 1.0);
 
   return { spent, ceiling, exhausted: spent >= ceiling };
 }

@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { users, refreshTokens } from "@/lib/db/schema";
 import { signSessionJwt } from "@/lib/auth/jwt";
 import { generateToken, hashToken, setAuthCookies, clearAuthCookies } from "@/lib/auth/session";
+import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 import { eq, and, gt } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
@@ -20,6 +21,16 @@ export async function GET(req: NextRequest) {
 
   const rawRefresh = req.cookies.get("refresh")?.value;
   if (!rawRefresh) {
+    return NextResponse.redirect(makeRedirect("/login"));
+  }
+
+  // Defence-in-depth: cap token-rotation attempts per IP.
+  const rl = await checkRateLimit(getClientIp(req), {
+    action: "refresh",
+    maxAttempts: 60,
+    windowSeconds: 60,
+  });
+  if (!rl.ok) {
     return NextResponse.redirect(makeRedirect("/login"));
   }
 

@@ -209,7 +209,8 @@ export async function checkBridgeAnomalies(
   const category = isActionRequired ? "action_required" : "attention";
 
   // For action_required, use LLM to compose a richer alert (if within daily limit)
-  const maxAlerts = parseInt(await getSettingValue(db, "max_security_alerts_per_day") ?? "10");
+  const parsedMaxAlerts = parseInt(await getSettingValue(db, "max_security_alerts_per_day") ?? "10", 10);
+  const maxAlerts = Number.isFinite(parsedMaxAlerts) && parsedMaxAlerts >= 0 ? parsedMaxAlerts : 10;
   const dailyCount = await getDailyAlertCount(db);
 
   let alertBody: string;

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { packageTags, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { canAccessPackage } from "@/lib/auth/packageAccess";
 import { callAiService } from "@/lib/ai/service";
 import { triggerReindex } from "@/lib/search/reindex";
 import { eq } from "drizzle-orm";
@@ -17,6 +18,11 @@ export async function GET(
   if (isErrorResponse(session)) return session;
 
   const { packageId } = await params;
+
+  if (!(await canAccessPackage(session, packageId))) {
+    return NextResponse.json({ error: "Package not found" }, { status: 404 });
+  }
+
   const db = getDb();
 
   const tags = await db
@@ -37,6 +43,11 @@ export async function POST(
   if (isErrorResponse(session)) return session;
 
   const { packageId } = await params;
+
+  if (!(await canAccessPackage(session, packageId))) {
+    return NextResponse.json({ error: "Package not found" }, { status: 404 });
+  }
+
   const db = getDb();
 
   let body: { tag?: string; category?: string; aiTrigger?: boolean };

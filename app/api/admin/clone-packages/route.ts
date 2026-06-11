@@ -35,7 +35,14 @@ export async function GET(req: NextRequest) {
 
   const kv = getRequestContext().env.SESSIONS_KV;
   const raw = await kv.get(todayKey());
-  const record: CloneRunRecord | null = raw ? (JSON.parse(raw) as CloneRunRecord) : null;
+  let record: CloneRunRecord | null = null;
+  if (raw) {
+    try {
+      record = JSON.parse(raw) as CloneRunRecord;
+    } catch {
+      console.error("[clone-packages] Corrupt KV record — ignoring");
+    }
+  }
 
   const sourceEmail = new URL(req.url).searchParams.get("sourceEmail");
   if (sourceEmail) {

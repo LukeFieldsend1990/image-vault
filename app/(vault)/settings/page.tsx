@@ -1,6 +1,6 @@
 export const runtime = "edge";
 
-import { cookies } from "next/headers";
+import { getServerSession } from "@/lib/auth/serverSession";
 import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { talentProfiles, users } from "@/lib/db/schema";
@@ -40,19 +40,9 @@ interface KnownForEntry {
 }
 
 async function getSessionData(): Promise<{ userId: string; email: string; role: Role } | null> {
-  try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
-    if (!session) return null;
-    const payload = JSON.parse(atob(session.split(".")[1])) as {
-      sub?: string;
-      email?: string;
-      role?: Role;
-    };
-    return { userId: payload.sub ?? "", email: payload.email ?? "", role: payload.role ?? "talent" };
-  } catch {
-    return null;
-  }
+  const session = await getServerSession();
+  if (!session) return null;
+  return { userId: session.sub, email: session.email, role: (session.role as Role) ?? "talent" };
 }
 
 const ROLE_LABELS: Record<Role, string> = {
