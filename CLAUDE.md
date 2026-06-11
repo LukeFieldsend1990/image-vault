@@ -49,6 +49,7 @@ lib/
   ai/              # providers.ts, cost-tracker.ts, constants.ts, signals.ts, suggestion-engine.ts, security-alerts.ts
   inbound/         # triage.ts (AI email classification), alias.ts (memorable aliases)
   skills/          # MCP-pattern skill system (see "Extending Skills" below)
+  mcp/             # Admin MCP server: tool registry, semantic layer, audit (see "Admin MCP Integration" below)
   crypto/          # Encryption utilities
 drizzle/
   migrations/      # Sequential SQL: 0000_auth.sql through 0030_soft_delete_packages.sql
@@ -225,6 +226,17 @@ case "my-skill": {
 - Registry is in-memory (code-defined, not DB-backed) — type-safe, zero cold-start cost
 - Skills are resolved at request time so new skills immediately work for already-triaged emails
 - Parameter validation is manual (no Zod) — matches the rest of the codebase
+
+## Admin MCP Integration
+
+MCP server at `/api/mcp` (Streamable HTTP, stateless JSON-RPC) gives whitelisted admins visibility and corrective tools from Claude. Admin console: `/admin/mcp`.
+
+- **Auth**: Bearer `mcp_` tokens (SHA-256 hashed in `mcpTokens`, expiring ≤90 days, revocable). Minted at `/admin/mcp` — requires admin session **plus a fresh TOTP code**. `requireMcpToken()` re-checks the admin whitelist on every request.
+- **Scopes**: `read` (visibility tools) and `admin` (corrective tools). Mutating tool calls additionally require a live 6-digit TOTP code in the `totp_code` argument, verified per call by the dispatcher (`app/api/mcp/route.ts`) — the MCP analogue of dual-custody. Admin accounts can never be modified through MCP; the admin role can never be assigned.
+- **Audit**: every call logged to `mcpAuditLog` with secret-bearing params redacted (`lib/mcp/audit.ts`). Rate limits: 120 RPC/min per token, 5 TOTP attempts/5 min.
+- **Extending**: tools self-register like skills — add a file under `lib/mcp/tools/` calling `registerMcpTool({ name, description, inputSchema, mutating, execute })`, import it from `lib/mcp/tools/index.ts`. Set `mutating: true` for anything that writes; the dispatcher injects and enforces `totp_code` automatically (never declare it in your own schema).
+- **Semantic layer**: `lib/mcp/semantic-layer.ts` is a curated concept map (compiled from the Notion "Image Vault concepts" docs) exposed via `list_concepts` / `explain_concept`. Update it when architecture changes.
+- **Connect**: `claude mcp add --transport http image-vault https://changling.io/api/mcp --header "Authorization: Bearer mcp_…"`
 
 ## Environment & Secrets
 
