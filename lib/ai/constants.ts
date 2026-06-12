@@ -136,4 +136,4 @@ Procedure:
 Then respond with ONLY a JSON object (no prose, no markdown fences):
 {"severity": "critical"|"high"|"medium", "headline": "<one line, max 90 chars>", "narrative": "<plain-text summary of findings with specific facts, max 600 chars>", "recommended_actions": [{"tool": "<mutating MCP tool name>", "reason": "<why, one sentence>"}]}
 
-Valid recommended_actions tool values (these are the admin's TOTP-gated corrective tools): set_user_suspended, set_user_flag, set_user_role, restore_package, revoke_mcp_token. Recommend only actions justified by your findings; an empty array is acceptable.`;
+Valid recommended_actions tool values (these are the admin's TOTP-gated corrective tools): set_user_suspended, set_user_flag, set_user_role, restore_package, revoke_mcp_token, lock_talent_downloads (lock a targeted talent's vault so no downloads can start), revoke_user_sessions (force-logout a suspicious user immediately, optionally suspending them). Recommend only actions justified by your findings; an empty array is acceptable.`;

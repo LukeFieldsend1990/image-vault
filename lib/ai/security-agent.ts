@@ -69,6 +69,8 @@ export const RECOMMENDABLE_TOOLS: readonly string[] = [
   "set_user_role",
   "restore_package",
   "revoke_mcp_token",
+  "lock_talent_downloads",
+  "revoke_user_sessions",
 ];
 
 // ── Verdict ──────────────────────────────────────────────────────────────────
