@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     expiresAt: now + expiresInDays * 24 * 60 * 60,
   });
 
-  void logMcpCall(db, {
+  await logMcpCall(db, {
     tokenId: id,
     userId: session.sub,
     tool: "token.created",

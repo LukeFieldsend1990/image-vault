@@ -37,7 +37,7 @@ export async function DELETE(
     .set({ revokedAt: Math.floor(Date.now() / 1000) })
     .where(eq(mcpTokens.id, id));
 
-  void logMcpCall(db, {
+  await logMcpCall(db, {
     tokenId: id,
     userId: session.sub,
     tool: "token.revoked",

@@ -93,7 +93,7 @@ async function handleToolCall(
   if (tool.mutating) {
     if (token.scope !== "admin") {
       const message = "This tool mutates platform state and requires an admin-scope MCP token (yours is read-only).";
-      void logMcpCall(db, { tokenId: token.tokenId, userId: token.userId, tool: name, params: args, success: false, message });
+      await logMcpCall(db, { tokenId: token.tokenId, userId: token.userId, tool: name, params: args, success: false, message });
       return rpcResult(id, { content: [{ type: "text", text: message }], isError: true });
     }
 
@@ -117,7 +117,7 @@ async function handleToolCall(
       .get();
     if (!totp || !code || !verifyTotpCode(totp.secret, code)) {
       const message = "Invalid or missing TOTP code. Provide a fresh 6-digit code from the authenticator app in totp_code.";
-      void logMcpCall(db, { tokenId: token.tokenId, userId: token.userId, tool: name, params: args, success: false, message });
+      await logMcpCall(db, { tokenId: token.tokenId, userId: token.userId, tool: name, params: args, success: false, message });
       return rpcResult(id, { content: [{ type: "text", text: message }], isError: true });
     }
     delete args.totp_code; // never pass the code into tool handlers
@@ -130,7 +130,7 @@ async function handleToolCall(
     result = { success: false, message: `Tool failed: ${err instanceof Error ? err.message : "unknown error"}` };
   }
 
-  void logMcpCall(db, {
+  await logMcpCall(db, {
     tokenId: token.tokenId,
     userId: token.userId,
     tool: name,
