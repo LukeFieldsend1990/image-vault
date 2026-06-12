@@ -151,6 +151,24 @@ describe("DELETE /api/productions/[id]/cast/[castId]", () => {
     expect(licenceRevoke).toBeUndefined();
   });
 
+  it("allows removing a placeholder cast member (no licence/invite to clean up)", async () => {
+    t.setSession({ sub: "licensee1", email: "lic@test.com", role: "licensee" });
+    t.enqueue(makeProduction());
+    t.enqueue(makeOrgMembership("owner"));
+    t.enqueue(makeCastRow({ licenceId: null, inviteId: null, status: "placeholder" }));
+
+    const res = await castRoute.DELETE(
+      buildRequest("/api/productions/prod1/cast/cast1", { method: "DELETE" }),
+      { params: Promise.resolve({ id: "prod1", castId: "cast1" }) }
+    );
+
+    expect(res.status).toBe(200);
+    const licenceRevoke = t.updatedRows.find(
+      (r) => (r.set as Record<string, unknown>).status === "REVOKED"
+    );
+    expect(licenceRevoke).toBeUndefined();
+  });
+
   it("returns 409 when trying to remove a consented cast member", async () => {
     t.setSession({ sub: "licensee1", email: "lic@test.com", role: "licensee" });
     t.enqueue(makeProduction());

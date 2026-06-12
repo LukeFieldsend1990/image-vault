@@ -58,7 +58,7 @@ export async function DELETE(
 
   if (!castRow) return NextResponse.json({ error: "Cast member not found" }, { status: 404 });
 
-  if (castRow.status !== "invited" && castRow.status !== "linked") {
+  if (castRow.status !== "placeholder" && castRow.status !== "invited" && castRow.status !== "linked") {
     return NextResponse.json(
       { error: "Cannot remove a cast member who has consented or completed the process" },
       { status: 409 }
@@ -118,7 +118,7 @@ export async function PATCH(
     .get();
   if (!castRow) return NextResponse.json({ error: "Cast member not found" }, { status: 404 });
 
-  let body: { characterName?: string; department?: string; sagMember?: boolean };
+  let body: { characterName?: string; department?: string; sagMember?: boolean; actorName?: string };
   try {
     body = JSON.parse(await req.text());
   } catch {
@@ -129,6 +129,7 @@ export async function PATCH(
   if (typeof body.characterName === "string") updates.characterName = body.characterName;
   if (typeof body.department === "string") updates.department = body.department;
   if (typeof body.sagMember === "boolean") updates.sagMember = body.sagMember;
+  if (typeof body.actorName === "string") updates.actorName = body.actorName;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 });
