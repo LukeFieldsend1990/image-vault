@@ -18,7 +18,9 @@ describe("jwt", () => {
   it("verifySessionJwt round-trips a valid token", async () => {
     const token = await signSessionJwt(testPayload, SECRET);
     const result = await verifySessionJwt(token, SECRET);
-    expect(result).toEqual(testPayload);
+    // verifySessionJwt also surfaces the JWT's issued-at for session-revocation checks
+    expect(result).toMatchObject(testPayload);
+    expect(typeof result?.iat).toBe("number");
   });
 
   it("verifySessionJwt returns null for wrong secret", async () => {

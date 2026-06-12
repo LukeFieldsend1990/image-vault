@@ -4,29 +4,44 @@ import {
   downloadEvents,
   bridgeEvents,
   licences,
-  users,
-  aiCostLog,
 } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { callAi } from "./providers";
-import { isAiEnabled, getSettingValue } from "./cost-tracker";
-import { SECURITY_ALERT_PROMPT, SUGGESTION_TTL_SECONDS } from "./constants";
+import { isAiEnabled } from "./cost-tracker";
+import { SUGGESTION_TTL_SECONDS } from "./constants";
 
 type Db = ReturnType<typeof drizzle>;
 
-async function getDailyAlertCount(db: Db): Promise<number> {
-  const dayAgo = Math.floor(Date.now() / 1000) - 86400;
-  const row = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(aiCostLog)
-    .where(
-      and(
-        eq(aiCostLog.feature, "security_alerts"),
-        sql`created_at > ${dayAgo}`
-      )
-    )
-    .get();
-  return row?.count ?? 0;
+/**
+ * Escalation descriptor handed to the ambient security agent
+ * (lib/ai/security-agent.ts) when heuristics detect an action_required event.
+ * All string fields are attacker-influenceable and must be treated as
+ * untrusted data by anything that feeds them to an LLM.
+ */
+export type SecurityTrigger =
+  | {
+      kind: "bridge";
+      eventType: string;
+      severity: string;
+      deviceId: string;
+      packageId: string;
+      packageName: string;
+      talentId: string;
+      recentCriticalCount: number;
+    }
+  | {
+      kind: "download";
+      licenceId: string;
+      licenseeId: string;
+      ip: string | null;
+      downloads24h: number;
+      knownIpCount: number;
+      talentId: string;
+      projectName: string;
+    };
+
+export interface SecurityEscalation {
+  escalate: boolean;
+  trigger?: SecurityTrigger;
 }
 
 async function getLicenceAlertCountToday(db: Db, licenceId: string): Promise<number> {
@@ -46,7 +61,7 @@ async function getLicenceAlertCountToday(db: Db, licenceId: string): Promise<num
   return row?.count ?? 0;
 }
 
-async function writeSuggestion(
+export async function writeSuggestion(
   db: Db,
   params: {
     userId: string;
@@ -57,6 +72,7 @@ async function writeSuggestion(
     entityType: string;
     entityId: string;
     priority: number;
+    feature?: string;
   }
 ) {
   const now = Math.floor(Date.now() / 1000);
@@ -64,7 +80,7 @@ async function writeSuggestion(
     id: crypto.randomUUID(),
     userId: params.userId,
     category: params.category,
-    feature: "security_alert",
+    feature: params.feature ?? "security_alert",
     title: params.title,
     body: params.body,
     deepLink: params.deepLink ?? null,
@@ -88,9 +104,9 @@ export async function checkDownloadAnomalies(
     fileId: string;
     ip: string | null;
   }
-) {
+): Promise<SecurityEscalation> {
   const enabled = await isAiEnabled(db);
-  if (!enabled || !event.licenceId) return;
+  if (!enabled || !event.licenceId) return { escalate: false };
 
   const now = Math.floor(Date.now() / 1000);
   const dayAgo = now - 86400;
@@ -101,11 +117,11 @@ export async function checkDownloadAnomalies(
     .from(licences)
     .where(eq(licences.id, event.licenceId))
     .get();
-  if (!licence) return;
+  if (!licence) return { escalate: false };
 
   // Rate limit: max 5 alerts per licence per day
   const licenceAlerts = await getLicenceAlertCountToday(db, event.licenceId);
-  if (licenceAlerts >= 5) return;
+  if (licenceAlerts >= 5) return { escalate: false };
 
   // Check 1: Unusual download volume (>3 from same licence in 24h)
   const recentDownloads = await db
@@ -118,13 +134,15 @@ export async function checkDownloadAnomalies(
       )
     )
     .get();
+  const downloads24h = recentDownloads?.count ?? 0;
+  const volumeAnomaly = downloads24h > 3;
 
-  if ((recentDownloads?.count ?? 0) > 3) {
+  if (volumeAnomaly) {
     await writeSuggestion(db, {
       userId: licence.talentId,
       category: "attention",
       title: "Unusual download volume",
-      body: `${recentDownloads!.count} downloads from licence "${licence.projectName}" in the last 24 hours. This is higher than typical — worth verifying the licensee's activity.`,
+      body: `${downloads24h} downloads from licence "${licence.projectName}" in the last 24 hours. This is higher than typical — worth verifying the licensee's activity.`,
       deepLink: `/vault/licences`,
       entityType: "licence",
       entityId: event.licenceId,
@@ -133,6 +151,8 @@ export async function checkDownloadAnomalies(
   }
 
   // Check 2: New IP for this licensee
+  let newIpAnomaly = false;
+  let knownIpCount = 0;
   if (event.ip) {
     const previousIps = await db
       .select({ ip: downloadEvents.ip })
@@ -148,7 +168,9 @@ export async function checkDownloadAnomalies(
       .all();
 
     const knownIps = new Set(previousIps.map((r) => r.ip));
-    if (knownIps.size > 0 && !knownIps.has(event.ip)) {
+    knownIpCount = knownIps.size;
+    newIpAnomaly = knownIps.size > 0 && !knownIps.has(event.ip);
+    if (newIpAnomaly) {
       await writeSuggestion(db, {
         userId: licence.talentId,
         category: "attention",
@@ -161,6 +183,26 @@ export async function checkDownloadAnomalies(
       });
     }
   }
+
+  // Escalate to the security agent when the signals compound:
+  // both anomalies at once, or extreme volume on its own.
+  if ((volumeAnomaly && newIpAnomaly) || downloads24h > 10) {
+    return {
+      escalate: true,
+      trigger: {
+        kind: "download",
+        licenceId: event.licenceId,
+        licenseeId: event.licenseeId,
+        ip: event.ip,
+        downloads24h,
+        knownIpCount,
+        talentId: licence.talentId,
+        projectName: licence.projectName,
+      },
+    };
+  }
+
+  return { escalate: false };
 }
 
 export async function checkBridgeAnomalies(
@@ -174,15 +216,14 @@ export async function checkBridgeAnomalies(
     severity: string;
     userId: string | null;
   }
-) {
+): Promise<SecurityEscalation> {
   const enabled = await isAiEnabled(db);
-  if (!enabled) return;
+  if (!enabled) return { escalate: false };
 
   const criticalEvents = new Set(["tamper_detected", "hash_mismatch", "unexpected_copy"]);
-  if (!criticalEvents.has(event.eventType)) return;
+  if (!criticalEvents.has(event.eventType)) return { escalate: false };
 
-  const now = Math.floor(Date.now() / 1000);
-  const dayAgo = now - 86400;
+  const dayAgo = Math.floor(Date.now() / 1000) - 86400;
 
   // Find the talent who owns this package
   const pkg = await db
@@ -190,7 +231,7 @@ export async function checkBridgeAnomalies(
     .from(sql`scan_packages`)
     .where(sql`id = ${event.packageId}`)
     .get();
-  if (!pkg) return;
+  if (!pkg) return { escalate: false };
 
   // Count recent critical events from same device
   const recentEvents = await db
@@ -204,53 +245,38 @@ export async function checkBridgeAnomalies(
       )
     )
     .get();
+  const recentCriticalCount = recentEvents?.count ?? 0;
 
-  const isActionRequired = (recentEvents?.count ?? 0) >= 2 || event.eventType === "tamper_detected";
-  const category = isActionRequired ? "action_required" : "attention";
+  const isActionRequired = recentCriticalCount >= 2 || event.eventType === "tamper_detected";
 
-  // For action_required, use LLM to compose a richer alert (if within daily limit)
-  const maxAlerts = parseInt(await getSettingValue(db, "max_security_alerts_per_day") ?? "10");
-  const dailyCount = await getDailyAlertCount(db);
-
-  let alertBody: string;
-
-  if (isActionRequired && dailyCount < maxAlerts) {
-    const result = await callAi(env, db, {
-      feature: "security_alerts",
-      requiresReasoning: false,
-      system: SECURITY_ALERT_PROMPT,
-      userMessage: JSON.stringify({
+  if (isActionRequired) {
+    // Hand off to the ambient security agent (lib/ai/security-agent.ts).
+    // Its decline path writes the same template alert this module used to.
+    return {
+      escalate: true,
+      trigger: {
+        kind: "bridge",
         eventType: event.eventType,
-        deviceId: event.deviceId,
-        packageName: pkg.name,
-        recentCriticalEventsFromDevice: recentEvents?.count ?? 0,
         severity: event.severity,
-      }),
-    });
-
-    if (result) {
-      try {
-        const parsed = JSON.parse(result.text);
-        alertBody = parsed.alert ?? result.text;
-      } catch {
-        alertBody = result.text;
-      }
-    } else {
-      alertBody = `${event.eventType.replace(/_/g, " ")} detected on device ${event.deviceId.slice(0, 8)}... for package "${pkg.name}". ${(recentEvents?.count ?? 0)} critical events from this device in the last 24 hours.`;
-    }
-  } else {
-    // Template string fallback
-    alertBody = `${event.eventType.replace(/_/g, " ")} detected on device ${event.deviceId.slice(0, 8)}... for package "${pkg.name}". ${(recentEvents?.count ?? 0)} critical events from this device in the last 24 hours.`;
+        deviceId: event.deviceId,
+        packageId: event.packageId,
+        packageName: pkg.name,
+        talentId: pkg.talentId,
+        recentCriticalCount,
+      },
+    };
   }
 
   await writeSuggestion(db, {
     userId: pkg.talentId,
-    category,
+    category: "attention",
     title: `Bridge: ${event.eventType.replace(/_/g, " ")}`,
-    body: alertBody,
+    body: `${event.eventType.replace(/_/g, " ")} detected on device ${event.deviceId.slice(0, 8)}... for package "${pkg.name}". ${recentCriticalCount} critical events from this device in the last 24 hours.`,
     deepLink: `/settings/bridge`,
     entityType: "package",
     entityId: event.packageId,
-    priority: isActionRequired ? 5 : 15,
+    priority: 15,
   });
+
+  return { escalate: false };
 }

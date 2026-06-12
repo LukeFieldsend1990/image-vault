@@ -662,3 +662,71 @@ export function registerInterestEmail(p: RegisterInterestParams): { subject: str
     `),
   };
 }
+
+// ── Security alert (ambient security agent) ─────────────────────────────────
+
+/**
+ * Escape untrusted text for HTML interpolation. The security agent's verdict
+ * is LLM output derived from attacker-influenced event fields, so unlike the
+ * other templates (trusted platform data) escaping is mandatory here.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export interface SecurityAlertEmailParams {
+  severity: "critical" | "high" | "medium";
+  headline: string;
+  narrative: string;
+  eventType: string;
+  entityLabel: string;
+  recommendedActions: Array<{ tool: string; reason: string }>;
+  toolCallCount: number;
+  degraded?: boolean;
+  adminMcpUrl: string;
+  occurredAt: number;
+}
+
+export function securityAlertEmail(p: SecurityAlertEmailParams): { subject: string; html: string } {
+  const severityBadge =
+    p.severity === "critical"
+      ? `<span class="badge badge-denied">Critical</span>`
+      : p.severity === "high"
+        ? `<span class="badge badge-pending">High</span>`
+        : `<span class="badge badge-revoked">Medium</span>`;
+
+  const actionsList = p.recommendedActions.length
+    ? `<p><strong>Recommended actions</strong> (run via your MCP client — each requires your TOTP code):</p>
+       <ul style="font-size:13px;color:#333;line-height:1.6;margin:0 0 16px;padding-left:18px;">
+         ${p.recommendedActions
+           .map((a) => `<li><code>${escapeHtml(a.tool)}</code> — ${escapeHtml(a.reason)}</li>`)
+           .join("")}
+       </ul>`
+    : "";
+
+  const investigatedNote = p.degraded
+    ? "Automated investigation was unavailable — this is a template alert from the trigger data."
+    : `The security agent investigated this event with ${p.toolCallCount} read-only tool call${p.toolCallCount !== 1 ? "s" : ""} (see /admin/mcp activity).`;
+
+  return {
+    subject: `[Security] ${p.severity.toUpperCase()}: ${p.headline}`,
+    html: layout(`
+      <p><strong>${escapeHtml(p.headline)}</strong></p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Severity</span><span class="kv-val">${severityBadge}</span></div>
+        <div class="kv-row"><span class="kv-key">Event</span><span class="kv-val">${escapeHtml(p.eventType.replace(/_/g, " "))}</span></div>
+        <div class="kv-row"><span class="kv-key">Entity</span><span class="kv-val">${escapeHtml(p.entityLabel)}</span></div>
+        <div class="kv-row"><span class="kv-key">When</span><span class="kv-val">${formatDate(p.occurredAt)}</span></div>
+      </div>
+      <p>${escapeHtml(p.narrative)}</p>
+      ${actionsList}
+      <p class="muted">${investigatedNote} Corrective action is never taken automatically.</p>
+      <a class="btn" href="${p.adminMcpUrl}">Review MCP activity</a>
+    `),
+  };
+}

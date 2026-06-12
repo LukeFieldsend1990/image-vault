@@ -74,6 +74,7 @@ export async function isFeatureEnabled(db: Db, feature: string): Promise<boolean
     fee_guidance: "fee_guidance_enabled",
     licence_summary: "licence_summary_enabled",
     metadata_tags: "metadata_tags_enabled",
+    security_agent: "security_agent_enabled",
   };
   const key = keyMap[feature];
   if (!key) return true; // features without a toggle are always on when master is on

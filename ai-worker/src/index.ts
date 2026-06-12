@@ -4,9 +4,11 @@ import * as schema from "@/lib/db/schema";
 import { isAiEnabled, isFeatureEnabled } from "@/lib/ai/cost-tracker";
 import { callAi } from "@/lib/ai/providers";
 import { suggestPackageTags } from "@/lib/ai/package-tags";
-import { checkBridgeAnomalies, checkDownloadAnomalies } from "@/lib/ai/security-alerts";
+import { checkBridgeAnomalies, checkDownloadAnomalies, type SecurityEscalation } from "@/lib/ai/security-alerts";
+import { runSecurityInvestigation } from "@/lib/ai/security-agent";
 import { runSuggestionBatch } from "@/lib/ai/suggestion-engine";
 import { FEE_GUIDANCE_PROMPT } from "@/lib/ai/constants";
+import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 
 const { licences } = schema;
 
@@ -15,6 +17,9 @@ interface Env {
   AI?: Ai;
   ANTHROPIC_API_KEY?: string;
   SCANS_BUCKET?: R2Bucket;
+  RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
+  APP_URL?: string;
 }
 
 interface Actor {
@@ -22,8 +27,6 @@ interface Actor {
   role: string;
   email: string;
 }
-
-const ADMIN_EMAILS = ["lukefieldsend@googlemail.com", "martindavison@gmail.com"];
 
 function getDb(env: Env) {
   return drizzle(env.DB, { schema });
@@ -182,7 +185,7 @@ async function handleRunBatch(request: Request, env: Env, ctx: ExecutionContext)
   });
 }
 
-async function handleBridgeSecurityEvent(request: Request, env: Env) {
+async function handleBridgeSecurityEvent(request: Request, env: Env, ctx: ExecutionContext) {
   if (request.headers.get("x-ai-source") !== "bridge-events") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -207,7 +210,7 @@ async function handleBridgeSecurityEvent(request: Request, env: Env) {
   }
 
   const db = getDb(env);
-  await checkBridgeAnomalies(db, env, {
+  const outcome = await checkBridgeAnomalies(db, env, {
     grantId: body.grantId ?? null,
     packageId: body.packageId,
     deviceId: body.deviceId,
@@ -216,10 +219,15 @@ async function handleBridgeSecurityEvent(request: Request, env: Env) {
     userId: body.userId ?? null,
   });
 
+  // Escalations run the investigation loop in the background — respond now
+  if (outcome.escalate && outcome.trigger) {
+    ctx.waitUntil(runSecurityInvestigation(db, env, outcome.trigger));
+  }
+
   return Response.json({ ok: true });
 }
 
-async function handleDownloadSecurityEvent(request: Request, env: Env) {
+async function handleDownloadSecurityEvent(request: Request, env: Env, ctx: ExecutionContext) {
   if (request.headers.get("x-ai-source") !== "download-complete") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -242,13 +250,19 @@ async function handleDownloadSecurityEvent(request: Request, env: Env) {
   }
 
   const db = getDb(env);
+  let escalation: SecurityEscalation = { escalate: false };
   for (const fileId of body.fileIds) {
-    await checkDownloadAnomalies(db, env, {
+    const outcome = await checkDownloadAnomalies(db, env, {
       licenceId: body.licenceId,
       licenseeId: body.licenseeId,
       fileId,
       ip: body.ip ?? null,
     });
+    if (outcome.escalate) escalation = outcome; // investigate once per event batch
+  }
+
+  if (escalation.escalate && escalation.trigger) {
+    ctx.waitUntil(runSecurityInvestigation(db, env, escalation.trigger));
   }
 
   return Response.json({ ok: true });
@@ -283,11 +297,11 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/security/bridge-event") {
-      return handleBridgeSecurityEvent(request, env);
+      return handleBridgeSecurityEvent(request, env, ctx);
     }
 
     if (request.method === "POST" && url.pathname === "/security/download-event") {
-      return handleDownloadSecurityEvent(request, env);
+      return handleDownloadSecurityEvent(request, env, ctx);
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });
