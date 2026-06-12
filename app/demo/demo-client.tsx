@@ -578,6 +578,83 @@ function fmtUSD(cents: number): string {
   return `$${(cents / 100).toLocaleString("en-US")}`;
 }
 
+// ─── Animation primitives ─────────────────────────────────────────────────────
+
+const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
+
+// Number that eases from 0 up to `value` on mount. Because each scene remounts
+// (keyed by scene.id), these replay every time their scene appears.
+function CountUp({
+  value,
+  format,
+  duration = 1000,
+  delay = 0,
+}: {
+  value: number;
+  format?: (n: number) => string;
+  duration?: number;
+  delay?: number;
+}) {
+  const [n, setN] = useState(0);
+
+  useEffect(() => {
+    let raf = 0;
+    let startedAt: number | null = null;
+    const startTimer = setTimeout(() => {
+      const tick = (t: number) => {
+        if (startedAt === null) startedAt = t;
+        const p = Math.min(1, (t - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - p, 3);
+        setN(value * eased);
+        if (p < 1) raf = requestAnimationFrame(tick);
+        else setN(value);
+      };
+      raf = requestAnimationFrame(tick);
+    }, delay);
+    return () => {
+      clearTimeout(startTimer);
+      cancelAnimationFrame(raf);
+    };
+  }, [value, duration, delay]);
+
+  return <>{format ? format(n) : Math.round(n).toLocaleString("en-US")}</>;
+}
+
+// One segment of a stacked split bar that grows from 0 to its share on mount.
+function SplitSegment({ pct, color, delay = 0 }: { pct: number; color: string; delay?: number }) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setW(pct), delay + 40);
+    return () => clearTimeout(t);
+  }, [pct, delay]);
+  return (
+    <div
+      style={{
+        width: `${w}%`,
+        height: "100%",
+        background: color,
+        transition: `width 0.9s ${EASE} ${delay}ms`,
+      }}
+    />
+  );
+}
+
+// Flag that flips true shortly after mount — drives one-shot CSS transitions
+// (e.g. SVG ring stroke-dashoffset draw-ins) that replay each time a scene mounts.
+function useLit(delay = 200): boolean {
+  const [lit, setLit] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setLit(true), delay);
+    return () => clearTimeout(t);
+  }, [delay]);
+  return lit;
+}
+
+// Rise-in entrance: opacity + translateY, with a stagger delay.
+function rise(delay = 0): React.CSSProperties {
+  return { animation: `demo-rise 0.55s ${EASE} both`, animationDelay: `${delay}ms` };
+}
+
 // ─── Label maps ───────────────────────────────────────────────────────────────
 
 const STATUS_COLOUR: Record<string, string> = {
@@ -898,7 +975,17 @@ function DemoSidebar({
 
 // ─── Vault view ───────────────────────────────────────────────────────────────
 
-function PkgCard({ pkg }: { pkg: FakePkg }) {
+function PkgCard({
+  pkg,
+  index = 0,
+  autoExpand = false,
+  files,
+}: {
+  pkg: FakePkg;
+  index?: number;
+  autoExpand?: boolean;
+  files?: FakeFile[];
+}) {
   const caps = [
     pkg.hasMesh && "Mesh",
     pkg.hasTexture && "Textures",
@@ -906,16 +993,33 @@ function PkgCard({ pkg }: { pkg: FakePkg }) {
     pkg.hasMotionCapture && "MoCap",
   ].filter(Boolean) as string[];
 
+  // First package in the vault auto-opens its file list to demo the accordion.
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!autoExpand) return;
+    const t = setTimeout(() => setOpen(true), 700);
+    return () => clearTimeout(t);
+  }, [autoExpand]);
+
   return (
     <div
       style={{
         border: "1px solid var(--color-border)",
         borderRadius: "2px",
         background: "var(--color-surface)",
+        ...rise(index * 90),
       }}
     >
       <div style={{ padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-        <div style={{ flexShrink: 0, color: "var(--color-ink)", opacity: 0.35 }}>
+        <div
+          style={{
+            flexShrink: 0,
+            color: "var(--color-ink)",
+            opacity: open ? 0.6 : 0.35,
+            transform: open ? "rotate(90deg)" : "rotate(0deg)",
+            transition: `transform 0.4s ${EASE}, opacity 0.3s ease`,
+          }}
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 18 15 12 9 6" />
           </svg>
@@ -949,8 +1053,12 @@ function PkgCard({ pkg }: { pkg: FakePkg }) {
         </div>
 
         <div style={{ flexShrink: 0, textAlign: "right", marginRight: "0.5rem" }}>
-          <div style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--color-ink)" }}>{pkg.fileCount} files</div>
-          <div style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>{formatBytes(pkg.totalSizeBytes)}</div>
+          <div style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--color-ink)" }}>
+            <CountUp value={pkg.fileCount} delay={index * 90 + 200} /> files
+          </div>
+          <div style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>
+            <CountUp value={pkg.totalSizeBytes} format={formatBytes} delay={index * 90 + 200} />
+          </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.125rem", flexShrink: 0 }}>
@@ -965,6 +1073,47 @@ function PkgCard({ pkg }: { pkg: FakePkg }) {
           ))}
         </div>
       </div>
+
+      {/* Auto-expanding file list (first package only) */}
+      {files && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateRows: open ? "1fr" : "0fr",
+            transition: `grid-template-rows 0.5s ${EASE}`,
+          }}
+        >
+          <div style={{ overflow: "hidden", minWidth: 0 }}>
+            <div style={{ borderTop: "1px solid var(--color-border)" }}>
+              {files.map((f, i) => (
+                <div
+                  key={f.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    padding: "0.625rem 1.25rem 0.625rem 3.5rem",
+                    borderBottom: i < files.length - 1 ? "1px solid var(--color-border)" : "none",
+                    opacity: open ? 1 : 0,
+                    transform: open ? "translateY(0)" : "translateY(-6px)",
+                    transition: `opacity 0.4s ease ${open ? 200 + i * 70 : 0}ms, transform 0.4s ${EASE} ${open ? 200 + i * 70 : 0}ms`,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", minWidth: 0 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", flexShrink: 0 }}>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <span style={{ fontSize: "0.8125rem", color: "var(--color-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.filename}</span>
+                  </div>
+                  <span style={{ fontSize: "0.6875rem", color: "var(--color-muted)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{formatBytes(f.sizeBytes)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -989,20 +1138,30 @@ function VaultView() {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 3rem", paddingBottom: "13rem" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {PACKAGES.map((pkg) => <PkgCard key={pkg.id} pkg={pkg} />)}
+          {PACKAGES.map((pkg, i) => (
+            <PkgCard
+              key={pkg.id}
+              pkg={pkg}
+              index={i}
+              autoExpand={i === 0}
+              files={i === 0 ? PKG1_FILES : undefined}
+            />
+          ))}
         </div>
       </div>
 
       <footer style={{ borderTop: "1px solid var(--color-border)", padding: "1rem 3rem", display: "flex", alignItems: "center", gap: "2rem", flexShrink: 0 }}>
         {[
-          { label: "Total scans", value: String(PACKAGES.length) },
-          { label: "Storage used", value: formatBytes(totalSize) },
-          { label: "Active licences", value: "2" },
-          { label: "Pending requests", value: "1" },
-        ].map((s) => (
-          <div key={s.label}>
+          { label: "Total scans", value: PACKAGES.length, format: undefined },
+          { label: "Storage used", value: totalSize, format: formatBytes },
+          { label: "Active licences", value: 2, format: undefined },
+          { label: "Pending requests", value: 1, format: undefined },
+        ].map((s, i) => (
+          <div key={s.label} style={rise(300 + i * 80)}>
             <p style={{ fontSize: "0.6875rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-muted)", margin: 0 }}>{s.label}</p>
-            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-ink)", margin: "0.25rem 0 0" }}>{s.value}</p>
+            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-ink)", margin: "0.25rem 0 0", fontVariantNumeric: "tabular-nums" }}>
+              <CountUp value={s.value} format={s.format} delay={400 + i * 80} />
+            </p>
           </div>
         ))}
       </footer>
@@ -1012,9 +1171,17 @@ function VaultView() {
 
 // ─── Licences view ────────────────────────────────────────────────────────────
 
-function LicCard({ lic, expanded }: { lic: FakeLicence; expanded: boolean }) {
+function LicCard({ lic, expanded, index = 0 }: { lic: FakeLicence; expanded: boolean; index?: number }) {
   const feeRef = lic.agreedFee ?? lic.proposedFee;
   const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
+
+  // Smoothly slide the details open after the card lands.
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const t = setTimeout(() => setOpen(true), 550 + index * 90);
+    return () => clearTimeout(t);
+  }, [expanded, index]);
   const caps = [
     lic.packageHasMesh && "Mesh",
     lic.packageHasTexture && "Textures",
@@ -1031,7 +1198,7 @@ function LicCard({ lic, expanded }: { lic: FakeLicence; expanded: boolean }) {
   ];
 
   return (
-    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)" }}>
+    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", ...rise(index * 90) }}>
       <div style={{ padding: "1.25rem" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1076,7 +1243,7 @@ function LicCard({ lic, expanded }: { lic: FakeLicence; expanded: boolean }) {
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
             <button style={{ display: "flex", alignItems: "center", gap: "0.25rem", padding: "0.375rem 0.625rem", fontSize: "0.75rem", border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-bg)", color: "var(--color-muted)", cursor: "default" }}>
               Details
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? "rotate(180deg)" : "none", transition: `transform 0.4s ${EASE}` }}>
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
@@ -1094,23 +1261,45 @@ function LicCard({ lic, expanded }: { lic: FakeLicence; expanded: boolean }) {
         </div>
 
         {expanded && (
-          <div style={{ marginTop: "1rem", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", overflow: "hidden", fontSize: "0.75rem" }}>
-            {detailRows.map(([key, val], i) => (
-              <div key={key} style={{ display: "flex", justifyContent: "space-between", gap: "1rem", padding: "0.5rem 0.75rem", borderBottom: i < detailRows.length - 1 ? "1px solid var(--color-border)" : "none" }}>
-                <span style={{ color: "var(--color-muted)" }}>{key}</span>
-                <span style={{ fontWeight: 500, color: "var(--color-ink)", textAlign: "right" }}>{val}</span>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateRows: open ? "1fr" : "0fr",
+              marginTop: open ? "1rem" : "0rem",
+              transition: `grid-template-rows 0.5s ${EASE}, margin-top 0.5s ${EASE}`,
+            }}
+          >
+            <div style={{ overflow: "hidden", minHeight: 0 }}>
+              <div
+                style={{
+                  borderRadius: "var(--radius)",
+                  border: "1px solid var(--color-border)",
+                  overflow: "hidden",
+                  fontSize: "0.75rem",
+                  opacity: open ? 1 : 0,
+                  transition: "opacity 0.45s ease 0.12s",
+                }}
+              >
+                {detailRows.map(([key, val], i) => (
+                  <div key={key} style={{ display: "flex", justifyContent: "space-between", gap: "1rem", padding: "0.5rem 0.75rem", borderBottom: i < detailRows.length - 1 ? "1px solid var(--color-border)" : "none" }}>
+                    <span style={{ color: "var(--color-muted)" }}>{key}</span>
+                    <span style={{ fontWeight: 500, color: "var(--color-ink)", textAlign: "right" }}>{val}</span>
+                  </div>
+                ))}
+                <div style={{ padding: "0.75rem", borderTop: "1px solid var(--color-border)" }}>
+                  <p style={{ color: "var(--color-muted)", margin: "0 0 0.375rem" }}>Intended use</p>
+                  <p style={{ color: "var(--color-ink)", margin: 0, lineHeight: 1.6 }}>{lic.intendedUse}</p>
+                </div>
+                {feeRef && (
+                  <div style={{ padding: "0.75rem", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--color-muted)" }}>{lic.agreedFee ? "Agreed fee" : "Proposed fee"}</span>
+                    <span style={{ color: "var(--color-ink)", fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+                      <CountUp value={feeRef} format={fmtUSD} delay={open ? 150 : 0} />
+                    </span>
+                  </div>
+                )}
               </div>
-            ))}
-            <div style={{ padding: "0.75rem", borderTop: "1px solid var(--color-border)" }}>
-              <p style={{ color: "var(--color-muted)", margin: "0 0 0.375rem" }}>Intended use</p>
-              <p style={{ color: "var(--color-ink)", margin: 0, lineHeight: 1.6 }}>{lic.intendedUse}</p>
             </div>
-            {feeRef && (
-              <div style={{ padding: "0.75rem", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "var(--color-muted)" }}>{lic.agreedFee ? "Agreed fee" : "Proposed fee"}</span>
-                <span style={{ color: "var(--color-ink)", fontWeight: 500 }}>{fmtUSD(feeRef)}</span>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1136,17 +1325,20 @@ function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expan
       </div>
 
       <div style={{ display: "flex", gap: "0.25rem", borderBottom: "1px solid var(--color-border)", marginBottom: "1.5rem" }}>
-        {["All", "Pending", "Approved", "Denied"].map((tab) => (
-          <div key={tab} style={{ padding: "0.5rem 1rem", fontSize: "0.875rem", color: tab === "All" ? "var(--color-ink)" : "var(--color-muted)", fontWeight: tab === "All" ? 600 : 400, position: "relative", cursor: "default" }}>
-            {tab}
-            {tab === "All" && <span style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", background: "var(--color-accent)" }} />}
-          </div>
-        ))}
+        {["Pending", "Approved", "Denied", "All"].map((tab) => {
+          const active = tab === "All";
+          return (
+            <div key={tab} style={{ padding: "0.5rem 1rem", fontSize: "0.875rem", color: active ? "var(--color-ink)" : "var(--color-muted)", fontWeight: active ? 600 : 400, position: "relative", cursor: "default" }}>
+              {tab}
+              {active && <span style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "2px", background: "var(--color-accent)" }} />}
+            </div>
+          );
+        })}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        {licences.map((lic) => (
-          <LicCard key={lic.id} lic={lic} expanded={expandedId === lic.id} />
+        {licences.map((lic, i) => (
+          <LicCard key={lic.id} lic={lic} expanded={expandedId === lic.id} index={i} />
         ))}
       </div>
     </div>
@@ -1158,6 +1350,18 @@ function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expan
 function DualCustodyDownloadView() {
   const steps = ["Verify identity", "Talent approval", "Download"];
   const currentStep = 2;
+
+  // Drive the stepper forward on mount so the lines fill and circles light up
+  // one after another, telling the "both parties verified" story.
+  const [active, setActive] = useState(-1);
+  useEffect(() => {
+    const timers = [
+      setTimeout(() => setActive(0), 350),
+      setTimeout(() => setActive(1), 850),
+      setTimeout(() => setActive(2), 1350),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, []);
 
   return (
     <div style={{ padding: "2rem 3rem", overflowY: "auto", height: "100%", paddingBottom: "13rem", maxWidth: "42rem" }}>
@@ -1176,35 +1380,43 @@ function DualCustodyDownloadView() {
       </p>
 
       <div style={{ marginBottom: "2rem", display: "flex", alignItems: "flex-start", gap: "0" }}>
-        {steps.map((label, i) => (
-          <div key={label} style={{ display: "flex", alignItems: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <div style={{
-                width: "1.75rem",
-                height: "1.75rem",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                background: i <= currentStep ? "var(--color-accent)" : "var(--color-border)",
-                color: i <= currentStep ? "#fff" : "var(--color-muted)",
-              }}>
-                {i < currentStep ? "✓" : i + 1}
+        {steps.map((label, i) => {
+          const lit = i <= active;
+          const checked = i < currentStep && i <= active;
+          return (
+            <div key={label} style={{ display: "flex", alignItems: "center" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{
+                  width: "1.75rem",
+                  height: "1.75rem",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  background: lit ? "var(--color-accent)" : "var(--color-border)",
+                  color: lit ? "#fff" : "var(--color-muted)",
+                  transform: lit ? "scale(1)" : "scale(0.8)",
+                  transition: `background 0.35s ${EASE}, color 0.35s ${EASE}, transform 0.35s ${EASE}`,
+                }}>
+                  {checked ? "✓" : i + 1}
+                </div>
+                <span style={{ marginTop: "0.3rem", fontSize: "0.6rem", textAlign: "center", width: "3.5rem", lineHeight: 1.3, color: i === currentStep && lit ? "var(--color-ink)" : "var(--color-muted)", fontWeight: i === currentStep && lit ? 500 : 400, transition: "color 0.3s ease" }}>
+                  {label}
+                </span>
               </div>
-              <span style={{ marginTop: "0.3rem", fontSize: "0.6rem", textAlign: "center", width: "3.5rem", lineHeight: 1.3, color: i === currentStep ? "var(--color-ink)" : "var(--color-muted)", fontWeight: i === currentStep ? 500 : 400 }}>
-                {label}
-              </span>
+              {i < steps.length - 1 && (
+                <div style={{ width: "2.5rem", height: "2px", borderRadius: "2px", background: "var(--color-border)", marginBottom: "1.25rem", flexShrink: 0, overflow: "hidden", position: "relative" }}>
+                  <div style={{ position: "absolute", inset: 0, background: "var(--color-accent)", transformOrigin: "left center", transform: i < active ? "scaleX(1)" : "scaleX(0)", transition: `transform 0.5s ${EASE}` }} />
+                </div>
+              )}
             </div>
-            {i < steps.length - 1 && (
-              <div style={{ width: "2.5rem", height: "1px", background: i < currentStep ? "var(--color-accent)" : "var(--color-border)", marginBottom: "1.25rem", flexShrink: 0 }} />
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div style={{ marginBottom: "1.25rem", borderRadius: "var(--radius)", padding: "0.75rem 1rem", border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#166534", fontSize: "0.875rem" }}>
+      <div style={{ marginBottom: "1.25rem", borderRadius: "var(--radius)", padding: "0.75rem 1rem", border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#166534", fontSize: "0.875rem", ...rise(1450) }}>
         Both verifications complete — download links are valid for 48 hours.
       </div>
 
@@ -1212,10 +1424,10 @@ function DualCustodyDownloadView() {
         {[
           { label: "Licensee", name: "Warner Bros. Pictures", icon: "WB" },
           { label: "Talent", name: "Emma Richardson", icon: "ER" },
-        ].map((party) => (
-          <div key={party.label} style={{ borderRadius: "var(--radius)", border: "1px solid #bbf7d0", padding: "0.875rem 1rem", background: "#f0fdf4" }}>
+        ].map((party, i) => (
+          <div key={party.label} style={{ borderRadius: "var(--radius)", border: "1px solid #bbf7d0", padding: "0.875rem 1rem", background: "#f0fdf4", ...rise(1550 + i * 150) }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.375rem" }}>
-              <div style={{ width: "1.5rem", height: "1.5rem", borderRadius: "50%", background: "#166534", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.45rem", fontWeight: 700, color: "#fff", letterSpacing: "0.05em", flexShrink: 0 }}>
+              <div style={{ width: "1.5rem", height: "1.5rem", borderRadius: "50%", background: "#166534", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.45rem", fontWeight: 700, color: "#fff", letterSpacing: "0.05em", flexShrink: 0, animation: `demo-pulse-ring 1.4s ease-out ${1700 + i * 150}ms 1 both` }}>
                 {party.icon}
               </div>
               <span style={{ fontSize: "0.6875rem", fontWeight: 600, color: "#166534", textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -1224,14 +1436,16 @@ function DualCustodyDownloadView() {
             </div>
             <p style={{ fontSize: "0.75rem", fontWeight: 500, color: "#14532d", margin: "0 0 0.25rem" }}>{party.name}</p>
             <p style={{ fontSize: "0.6875rem", color: "#166534", margin: 0, display: "flex", alignItems: "center", gap: "0.3rem" }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              <span style={{ display: "inline-flex", animation: `demo-pop-check 0.5s ${EASE} ${1750 + i * 150}ms both` }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              </span>
               2FA verified
             </p>
           </div>
         ))}
       </div>
 
-      <button style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: "0.5rem", borderRadius: "var(--radius)", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", cursor: "default", marginBottom: "0.75rem" }}>
+      <button style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "center", gap: "0.5rem", borderRadius: "var(--radius)", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", cursor: "default", marginBottom: "0.75rem", ...rise(1950) }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <polyline points="7 10 12 15 17 10" />
@@ -1241,8 +1455,8 @@ function DualCustodyDownloadView() {
       </button>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {PKG1_FILES.map((f) => (
-          <div key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", padding: "0.75rem 1rem", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-ink)", cursor: "default" }}>
+        {PKG1_FILES.map((f, i) => (
+          <div key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: "var(--radius)", border: "1px solid var(--color-border)", padding: "0.75rem 1rem", background: "var(--color-surface)", fontSize: "0.875rem", color: "var(--color-ink)", cursor: "default", ...rise(2100 + i * 70) }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", minWidth: 0 }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", flexShrink: 0 }}>
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -1280,14 +1494,16 @@ function RosterView() {
         {/* Stat cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.25rem" }}>
           {[
-            { label: "Active Licences", value: "1", sub: null },
-            { label: "Revenue This Quarter", value: "$0", sub: "$150,000 lifetime", accent: true },
-            { label: "Pending Requests", value: "1", sub: "awaiting approval" },
-            { label: "Ready Scans", value: "3", sub: null },
-          ].map((c) => (
-            <div key={c.label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", padding: "0.875rem 1rem", background: "var(--color-surface)" }}>
+            { label: "Active Licences", value: 1, format: undefined, sub: null, accent: false },
+            { label: "Revenue This Quarter", value: 0, format: (n: number) => `$${Math.round(n)}`, sub: "$150,000 lifetime", accent: true },
+            { label: "Pending Requests", value: 1, format: undefined, sub: "awaiting approval", accent: false },
+            { label: "Ready Scans", value: 3, format: undefined, sub: null, accent: false },
+          ].map((c, i) => (
+            <div key={c.label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", padding: "0.875rem 1rem", background: "var(--color-surface)", ...rise(i * 80) }}>
               <p style={{ fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>{c.label}</p>
-              <p style={{ fontSize: "1.25rem", fontWeight: 700, color: c.accent ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem" }}>{c.value}</p>
+              <p style={{ fontSize: "1.25rem", fontWeight: 700, color: c.accent ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem", fontVariantNumeric: "tabular-nums" }}>
+                <CountUp value={c.value} format={c.format} delay={200 + i * 80} />
+              </p>
               {c.sub && <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: 0 }}>{c.sub}</p>}
             </div>
           ))}
@@ -1327,12 +1543,12 @@ function RosterView() {
       {/* Talent grid */}
       <div style={{ padding: "0 2.5rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "1rem" }}>
         {ROSTER.map((talent, i) => (
-          <div key={talent.id} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", overflow: "hidden" }}>
+          <div key={talent.id} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", overflow: "hidden", ...rise(350 + i * 90) }}>
             {/* Photo area */}
             <div style={{ position: "relative", aspectRatio: "3/4", background: "linear-gradient(160deg, #e5e7eb 0%, #d1d5db 100%)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               {i === 0 ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src="/demo-ct.jpg" alt="Channing Tatum" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
+                <img src="/demo-ct.jpg" alt="Channing Tatum" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block", animation: `demo-img-pop 0.7s ${EASE} ${450 + i * 90}ms both` }} />
               ) : (
                 <span style={{ fontSize: "2.5rem", fontWeight: 700, color: "rgba(0,0,0,0.12)", letterSpacing: "-0.04em", userSelect: "none" }}>
                   {talent.initials}
@@ -1379,18 +1595,18 @@ function RepVaultTab() {
   return (
     <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        {CT_PACKAGES.map((pkg) => <PkgCard key={pkg.id} pkg={pkg} />)}
+        {CT_PACKAGES.map((pkg, i) => <PkgCard key={pkg.id} pkg={pkg} index={i} />)}
       </div>
     </div>
   );
 }
 
-function RepLicCard({ lic }: { lic: FakeLicence }) {
+function RepLicCard({ lic, index = 0 }: { lic: FakeLicence; index?: number }) {
   const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
   const feeRef = lic.agreedFee ?? lic.proposedFee;
 
   return (
-    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", padding: "1rem 1.25rem" }}>
+    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", padding: "1rem 1.25rem", ...rise(index * 90) }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.125rem" }}>
@@ -1435,8 +1651,8 @@ function RepLicencesTab() {
   return (
     <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        {CT_LICENCES.map((lic) => (
-          <RepLicCard key={lic.id} lic={lic} />
+        {CT_LICENCES.map((lic, i) => (
+          <RepLicCard key={lic.id} lic={lic} index={i} />
         ))}
       </div>
     </div>
@@ -1476,6 +1692,7 @@ function RepPermissionsTab() {
               padding: "0.875rem 1rem",
               borderBottom: i < CT_PERMISSIONS.length - 1 ? "1px solid var(--color-border)" : "none",
               background: "var(--color-surface)",
+              ...rise(i * 70),
             }}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1530,21 +1747,53 @@ function RepRevenueTab() {
     { label: "Platform Fee", pct: "10%", value: platformCut, sub: null, accent: false },
   ];
 
+  // Slide the first licence-history row open after the table lands.
+  const [rowOpen, setRowOpen] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setRowOpen(true), 750);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
       {/* Stat cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "2rem" }}>
-        {statCards.map((c) => (
-          <div key={c.label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", padding: "0.875rem 1rem", background: "var(--color-surface)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
+        {statCards.map((c, i) => (
+          <div key={c.label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", padding: "0.875rem 1rem", background: "var(--color-surface)", ...rise(i * 80) }}>
             <p style={{ fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>
               {c.label}{c.pct ? ` (${c.pct})` : ""}
             </p>
-            <p style={{ fontSize: "1.25rem", fontWeight: 700, color: c.accent ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem" }}>
-              {fmtUSD(c.value)}
+            <p style={{ fontSize: "1.25rem", fontWeight: 700, color: c.accent ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem", fontVariantNumeric: "tabular-nums" }}>
+              <CountUp value={c.value} format={fmtUSD} delay={200 + i * 80} />
             </p>
             {c.sub && <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: 0 }}>{c.sub}</p>}
           </div>
         ))}
+      </div>
+
+      {/* Animated revenue split bar */}
+      <div style={{ marginBottom: "2rem", ...rise(420) }}>
+        <div style={{ display: "flex", height: "0.5rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
+          {[
+            { pct: 80, color: "var(--color-accent)" },
+            { pct: 10, color: "#b45309" },
+            { pct: 10, color: "#1a1a1a" },
+          ].map((seg, i) => (
+            <SplitSegment key={i} pct={seg.pct} color={seg.color} delay={500 + i * 120} />
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: "1.25rem", marginTop: "0.5rem" }}>
+          {[
+            { label: "Talent 80%", color: "var(--color-accent)" },
+            { label: "Agency 10%", color: "#b45309" },
+            { label: "Platform 10%", color: "#1a1a1a" },
+          ].map((l) => (
+            <span key={l.label} style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.6875rem", color: "var(--color-muted)" }}>
+              <span style={{ width: "0.5rem", height: "0.5rem", borderRadius: "9999px", background: l.color }} />
+              {l.label}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Licence history */}
@@ -1584,38 +1833,49 @@ function RepRevenueTab() {
                   <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.15rem 0.5rem", borderRadius: "9999px", background: `${colour}18`, color: colour, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     {lic.status}
                   </span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", transform: expanded ? "rotate(180deg)" : "none" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)", transform: expanded && rowOpen ? "rotate(180deg)" : "none", transition: `transform 0.4s ${EASE}` }}>
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </div>
               </div>
 
               {expanded && (
-                <div style={{ padding: "0 1rem 1rem", background: "var(--color-bg)", borderTop: "1px solid var(--color-border)" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem 2rem", padding: "0.875rem 0", borderBottom: "1px solid var(--color-border)", marginBottom: "0.75rem" }}>
-                    {[
-                      { label: "Licensee", value: "lukefieldsend+licensee@googlemail.com" },
-                      { label: "Valid period", value: `${formatDate(lic.validFrom)} – ${formatDate(lic.validTo)}` },
-                      { label: "Approved", value: lic.approvedAt ? formatDate(lic.approvedAt) : "—" },
-                      { label: "Downloads", value: String(lic.downloadCount) },
-                    ].map((row) => (
-                      <div key={row.label}>
-                        <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: "0 0 0.125rem" }}>{row.label}</p>
-                        <p style={{ fontSize: "0.8125rem", color: "var(--color-ink)", margin: 0 }}>{row.value}</p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateRows: rowOpen ? "1fr" : "0fr",
+                    background: "var(--color-bg)",
+                    transition: `grid-template-rows 0.5s ${EASE}`,
+                  }}
+                >
+                  <div style={{ overflow: "hidden", minHeight: 0 }}>
+                    <div style={{ padding: "0 1rem 1rem", borderTop: "1px solid var(--color-border)", opacity: rowOpen ? 1 : 0, transition: "opacity 0.45s ease 0.12s" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem 2rem", padding: "0.875rem 0", borderBottom: "1px solid var(--color-border)", marginBottom: "0.75rem" }}>
+                        {[
+                          { label: "Licensee", value: "lukefieldsend+licensee@googlemail.com" },
+                          { label: "Valid period", value: `${formatDate(lic.validFrom)} – ${formatDate(lic.validTo)}` },
+                          { label: "Approved", value: lic.approvedAt ? formatDate(lic.approvedAt) : "—" },
+                          { label: "Downloads", value: String(lic.downloadCount) },
+                        ].map((row) => (
+                          <div key={row.label}>
+                            <p style={{ fontSize: "0.6875rem", color: "var(--color-muted)", margin: "0 0 0.125rem" }}>{row.label}</p>
+                            <p style={{ fontSize: "0.8125rem", color: "var(--color-ink)", margin: 0 }}>{row.value}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  {[
-                    { label: `Proposed fee`, value: fmtUSDk(fee), muted: false, accent: false },
-                    { label: `Platform (10%)`, value: `~${fmtUSDk(platform)}`, muted: true, accent: false },
-                    { label: `Agency (10%)`, value: `~${fmtUSDk(agency)}`, muted: true, accent: false },
-                    { label: `Talent earnings`, value: fmtUSDk(talent), muted: false, accent: true },
-                  ].map((row) => (
-                    <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "0.25rem 0" }}>
-                      <span style={{ fontSize: "0.8125rem", color: row.accent ? "var(--color-accent)" : row.muted ? "var(--color-muted)" : "var(--color-ink)", fontWeight: row.accent ? 600 : 400 }}>{row.label}</span>
-                      <span style={{ fontSize: "0.8125rem", color: row.accent ? "var(--color-accent)" : row.muted ? "var(--color-muted)" : "var(--color-ink)", fontWeight: row.accent ? 600 : 500 }}>{row.value}</span>
+                      {[
+                        { label: `Proposed fee`, value: fmtUSDk(fee), muted: false, accent: false },
+                        { label: `Platform (10%)`, value: `~${fmtUSDk(platform)}`, muted: true, accent: false },
+                        { label: `Agency (10%)`, value: `~${fmtUSDk(agency)}`, muted: true, accent: false },
+                        { label: `Talent earnings`, value: fmtUSDk(talent), muted: false, accent: true },
+                      ].map((row) => (
+                        <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "0.25rem 0" }}>
+                          <span style={{ fontSize: "0.8125rem", color: row.accent ? "var(--color-accent)" : row.muted ? "var(--color-muted)" : "var(--color-ink)", fontWeight: row.accent ? 600 : 400 }}>{row.label}</span>
+                          <span style={{ fontSize: "0.8125rem", color: row.accent ? "var(--color-accent)" : row.muted ? "var(--color-muted)" : "var(--color-ink)", fontWeight: row.accent ? 600 : 500 }}>{row.value}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1728,13 +1988,13 @@ function ProductionsListView() {
           </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {PROD_PRODUCTIONS.map((p) => {
+          {PROD_PRODUCTIONS.map((p, idx) => {
             const sc = p.status ? PROD_STATUS_COLOURS[p.status] : null;
             const sl = p.status ? PROD_STATUS_LABELS[p.status] : null;
             const castPct = p.castTotal > 0 ? Math.round((p.castConsented / p.castTotal) * 100) : 0;
             const castColour = castPct === 100 ? "#166534" : "#b45309";
             return (
-              <div key={p.id} style={{ borderRadius: "8px", overflow: "hidden", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+              <div key={p.id} style={{ borderRadius: "8px", overflow: "hidden", border: "1px solid var(--color-border)", background: "var(--color-surface)", ...rise(idx * 110) }}>
                 <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -1758,7 +2018,9 @@ function ProductionsListView() {
                       {p.company && <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: 0 }}>{p.company}</p>}
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p style={{ fontSize: "1.375rem", fontWeight: 700, color: "var(--color-ink)", margin: "0 0 0.125rem", lineHeight: 1 }}>{p.licenceCount}</p>
+                      <p style={{ fontSize: "1.375rem", fontWeight: 700, color: "var(--color-ink)", margin: "0 0 0.125rem", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+                        <CountUp value={p.licenceCount} delay={idx * 110 + 250} />
+                      </p>
                       <p style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>Licences</p>
                     </div>
                   </div>
@@ -1771,9 +2033,11 @@ function ProductionsListView() {
                     <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                       <span style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>{p.castConsented}/{p.castTotal} cast consented</span>
                       <span style={{ display: "inline-flex", width: "5rem", height: "0.25rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
-                        <span style={{ height: "100%", borderRadius: "9999px", width: `${castPct}%`, background: castColour }} />
+                        <SplitSegment pct={castPct} color={castColour} delay={idx * 110 + 350} />
                       </span>
-                      <span style={{ fontSize: "0.625rem", fontWeight: 700, color: castColour }}>{castPct}%</span>
+                      <span style={{ fontSize: "0.625rem", fontWeight: 700, color: castColour, fontVariantNumeric: "tabular-nums" }}>
+                        <CountUp value={castPct} format={(n) => `${Math.round(n)}%`} delay={idx * 110 + 350} />
+                      </span>
                     </span>
                   ) : (
                     <span style={{ marginLeft: "auto", fontSize: "0.625rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "4px", background: "rgba(180,83,9,0.08)", color: "#b45309" }}>No cast added yet</span>
@@ -1827,10 +2091,10 @@ function AddCastView() {
             </div>
           </div>
           {BATMAN_CAST.map((actor, i) => (
-            <div key={actor.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: i < BATMAN_CAST.length - 1 ? "1px solid var(--color-border)" : "none", background: actor.checked ? "rgba(192,57,43,0.025)" : "var(--color-bg)" }}>
+            <div key={actor.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: i < BATMAN_CAST.length - 1 ? "1px solid var(--color-border)" : "none", background: actor.checked ? "rgba(192,57,43,0.025)" : "var(--color-bg)", ...rise(150 + i * 80) }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
                 <div style={{ width: "1rem", height: "1rem", borderRadius: "3px", border: `2px solid ${actor.checked ? "var(--color-accent)" : "var(--color-border)"}`, background: actor.checked ? "var(--color-accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {actor.checked && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  {actor.checked && <span style={{ display: "inline-flex", animation: `demo-pop-check 0.5s ${EASE} ${500 + i * 80}ms both` }}><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
                 </div>
                 <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{actor.name}</span>
                 <span style={{ fontSize: "0.875rem", color: "var(--color-muted)" }}>as {actor.character}</span>
@@ -1900,7 +2164,7 @@ function IncomingRequestView() {
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.375rem" }}>Incoming Requests</h1>
         <p style={{ fontSize: "0.9375rem", color: "var(--color-muted)", margin: "0 0 2rem" }}>Review and approve or deny licence requests from production companies.</p>
 
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", background: "var(--color-surface)" }}>
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", background: "var(--color-surface)", ...rise(150) }}>
           <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
               <div>
@@ -1912,7 +2176,9 @@ function IncomingRequestView() {
                   <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>Film / Digital Double</span>
                 </div>
                 <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>Warner Bros. Pictures · Worldwide</p>
-                <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-accent)", margin: 0 }}>Proposed fee: $350,000</p>
+                <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-accent)", margin: 0, fontVariantNumeric: "tabular-nums" }}>
+                  Proposed fee: <CountUp value={350000} format={(n) => `$${Math.round(n).toLocaleString("en-US")}`} delay={400} />
+                </p>
               </div>
               <button style={{ display: "flex", alignItems: "center", gap: "0.375rem", padding: "0.375rem 0.75rem", fontSize: "0.875rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-muted)", cursor: "default", flexShrink: 0 }}>
                 Details
@@ -1957,6 +2223,7 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
   const circ52 = 2 * Math.PI * 52;
   const circ22 = 2 * Math.PI * 22;
   const overallOffset = circ52 * (1 - overallScore / 100);
+  const lit = useLit(250);
 
   return (
     <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
@@ -1980,17 +2247,19 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
           <div style={{ flexShrink: 0 }}>
             <svg width="96" height="96" viewBox="0 0 128 128">
               <circle cx="64" cy="64" r="52" fill="none" stroke="var(--color-border)" strokeWidth="8" />
-              <circle cx="64" cy="64" r="52" fill="none" stroke={overallColor} strokeWidth="8" strokeDasharray={circ52} strokeDashoffset={overallOffset} strokeLinecap="round" transform="rotate(-90 64 64)" />
-              <text x="64" y="60" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-text)">{overallScore}%</text>
+              <circle cx="64" cy="64" r="52" fill="none" stroke={overallColor} strokeWidth="8" strokeDasharray={circ52} strokeDashoffset={lit ? overallOffset : circ52} strokeLinecap="round" transform="rotate(-90 64 64)" style={{ transition: `stroke-dashoffset 1.2s ${EASE}` }} />
+              <text x="64" y="60" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-text)"><CountUp value={overallScore} format={(n) => `${Math.round(n)}%`} delay={300} /></text>
               <text x="64" y="78" textAnchor="middle" fontSize="10" fill={overallColor} style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>Partial</text>
             </svg>
           </div>
           <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap" }}>
-            {[["11", "Licences"], ["3/3", "Productions"], ["2", "Required Gaps"], ["0", "Active Strikes"], ["1", "Pending Transfers"]].map(([v, l]) => {
+            {[["11", "Licences"], ["3/3", "Productions"], ["2", "Required Gaps"], ["0", "Active Strikes"], ["1", "Pending Transfers"]].map(([v, l], i) => {
               const warn = (l === "Required Gaps" || l === "Pending Transfers") && v !== "0";
               return (
-              <div key={l} style={{ border: "1px solid var(--color-border)", borderRadius: "4px", padding: "0.75rem 1rem", background: "var(--color-bg)", minWidth: "5rem" }}>
-                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: warn ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem", lineHeight: 1 }}>{v}</p>
+              <div key={l} style={{ border: "1px solid var(--color-border)", borderRadius: "4px", padding: "0.75rem 1rem", background: "var(--color-bg)", minWidth: "5rem", ...rise(150 + i * 70) }}>
+                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: warn ? "var(--color-accent)" : "var(--color-ink)", margin: "0 0 0.125rem", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+                  {/^\d+$/.test(v) ? <CountUp value={Number(v)} delay={350 + i * 70} /> : v}
+                </p>
                 <p style={{ fontSize: "0.5625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>{l}</p>
               </div>
             );})}
@@ -2001,13 +2270,13 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
         <div style={{ border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", background: "var(--color-surface)", marginBottom: "1.5rem" }}>
           <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--color-border)", margin: 0 }}>Obligation Progress</p>
           <div style={{ padding: "0 1.25rem" }}>
-            {PROD_OBLIGATIONS.map((ob) => (
-              <div key={ob.clauseRef} style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "0.625rem 0", borderBottom: "1px solid var(--color-border)" }}>
+            {PROD_OBLIGATIONS.map((ob, i) => (
+              <div key={ob.clauseRef} style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "0.625rem 0", borderBottom: "1px solid var(--color-border)", ...rise(300 + i * 70) }}>
                 <span style={{ fontSize: "0.75rem", fontFamily: "monospace", width: "3rem", flexShrink: 0, color: "var(--color-muted)" }}>{ob.clauseRef}</span>
                 <span style={{ fontSize: "0.875rem", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-text)" }}>{ob.title}</span>
                 <div style={{ width: "8rem", flexShrink: 0 }}>
                   <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
-                    {ob.count !== "—" && ob.pct > 0 && <div style={{ height: "100%", width: `${ob.pct}%`, borderRadius: "9999px", background: ob.barColor }} />}
+                    {ob.count !== "—" && ob.pct > 0 && <SplitSegment pct={ob.pct} color={ob.barColor} delay={500 + i * 70} />}
                   </div>
                 </div>
                 <span style={{ fontSize: "0.75rem", width: "2.5rem", textAlign: "right", flexShrink: 0, color: "var(--color-muted)" }}>{ob.count}</span>
@@ -2024,11 +2293,11 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
           Productions ({PROD_COMPLIANCE_PRODS.length})
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
-          {PROD_COMPLIANCE_PRODS.map((prod) => {
+          {PROD_COMPLIANCE_PRODS.map((prod, ci) => {
             const ringOffset = circ22 * (1 - prod.score / 100);
             const castColour = prod.castPct === 100 ? "#1a7f37" : prod.castPct > 50 ? "#b45309" : "#c0392b";
             return (
-              <div key={prod.name} style={{ border: `1px solid ${prod.border}`, borderRadius: "4px", background: "var(--color-surface)", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", cursor: "default" }}>
+              <div key={prod.name} style={{ border: `1px solid ${prod.border}`, borderRadius: "4px", background: "var(--color-surface)", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", cursor: "default", ...rise(700 + ci * 110) }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
                   <div style={{ minWidth: 0 }}>
                     <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text)", margin: "0 0 0.125rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{prod.name}</p>
@@ -2042,9 +2311,9 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
                   <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
                     <svg width="56" height="56" viewBox="0 0 56 56">
                       <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-border)" strokeWidth="5" />
-                      <circle cx="28" cy="28" r="22" fill="none" stroke={prod.color} strokeWidth="5" strokeDasharray={circ22} strokeDashoffset={ringOffset} strokeLinecap="round" transform="rotate(-90 28 28)" />
+                      <circle cx="28" cy="28" r="22" fill="none" stroke={prod.color} strokeWidth="5" strokeDasharray={circ22} strokeDashoffset={lit ? ringOffset : circ22} strokeLinecap="round" transform="rotate(-90 28 28)" style={{ transition: `stroke-dashoffset 1.1s ${EASE} ${700 + ci * 110}ms` }} />
                     </svg>
-                    <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8125rem", fontWeight: 700, color: prod.color, lineHeight: 1 }}>{prod.score}%</span>
+                    <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8125rem", fontWeight: 700, color: prod.color, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}><CountUp value={prod.score} format={(n) => `${Math.round(n)}%`} delay={800 + ci * 110} /></span>
                   </div>
                   <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                     {prod.obligations.map((ob) => (
@@ -2061,7 +2330,7 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
                     <span style={{ fontSize: "0.75rem", fontWeight: 700, color: castColour }}>{prod.castConsented}/{prod.castTotal}</span>
                   </div>
                   <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
-                    <div style={{ height: "100%", width: `${prod.castPct}%`, borderRadius: "9999px", background: castColour }} />
+                    <SplitSegment pct={prod.castPct} color={castColour} delay={900 + ci * 110} />
                   </div>
                   {prod.castPct === 100
                     ? <p style={{ fontSize: "0.625rem", color: "#1a7f37", margin: "0.375rem 0 0" }}>✓ All cast onboarded</p>
@@ -2106,12 +2375,12 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
             </div>
 
             {/* Obligation rows */}
-            {PROD_MODAL_OBLIGATIONS.map((o) => {
+            {PROD_MODAL_OBLIGATIONS.map((o, i) => {
               const ic = o.status === "met" ? "#1a7f37" : o.status === "pending" ? "#2563eb" : "#c0392b";
               const icon = o.status === "met" ? "✓" : o.status === "pending" ? "⏳" : "⚠";
               return (
-                <div key={o.clause} style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", padding: "0.75rem 0.875rem", borderBottom: "1px solid var(--color-border)" }}>
-                  <span style={{ fontSize: "0.9375rem", color: ic, flexShrink: 0, width: "1.25rem", textAlign: "center", marginTop: "0.125rem" }}>{icon}</span>
+                <div key={o.clause} style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", padding: "0.75rem 0.875rem", borderBottom: "1px solid var(--color-border)", ...rise(150 + i * 90) }}>
+                  <span style={{ fontSize: "0.9375rem", color: ic, flexShrink: 0, width: "1.25rem", textAlign: "center", marginTop: "0.125rem", display: "inline-block", animation: `demo-pop-check 0.5s ${EASE} ${400 + i * 90}ms both` }}>{icon}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--color-text)", margin: "0 0 0.25rem" }}>
                       <span style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--color-muted)", marginRight: "0.5rem" }}>{o.clause}</span>
@@ -2185,8 +2454,22 @@ function TourCard({
         color: "#fff",
         boxShadow: "0 24px 64px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.07)",
         zIndex: 40,
+        overflow: "hidden",
       }}
     >
+      {/* Auto-play progress bar — fills over the scene duration, resets each scene */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2.5px", background: "rgba(255,255,255,0.08)" }}>
+        <div
+          key={`${mode}-${sceneIndex}-${paused}`}
+          style={{
+            height: "100%",
+            background: "#c0392b",
+            width: paused ? "100%" : "0%",
+            animation: paused ? "none" : `demo-progress ${AUTO_MS}ms linear both`,
+          }}
+        />
+      </div>
+
       {/* Mode switcher */}
       <div style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem", justifyContent: "center" }}>
         {([["talent", "Talent"], ["rep", "Rep"], ["production", "Production"]] as [DemoMode, string][]).map(([m, label]) => (
@@ -2342,6 +2625,32 @@ export default function DemoClient() {
         @keyframes demo-fade-in {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes demo-rise {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes demo-pop {
+          from { opacity: 0; transform: scale(0.94); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes demo-pop-check {
+          0%   { opacity: 0; transform: scale(0); }
+          60%  { opacity: 1; transform: scale(1.3); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes demo-progress {
+          from { width: 0%; }
+          to   { width: 100%; }
+        }
+        @keyframes demo-img-pop {
+          from { opacity: 0; transform: scale(1.06); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes demo-pulse-ring {
+          0%   { box-shadow: 0 0 0 0 rgba(22,101,52,0.35); }
+          70%  { box-shadow: 0 0 0 7px rgba(22,101,52,0); }
+          100% { box-shadow: 0 0 0 0 rgba(22,101,52,0); }
         }
         .demo-view-enter {
           animation: demo-fade-in 0.3s ease both;
