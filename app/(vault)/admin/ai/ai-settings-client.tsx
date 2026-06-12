@@ -181,6 +181,15 @@ export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRun
             onToggle={() => toggleSetting("metadata_tags_enabled")}
           />
 
+          {/* Security agent */}
+          <ToggleRow
+            label="Security Agent"
+            sublabel="Autonomous investigation of critical security events"
+            checked={settings["security_agent_enabled"] === "true"}
+            saving={saving === "security_agent_enabled"}
+            onToggle={() => toggleSetting("security_agent_enabled")}
+          />
+
           {/* Budget ceiling */}
           <InputRow
             label="Budget Ceiling (USD)"
