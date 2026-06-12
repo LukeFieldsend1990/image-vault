@@ -3,7 +3,7 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { getDb } from "@/lib/db";
-import { talentProfiles, users } from "@/lib/db/schema";
+import { talentProfiles, users, siteSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
@@ -12,6 +12,7 @@ import ChangePassword from "./change-password";
 import PhoneField from "./phone-field";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
+import DemoToggleCard from "./demo-toggle-card";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -29,6 +30,9 @@ const ADMIN_SECTIONS = [
   { href: "/admin/storage", label: "Storage", description: "Per-talent storage usage" },
   { href: "/admin/bridge", label: "Bridge", description: "Active Bridge sessions and tamper event log" },
   { href: "/admin/ai", label: "AI Features", description: "AI settings, cost tracking and batch controls" },
+  { href: "/admin/skills", label: "Triage", description: "Whitelisted email triage skills" },
+  { href: "/admin/compliance", label: "Compliance", description: "Art. 39 strikes, transfers and certificates" },
+  { href: "/admin/mcp", label: "MCP Integration", description: "Claude tokens, tools and audit log" },
 ];
 
 type Role = "talent" | "rep" | "licensee" | "admin";
@@ -82,10 +86,20 @@ export default async function SettingsPage({
   } | null = null;
 
   let inboundEnabled = false;
+  let demoEnabled = false;
 
   if (user?.userId) {
     try {
       const db = getDb();
+
+      if (userIsAdmin) {
+        const demoSetting = await db
+          .select({ value: siteSettings.value })
+          .from(siteSettings)
+          .where(eq(siteSettings.key, "demo_enabled"))
+          .get();
+        demoEnabled = demoSetting?.value === "true";
+      }
 
       if (user.role === "talent") {
         const row = await db
@@ -154,7 +168,10 @@ export default async function SettingsPage({
           </p>
           <div className="mb-4">
             <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>Platform Features</p>
-            <RoyaltyMeterPlatformToggle />
+            <div className="space-y-3">
+              <RoyaltyMeterPlatformToggle />
+              <DemoToggleCard initialEnabled={demoEnabled} />
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {ADMIN_SECTIONS.map((s) => (
