@@ -8,9 +8,9 @@ import NotificationBell from "./notification-bell";
 import { getDb } from "@/lib/db";
 import { licences, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { isIndustryRole } from "@/lib/auth/roles";
+import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
 
-type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
 
 interface SessionData {
   sub: string;
@@ -174,7 +174,7 @@ export default async function VaultLayout({
     getComplianceEnabled(sub),
   ]);
 
-  const homeHref = isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
+  const homeHref = isComplianceRole(role) ? "/evidence" : isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
 
   return (
     <div className="flex h-screen overflow-hidden">

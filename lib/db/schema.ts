@@ -6,7 +6,8 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   // "licensee" retained for the transition window; new accounts use "industry". Gate via isIndustryRole().
-  role: text("role", { enum: ["talent", "rep", "industry", "licensee", "admin"] }).notNull().default("talent"),
+  // "compliance" = read-only Union/Regulator/Insurer watcher (no data-plane access).
+  role: text("role", { enum: ["talent", "rep", "industry", "licensee", "compliance", "admin"] }).notNull().default("talent"),
   vaultLocked: integer("vault_locked", { mode: "boolean" }).notNull().default(false),
   suspendedAt: integer("suspended_at"), // unix timestamp; null = active
   phone: text("phone"), // optional, E.164 format
@@ -197,7 +198,7 @@ export const talentProfiles = sqliteTable("talent_profiles", {
 export const invites = sqliteTable("invites", {
   id: text("id").primaryKey(), // UUID (the token in the invite link)
   email: text("email").notNull(),
-  role: text("role", { enum: ["talent", "rep", "industry", "licensee"] }).notNull(),
+  role: text("role", { enum: ["talent", "rep", "industry", "licensee", "compliance"] }).notNull(),
   invitedBy: text("invited_by").notNull().references(() => users.id, { onDelete: "cascade" }),
   talentId: text("talent_id").references(() => users.id, { onDelete: "cascade" }),
   message: text("message"),
@@ -986,4 +987,17 @@ export const notifications = sqliteTable("notifications", {
   href: text("href"),
   read: integer("read", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at").notNull(), // unix timestamp
+});
+
+// Compliance-role access grants (Union / Regulator / Insurer "watchers").
+// A compliance user only sees evidence for scopes granted here.
+export const complianceGrants = sqliteTable("compliance_grants", {
+  id: text("id").primaryKey(),
+  complianceUserId: text("compliance_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  subtype: text("subtype", { enum: ["union", "regulator", "insurer"] }).notNull(),
+  scope: text("scope", { enum: ["platform", "organisation", "production", "talent"] }).notNull(),
+  scopeId: text("scope_id"), // null = platform-wide
+  grantedBy: text("granted_by").references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  revokedAt: integer("revoked_at"),
 });

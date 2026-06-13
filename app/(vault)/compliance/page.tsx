@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { isIndustryRole } from "@/lib/auth/roles";
+import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
 import { cookies } from "next/headers";
 import ComplianceClient from "./compliance-client";
 import RepComplianceOverview from "./rep-compliance-overview";
@@ -32,6 +32,9 @@ export default async function CompliancePage() {
   }
 
   if (!userId) redirect("/login");
+
+  // Compliance watchers only see their own read-only evidence area.
+  if (isComplianceRole(role)) redirect("/evidence");
 
   // Licensees access compliance through their licence panel, not this page
   if (isIndustryRole(role)) redirect("/dashboard");
