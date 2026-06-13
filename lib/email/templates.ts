@@ -733,3 +733,48 @@ export function securityAlertEmail(p: SecurityAlertEmailParams): { subject: stri
     `),
   };
 }
+
+export interface ScanTransferReceivedParams {
+  fromOrgName: string;
+  lookLabel: string;
+  forTalentName?: string;
+  viewUrl: string;
+}
+
+// To talent/rep: a capture company has delivered a scan awaiting acceptance.
+export function scanTransferReceivedEmail(p: ScanTransferReceivedParams): { subject: string; html: string } {
+  return {
+    subject: `Scan delivery awaiting your acceptance — ${p.lookLabel}`,
+    html: layout(`
+      <p>${escapeHtml(p.fromOrgName)} has delivered a scan package${p.forTalentName ? ` for ${escapeHtml(p.forTalentName)}` : ""}. It is held pending your acceptance — nothing enters the vault until you accept.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">From</span><span class="kv-val">${escapeHtml(p.fromOrgName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Look</span><span class="kv-val">${escapeHtml(p.lookLabel)}</span></div>
+      </div>
+      <a class="btn" href="${p.viewUrl}">Review delivery</a>
+    `),
+  };
+}
+
+export interface ScanTransferDecisionParams {
+  lookLabel: string;
+  decision: "accepted" | "rejected";
+  decidedByLabel?: string;
+  viewUrl: string;
+}
+
+// To the capture org: the target talent/rep accepted or rejected the delivery.
+export function scanTransferDecisionEmail(p: ScanTransferDecisionParams): { subject: string; html: string } {
+  const accepted = p.decision === "accepted";
+  return {
+    subject: `Scan delivery ${p.decision} — ${p.lookLabel}`,
+    html: layout(`
+      <p>Your scan delivery was <strong>${p.decision}</strong>${p.decidedByLabel ? ` by ${escapeHtml(p.decidedByLabel)}` : ""}.${accepted ? " The package is now in the talent's vault." : " The staged package has been discarded."}</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Look</span><span class="kv-val">${escapeHtml(p.lookLabel)}</span></div>
+        <div class="kv-row"><span class="kv-key">Outcome</span><span class="kv-val">${p.decision}</span></div>
+      </div>
+      <a class="btn" href="${p.viewUrl}">View transfers</a>
+    `),
+  };
+}

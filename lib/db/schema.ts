@@ -648,6 +648,30 @@ export const organisationInvites = sqliteTable("organisation_invites", {
   createdAt: integer("created_at").notNull(),
 });
 
+// ── Scan transfers (capture-company upload-on-behalf) ─────────────────────────
+// A scan_service / vendor org uploads a package either into a talent's vault
+// (to_talent) or against a production licence's pending scan (to_licence). The
+// staged package is owned by the uploading org member until the transfer is
+// accepted, at which point ownership reassigns to the target talent.
+export const scanTransfers = sqliteTable("scan_transfers", {
+  id: text("id").primaryKey(),
+  fromOrgId: text("from_org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  transferType: text("transfer_type", { enum: ["to_talent", "to_licence"] }).notNull(),
+  // Target talent — set directly for to_talent, derived from the licence for to_licence.
+  toTalentId: text("to_talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetLicenceId: text("target_licence_id").references(() => licences.id, { onDelete: "set null" }),
+  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  lookLabel: text("look_label"), // human-readable look name, e.g. "Base Look"
+  status: text("status", {
+    enum: ["pending", "submitted", "accepted", "rejected", "cancelled"],
+  }).notNull().default("pending"),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  submittedAt: integer("submitted_at"),
+  decidedAt: integer("decided_at"),
+  decidedBy: text("decided_by").references(() => users.id),
+});
+
 // ── Render-bridge agents ──────────────────────────────────────────────────────
 
 export const renderBridgeAgents = sqliteTable("render_bridge_agents", {
