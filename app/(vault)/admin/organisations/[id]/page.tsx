@@ -7,6 +7,8 @@ import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, organisationInvites, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import OrgAdminClient from "./org-admin-client";
+import OrgSettingsClient from "./org-settings-client";
+import { ORG_TYPE_LABELS, type OrgType } from "@/lib/organisations/orgTypes";
 
 function fmtDate(epoch: number) {
   return new Date(epoch * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -28,6 +30,8 @@ export default async function AdminOrgDetailPage({
         name: organisations.name,
         website: organisations.website,
         billingEmail: organisations.billingEmail,
+        orgType: organisations.orgType,
+        vendorAuditPassed: organisations.vendorAuditPassed,
         createdAt: organisations.createdAt,
         createdByEmail: users.email,
       })
@@ -113,6 +117,7 @@ export default async function AdminOrgDetailPage({
           <div className="rounded border divide-y" style={{ borderColor: "var(--color-border)" }}>
             {[
               { label: "Name", value: org.name },
+              { label: "Type", value: ORG_TYPE_LABELS[org.orgType as OrgType] ?? org.orgType },
               { label: "Website", value: org.website ?? "—" },
               { label: "Billing Email", value: org.billingEmail ?? "—" },
             ].map(({ label, value }) => (
@@ -123,6 +128,13 @@ export default async function AdminOrgDetailPage({
             ))}
           </div>
         </section>
+
+        {/* Type & audit gate */}
+        <OrgSettingsClient
+          orgId={id}
+          orgType={org.orgType as OrgType}
+          vendorAuditPassed={org.vendorAuditPassed}
+        />
 
         {/* Interactive member management */}
         <OrgAdminClient orgId={id} members={members} invites={inviteRows} />

@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { ORG_TYPES } from "@/lib/organisations/orgTypes";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(), // UUID
@@ -623,8 +624,10 @@ export const organisations = sqliteTable("organisations", {
   createdBy: text("created_by").notNull().references(() => users.id),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
-  // values: production_company | studio | vfx_vendor | advertising_agency | brand | publisher | game_studio | ai_company | broadcaster | scan_service | other
-  orgType: text("org_type").notNull().default("production_company"),
+  // Subtype decoration — see lib/organisations/orgTypes.ts (single source of truth).
+  orgType: text("org_type", { enum: ORG_TYPES }).notNull().default("production_company"),
+  // Environment-audit gate for vendor ("mover") orgs — admin-togglable; gates Bridge provisioning.
+  vendorAuditPassed: integer("vendor_audit_passed", { mode: "boolean" }).notNull().default(false),
 });
 
 export const organisationMembers = sqliteTable("organisation_members", {
