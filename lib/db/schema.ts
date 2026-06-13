@@ -672,6 +672,25 @@ export const scanTransfers = sqliteTable("scan_transfers", {
   decidedBy: text("decided_by").references(() => users.id),
 });
 
+// ── Vendor authorisations (producer → vendor access within a licence) ─────────
+// A production (the licence holder) authorises specific vendor orgs to pull the
+// licensed scan via the Bridge, bounded by the licence's type/time. An
+// authorised vendor can nominate a sub-vendor under its own authorisation
+// (parentAuthorisationId set, nominatedByOrgId = the parent vendor org).
+export const vendorAuthorisations = sqliteTable("vendor_authorisations", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  vendorOrgId: text("vendor_org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  // null = direct production→vendor; set = sub-vendor nominated under the parent auth (plain id, app-enforced).
+  parentAuthorisationId: text("parent_authorisation_id"),
+  nominatedByOrgId: text("nominated_by_org_id").references(() => organisations.id),
+  authorisedBy: text("authorised_by").notNull().references(() => users.id),
+  status: text("status", { enum: ["active", "revoked"] }).notNull().default("active"),
+  createdAt: integer("created_at").notNull(),
+  revokedAt: integer("revoked_at"),
+  revokedBy: text("revoked_by").references(() => users.id),
+});
+
 // ── Render-bridge agents ──────────────────────────────────────────────────────
 
 export const renderBridgeAgents = sqliteTable("render_bridge_agents", {
