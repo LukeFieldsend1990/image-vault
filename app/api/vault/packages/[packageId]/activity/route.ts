@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, licences, downloadEvents, users, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { formatChainCode } from "@/lib/codes/codes";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq, inArray, sql } from "drizzle-orm";
 
@@ -51,6 +52,7 @@ export interface CustodyPackage {
   talentEmail: string;
   talentName: string | null;
   createdAt: number;
+  chainCode: string;
 }
 
 export interface ActivityResponse {
@@ -77,6 +79,7 @@ export async function GET(
       captureDate: scanPackages.captureDate,
       studioName: scanPackages.studioName,
       createdAt: scanPackages.createdAt,
+      scanNumber: scanPackages.scanNumber,
     })
     .from(scanPackages)
     .where(eq(scanPackages.id, packageId))
@@ -97,7 +100,7 @@ export async function GET(
   // ── Fetch all raw data ──────────────────────────────────────────────────────
 
   const [talentUser, talentProfile, files, licenceRows] = await Promise.all([
-    db.select({ email: users.email }).from(users).where(eq(users.id, pkg.talentId)).get(),
+    db.select({ email: users.email, shortCode: users.shortCode }).from(users).where(eq(users.id, pkg.talentId)).get(),
     db.select({ fullName: talentProfiles.fullName }).from(talentProfiles).where(eq(talentProfiles.userId, pkg.talentId)).get(),
     db.select({
       id: scanFiles.id,
@@ -297,6 +300,7 @@ export async function GET(
       talentEmail: talentUser?.email ?? "Unknown",
       talentName: talentProfile?.fullName ?? null,
       createdAt: pkg.createdAt,
+      chainCode: formatChainCode({ actorCode: talentUser?.shortCode, scanNumber: pkg.scanNumber }),
     },
     events,
     generatedAt: Math.floor(Date.now() / 1000),

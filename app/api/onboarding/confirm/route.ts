@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { talentProfiles, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { mintUserCode } from "@/lib/codes/codes";
 import { eq } from "drizzle-orm";
 
 interface ConfirmBody {
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
       onboardedAt: now,
     });
 
+    await mintUserCode(db, session.sub, "talent");
     return NextResponse.json({ ok: true });
   }
 
@@ -92,5 +94,6 @@ export async function POST(req: NextRequest) {
     onboardedAt: now,
   });
 
+  await mintUserCode(db, session.sub, "talent");
   return NextResponse.json({ ok: true });
 }
