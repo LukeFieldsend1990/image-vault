@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import OrgAdminClient from "./org-admin-client";
 import OrgSettingsClient from "./org-settings-client";
 import { ORG_TYPE_LABELS, type OrgType } from "@/lib/organisations/orgTypes";
+import OrgTypeBadge from "@/app/components/org-type-badge";
 
 function fmtDate(epoch: number) {
   return new Date(epoch * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -101,8 +102,9 @@ export default async function AdminOrgDetailPage({
               Admin
             </p>
           </div>
-          <h1 className="text-lg font-semibold tracking-tight truncate" style={{ color: "var(--color-ink)" }}>
-            {org.name}
+          <h1 className="text-lg font-semibold tracking-tight truncate flex items-center gap-2" style={{ color: "var(--color-ink)" }}>
+            <span className="truncate">{org.name}</span>
+            <OrgTypeBadge type={org.orgType} />
           </h1>
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
             Created {fmtDate(org.createdAt)}{org.createdByEmail ? ` by ${org.createdByEmail}` : ""}

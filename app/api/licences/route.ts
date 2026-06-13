@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users, talentReps, talentSettings, talentProfiles, productions, productionCompanies, organisationMembers } from "@/lib/db/schema";
+import { licences, scanPackages, users, talentReps, talentSettings, talentProfiles, productions, productionCompanies, organisations, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, desc, and, inArray, like, or } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -74,13 +74,16 @@ export async function GET(req: NextRequest) {
       contractUrl: licences.contractUrl,
       contractUploadedAt: licences.contractUploadedAt,
       organisationId: licences.organisationId,
+      orgName: organisations.name,
+      orgType: organisations.orgType,
       productionId: licences.productionId,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
     .leftJoin(users, eq(users.id, licences.talentId))
     .leftJoin(talentSettings, eq(talentSettings.talentId, licences.talentId))
-    .leftJoin(talentProfiles, eq(talentProfiles.userId, licences.talentId));
+    .leftJoin(talentProfiles, eq(talentProfiles.userId, licences.talentId))
+    .leftJoin(organisations, eq(organisations.id, licences.organisationId));
 
   if (session.role === "talent") {
     const whereClause = statusFilter

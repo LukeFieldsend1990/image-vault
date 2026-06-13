@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, licences } from "@/lib/db/schema";
+import { productions, productionCompanies, organisations, licences } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, count } from "drizzle-orm";
@@ -29,11 +29,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       director: productions.director,
       vfxSupervisor: productions.vfxSupervisor,
       notes: productions.notes,
+      organisationId: productions.organisationId,
+      orgName: organisations.name,
+      orgType: organisations.orgType,
+      sagProjectNumber: productions.sagProjectNumber,
       createdAt: productions.createdAt,
       updatedAt: productions.updatedAt,
     })
     .from(productions)
     .leftJoin(productionCompanies, eq(productionCompanies.id, productions.companyId))
+    .leftJoin(organisations, eq(organisations.id, productions.organisationId))
     .where(eq(productions.id, id))
     .limit(1)
     .all();

@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import ProductionEditForm from "./production-edit-form";
 import CastResolveButton from "./cast-resolve-button";
+import OrgTypeBadge from "@/app/components/org-type-badge";
 
 export default async function AdminProductionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -28,11 +29,15 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
       director: productions.director,
       vfxSupervisor: productions.vfxSupervisor,
       notes: productions.notes,
+      organisationId: productions.organisationId,
+      orgName: organisations.name,
+      orgType: organisations.orgType,
       createdAt: productions.createdAt,
       updatedAt: productions.updatedAt,
     })
     .from(productions)
     .leftJoin(productionCompanies, eq(productionCompanies.id, productions.companyId))
+    .leftJoin(organisations, eq(organisations.id, productions.organisationId))
     .where(eq(productions.id, id))
     .limit(1)
     .all();
@@ -109,8 +114,8 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
 
   const [directOrgs, membershipRows] = await Promise.all([
     directOrgIds.length > 0
-      ? db.select({ id: organisations.id, name: organisations.name }).from(organisations).where(inArray(organisations.id, directOrgIds)).all()
-      : Promise.resolve([] as { id: string; name: string }[]),
+      ? db.select({ id: organisations.id, name: organisations.name, orgType: organisations.orgType }).from(organisations).where(inArray(organisations.id, directOrgIds)).all()
+      : Promise.resolve([] as { id: string; name: string; orgType: string }[]),
     licenseeIds.length > 0
       ? db.select({ userId: organisationMembers.userId, organisationId: organisationMembers.organisationId })
           .from(organisationMembers)
@@ -120,18 +125,23 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
   ]);
 
   const directOrgMap = new Map(directOrgs.map((o) => [o.id, o.name]));
+  const directOrgTypeMap = new Map(directOrgs.map((o) => [o.id, o.orgType]));
 
   // For licensees in an org without a direct link, fetch those org names
   const indirectOrgIds = [...new Set(membershipRows.map((m) => m.organisationId))];
   const indirectOrgs = indirectOrgIds.length > 0
-    ? await db.select({ id: organisations.id, name: organisations.name }).from(organisations).where(inArray(organisations.id, indirectOrgIds)).all()
+    ? await db.select({ id: organisations.id, name: organisations.name, orgType: organisations.orgType }).from(organisations).where(inArray(organisations.id, indirectOrgIds)).all()
     : [];
   const indirectOrgMap = new Map(indirectOrgs.map((o) => [o.id, o.name]));
+  const indirectOrgTypeMap = new Map(indirectOrgs.map((o) => [o.id, o.orgType]));
   const licenseeOrgMap = new Map(membershipRows.map((m) => [m.userId, indirectOrgMap.get(m.organisationId) ?? null]));
+  const licenseeOrgTypeMap = new Map(membershipRows.map((m) => [m.userId, indirectOrgTypeMap.get(m.organisationId) ?? null]));
 
   // Per-licence org name: prefer direct link, else licensee membership
   const licenceOrgName = (l: { directOrgId: string | null; licenseeId: string }) =>
     (l.directOrgId ? directOrgMap.get(l.directOrgId) : null) ?? licenseeOrgMap.get(l.licenseeId) ?? null;
+  const licenceOrgType = (l: { directOrgId: string | null; licenseeId: string }) =>
+    (l.directOrgId ? directOrgTypeMap.get(l.directOrgId) : null) ?? licenseeOrgTypeMap.get(l.licenseeId) ?? null;
 
   function ts(d: number): string {
     return new Date(d * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -161,8 +171,11 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
       <div className="mb-6">
         <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>Production</p>
         <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>{production.name}</h1>
-        {production.companyName && (
-          <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>{production.companyName}</p>
+        {(production.orgName ?? production.companyName) && (
+          <p className="text-sm mt-1 flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+            <span>{production.orgName ?? production.companyName}</span>
+            <OrgTypeBadge type={production.orgType} />
+          </p>
         )}
       </div>
 
@@ -262,6 +275,7 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
             </div>
             {linkedLicences.map((l) => {
               const orgName = licenceOrgName(l);
+              const orgType = licenceOrgType(l);
               return (
               <div
                 key={l.id}
@@ -284,6 +298,7 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
                       {orgName}
                     </span>
                   )}
+                  {orgName && <OrgTypeBadge type={orgType} className="ml-1" />}
                 </div>
                 <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{l.packageName ?? "—"}</span>
                 <span

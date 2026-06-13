@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import OrgTypeBadge from "@/app/components/org-type-badge";
 
 interface BridgeToken {
   id: string;
@@ -22,6 +23,7 @@ interface BridgeDevice {
 interface ConnectionOrg {
   orgId: string;
   orgName: string;
+  orgType?: string | null;
   productions: { id: string; name: string }[];
 }
 
@@ -285,8 +287,9 @@ export default function BridgeSettingsClient({
           <div className="flex flex-col gap-4">
             {connectionIds.map((org) => (
               <div key={org.orgId}>
-                <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
-                  {org.orgName}
+                <p className="text-[10px] uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                  <span>{org.orgName}</span>
+                  <OrgTypeBadge type={org.orgType} />
                 </p>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-xs w-28 shrink-0" style={{ color: "var(--color-muted)" }}>organisationId</span>

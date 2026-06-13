@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Autocomplete, type AutocompleteOption } from "@/components/autocomplete";
+import { ORG_TYPE_LABELS, isOrgType } from "@/lib/organisations/orgTypes";
 
 // ── Licence type definitions ──────────────────────────────────────────────────
 
@@ -191,13 +192,13 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
   const [productionCompanyId, setProductionCompanyId] = useState<string | null>(null);
 
   // Organisation
-  const [userOrgs, setUserOrgs] = useState<Array<{ id: string; name: string }>>([]);
+  const [userOrgs, setUserOrgs] = useState<Array<{ id: string; name: string; orgType?: string }>>([]);
   const [organisationId, setOrganisationId] = useState<string | "individual" | "">("");
 
   useEffect(() => {
     void fetch("/api/organisations")
       .then(async r => {
-        const d = await r.json() as { organisations?: Array<{ id: string; name: string }> };
+        const d = await r.json() as { organisations?: Array<{ id: string; name: string; orgType?: string }> };
         const orgs = d.organisations ?? [];
         setUserOrgs(orgs);
         if (orgs.length === 1) setOrganisationId(orgs[0].id);
@@ -405,7 +406,9 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
               >
                 <option value="">Select…</option>
                 {userOrgs.map(o => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
+                  <option key={o.id} value={o.id}>
+                    {isOrgType(o.orgType) ? `${o.name} — ${ORG_TYPE_LABELS[o.orgType]}` : o.name}
+                  </option>
                 ))}
                 <option value="individual">Myself (individual)</option>
               </select>

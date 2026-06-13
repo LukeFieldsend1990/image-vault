@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import OrgTypeBadge from "@/app/components/org-type-badge";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,8 @@ interface Production {
   director: string | null;
   vfxSupervisor: string | null;
   organisationId: string | null;
+  orgName?: string | null;
+  orgType?: string | null;
   licenceCount: number;
 }
 
@@ -410,7 +413,12 @@ export default function ProductionDetailClient() {
             )}
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            {production.companyName && <span className="text-sm" style={{ color: "var(--color-muted)" }}>{production.companyName}</span>}
+            {(production.orgName ?? production.companyName) && (
+              <span className="text-sm flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                <span>{production.orgName ?? production.companyName}</span>
+                <OrgTypeBadge type={production.orgType} />
+              </span>
+            )}
             {production.year && <span className="text-sm" style={{ color: "var(--color-muted)" }}>{production.year}</span>}
             {production.director && <span className="text-sm" style={{ color: "var(--color-muted)" }}>Dir. {production.director}</span>}
             {production.sagProjectNumber && (
