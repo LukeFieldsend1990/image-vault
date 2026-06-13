@@ -15,7 +15,16 @@ export const INDUSTRY_ROLE = "industry" as const;
 export type AssignableRole = "talent" | "rep" | "industry";
 
 /** Any role persisted on users.role (admin is whitelist-only, never assigned). */
-export type UserRole = AssignableRole | "licensee" | "admin";
+export type UserRole = AssignableRole | "licensee" | "compliance" | "admin";
+
+/**
+ * Read-only Union / Regulator / Insurer "watcher" role. Sees compliance evidence
+ * for granted scopes only and must never reach the data plane — gate every
+ * data-plane surface so this returns true → redirect to /evidence.
+ */
+export function isComplianceRole(role: string | null | undefined): boolean {
+  return role === "compliance";
+}
 
 /**
  * True for both the new `industry` role and the legacy `licensee` role.

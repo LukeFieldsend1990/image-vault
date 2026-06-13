@@ -35,6 +35,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/ai", label: "AI Features", description: "AI settings, cost tracking and batch controls" },
   { href: "/admin/skills", label: "Triage", description: "Whitelisted email triage skills" },
   { href: "/admin/compliance", label: "Compliance", description: "Art. 39 strikes, transfers and certificates" },
+  { href: "/admin/compliance-access", label: "Compliance Access", description: "Grant Union/Regulator/Insurer read-only evidence access" },
   { href: "/admin/mcp", label: "MCP Integration", description: "Claude tokens, tools and audit log" },
 ];
 

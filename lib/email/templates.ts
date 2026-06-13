@@ -287,17 +287,18 @@ export function licenceRevokedEmail(p: LicenceRevokedParams): { subject: string;
 export interface InviteEmailParams {
   to: string;
   inviterEmail: string;
-  role: "talent" | "rep" | "industry" | "licensee";
+  role: "talent" | "rep" | "industry" | "licensee" | "compliance";
   message: string | null;
   signupUrl: string;
   expiresAt: number; // unix timestamp
 }
 
-const ROLE_LABELS: Record<"talent" | "rep" | "industry" | "licensee", string> = {
+const ROLE_LABELS: Record<"talent" | "rep" | "industry" | "licensee" | "compliance", string> = {
   talent: "Talent",
   rep: "Representative",
   industry: "Industry",
   licensee: "Licensee",
+  compliance: "Compliance (Union / Regulator / Insurer)",
 };
 
 export function inviteEmail(p: InviteEmailParams): { subject: string; html: string } {
