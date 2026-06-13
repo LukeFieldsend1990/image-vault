@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
+import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import {
   scanTransferReceivedEmail,
@@ -121,10 +122,17 @@ export async function POST(
         db.select({ email: users.email }).from(users).where(eq(users.id, transfer.toTalentId)).get(),
         db.select({ name: organisations.name }).from(organisations).where(eq(organisations.id, transfer.fromOrgId)).get(),
       ]);
+      const orgName = org?.name ?? "A capture company";
       if (talentUser?.email) {
-        const { subject, html } = scanTransferReceivedEmail({ fromOrgName: org?.name ?? "A capture company", lookLabel: transfer.lookLabel ?? pkg.name, viewUrl: `${BASE_URL()}/transfers` });
+        const { subject, html } = scanTransferReceivedEmail({ fromOrgName: orgName, lookLabel: transfer.lookLabel ?? pkg.name, viewUrl: `${BASE_URL()}/transfers` });
         await sendEmail({ to: talentUser.email, subject, html });
       }
+      await notifyTalentAndReps(db, transfer.toTalentId, {
+        type: "scan_delivery",
+        title: "Scan delivery awaiting acceptance",
+        body: `${orgName} delivered "${transfer.lookLabel ?? pkg.name}" — review and accept.`,
+        href: "/transfers",
+      });
     })();
     return NextResponse.json({ ok: true, status: "submitted" });
   }

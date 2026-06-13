@@ -950,3 +950,15 @@ export const mcpAuditLog = sqliteTable("mcp_audit_log", {
   message: text("message"),
   createdAt: integer("created_at").notNull(), // unix timestamp
 });
+
+// In-app notification centre (migration 0026; lightweight, poll-based).
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // e.g. vendor_authorised | scan_delivery | licence_status
+  title: text("title").notNull(),
+  body: text("body"),
+  href: text("href"),
+  read: integer("read", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull(), // unix timestamp
+});
