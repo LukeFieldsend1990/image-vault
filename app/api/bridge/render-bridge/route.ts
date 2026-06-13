@@ -6,6 +6,7 @@ import { renderBridgeAgents, organisations, licences, scanPackages, scanFiles, b
 import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { requireBridgeToken, isBridgeTokenError } from "@/lib/auth/requireBridgeToken";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 const ONLINE_THRESHOLD_SECS = 60;
 
@@ -282,7 +283,7 @@ export async function GET(req: NextRequest) {
     revokedAt: renderBridgeAgents.revokedAt,
   };
 
-  if (session.role === "licensee") {
+  if (isIndustryRole(session.role)) {
     const memberships = await db
       .select({ organisationId: organisationMembers.organisationId })
       .from(organisationMembers)

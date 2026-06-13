@@ -34,7 +34,7 @@ function inferRole(text: string): string | null {
   const lower = text.toLowerCase();
   if (/\b(talent|actor|artist|performer)\b/.test(lower)) return "talent";
   if (/\b(rep|agent|agency)\b/.test(lower)) return "rep";
-  if (/\b(licensee|production|studio|company)\b/.test(lower)) return "licensee";
+  if (/\b(licensee|production|studio|company)\b/.test(lower)) return "industry";
   return null;
 }
 
@@ -66,7 +66,7 @@ function prefillSkill(
       } else if (category === "onboarding") {
         prefilled.role = "talent";
       } else if (category === "introduction") {
-        prefilled.role = "licensee";
+        prefilled.role = "industry";
       }
       break;
     }

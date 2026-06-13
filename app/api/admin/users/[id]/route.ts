@@ -39,7 +39,7 @@ export async function PATCH(
   const hasRoyaltyMeterEnabled = typeof body.royaltyMeterEnabled === "boolean";
   const hasComplianceEnabled = typeof body.complianceEnabled === "boolean";
   const hasPitchVignettesEnabled = typeof body.pitchVignettesEnabled === "boolean";
-  const validRoles = ["talent", "rep", "licensee"] as const;
+  const validRoles = ["talent", "rep", "industry", "licensee"] as const;
   const hasRole = typeof body.role === "string" && validRoles.includes(body.role as typeof validRoles[number]);
 
   if (!hasSuspended && !hasEmailMuted && !hasAiDisabled && !hasInboundEnabled && !hasGeoFingerprintEnabled && !hasRoyaltyMeterEnabled && !hasComplianceEnabled && !hasPitchVignettesEnabled && !hasRole) {
@@ -113,7 +113,7 @@ export async function PATCH(
   if (hasRole) {
     await db
       .update(users)
-      .set({ role: body.role as "talent" | "rep" | "licensee" | "admin" })
+      .set({ role: body.role as "talent" | "rep" | "industry" | "licensee" | "admin" })
       .where(eq(users.id, id));
   }
 

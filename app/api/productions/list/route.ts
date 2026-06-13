@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { productions, productionCompanies, organisationMembers, licences, productionCast } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, inArray, count, desc } from "drizzle-orm";
 
 // GET /api/productions/list — productions scoped to the caller's organisations
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(productions.createdAt))
       .limit(100)
       .all();
-  } else if (session.role === "licensee") {
+  } else if (isIndustryRole(session.role)) {
     const memberRows = await db
       .select({ organisationId: organisationMembers.organisationId })
       .from(organisationMembers)

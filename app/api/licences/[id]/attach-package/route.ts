@@ -8,6 +8,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { packageAttachedEmail } from "@/lib/email/templates";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 // PATCH /api/licences/[id]/attach-package
 // Attaches a scan package to a placeholder licence (status AWAITING_PACKAGE)
@@ -24,7 +25,7 @@ export async function PATCH(
     session.role !== "talent" &&
     session.role !== "rep" &&
     session.role !== "admin" &&
-    session.role !== "licensee"
+    !isIndustryRole(session.role)
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -68,7 +69,7 @@ export async function PATCH(
     if (!link) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   } else if (session.role === "talent" && licence.talentId !== session.sub) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  } else if (session.role === "licensee" && session.sub !== licence.licenseeId) {
+  } else if (isIndustryRole(session.role) && session.sub !== licence.licenseeId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -164,7 +165,7 @@ export async function PATCH(
         recipientEmail: licenseeUser.email,
         projectName: licence.projectName,
         packageName: pkg.name,
-        role: "licensee",
+        role: "industry",
         viewUrl: `${baseUrl}/licences`,
       });
       await sendEmail({ to: licenseeUser.email, subject, html });

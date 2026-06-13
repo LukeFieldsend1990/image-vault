@@ -8,6 +8,7 @@ import { eq, desc, and, inArray, like, or } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceRequestedEmail, placeholderLicenceCreatedEmail } from "@/lib/email/templates";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -101,7 +102,7 @@ export async function GET(req: NextRequest) {
       ? and(inArray(licences.talentId, scopeIds), eq(licences.status, statusFilter as LicenceStatus))
       : inArray(licences.talentId, scopeIds);
     rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
-  } else if (session.role === "licensee") {
+  } else if (isIndustryRole(session.role)) {
     // Include licences owned directly + licences owned by any org the user belongs to
     const userOrgRows = await db
       .select({ organisationId: organisationMembers.organisationId })
@@ -201,7 +202,7 @@ export async function POST(req: NextRequest) {
     resolvedLicenseeId = body.licenseeId;
   } else {
     // Standard licensee-initiated request against an existing package.
-    if (session.role !== "licensee") {
+    if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const [pkg] = await db

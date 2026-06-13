@@ -6,11 +6,12 @@ import { users, talentProfiles, scanPackages, talentReps } from "@/lib/db/schema
 import { sql } from "drizzle-orm";
 import UserActions from "./user-actions";
 
-type Role = "talent" | "rep" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
 const ROLE_LABEL: Record<Role, string> = {
   talent: "Talent",
   rep: "Rep",
+  industry: "Industry",
   licensee: "Licensee",
   admin: "Admin",
 };
@@ -18,6 +19,7 @@ const ROLE_LABEL: Record<Role, string> = {
 const ROLE_COLOR: Record<Role, string> = {
   talent: "#4f46e5",
   rep: "#0891b2",
+  industry: "#059669",
   licensee: "#059669",
   admin: "#c0392b",
 };

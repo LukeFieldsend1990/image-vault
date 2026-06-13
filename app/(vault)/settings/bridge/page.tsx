@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { bridgeTokens, bridgeDevices, bridgeGrants, licences, organisationMembers, organisations, productions, scanPackages } from "@/lib/db/schema";
 import { eq, isNull, and, gt, inArray } from "drizzle-orm";
 import BridgeSettingsClient from "./bridge-client";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 async function getSessionData() {
   try {
@@ -27,7 +28,7 @@ export default async function BridgeSettingsPage() {
   if (!user) redirect("/login");
 
   // Talent and rep get read-only visibility; licensee gets full management
-  const canManage = user.role === "licensee" || user.role === "admin";
+  const canManage = isIndustryRole(user.role) || user.role === "admin";
 
   const db = getDb();
 

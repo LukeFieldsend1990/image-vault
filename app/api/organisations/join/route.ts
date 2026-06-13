@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { organisationInvites, organisationMembers, organisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 
 // POST /api/organisations/join — accept an invite token
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "licensee" && session.role !== "admin") {
+  if (!isIndustryRole(session.role) && session.role !== "admin") {
     return NextResponse.json({ error: "Only licensee accounts can join organisations" }, { status: 403 });
   }
 

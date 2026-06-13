@@ -9,6 +9,7 @@ import { licences, organisationMembers, productions, talentReps, users } from "@
 import type { getDb } from "@/lib/db";
 import type { SessionPayload } from "@/lib/auth/jwt";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 // Admin is determined by the email whitelist (lib/auth/adminEmails), not the JWT
 // role — platform admins keep their original role (e.g. talent) and gain admin via
@@ -79,7 +80,7 @@ export async function authorizeLicence(
     return link ? { ok: true, licence } : { ok: false, status: 403, error: "Forbidden" };
   }
 
-  if (session.role === "licensee" && mode === "read" && session.sub === licence.licenseeId) {
+  if (isIndustryRole(session.role) && mode === "read" && session.sub === licence.licenseeId) {
     return { ok: true, licence };
   }
 
@@ -109,7 +110,7 @@ export async function authorizeProducer(
 
   if (!licence) return { ok: false, status: 404, error: "Licence not found" };
   if (isAdminSession(session)) return { ok: true, licence };
-  if (session.role === "licensee" && session.sub === licence.licenseeId) {
+  if (isIndustryRole(session.role) && session.sub === licence.licenseeId) {
     return { ok: true, licence };
   }
   return { ok: false, status: 403, error: "Forbidden" };

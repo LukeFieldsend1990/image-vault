@@ -7,7 +7,7 @@ import { users, invites, talentReps, productionCast, licences, productions, orga
 import { hashPassword } from "@/lib/auth/password";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
-const VALID_ROLES = ["talent", "rep", "licensee"] as const;
+const VALID_ROLES = ["talent", "rep", "industry", "licensee"] as const;
 type Role = (typeof VALID_ROLES)[number];
 
 // Roles that require an invite token

@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import {
@@ -51,7 +52,7 @@ export async function GET(
 
   // Auth check: admin or licensee org member
   if (!isAdmin(session.email)) {
-    if (session.role !== "licensee") {
+    if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (production.organisationId) {
@@ -195,7 +196,7 @@ export async function POST(
 
   // Auth check: admin or licensee org owner/admin
   if (!isAdmin(session.email)) {
-    if (session.role !== "licensee") {
+    if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (production.organisationId) {

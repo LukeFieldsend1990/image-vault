@@ -25,7 +25,7 @@ const skill: SkillDefinition = {
       type: "select",
       description: "Account type for the invitee",
       required: true,
-      options: ["talent", "rep", "licensee"],
+      options: ["talent", "rep", "industry", "licensee"],
       default: "talent",
     },
     {
@@ -45,14 +45,14 @@ const skill: SkillDefinition = {
     }
 
     const email = (params.email as string)?.toLowerCase().trim();
-    const role = params.role as "talent" | "rep" | "licensee";
+    const role = params.role as "talent" | "rep" | "industry" | "licensee";
     const message = (params.message as string)?.trim() || null;
 
     if (!email || !role) {
       return { success: false, message: "Email and role are required." };
     }
 
-    if (!["talent", "rep", "licensee"].includes(role)) {
+    if (!["talent", "rep", "industry", "licensee"].includes(role)) {
       return { success: false, message: "Invalid role." };
     }
 

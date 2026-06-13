@@ -1,0 +1,14 @@
+-- Industry role migration (Step 1 of the v6 journey reconciliation).
+--
+-- `industry` renames and expands the legacy `licensee` role. Both values
+-- coexist during the transition window: existing `licensee` rows are left
+-- untouched and continue to work, new accounts are created as `industry`.
+-- The role column is plain TEXT (SQLite does not enforce the Drizzle enum),
+-- so this rename requires no DDL — the enum is enforced at the TS layer and
+-- every runtime check goes through isIndustryRole() which accepts both.
+--
+-- No data is migrated. To opt an existing user into the new role explicitly:
+--   UPDATE users SET role = 'industry' WHERE role = 'licensee' AND id = ?;
+--
+-- This file is an intentional no-op kept for migration-sequence continuity.
+SELECT 1;

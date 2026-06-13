@@ -508,6 +508,7 @@ export default function EmailDetailClient() {
                               >
                                 <option value="talent">Talent</option>
                                 <option value="rep">Rep</option>
+                                <option value="industry">Industry</option>
                                 <option value="licensee">Licensee</option>
                               </select>
                             ) : key === "licence_type" ? (

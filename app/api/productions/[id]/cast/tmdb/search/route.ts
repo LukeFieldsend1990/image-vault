@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { productions, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 
 interface TmdbTitleResult {
@@ -38,7 +39,7 @@ export async function GET(
   if (!production) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (!isAdmin(session.email)) {
-    if (session.role !== "licensee") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!isIndustryRole(session.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     if (production.organisationId) {
       const membership = await db
         .select({ memberRole: organisationMembers.memberRole })

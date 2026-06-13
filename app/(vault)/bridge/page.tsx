@@ -3,6 +3,7 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import BridgeClient from "./bridge-client";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 async function getRole(): Promise<string | null> {
   const cookieStore = await cookies();
@@ -15,7 +16,7 @@ async function getRole(): Promise<string | null> {
 
 export default async function BridgePage() {
   const role = await getRole();
-  if (!role || (role !== "licensee" && role !== "talent" && role !== "rep" && role !== "admin")) {
+  if (!role || (!isIndustryRole(role) && role !== "talent" && role !== "rep" && role !== "admin")) {
     redirect("/dashboard");
   }
   return <BridgeClient role={role} />;

@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { productions, organisationMembers, talentProfiles, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 
 interface TmdbCastMember {
@@ -66,7 +67,7 @@ export async function GET(
 
   // Auth check
   if (!isAdmin(session.email)) {
-    if (session.role !== "licensee") {
+    if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (production.organisationId) {

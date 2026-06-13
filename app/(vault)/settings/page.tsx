@@ -11,6 +11,7 @@ import PitchVignettesToggle from "./pitch-vignettes-toggle";
 import ChangePassword from "./change-password";
 import PhoneField from "./phone-field";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
 import DemoToggleCard from "./demo-toggle-card";
 
@@ -35,7 +36,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/mcp", label: "MCP Integration", description: "Claude tokens, tools and audit log" },
 ];
 
-type Role = "talent" | "rep" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
 interface KnownForEntry {
   title: string;
@@ -62,6 +63,7 @@ async function getSessionData(): Promise<{ userId: string; email: string; role: 
 const ROLE_LABELS: Record<Role, string> = {
   talent: "Talent",
   rep: "Representative / Agency",
+  industry: "Industry",
   licensee: "Licensee",
   admin: "Platform Admin",
 };
@@ -400,7 +402,7 @@ export default async function SettingsPage({
       )}
 
       {/* Organisation (licensee only) */}
-      {user?.role === "licensee" && (
+      {isIndustryRole(user?.role) && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Organisation</h2>
           <Link
@@ -420,7 +422,7 @@ export default async function SettingsPage({
       )}
 
       {/* CAS Bridge (licensee + rep + talent) */}
-      {(user?.role === "licensee" || user?.role === "rep" || user?.role === "talent") && (
+      {(isIndustryRole(user?.role) || user?.role === "rep" || user?.role === "talent") && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>CAS Bridge</h2>
           <Link
@@ -428,13 +430,13 @@ export default async function SettingsPage({
             className="flex items-center justify-between text-sm"
             style={{ color: "var(--color-ink)" }}
           >
-            <span>{user?.role === "licensee" ? "Manage API tokens & devices" : "View active bridge sessions"}</span>
+            <span>{isIndustryRole(user?.role) ? "Manage API tokens & devices" : "View active bridge sessions"}</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </Link>
           <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
-            {user?.role === "licensee"
+            {isIndustryRole(user?.role)
               ? "Connect the CAS Bridge app to access licensed scan data in Nuke, Houdini, and Maya."
               : "Monitor when licensees access files via the CAS Bridge desktop app."}
           </p>

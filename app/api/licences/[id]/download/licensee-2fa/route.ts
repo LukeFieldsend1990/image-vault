@@ -8,6 +8,7 @@ import { verifyTotpCode } from "@/lib/auth/totp";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { downloadRequestEmail } from "@/lib/email/templates";
+import { isIndustryRole } from "@/lib/auth/roles";
 import type { DualCustodySession } from "../initiate/route";
 
 // POST /api/licences/[id]/download/licensee-2fa
@@ -20,7 +21,7 @@ export async function POST(
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "licensee") {
+  if (!isIndustryRole(session.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

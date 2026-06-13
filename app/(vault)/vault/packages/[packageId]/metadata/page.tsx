@@ -7,6 +7,7 @@ import { scanPackages, talentReps } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import PackageMetadataForm from "./package-metadata-form";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 export default async function PackageMetadataPage({ params }: { params: Promise<{ packageId: string }> }) {
   const { packageId: id } = await params;
@@ -44,7 +45,7 @@ export default async function PackageMetadataPage({ params }: { params: Promise<
       .all();
     if (!rep) redirect("/dashboard");
   }
-  if (role === "licensee") redirect("/dashboard");
+  if (isIndustryRole(role)) redirect("/dashboard");
 
   const metadata = {
     id: pkg.id,
