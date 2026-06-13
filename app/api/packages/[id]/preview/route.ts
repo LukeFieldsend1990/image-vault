@@ -7,6 +7,7 @@ import { scanFiles, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { hasRepAccess } from "@/lib/auth/repAccess";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { and, eq } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 
@@ -86,7 +87,7 @@ export async function GET(
   const isOwner = pkg.talentId === session.sub;
   const isRep = session.role === "rep" && (await hasRepAccess(session.sub, pkg.talentId));
   const admin = session.role === "admin" || isAdmin(session.email);
-  const isBrowser = session.role === "licensee" || admin;
+  const isBrowser = isIndustryRole(session.role) || admin;
   if (!isOwner && !isRep && !isBrowser) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

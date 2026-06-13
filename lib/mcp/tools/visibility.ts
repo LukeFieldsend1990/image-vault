@@ -67,7 +67,7 @@ registerMcpTool({
   inputSchema: {
     type: "object",
     properties: {
-      role: { type: "string", enum: ["talent", "rep", "licensee", "admin"], description: "Filter by role" },
+      role: { type: "string", enum: ["talent", "rep", "industry", "licensee", "admin"], description: "Filter by role" },
       search: { type: "string", description: "Email substring filter" },
       limit: { type: "number", description: "Max rows (default 50, max 200)" },
     },

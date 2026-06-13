@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 
 // POST /api/admin/organisations/[id]/members — assign a licensee user to an org (bypasses invite)
@@ -53,7 +54,7 @@ export async function POST(
   if (!targetUser) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
-  if (targetUser.role !== "licensee") {
+  if (!isIndustryRole(targetUser.role)) {
     return NextResponse.json({ error: "Only licensee users can be added to organisations" }, { status: 400 });
   }
 

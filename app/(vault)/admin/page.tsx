@@ -57,7 +57,7 @@ export default async function AdminOverviewPage() {
     db.select({ n: sql<number>`count(*)` }).from(users).get(),
     db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'talent'`).get(),
     db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'rep'`).get(),
-    db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'licensee'`).get(),
+    db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role IN ('licensee', 'industry')`).get(),
     db.select({ n: sql<number>`count(*)` }).from(scanPackages).get(),
     db.select({ total: sql<number>`coalesce(sum(total_size_bytes),0)` }).from(scanPackages).get(),
     db.select({ n: sql<number>`count(*)` }).from(licences).get(),

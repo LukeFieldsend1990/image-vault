@@ -3,6 +3,7 @@ export const runtime = "edge";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import ComplianceDashboardClient from "./dashboard-client";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 export default async function ComplianceDashboardPage() {
   const cookieStore = await cookies();
@@ -27,7 +28,7 @@ export default async function ComplianceDashboardPage() {
   if (!userId) redirect("/login");
 
   // Only licensees and admins use this page; talent/rep use /compliance
-  if (role !== "licensee" && role !== "admin") redirect("/compliance");
+  if (!isIndustryRole(role) && role !== "admin") redirect("/compliance");
 
   return <ComplianceDashboardClient />;
 }

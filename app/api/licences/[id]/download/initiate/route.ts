@@ -5,6 +5,7 @@ import { getDb, getKv } from "@/lib/db";
 import { licences, users, organisationMembers } from "@/lib/db/schema";
 // deliveryMode is read below to block standard download for bridge_only licences
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 
 export interface DualCustodySession {
@@ -29,7 +30,7 @@ export async function POST(
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "licensee") {
+  if (!isIndustryRole(session.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

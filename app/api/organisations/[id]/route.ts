@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 
 // GET /api/organisations/[id] — org details + member list
@@ -30,7 +31,7 @@ export async function GET(
   }
 
   // Licensees must be members; talent/rep/admin can view for licence context
-  if (session.role === "licensee") {
+  if (isIndustryRole(session.role)) {
     const [membership] = await db
       .select({ memberRole: organisationMembers.memberRole })
       .from(organisationMembers)

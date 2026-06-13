@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { productions, productionCompanies, organisations, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, like, desc, and } from "drizzle-orm";
 
 // GET /api/productions?q=search — autocomplete search
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Licensee role must supply an organisationId and be a member of it
-  if (session.role === "licensee" && !body.organisationId) {
+  if (isIndustryRole(session.role) && !body.organisationId) {
     return NextResponse.json(
       { error: "Licensee users must provide an organisationId when creating a production" },
       { status: 400 }
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
     orgId = org.id;
 
     // If licensee, verify membership
-    if (session.role === "licensee") {
+    if (isIndustryRole(session.role)) {
       const membership = await db
         .select({ memberRole: organisationMembers.memberRole })
         .from(organisationMembers)

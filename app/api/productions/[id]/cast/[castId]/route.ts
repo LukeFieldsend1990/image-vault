@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { productionCast, productions, organisationMembers, invites, licences } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 
 async function checkOrgAccess(
@@ -13,7 +14,7 @@ async function checkOrgAccess(
   db: ReturnType<typeof getDb>
 ): Promise<boolean> {
   if (isAdmin(session.email)) return true;
-  if (session.role !== "licensee") return false;
+  if (!isIndustryRole(session.role)) return false;
   if (!organisationId) return true; // no org attached — allow licensee through
   const membership = await db
     .select({ memberRole: organisationMembers.memberRole })

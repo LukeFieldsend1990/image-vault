@@ -4,7 +4,8 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(), // UUID
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: text("role", { enum: ["talent", "rep", "licensee", "admin"] }).notNull().default("talent"),
+  // "licensee" retained for the transition window; new accounts use "industry". Gate via isIndustryRole().
+  role: text("role", { enum: ["talent", "rep", "industry", "licensee", "admin"] }).notNull().default("talent"),
   vaultLocked: integer("vault_locked", { mode: "boolean" }).notNull().default(false),
   suspendedAt: integer("suspended_at"), // unix timestamp; null = active
   phone: text("phone"), // optional, E.164 format
@@ -193,7 +194,7 @@ export const talentProfiles = sqliteTable("talent_profiles", {
 export const invites = sqliteTable("invites", {
   id: text("id").primaryKey(), // UUID (the token in the invite link)
   email: text("email").notNull(),
-  role: text("role", { enum: ["talent", "rep", "licensee"] }).notNull(),
+  role: text("role", { enum: ["talent", "rep", "industry", "licensee"] }).notNull(),
   invitedBy: text("invited_by").notNull().references(() => users.id, { onDelete: "cascade" }),
   talentId: text("talent_id").references(() => users.id, { onDelete: "cascade" }),
   message: text("message"),

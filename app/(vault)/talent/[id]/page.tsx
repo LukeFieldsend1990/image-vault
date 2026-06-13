@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { users, scanPackages, scanFiles, talentProfiles, talentLicencePermissions, packageTags } from "@/lib/db/schema";
 import { eq, sql, and, desc, isNull, inArray } from "drizzle-orm";
 import TalentProfileClient from "./talent-profile-client";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 const LICENCE_TYPES = [
   "commercial",
@@ -157,7 +158,7 @@ export default async function TalentProfilePage({
   }));
 
   // Deepfake Protection (monitoring_reference) is internal — hide from licensees and reps (directory view)
-  const visiblePermissions = (session.role === "licensee" || session.role === "rep")
+  const visiblePermissions = (isIndustryRole(session.role) || session.role === "rep")
     ? permissions.filter((p) => p.licenceType !== "monitoring_reference")
     : permissions;
 

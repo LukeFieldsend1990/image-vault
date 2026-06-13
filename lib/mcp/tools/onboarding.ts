@@ -23,6 +23,7 @@ import {
   placeholderLicenceCreatedEmail,
 } from "@/lib/email/templates";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
+import { isIndustryRole } from "@/lib/auth/roles";
 import type { McpToolContext } from "../types";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
@@ -63,7 +64,7 @@ registerMcpTool({
     type: "object",
     properties: {
       email: { type: "string", description: "Email address to invite" },
-      role: { type: "string", enum: ["talent", "rep", "licensee"], description: "Account type (default talent)" },
+      role: { type: "string", enum: ["talent", "rep", "industry", "licensee"], description: "Account type (default talent)" },
       message: { type: "string", description: "Optional personal note included in the invite email (e.g. who it's for and why)" },
     },
     required: ["email"],
@@ -73,7 +74,7 @@ registerMcpTool({
     const email = typeof params.email === "string" ? params.email.trim().toLowerCase() : "";
     if (!email || !email.includes("@")) return { success: false, message: "A valid email is required." };
 
-    const role = params.role === "rep" || params.role === "licensee" ? params.role : "talent";
+    const role = params.role === "rep" || params.role === "licensee" || params.role === "industry" ? params.role : "talent";
     const message = typeof params.message === "string" && params.message.trim() ? params.message.trim() : null;
     const now = Math.floor(Date.now() / 1000);
 
@@ -256,7 +257,7 @@ registerMcpTool({
     }
     const licensee = await findUserByEmail(ctx, params.licenseeEmail);
     if (!licensee) return { success: false, message: `No user with email ${String(params.licenseeEmail)}.` };
-    if (licensee.role !== "licensee") {
+    if (!isIndustryRole(licensee.role)) {
       return { success: false, message: `${licensee.email} is a ${licensee.role} account, not a licensee.` };
     }
 

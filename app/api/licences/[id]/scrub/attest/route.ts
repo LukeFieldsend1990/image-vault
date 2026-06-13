@@ -12,6 +12,7 @@ import {
   users,
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { verifyTotpCode } from "@/lib/auth/totp";
 import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 import { and, eq, inArray } from "drizzle-orm";
@@ -37,7 +38,7 @@ export async function POST(
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "licensee") {
+  if (!isIndustryRole(session.role)) {
     return NextResponse.json({ error: "Only the licensee can submit the attestation" }, { status: 403 });
   }
 

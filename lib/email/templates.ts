@@ -3,6 +3,8 @@
  * Minimal, black/white, typography-led, red accent.
  */
 
+import { isIndustryRole } from "@/lib/auth/roles";
+
 function formatDate(unix: number): string {
   return new Date(unix * 1000).toLocaleDateString("en-GB", {
     day: "numeric",
@@ -192,12 +194,12 @@ export interface PackageAttachedParams {
   recipientEmail: string;
   projectName: string;
   packageName: string;
-  role: "licensee" | "talent";
+  role: "industry" | "licensee" | "talent";
   viewUrl: string;
 }
 
 export function packageAttachedEmail(p: PackageAttachedParams): { subject: string; html: string } {
-  const body = p.role === "licensee"
+  const body = isIndustryRole(p.role)
     ? `<p>The scan package for your licence has been uploaded and attached. The licence is now awaiting talent approval.</p>`
     : `<p>A scan package has been attached to an awaiting licence. Please review and approve when ready.</p>`;
   return {
@@ -285,15 +287,16 @@ export function licenceRevokedEmail(p: LicenceRevokedParams): { subject: string;
 export interface InviteEmailParams {
   to: string;
   inviterEmail: string;
-  role: "talent" | "rep" | "licensee";
+  role: "talent" | "rep" | "industry" | "licensee";
   message: string | null;
   signupUrl: string;
   expiresAt: number; // unix timestamp
 }
 
-const ROLE_LABELS: Record<"talent" | "rep" | "licensee", string> = {
+const ROLE_LABELS: Record<"talent" | "rep" | "industry" | "licensee", string> = {
   talent: "Talent",
   rep: "Representative",
+  industry: "Industry",
   licensee: "Licensee",
 };
 

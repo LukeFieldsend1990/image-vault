@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isIndustryRole } from "@/lib/auth/roles";
 
-type Role = "talent" | "rep" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
 const TALENT_NAV = [
   {
@@ -288,7 +289,7 @@ const REP_NAV = [
 ];
 
 function navItemsForRole(role: Role) {
-  if (role === "licensee") return LICENSEE_NAV;
+  if (isIndustryRole(role)) return LICENSEE_NAV;
   if (role === "rep") return REP_NAV;
   return TALENT_NAV; // talent, admin
 }

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 interface Invite {
   id: string;
   email: string;
-  role: "talent" | "rep" | "licensee";
+  role: "talent" | "rep" | "industry" | "licensee";
   invitedByEmail: string | null;
   message: string | null;
   status: "pending" | "used" | "expired";
@@ -34,7 +34,7 @@ export default function InviteManager() {
 
   // Create form state
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"talent" | "rep" | "licensee">("talent");
+  const [role, setRole] = useState<"talent" | "rep" | "industry" | "licensee">("talent");
   const [message, setMessage] = useState("");
   const [skipEmail, setSkipEmail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -141,6 +141,7 @@ export default function InviteManager() {
               >
                 <option value="talent">Talent</option>
                 <option value="rep">Representative</option>
+                <option value="industry">Industry</option>
                 <option value="licensee">Licensee</option>
               </select>
             </div>

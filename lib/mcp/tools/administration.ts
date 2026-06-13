@@ -83,15 +83,15 @@ registerMcpTool({
     type: "object",
     properties: {
       email: { type: "string", description: "Target user email" },
-      role: { type: "string", enum: ["talent", "rep", "licensee"], description: "New role" },
+      role: { type: "string", enum: ["talent", "rep", "industry", "licensee"], description: "New role" },
     },
     required: ["email", "role"],
   },
   mutating: true,
   async execute(ctx, params) {
     const role = params.role;
-    if (role !== "talent" && role !== "rep" && role !== "licensee") {
-      return { success: false, message: 'role must be one of "talent", "rep", "licensee".' };
+    if (role !== "talent" && role !== "rep" && role !== "industry" && role !== "licensee") {
+      return { success: false, message: 'role must be one of "talent", "rep", "industry", "licensee".' };
     }
     const target = await findTargetUser(ctx, params.email);
     if (isResult(target)) return target;

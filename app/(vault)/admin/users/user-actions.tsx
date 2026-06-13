@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Role = "talent" | "rep" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
 const ROLE_COLOR: Record<Role, string> = {
   talent: "#4f46e5",
   rep: "#0891b2",
+  industry: "#059669",
   licensee: "#059669",
   admin: "#c0392b",
 };
@@ -255,6 +256,7 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
         >
           <option value="talent">Talent</option>
           <option value="rep">Rep</option>
+          <option value="industry">Industry</option>
           <option value="licensee">Licensee</option>
         </select>
       )}

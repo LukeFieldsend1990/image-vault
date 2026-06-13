@@ -7,8 +7,9 @@ import SidebarShell from "./sidebar-shell";
 import { getDb } from "@/lib/db";
 import { licences, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { isIndustryRole } from "@/lib/auth/roles";
 
-type Role = "talent" | "rep" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
 interface SessionData {
   sub: string;
@@ -85,7 +86,7 @@ async function getLicenceAlert(userId: string, role: Role): Promise<boolean> {
   if (!userId) return false;
   try {
     const db = getDb();
-    if (role === "licensee") {
+    if (isIndustryRole(role)) {
       const row = await db
         .select({ n: sql<number>`count(*)` })
         .from(licences)
@@ -172,7 +173,7 @@ export default async function VaultLayout({
     getComplianceEnabled(sub),
   ]);
 
-  const homeHref = role === "licensee" ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
+  const homeHref = isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
 
   return (
     <div className="flex h-screen overflow-hidden">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 interface NamedPackage {
   packageId: string;
@@ -299,7 +300,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
         </div>
 
         {/* Licences covered */}
-        {role === "licensee" && activeLicences.length > 0 && (
+        {isIndustryRole(role) && activeLicences.length > 0 && (
           <div className="px-5 py-4">
             <p className="text-[10px] font-semibold tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
               Licences covered
@@ -375,7 +376,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
           <p className="mt-3 text-[10px] font-mono truncate" style={{ color: "var(--color-border)" }}>
             {agent.agentId}
           </p>
-          {!isRevoked && role === "licensee" && (
+          {!isRevoked && isIndustryRole(role) && (
             <button
               onClick={() => void handleRevoke()}
               disabled={revoking}
@@ -405,10 +406,10 @@ function EmptyState({ role }: { role: string }) {
         </svg>
       </div>
       <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-        {role === "licensee" ? "No render-bridge agents enrolled" : "No render-bridge access active"}
+        {isIndustryRole(role) ? "No render-bridge agents enrolled" : "No render-bridge access active"}
       </p>
       <p className="mt-1 max-w-xs text-xs" style={{ color: "var(--color-muted)" }}>
-        {role === "licensee"
+        {isIndustryRole(role)
           ? "Enrol a Docker agent on your render farm using a bridge PAT from Settings → Bridge Tokens."
           : "None of your active licences have a render-bridge agent connected."}
       </p>
@@ -444,8 +445,8 @@ export default function BridgeClient({ role }: { role: string }) {
 
   const onlineCount = agents.filter(a => a.agentOnline).length;
 
-  const pageTitle = role === "licensee" ? "Render Bridge" : "Bridge Access";
-  const pageSubtitle = role === "licensee"
+  const pageTitle = isIndustryRole(role) ? "Render Bridge" : "Bridge Access";
+  const pageSubtitle = isIndustryRole(role)
     ? "Automated delivery to your facility's render share"
     : "Render-bridge agents accessing your licensed assets";
 
