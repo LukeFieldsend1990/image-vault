@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     .select({
       id: users.id,
       email: users.email,
+      shortCode: users.shortCode,
       fullName: talentProfiles.fullName,
       profileImageUrl: talentProfiles.profileImageUrl,
       packageCount: sql<number>`count(${scanPackages.id})`.as("package_count"),

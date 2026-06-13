@@ -4,12 +4,14 @@ import { cookies } from "next/headers";
 import { NavLinks } from "./nav";
 import UserWidget from "./user-widget";
 import SidebarShell from "./sidebar-shell";
+import NotificationBell from "./notification-bell";
+import { CodesProvider } from "@/app/components/code-tag";
 import { getDb } from "@/lib/db";
 import { licences, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { isIndustryRole } from "@/lib/auth/roles";
+import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
 
-type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
 
 interface SessionData {
   sub: string;
@@ -143,6 +145,21 @@ async function getInboundEnabled(userId: string): Promise<boolean> {
   }
 }
 
+async function getShowCodes(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const db = getDb();
+    const row = await db
+      .select({ showCodes: users.showCodes })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
+    return !!row?.showCodes;
+  } catch {
+    return false;
+  }
+}
+
 async function getComplianceEnabled(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
@@ -165,15 +182,16 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled] = await Promise.all([
+  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
     getLicenceAlert(sub, role),
     getComplianceEnabled(sub),
+    getShowCodes(sub),
   ]);
 
-  const homeHref = isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
+  const homeHref = isComplianceRole(role) ? "/evidence" : isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -193,18 +211,21 @@ export default async function VaultLayout({
             <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} />
           </div>
 
-          <UserWidget
-            email={email}
-            initials={initials}
-            role={role}
-            identity={identity}
-          />
+          <div>
+            <NotificationBell />
+            <UserWidget
+              email={email}
+              initials={initials}
+              role={role}
+              identity={identity}
+            />
+          </div>
         </div>
       </SidebarShell>
 
       {/* ── Main ── */}
       <main className="flex flex-1 flex-col overflow-y-auto bg-[--color-bg] pt-12 lg:pt-0">
-        {children}
+        <CodesProvider show={showCodes}>{children}</CodesProvider>
       </main>
     </div>
   );

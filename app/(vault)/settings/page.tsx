@@ -13,6 +13,8 @@ import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
 import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
 import DemoToggleCard from "./demo-toggle-card";
+import BillingFees from "./billing-fees";
+import ShowCodesToggle from "./show-codes-toggle";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -24,6 +26,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/invites", label: "Invites", description: "Manage platform invitations" },
   { href: "/admin/pipeline", label: "Pipeline", description: "Digital double pipeline jobs" },
   { href: "/admin/talent", label: "Talent Settings", description: "Pipeline, fee splits & permissions" },
+  { href: "/admin/financial", label: "Billing & Fees", description: "Tier fees, production bands and obligations" },
   { href: "/admin/audit", label: "Audit Log", description: "Last 500 download events" },
   { href: "/admin/organisations", label: "Organisations", description: "Production organisations and member management" },
   { href: "/admin/productions", label: "Productions", description: "Production entities and companies" },
@@ -32,6 +35,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/ai", label: "AI Features", description: "AI settings, cost tracking and batch controls" },
   { href: "/admin/skills", label: "Triage", description: "Whitelisted email triage skills" },
   { href: "/admin/compliance", label: "Compliance", description: "Art. 39 strikes, transfers and certificates" },
+  { href: "/admin/compliance-access", label: "Compliance Access", description: "Grant Union/Regulator/Insurer read-only evidence access" },
   { href: "/admin/mcp", label: "MCP Integration", description: "Claude tokens, tools and audit log" },
 ];
 
@@ -238,6 +242,14 @@ export default async function SettingsPage({
           </div>
         </div>
       </div>
+
+      {/* ── Code view mode (all roles) ── */}
+      <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <ShowCodesToggle />
+      </div>
+
+      {/* ── Billing & Fees (talent only; self-hides unless visibility flag is on) ── */}
+      {user?.role === "talent" && <BillingFees />}
 
       {/* ── Industry Identity (talent only) ── */}
       {user?.role === "talent" && (

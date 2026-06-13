@@ -2,12 +2,15 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface TalentRow {
   id: string;
   email: string;
+  shortCode?: string | null;
   fullName: string | null;
   profileImageUrl: string | null;
   packageCount: number;
@@ -28,9 +31,11 @@ interface PackageResult {
   coverImageKey: string | null;
   totalSizeBytes: number | null;
   createdAt: number;
+  scanNumber?: number | null;
   tags: string | null;
   structuredTags: StructuredTag[];
   talentName?: string | null;
+  talentShortCode?: string | null;
   matchType: "keyword" | "semantic" | "both";
   relevanceScore: number | null;
 }
@@ -259,10 +264,11 @@ export default function DirectoryClient() {
                 </div>
               )}
               <p
-                className="truncate text-sm font-medium"
+                className="truncate text-sm font-medium flex items-center gap-1.5"
                 style={{ color: "var(--color-ink)" }}
               >
-                {t.fullName ?? t.email}
+                <span className="truncate">{t.fullName ?? t.email}</span>
+                <CodeTag code={t.shortCode} />
               </p>
               <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
                 {t.packageCount} scan package
@@ -309,14 +315,16 @@ function PackageCard({ pkg }: { pkg: PackageResult }) {
       }}
     >
       <p
-        className="truncate text-sm font-medium"
+        className="truncate text-sm font-medium flex items-center gap-1.5"
         style={{ color: "var(--color-ink)" }}
       >
-        {pkg.name}
+        <span className="truncate">{pkg.name}</span>
+        <CodeTag code={formatScan(pkg.scanNumber)} />
       </p>
       {pkg.talentName && (
-        <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
-          {pkg.talentName}
+        <p className="mt-0.5 text-xs flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+          <span>{pkg.talentName}</span>
+          <CodeTag code={pkg.talentShortCode} />
         </p>
       )}
       {pkg.description && (

@@ -333,6 +333,10 @@ export default function CustodyClient({ packageId }: { packageId: string }) {
               <p className="font-semibold mt-0.5" style={{ color: "#111111" }}>{data.package.name}</p>
             </div>
             <div>
+              <span className="uppercase tracking-wide text-[9px] font-bold" style={{ color: "#888888" }}>Vault Code</span>
+              <p className="font-mono mt-0.5" style={{ color: "#111111" }}>{data.package.chainCode}</p>
+            </div>
+            <div>
               <span className="uppercase tracking-wide text-[9px] font-bold" style={{ color: "#888888" }}>Talent</span>
               <p className="font-mono mt-0.5" style={{ color: "#111111" }}>{data.package.talentEmail}</p>
             </div>

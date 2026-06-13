@@ -2,9 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { isIndustryRole } from "@/lib/auth/roles";
+import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
 
-type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
+
+const TRANSFERS_NAV_ITEM = {
+  href: "/transfers",
+  label: "Transfers",
+  icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="17 1 21 5 17 9" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <polyline points="7 23 3 19 7 15" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  ),
+};
 
 const TALENT_NAV = [
   {
@@ -71,6 +84,7 @@ const TALENT_NAV = [
       </svg>
     ),
   },
+  TRANSFERS_NAV_ITEM,
   {
     href: "/bookings",
     label: "Bookings",
@@ -174,6 +188,7 @@ const LICENSEE_NAV = [
     ),
   },
   BRIDGE_NAV_ITEM,
+  TRANSFERS_NAV_ITEM,
   {
     href: "/compliance/dashboard",
     label: "Compliance",
@@ -256,6 +271,7 @@ const REP_NAV = [
       </svg>
     ),
   },
+  TRANSFERS_NAV_ITEM,
   {
     href: "/compliance",
     label: "Compliance",
@@ -288,7 +304,31 @@ const REP_NAV = [
   },
 ];
 
+const COMPLIANCE_NAV = [
+  {
+    href: "/evidence",
+    label: "Evidence",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <polyline points="9 12 11 14 15 10" />
+      </svg>
+    ),
+  },
+  {
+    href: "/settings",
+    label: "Settings",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    ),
+  },
+];
+
 function navItemsForRole(role: Role) {
+  if (isComplianceRole(role)) return COMPLIANCE_NAV;
   if (isIndustryRole(role)) return LICENSEE_NAV;
   if (role === "rep") return REP_NAV;
   return TALENT_NAV; // talent, admin

@@ -8,6 +8,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import ProductionEditForm from "./production-edit-form";
 import CastResolveButton from "./cast-resolve-button";
+import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
 
 export default async function AdminProductionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -28,11 +31,17 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
       director: productions.director,
       vfxSupervisor: productions.vfxSupervisor,
       notes: productions.notes,
+      organisationId: productions.organisationId,
+      shortCode: productions.shortCode,
+      orgName: organisations.name,
+      orgType: organisations.orgType,
+      orgShortCode: organisations.shortCode,
       createdAt: productions.createdAt,
       updatedAt: productions.updatedAt,
     })
     .from(productions)
     .leftJoin(productionCompanies, eq(productionCompanies.id, productions.companyId))
+    .leftJoin(organisations, eq(organisations.id, productions.organisationId))
     .where(eq(productions.id, id))
     .limit(1)
     .all();
@@ -89,7 +98,9 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
       id: licences.id,
       talentId: licences.talentId,
       talentEmail: users.email,
+      talentShortCode: users.shortCode,
       packageName: scanPackages.name,
+      packageScanNumber: scanPackages.scanNumber,
       status: licences.status,
       agreedFee: licences.agreedFee,
       createdAt: licences.createdAt,
@@ -109,8 +120,8 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
 
   const [directOrgs, membershipRows] = await Promise.all([
     directOrgIds.length > 0
-      ? db.select({ id: organisations.id, name: organisations.name }).from(organisations).where(inArray(organisations.id, directOrgIds)).all()
-      : Promise.resolve([] as { id: string; name: string }[]),
+      ? db.select({ id: organisations.id, name: organisations.name, orgType: organisations.orgType, shortCode: organisations.shortCode }).from(organisations).where(inArray(organisations.id, directOrgIds)).all()
+      : Promise.resolve([] as { id: string; name: string; orgType: string; shortCode: string | null }[]),
     licenseeIds.length > 0
       ? db.select({ userId: organisationMembers.userId, organisationId: organisationMembers.organisationId })
           .from(organisationMembers)
@@ -120,18 +131,28 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
   ]);
 
   const directOrgMap = new Map(directOrgs.map((o) => [o.id, o.name]));
+  const directOrgTypeMap = new Map(directOrgs.map((o) => [o.id, o.orgType]));
+  const directOrgShortCodeMap = new Map(directOrgs.map((o) => [o.id, o.shortCode]));
 
   // For licensees in an org without a direct link, fetch those org names
   const indirectOrgIds = [...new Set(membershipRows.map((m) => m.organisationId))];
   const indirectOrgs = indirectOrgIds.length > 0
-    ? await db.select({ id: organisations.id, name: organisations.name }).from(organisations).where(inArray(organisations.id, indirectOrgIds)).all()
+    ? await db.select({ id: organisations.id, name: organisations.name, orgType: organisations.orgType, shortCode: organisations.shortCode }).from(organisations).where(inArray(organisations.id, indirectOrgIds)).all()
     : [];
   const indirectOrgMap = new Map(indirectOrgs.map((o) => [o.id, o.name]));
+  const indirectOrgTypeMap = new Map(indirectOrgs.map((o) => [o.id, o.orgType]));
+  const indirectOrgShortCodeMap = new Map(indirectOrgs.map((o) => [o.id, o.shortCode]));
   const licenseeOrgMap = new Map(membershipRows.map((m) => [m.userId, indirectOrgMap.get(m.organisationId) ?? null]));
+  const licenseeOrgTypeMap = new Map(membershipRows.map((m) => [m.userId, indirectOrgTypeMap.get(m.organisationId) ?? null]));
+  const licenseeOrgShortCodeMap = new Map(membershipRows.map((m) => [m.userId, indirectOrgShortCodeMap.get(m.organisationId) ?? null]));
 
   // Per-licence org name: prefer direct link, else licensee membership
   const licenceOrgName = (l: { directOrgId: string | null; licenseeId: string }) =>
     (l.directOrgId ? directOrgMap.get(l.directOrgId) : null) ?? licenseeOrgMap.get(l.licenseeId) ?? null;
+  const licenceOrgType = (l: { directOrgId: string | null; licenseeId: string }) =>
+    (l.directOrgId ? directOrgTypeMap.get(l.directOrgId) : null) ?? licenseeOrgTypeMap.get(l.licenseeId) ?? null;
+  const licenceOrgShortCode = (l: { directOrgId: string | null; licenseeId: string }) =>
+    (l.directOrgId ? directOrgShortCodeMap.get(l.directOrgId) : null) ?? licenseeOrgShortCodeMap.get(l.licenseeId) ?? null;
 
   function ts(d: number): string {
     return new Date(d * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -160,9 +181,16 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
 
       <div className="mb-6">
         <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>Production</p>
-        <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>{production.name}</h1>
-        {production.companyName && (
-          <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>{production.companyName}</p>
+        <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: "var(--color-ink)" }}>
+          <span>{production.name}</span>
+          <CodeTag code={production.shortCode} />
+        </h1>
+        {(production.orgName ?? production.companyName) && (
+          <p className="text-sm mt-1 flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+            <span>{production.orgName ?? production.companyName}</span>
+            <OrgTypeBadge type={production.orgType} />
+            <CodeTag code={production.orgShortCode} />
+          </p>
         )}
       </div>
 
@@ -262,6 +290,8 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
             </div>
             {linkedLicences.map((l) => {
               const orgName = licenceOrgName(l);
+              const orgType = licenceOrgType(l);
+              const orgShortCode = licenceOrgShortCode(l);
               return (
               <div
                 key={l.id}
@@ -272,7 +302,10 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
                 }}
               >
                 <div className="min-w-0">
-                  <span className="text-xs truncate block" style={{ color: "var(--color-text)" }}>{l.talentEmail ?? "—"}</span>
+                  <span className="text-xs truncate flex items-center gap-1.5" style={{ color: "var(--color-text)" }}>
+                    <span className="truncate">{l.talentEmail ?? "—"}</span>
+                    <CodeTag code={l.talentShortCode} />
+                  </span>
                   {orgName && (
                     <span
                       className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded mt-0.5"
@@ -284,8 +317,13 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
                       {orgName}
                     </span>
                   )}
+                  {orgName && <OrgTypeBadge type={orgType} className="ml-1" />}
+                  {orgName && <CodeTag code={orgShortCode} className="ml-1" />}
                 </div>
-                <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{l.packageName ?? "—"}</span>
+                <span className="text-xs truncate flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                  <span className="truncate">{l.packageName ?? "—"}</span>
+                  <CodeTag code={formatScan(l.packageScanNumber)} />
+                </span>
                 <span
                   className="inline-flex text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded w-fit"
                   style={{

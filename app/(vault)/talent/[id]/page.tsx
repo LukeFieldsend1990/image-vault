@@ -50,7 +50,7 @@ export default async function TalentProfilePage({
   const db = getDb();
 
   const [talent] = await db
-    .select({ id: users.id, email: users.email })
+    .select({ id: users.id, email: users.email, shortCode: users.shortCode })
     .from(users)
     .where(and(eq(users.id, id), eq(users.role, "talent")))
     .limit(1)
@@ -80,6 +80,7 @@ export default async function TalentProfilePage({
     db.select({
       id: scanPackages.id,
       name: scanPackages.name,
+      scanNumber: scanPackages.scanNumber,
       description: scanPackages.description,
       captureDate: scanPackages.captureDate,
       studioName: scanPackages.studioName,

@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
         roleFilter
           ? and(
               eq(invites.invitedBy, session.sub),
-              eq(invites.role, roleFilter as "talent" | "rep" | "industry")
+              eq(invites.role, roleFilter as "talent" | "rep" | "industry" | "compliance")
             )
           : eq(invites.invitedBy, session.sub)
       );
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "email and role are required" }, { status: 400 });
   }
 
-  if (!["talent", "rep", "industry"].includes(role)) {
+  if (!["talent", "rep", "industry", "compliance"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
   await db.insert(invites).values({
     id: inviteId,
     email: normalEmail,
-    role: role as "talent" | "rep" | "industry",
+    role: role as "talent" | "rep" | "industry" | "compliance",
     invitedBy: session.sub,
     talentId: session.role === "talent" && role === "rep" ? session.sub : null,
     message: message?.trim() ?? null,
@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
     const { subject, html } = inviteEmail({
       to: normalEmail,
       inviterEmail: session.email,
-      role: role as "talent" | "rep" | "industry",
+      role: role as "talent" | "rep" | "industry" | "compliance",
       message: message?.trim() ?? null,
       signupUrl: `${baseUrl}/signup?invite=${inviteId}`,
       expiresAt,

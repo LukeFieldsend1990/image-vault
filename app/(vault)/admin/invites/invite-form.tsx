@@ -6,7 +6,7 @@ import { ORG_TYPES, ORG_TYPE_LABELS } from "@/lib/organisations/orgTypes";
 interface Invite {
   id: string;
   email: string;
-  role: "talent" | "rep" | "industry";
+  role: "talent" | "rep" | "industry" | "compliance";
   orgSubtype: string | null;
   invitedByEmail: string | null;
   message: string | null;
@@ -36,7 +36,7 @@ export default function InviteManager() {
 
   // Create form state
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"talent" | "rep" | "industry">("talent");
+  const [role, setRole] = useState<"talent" | "rep" | "industry" | "compliance">("talent");
   const [orgSubtype, setOrgSubtype] = useState("");
   const [message, setMessage] = useState("");
   const [skipEmail, setSkipEmail] = useState(false);
@@ -151,6 +151,7 @@ export default function InviteManager() {
                 <option value="talent">Talent</option>
                 <option value="rep">Representative</option>
                 <option value="industry">Industry</option>
+                <option value="compliance">Compliance (Union / Regulator)</option>
               </select>
             </div>
 

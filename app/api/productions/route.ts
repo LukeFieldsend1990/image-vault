@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { productions, productionCompanies, organisations, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { mintProductionCode } from "@/lib/codes/codes";
 import { eq, like, desc, and } from "drizzle-orm";
 
 // GET /api/productions?q=search — autocomplete search
@@ -169,6 +170,8 @@ export async function POST(req: NextRequest) {
     createdAt: now,
     updatedAt: now,
   });
+
+  await mintProductionCode(db, productionId);
 
   return NextResponse.json({ id: productionId, companyId }, { status: 201 });
 }

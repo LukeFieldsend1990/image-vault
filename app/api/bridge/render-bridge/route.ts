@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { renderBridgeAgents, organisations, licences, scanPackages, scanFiles, bridgeEvents, talentProfiles, organisationMembers } from "@/lib/db/schema";
+import { renderBridgeAgents, organisations, licences, scanPackages, scanFiles, bridgeEvents, talentProfiles, organisationMembers, users } from "@/lib/db/schema";
 import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { requireBridgeToken, isBridgeTokenError } from "@/lib/auth/requireBridgeToken";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
@@ -130,6 +130,7 @@ export async function GET(req: NextRequest) {
 
   async function buildAgentPayload(rawAgents: Array<{
     id: string; displayName: string; organisationId: string; organisationName: string | null;
+    organisationType: string | null; organisationShortCode: string | null;
     status: string; lastHeartbeatAt: number | null; tokenExpiresAt: number | null;
     publishedPackagesJson: string; pendingAction: string | null; revokedAt: number | null;
   }>) {
@@ -146,7 +147,9 @@ export async function GET(req: NextRequest) {
           id: licences.id,
           packageId: licences.packageId,
           packageName: scanPackages.name,
+          packageScanNumber: scanPackages.scanNumber,
           talentName: talentProfiles.fullName,
+          talentShortCode: users.shortCode,
           projectName: licences.projectName,
           validFrom: licences.validFrom,
           validTo: licences.validTo,
@@ -157,6 +160,7 @@ export async function GET(req: NextRequest) {
         .from(licences)
         .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
         .leftJoin(talentProfiles, eq(talentProfiles.userId, licences.talentId))
+        .leftJoin(users, eq(users.id, licences.talentId))
         .where(
           and(
             isNotNull(licences.packageId),
@@ -245,6 +249,8 @@ export async function GET(req: NextRequest) {
         displayName: agent.displayName,
         organisationId: agent.organisationId,
         organisationName: agent.organisationName ?? agent.organisationId,
+        organisationType: agent.organisationType,
+        organisationShortCode: agent.organisationShortCode,
         status: agent.status,
         lastHeartbeatAt: agent.lastHeartbeatAt,
         agentOnline: agent.lastHeartbeatAt !== null && agent.lastHeartbeatAt > now - ONLINE_THRESHOLD_SECS,
@@ -258,7 +264,9 @@ export async function GET(req: NextRequest) {
           licenceId: l.id,
           packageId: l.packageId,
           packageName: l.packageName,
+          packageScanNumber: l.packageScanNumber ?? null,
           talentName: l.talentName ?? null,
+          talentShortCode: l.talentShortCode ?? null,
           licenceName: l.projectName,
           validFrom: l.validFrom,
           validTo: l.validTo,
@@ -275,6 +283,8 @@ export async function GET(req: NextRequest) {
     displayName: renderBridgeAgents.displayName,
     organisationId: renderBridgeAgents.organisationId,
     organisationName: organisations.name,
+    organisationType: organisations.orgType,
+    organisationShortCode: organisations.shortCode,
     status: renderBridgeAgents.status,
     lastHeartbeatAt: renderBridgeAgents.lastHeartbeatAt,
     tokenExpiresAt: renderBridgeAgents.tokenExpiresAt,

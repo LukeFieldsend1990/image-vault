@@ -404,6 +404,15 @@ export default function LicencesClient() {
                         Download
                       </Link>
                     )}
+                    {l.status === "APPROVED" && (
+                      <Link
+                        href={`/licences/${l.id}/vendors`}
+                        className="rounded px-4 py-2 text-xs font-medium transition border"
+                        style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}
+                      >
+                        Vendor access
+                      </Link>
+                    )}
                     {(l.status === "SCRUB_PERIOD" || l.status === "OVERDUE") && (
                       <Link
                         href={`/licences/${l.id}/scrub`}

@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { scanPackages, packageTags, talentProfiles } from "@/lib/db/schema";
+import { scanPackages, packageTags, talentProfiles, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and, like, sql, isNull, inArray } from "drizzle-orm";
 
@@ -112,6 +112,7 @@ export async function GET(req: NextRequest) {
       .select({
         id: scanPackages.id,
         name: scanPackages.name,
+        scanNumber: scanPackages.scanNumber,
         description: scanPackages.description,
         talentId: scanPackages.talentId,
         status: scanPackages.status,
@@ -172,10 +173,22 @@ export async function GET(req: NextRequest) {
       : [];
   const talentNameMap = new Map(talents.map((t) => [t.userId, t.fullName]));
 
+  // Talent system codes (AH) live on the users table, not talentProfiles
+  const talentCodes =
+    talentIds.length > 0
+      ? await db
+          .select({ id: users.id, shortCode: users.shortCode })
+          .from(users)
+          .where(inArray(users.id, talentIds))
+          .all()
+      : [];
+  const talentCodeMap = new Map(talentCodes.map((t) => [t.id, t.shortCode]));
+
   const results = packages.map((p) => ({
     ...p,
     structuredTags: tagsByPackage.get(p.id) ?? [],
     talentName: talentNameMap.get(p.talentId) ?? null,
+    talentShortCode: talentCodeMap.get(p.talentId) ?? null,
   }));
 
   return NextResponse.json({

@@ -6,6 +6,8 @@ import { productions, productionCompanies, licences, productionCast, organisatio
 import { eq, sql, desc, inArray } from "drizzle-orm";
 import Link from "next/link";
 import NewCompanyButton from "./new-company-button";
+import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 const TYPE_LABEL: Record<string, string> = {
   film: "Film",
@@ -48,6 +50,7 @@ export default async function AdminProductionsPage() {
       type: productions.type,
       year: productions.year,
       status: productions.status,
+      shortCode: productions.shortCode,
       sagProjectNumber: productions.sagProjectNumber,
       organisationId: productions.organisationId,
       createdAt: productions.createdAt,
@@ -70,13 +73,15 @@ export default async function AdminProductionsPage() {
     (() => {
       const orgIds = [...new Set(allProductions.map((p) => p.organisationId).filter(Boolean))] as string[];
       return orgIds.length > 0
-        ? db.select({ id: organisations.id, name: organisations.name }).from(organisations).where(inArray(organisations.id, orgIds)).all()
-        : Promise.resolve([]);
+        ? db.select({ id: organisations.id, name: organisations.name, orgType: organisations.orgType, shortCode: organisations.shortCode }).from(organisations).where(inArray(organisations.id, orgIds)).all()
+        : Promise.resolve([] as { id: string; name: string; orgType: string; shortCode: string | null }[]);
     })(),
   ]);
 
   const licenceCountMap = new Map(licenceCounts.map((l) => [l.productionId, l.n]));
   const orgNameMap = new Map(orgRows.map((o) => [o.id, o.name]));
+  const orgTypeMap = new Map(orgRows.map((o) => [o.id, o.orgType]));
+  const orgShortCodeMap = new Map(orgRows.map((o) => [o.id, o.shortCode]));
 
   // Cast onboarding stats per production
   const castStatMap = new Map<string, { total: number; consented: number; invited: number; linked: number }>();
@@ -156,6 +161,8 @@ export default async function AdminProductionsPage() {
           const castColor = castPct === null ? "var(--color-muted)" : castPct === 100 ? "#059669" : castPct > 50 ? "#d97706" : "#dc2626";
           const statusColor = p.status ? STATUS_COLOR[p.status] ?? "var(--color-muted)" : "var(--color-muted)";
           const orgName = p.organisationId ? (orgNameMap.get(p.organisationId) ?? "—") : "—";
+          const orgType = p.organisationId ? orgTypeMap.get(p.organisationId) : null;
+          const orgShortCode = p.organisationId ? orgShortCodeMap.get(p.organisationId) : null;
 
           return (
             <Link
@@ -168,12 +175,19 @@ export default async function AdminProductionsPage() {
               }}
             >
               <div className="min-w-0">
-                <span className="font-medium truncate block" style={{ color: "var(--color-ink)" }}>{p.name}</span>
+                <span className="font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                  <span className="truncate">{p.name}</span>
+                  <CodeTag code={p.shortCode} />
+                </span>
                 {p.sagProjectNumber && (
                   <span className="text-[10px] font-mono" style={{ color: "var(--color-muted)" }}>SAG {p.sagProjectNumber}</span>
                 )}
               </div>
-              <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{orgName}</span>
+              <span className="text-xs truncate flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                <span className="truncate">{orgName}</span>
+                <OrgTypeBadge type={orgType} />
+                <CodeTag code={orgShortCode} />
+              </span>
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>
                 {p.type ? TYPE_LABEL[p.type] ?? p.type : "—"}
               </span>

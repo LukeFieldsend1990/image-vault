@@ -49,6 +49,7 @@ const USER_FLAGS = {
   geoFingerprintEnabled: users.geoFingerprintEnabled,
   royaltyMeterEnabled: users.royaltyMeterEnabled,
   complianceEnabled: users.complianceEnabled,
+  financialVisibilityEnabled: users.financialVisibilityEnabled,
 } as const;
 
 registerMcpTool({

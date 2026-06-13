@@ -59,10 +59,10 @@ export default async function BridgeSettingsPage() {
     .all();
 
   // Fetch org + production IDs for licensees (needed to configure Docker bridge registration)
-  let connectionIds: { orgId: string; orgName: string; productions: { id: string; name: string }[] }[] = [];
+  let connectionIds: { orgId: string; orgName: string; orgType: string | null; orgShortCode: string | null; productions: { id: string; name: string }[] }[] = [];
   if (canManage) {
     const memberships = await db
-      .select({ organisationId: organisationMembers.organisationId, orgName: organisations.name })
+      .select({ organisationId: organisationMembers.organisationId, orgName: organisations.name, orgType: organisations.orgType, orgShortCode: organisations.shortCode })
       .from(organisationMembers)
       .leftJoin(organisations, eq(organisations.id, organisationMembers.organisationId))
       .where(eq(organisationMembers.userId, user.userId))
@@ -79,6 +79,8 @@ export default async function BridgeSettingsPage() {
       connectionIds = memberships.map(m => ({
         orgId: m.organisationId,
         orgName: m.orgName ?? m.organisationId,
+        orgType: m.orgType ?? null,
+        orgShortCode: m.orgShortCode ?? null,
         productions: orgProductions
           .filter(p => p.organisationId === m.organisationId)
           .map(p => ({ id: p.id, name: p.name })),
