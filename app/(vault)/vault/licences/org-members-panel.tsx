@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import OrgTypeBadge from "@/app/components/org-type-badge";
 
 interface OrgMember {
   userId: string;
@@ -14,6 +15,7 @@ interface OrgDetail {
   name: string;
   website: string | null;
   billingEmail: string | null;
+  orgType?: string | null;
 }
 
 interface Props {
@@ -71,8 +73,9 @@ export default function OrgMembersPanel({ organisationId, submittedByUserId }: P
           padding: "0.75rem",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.5rem" }}>
-            <p style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--color-muted)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              {org.name}
+            <p style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--color-muted)", letterSpacing: "0.05em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <span>{org.name}</span>
+              <OrgTypeBadge type={org.orgType} />
             </p>
             {org.website && (
               <a href={org.website} target="_blank" rel="noreferrer" style={{ fontSize: "0.65rem", color: "var(--color-muted)" }}>

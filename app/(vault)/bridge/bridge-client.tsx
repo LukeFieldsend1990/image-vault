@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { isIndustryRole } from "@/lib/auth/roles";
+import OrgTypeBadge from "@/app/components/org-type-badge";
 
 interface NamedPackage {
   packageId: string;
@@ -26,6 +27,7 @@ interface AgentSummary {
   displayName: string;
   organisationId: string;
   organisationName: string;
+  organisationType?: string | null;
   status: "active" | "revoked" | "expired";
   lastHeartbeatAt: number | null;
   agentOnline: boolean;
@@ -189,8 +191,9 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
             <p className="font-mono text-sm font-semibold truncate" style={{ color: "#ffffff" }}>
               {agent.displayName}
             </p>
-            <p className="mt-0.5 text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>
-              {agent.organisationName}
+            <p className="mt-0.5 text-xs truncate flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>
+              <span className="truncate">{agent.organisationName}</span>
+              <OrgTypeBadge type={agent.organisationType} />
             </p>
           </div>
           <span
@@ -341,6 +344,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               </svg>
               <span style={{ color: "var(--color-ink)" }}>{agent.organisationName}</span>
+              <OrgTypeBadge type={agent.organisationType} />
               <span style={{ color: "var(--color-muted)" }}>is publishing your data to a render share</span>
             </div>
             {(agent.publishedPackages.length + agent.unauthorisedPublishedPackages.length) > 0 && (

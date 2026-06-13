@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import OrgMembersPanel from "./org-members-panel";
+import OrgTypeBadge from "@/app/components/org-type-badge";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -46,6 +47,8 @@ interface Licence {
   contractUrl: string | null;
   contractUploadedAt: number | null;
   organisationId: string | null;
+  orgName?: string | null;
+  orgType?: string | null;
   productionId: string | null;
   licenseeId: string;
 }
@@ -555,8 +558,10 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
-                          {l.productionCompany}{l.organisationId ? "" : ""} · {l.packageName ?? "—"}
+                        <p className="mt-0.5 text-xs flex items-center gap-1.5 flex-wrap" style={{ color: "var(--color-muted)" }}>
+                          <span>{l.productionCompany}</span>
+                          {l.organisationId && <OrgTypeBadge type={l.orgType} />}
+                          <span>· {l.packageName ?? "—"}</span>
                         </p>
                         {l.organisationId && (
                           <OrgMembersPanel organisationId={l.organisationId} submittedByUserId={l.licenseeId} />

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { ORG_TYPE_LABELS, isOrgType } from "@/lib/organisations/orgTypes";
 
 interface Organisation {
   id: string;
@@ -325,7 +326,9 @@ export default function NewProductionClient() {
             >
               <option value="">Select organisation…</option>
               {orgs.map((o) => (
-                <option key={o.id} value={o.id}>{o.name}</option>
+                <option key={o.id} value={o.id}>
+                  {isOrgType(o.orgType) ? `${o.name} — ${ORG_TYPE_LABELS[o.orgType]}` : o.name}
+                </option>
               ))}
             </select>
           </Field>

@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, organisationMembers, licences, productionCast } from "@/lib/db/schema";
+import { productions, productionCompanies, organisations, organisationMembers, licences, productionCast } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
@@ -28,10 +28,13 @@ export async function GET(req: NextRequest) {
         status: productions.status,
         sagProjectNumber: productions.sagProjectNumber,
         organisationId: productions.organisationId,
+        orgName: organisations.name,
+        orgType: organisations.orgType,
         createdAt: productions.createdAt,
       })
       .from(productions)
       .leftJoin(productionCompanies, eq(productionCompanies.id, productions.companyId))
+      .leftJoin(organisations, eq(organisations.id, productions.organisationId))
       .orderBy(desc(productions.createdAt))
       .limit(100)
       .all();
@@ -57,10 +60,13 @@ export async function GET(req: NextRequest) {
         status: productions.status,
         sagProjectNumber: productions.sagProjectNumber,
         organisationId: productions.organisationId,
+        orgName: organisations.name,
+        orgType: organisations.orgType,
         createdAt: productions.createdAt,
       })
       .from(productions)
       .leftJoin(productionCompanies, eq(productionCompanies.id, productions.companyId))
+      .leftJoin(organisations, eq(organisations.id, productions.organisationId))
       .where(inArray(productions.organisationId, orgIds))
       .orderBy(desc(productions.createdAt))
       .limit(100)

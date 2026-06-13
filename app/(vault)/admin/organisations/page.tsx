@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, users } from "@/lib/db/schema";
 import { eq, desc, count } from "drizzle-orm";
+import OrgTypeBadge from "@/app/components/org-type-badge";
+import { isVendorOrgType } from "@/lib/organisations/orgTypes";
 
 function fmtDate(epoch: number) {
   return new Date(epoch * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -18,6 +20,8 @@ export default async function AdminOrganisationsPage() {
     .select({
       id: organisations.id,
       name: organisations.name,
+      orgType: organisations.orgType,
+      vendorAuditPassed: organisations.vendorAuditPassed,
       website: organisations.website,
       billingEmail: organisations.billingEmail,
       createdAt: organisations.createdAt,
@@ -82,7 +86,19 @@ export default async function AdminOrganisationsPage() {
                 >
                   {/* Name + created date */}
                   <div className="min-w-0">
-                    <p className="text-xs font-medium truncate" style={{ color: "var(--color-ink)" }}>{org.name}</p>
+                    <p className="text-xs font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                      <span className="truncate">{org.name}</span>
+                      <OrgTypeBadge type={org.orgType} />
+                      {isVendorOrgType(org.orgType) && (
+                        <span
+                          className="text-[10px] shrink-0"
+                          style={{ color: org.vendorAuditPassed ? "var(--color-accent)" : "var(--color-muted)" }}
+                          title={org.vendorAuditPassed ? "Environment audit passed" : "Environment audit not passed"}
+                        >
+                          {org.vendorAuditPassed ? "Audit ✓" : "Audit —"}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>{fmtDate(org.createdAt)}</p>
                   </div>
 

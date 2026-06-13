@@ -130,6 +130,7 @@ export async function GET(req: NextRequest) {
 
   async function buildAgentPayload(rawAgents: Array<{
     id: string; displayName: string; organisationId: string; organisationName: string | null;
+    organisationType: string | null;
     status: string; lastHeartbeatAt: number | null; tokenExpiresAt: number | null;
     publishedPackagesJson: string; pendingAction: string | null; revokedAt: number | null;
   }>) {
@@ -245,6 +246,7 @@ export async function GET(req: NextRequest) {
         displayName: agent.displayName,
         organisationId: agent.organisationId,
         organisationName: agent.organisationName ?? agent.organisationId,
+        organisationType: agent.organisationType,
         status: agent.status,
         lastHeartbeatAt: agent.lastHeartbeatAt,
         agentOnline: agent.lastHeartbeatAt !== null && agent.lastHeartbeatAt > now - ONLINE_THRESHOLD_SECS,
@@ -275,6 +277,7 @@ export async function GET(req: NextRequest) {
     displayName: renderBridgeAgents.displayName,
     organisationId: renderBridgeAgents.organisationId,
     organisationName: organisations.name,
+    organisationType: organisations.orgType,
     status: renderBridgeAgents.status,
     lastHeartbeatAt: renderBridgeAgents.lastHeartbeatAt,
     tokenExpiresAt: renderBridgeAgents.tokenExpiresAt,

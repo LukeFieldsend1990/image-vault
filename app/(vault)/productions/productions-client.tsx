@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import OrgTypeBadge from "@/app/components/org-type-badge";
 
 interface Production {
   id: string;
@@ -12,6 +13,8 @@ interface Production {
   status: string | null;
   sagProjectNumber: string | null;
   organisationId: string | null;
+  orgName?: string | null;
+  orgType?: string | null;
   createdAt: number;
   licenceCount: number;
   cast: { total: number; consented: number; invited: number; linked: number } | null;
@@ -188,9 +191,10 @@ export default function ProductionsClient() {
                   <h2 className="text-xl font-semibold tracking-tight leading-none" style={{ color: "var(--color-ink)" }}>
                     {p.name}
                   </h2>
-                  {p.companyName && (
-                    <p className="mt-1.5 text-sm" style={{ color: "var(--color-muted)" }}>
-                      {p.companyName}
+                  {(p.orgName ?? p.companyName) && (
+                    <p className="mt-1.5 text-sm flex items-center gap-1.5 flex-wrap" style={{ color: "var(--color-muted)" }}>
+                      <span>{p.orgName ?? p.companyName}</span>
+                      <OrgTypeBadge type={p.orgType} />
                     </p>
                   )}
                 </div>
