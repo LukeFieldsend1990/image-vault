@@ -7,6 +7,7 @@ import { talentProfiles, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
+import PitchVignettesToggle from "./pitch-vignettes-toggle";
 import ChangePassword from "./change-password";
 import PhoneField from "./phone-field";
 import { isAdmin } from "@/lib/auth/adminEmails";
@@ -437,6 +438,16 @@ export default async function SettingsPage({
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </Link>
+        </div>
+      )}
+
+      {/* AI Pitch Vignettes (talent only) */}
+      {user?.role === "talent" && (
+        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
+            AI Pitch Vignettes
+          </h2>
+          <PitchVignettesToggle />
         </div>
       )}
 

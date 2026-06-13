@@ -22,6 +22,7 @@
 14. [Trial Production — End-to-End Proving Ground](#14-trial-production--end-to-end-proving-ground)
 15. [Live Royalty Meter — Pay-As-You-Go Likeness Usage Feed](#15-live-royalty-meter--pay-as-you-go-likeness-usage-feed)
 16. [Compliance Layer — SAG-AFTRA Article 39 & Multi-Regime Consent Ledger](#16-compliance-layer--sag-aftra-article-39--multi-regime-consent-ledger)
+17. [Higgs Field — AI Pitch Vignette Generator](#17-higgs-field--ai-pitch-vignette-generator)
 
 ---
 
@@ -32,7 +33,9 @@ Image Vault is a B2B SaaS platform allowing talent (actors) and their representa
 - Manage access controls and licences for production companies
 - Distribute licensed access to scans via a dual-custody, time-limited download flow
 
-All data is client-side encrypted before leaving the browser. The platform holds **zero plaintext access** to scan files.
+Uploads and downloads are **server-mediated** — scan bytes pass through the Cloudflare Worker/edge to and from R2. Files are protected by storage-provider encryption at rest plus strict access control (authentication, dual-custody 2FA, time-limited download tokens, and audit logging).
+
+> ⚠️ **Not zero-knowledge / not zero-trust.** Earlier drafts of this spec described a client-side zero-knowledge encryption model in which keys never reached the server and the platform held "zero plaintext access." **That approach is no longer being pursued and is explicitly out of scope** (see §5.3). The platform is server-mediated and can technically access stored content; do not reintroduce zero-knowledge / end-to-end-encryption claims in product copy, code, or docs.
 
 **Stack:** Next.js 16 (App Router) · Cloudflare Pages · Cloudflare R2 · Cloudflare D1 · Cloudflare KV · Wrangler
 
@@ -71,13 +74,13 @@ All data is client-side encrypted before leaving the browser. The platform holds
 - [ ] Chunked multipart upload directly to R2 via presigned URLs (never routed through Worker) — *current impl buffers 50 MB chunks through Worker (supports ~500 GB); presigned URL path needed for full 1 TB support*
 - [x] Resumable uploads — status API (`GET /api/vault/upload/status`), resume modal (skips completed parts by filename+size match), "Resume" button on in-progress packages in dashboard
 - [x] Upload progress UI with per-chunk status and overall ETA
-- [ ] Client-side AES-256-GCM encryption of each chunk before upload — *deferred (zero-knowledge layer)*
+- [ ] ~~Client-side AES-256-GCM encryption of each chunk before upload~~ — **out of scope (zero-knowledge model dropped, see §5.3).** Files are encrypted at rest by the storage provider (R2), not client-side.
 - [ ] Integrity verification — SHA-256 hash per chunk and full file, verified post-upload
 - [x] Upload session management — upload_sessions table tracks multipart state; incomplete uploads can be resumed
 - [x] Multi-file upload — a scan package may contain multiple files (body, face, hands, etc.)
 
 ### 3.4 Large File Download (for licensees)
-- [ ] Chunked download with reassembly and decryption in-browser
+- [ ] Chunked download with reassembly in-browser — *no in-browser decryption; files are served from R2 via the server-mediated token flow (zero-knowledge model dropped, see §5.3)*
 - [ ] Parallel chunk download for maximum throughput
 - [ ] Download progress UI with speed meter
 - [ ] Resume interrupted downloads
@@ -150,7 +153,7 @@ Browser
 | **Cloudflare R2** | Scan file storage | Free 10GB, then $0.015/GB (no egress fees) |
 | **Cloudflare D1** | Relational metadata, users, licences, audit log | Free (5GB) |
 | **Cloudflare KV** | Sessions, download tokens, upload state | Free (1GB) |
-| **Cloudflare Access** | Zero Trust identity layer (optional layer 2) | Free up to 50 users |
+| **Cloudflare Access** | Optional network-level identity layer (layer 2) | Free up to 50 users |
 | **Resend** | Transactional email | Free 3k/month |
 | **Twilio** | SMS 2FA | Pay-per-use |
 
@@ -161,15 +164,14 @@ Cloudflare Workers have a 128 MB request body limit. Files up to 1 TB must be up
 
 > **Current implementation note:** V1 routes 50 MB chunks through the Worker via `multipartUpload.uploadPart()`. This works for files up to ~500 GB (50 MB × 10,000 parts = 500 GB). For full 1 TB support, true presigned multipart URLs (bypassing the Worker) are required — tracked in §3.3.
 
-**Why client-side encryption?**
-The platform operates with zero-knowledge of file contents. Each scan is encrypted with a per-file AES-256-GCM key in the browser before any bytes are sent to R2. The platform never holds the plaintext.
+**Storage & encryption model (server-mediated — NOT zero-knowledge):**
+File bytes are handled by the platform. Uploads pass through the Cloudflare Worker/edge to R2, and downloads are served back the same way. Encryption at rest is provided by the storage layer (R2), and the platform can technically access stored content. Confidentiality is enforced by **access control**, not by the platform being unable to read files:
+- Authentication + mandatory TOTP 2FA on every account
+- Dual-custody download — both the licensee and the talent/rep must complete 2FA before a download token is issued
+- Time-limited, single-purpose download tokens (KV-backed, 48h TTL)
+- Vault lock, licence revocation, and tamper-evident audit logging
 
-**Key management (high level):**
-- Each scan has a unique Content Encryption Key (CEK)
-- CEKs are encrypted with the talent's Key Encryption Key (KEK)
-- KEKs are derived from the talent's passphrase using PBKDF2 (never sent to server)
-- For licensed access, a CEK is re-encrypted with the licensee's public key and stored in D1
-- This is an **end-to-end encrypted key exchange** — the platform sees only encrypted key material
+> 🚫 **Zero-knowledge / end-to-end-encrypted key exchange is out of scope (see §5.3).** A previous design proposed per-file Content Encryption Keys (CEKs) wrapped by a talent Key Encryption Key (KEK) derived client-side via PBKDF2, with CEKs re-encrypted to a licensee public key — so the platform would only ever see ciphertext and encrypted key material. **This is not being built.** Do not treat client-side key custody as a current or planned guarantee.
 
 ### 4.4 CI/CD — Cloudflare Pages Native
 
@@ -193,12 +195,14 @@ GitHub repo (main branch)
 
 ## 5. Security Model
 
+> ⚠️ **Scope note:** This platform is **server-mediated, not zero-knowledge** (see §5.3). The threat model below reflects that: the platform *can* technically access stored content, so protections rest on access control, dual-custody, and provider encryption at rest — not on the platform being cryptographically unable to read files.
+
 ### 5.1 Threat Model
-- **Platform compromise:** Cloudflare R2/D1 breach exposes only ciphertext. No plaintext file data at rest on server.
-- **Rogue admin:** Admins cannot access scan files (no key material server-side).
+- **Platform compromise:** R2/D1 data is encrypted at rest by the storage provider, but the platform is server-mediated — a sufficiently deep compromise of platform credentials/infrastructure could expose file content. Blast radius is limited by access control, audit logging, and per-licence scoping rather than by client-held keys.
+- **Rogue admin:** Mitigated by audit logging, least-privilege access, and the admin-email whitelist — **not** by an inability to access files. (Under the dropped zero-knowledge model, admins would have had no key material; that guarantee no longer applies.)
 - **Credential theft:** TOTP 2FA + short-lived sessions limit blast radius.
-- **Insider threat (licensee):** Dual-custody download ensures Talent/Rep participates in every download. Download URLs expire. All downloads are logged.
-- **Link sharing:** Presigned URLs are bound to the requesting licensee's IP (where feasible) and expire.
+- **Insider threat (licensee):** Dual-custody download ensures Talent/Rep participates in every download. Download tokens expire. All downloads are logged.
+- **Link sharing:** Download tokens are single-purpose, time-limited (48h TTL), and bound to the issuing licence/file; bound to requesting IP where feasible.
 - **Scan exfiltration:** Watermarking metadata can be embedded into download packages for forensic traceability.
 
 ### 5.2 Compliance Considerations (TBD — see §8)
@@ -206,6 +210,17 @@ GitHub repo (main branch)
 - CCPA — California residents
 - UK GDPR
 - Biometric data legislation (Illinois BIPA, Texas CUBI, etc.)
+
+### 5.3 Out of Scope — Zero-Knowledge / Zero-Trust Encryption (Deprecated)
+
+**Client-side zero-knowledge encryption is NOT being pursued and is not part of the product.** This section exists so the decision is explicit and is not silently reintroduced by future contributors or AI agents.
+
+- ❌ **No client-side encryption** of scan files before upload. Bytes are uploaded in the clear to the platform and stored with provider-managed encryption at rest.
+- ❌ **No client-held key custody.** There is no talent-derived KEK, no per-file CEK wrapping, and no licensee public-key re-encryption. The platform does not operate "zero-knowledge."
+- ❌ **Not "end-to-end encrypted"** and **not "zero-trust"** in the cryptographic sense. Do not use these terms in marketing copy, UI, code comments, or docs.
+- ✅ **What actually protects scans:** authentication + mandatory TOTP 2FA, dual-custody download approval, time-limited download tokens, vault lock, licence revocation, audit logging, and storage-provider encryption at rest.
+
+**Rationale:** A true zero-knowledge model is incompatible with the server-mediated upload/download, large-file streaming, and operational/recovery requirements the product needs in V1. If this is ever revisited it must be re-proposed as a new initiative — until then, treat any "zero-knowledge"/"zero-trust" claim as a bug to be corrected.
 
 ---
 
@@ -627,14 +642,14 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
 - [x] Database schema: scan_packages, scan_files, upload_sessions
 - [x] Talent vault dashboard with expandable package cards + file list
 - [x] Multipart upload orchestration API — initiate, upload part (via Worker), complete; upload-complete triggers email to talent
-- [ ] Client-side AES-256-GCM chunk encryption (deferred — zero-knowledge layer)
+- [ ] ~~Client-side AES-256-GCM chunk encryption~~ — **out of scope; zero-knowledge model dropped (see §5.3).** Encryption at rest is handled by R2.
 - [x] Upload progress UI with per-file progress bars
 - [x] Resumable uploads — GET /api/vault/upload/status; resume modal skips completed parts; dashboard "Resume" button on in-progress packages
 
 ### ✅ Phase 3 — Download
 - [x] R2 → browser streaming download per file
 - [x] Expandable package cards with per-file download buttons
-- [ ] Chunked download with in-browser AES-256-GCM decryption (deferred — tied to encryption)
+- [ ] ~~Chunked download with in-browser AES-256-GCM decryption~~ — **out of scope; zero-knowledge model dropped (see §5.3).** Downloads are served server-mediated from R2.
 - [ ] Download speed / progress meter
 - [ ] Branded download page per agency (deferred to Phase 5)
 
@@ -3723,3 +3738,296 @@ Given/When/Then acceptance criteria (each becomes a `__tests__/domain/*` case):
 - **E-signature integration** (DocuSign/Adobe) — decision is eventing-based consent; e-sign is a future option if a tenant's counsel requires it.
 - **Union API integration** — 39.L training notices and 39.I approvals are captured in-platform; automated filing to a SAG-AFTRA endpoint is a later phase and gated on Union endorsement (§6.10.3).
 - **Path 4 (AI Training Data Brokerage)** — the opt-in registry remains a separate, adversarial initiative; this section only captures the 39.L `training.notice_filed` record.
+
+---
+
+## 17. Higgs Field — AI Pitch Vignette Generator
+
+### 17.1 Overview
+
+Reps feed a talent's scan package (preview images from 3D scans + TMDB profile metadata) into **[Higgsfield AI](https://higgsfield.ai)** to generate a short cinematic video vignette pitched at a specific role. The output is a 10–30 second bespoke clip that shows the talent visually inhabiting the character context — going far beyond a static headshot by leveraging vault-origin 3D scan data.
+
+**Value proposition:** a reference image from Google Images can be found by anyone. A Higgsfield vignette synthesised from exclusive scan previews is provably vault-origin — it demonstrates Image Vault's value at the exact moment of a casting pitch.
+
+Higgsfield is a professional AI media platform (4.5M+ video generations/day) supporting image-to-video with models including Kling 3.0, Google Veo 3, and Sora 2, with a full REST API and webhook support.
+
+---
+
+### 17.2 User Flow (Rep)
+
+1. Rep opens a processed scan package → **Pitches** tab (new, alongside Files and Activity)
+2. Click **New Pitch**
+3. Fill the generation form:
+   - **Production** — e.g. `The Crown — Season 7`
+   - **Character** — name + 1–3 sentence description (e.g. `Lady Edith, late 40s, British aristocrat, emotionally reserved, conflicted`)
+   - **Tone** — dropdown: `Dramatic | Thriller | Period | Sci-Fi | Comedy | Action | Commercial`
+   - **Audio** — toggle: `None | Ambient score | AI voiceover`
+4. System shows which scan preview images will be used; rep can deselect individual frames
+5. Claude Haiku drafts a Higgsfield-optimised cinematic video prompt from the role + talent metadata
+6. Rep reviews and can edit the draft prompt inline before confirming
+7. **Generate** → async job queued; status pill cycles: `Crafting prompt → Submitting → Generating → Done`
+8. On completion: inline video player renders in the Pitches tab
+9. Actions: **Download** / **Share with licensee** (token-gated link, no login required) / **Attach to licence** / **Archive**
+
+---
+
+### 17.3 Data Model
+
+```sql
+-- Migration: 0031_pitch_vignettes.sql
+CREATE TABLE pitch_vignettes (
+  id                    TEXT PRIMARY KEY,
+  talent_id             TEXT NOT NULL,
+  package_id            TEXT NOT NULL REFERENCES scan_packages(id),
+  created_by            TEXT NOT NULL,         -- rep userId
+  production_name       TEXT NOT NULL,
+  character_description TEXT NOT NULL,
+  tone                  TEXT NOT NULL,
+  include_audio         INTEGER NOT NULL DEFAULT 0,
+  source_image_keys     TEXT NOT NULL,         -- JSON array of R2 keys used as input
+  generated_prompt      TEXT,                  -- Claude-crafted Higgsfield prompt
+  higgsfield_job_id     TEXT,
+  status                TEXT NOT NULL DEFAULT 'pending',
+  -- pending | prompt_crafting | submitting | generating | complete | failed
+  output_r2_key         TEXT,                  -- pitch/{id}/vignette.mp4
+  output_duration_s     INTEGER,
+  error_text            TEXT,
+  created_at            INTEGER NOT NULL,
+  completed_at          INTEGER,
+  deleted_at            INTEGER                -- soft delete
+);
+
+CREATE INDEX idx_pitch_vignettes_package ON pitch_vignettes(package_id, deleted_at);
+CREATE INDEX idx_pitch_vignettes_talent  ON pitch_vignettes(talent_id, deleted_at);
+```
+
+**`talent_profiles` addition:**
+
+```sql
+ALTER TABLE talent_profiles ADD COLUMN pitch_vignettes_enabled INTEGER NOT NULL DEFAULT 1;
+```
+
+---
+
+### 17.4 API Routes
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/pitch/generate` | rep | Create vignette record + queue job |
+| `GET` | `/api/pitch` | rep | List vignettes for a package (`?packageId=`) |
+| `GET` | `/api/pitch/:id` | rep/talent | Get vignette details + current status |
+| `GET` | `/api/pitch/:id/stream` | share token | Token-gated MP4 proxy from R2 |
+| `DELETE` | `/api/pitch/:id` | rep | Soft-delete vignette |
+| `POST` | `/api/pitch/webhook` | HMAC | Higgsfield job completion callback |
+
+**POST `/api/pitch/generate` body:**
+
+```typescript
+{
+  packageId: string;
+  productionName: string;
+  characterDescription: string;
+  tone: "dramatic" | "thriller" | "period" | "sci-fi" | "comedy" | "action" | "commercial";
+  includeAudio: boolean;
+  sourceImageKeys: string[];  // R2 keys of preview images to use (1–4)
+}
+```
+
+**GET `/api/pitch/:id/stream`** — requires `?token=<shareToken>` (KV-backed, 7-day TTL). Streams R2 object with `Content-Type: video/mp4` and `Content-Disposition: inline`.
+
+---
+
+### 17.5 Worker Architecture
+
+New worker: **`higgs-worker`** — isolated from `ai-worker` to separate Higgsfield billing, rate limits, and failure modes.
+
+```
+POST /api/pitch/generate
+  → insert pitch_vignettes row (status: pending)
+  → PITCH_QUEUE.send({ pitchId })
+  → return { id, status: "pending" }
+
+higgs-worker consumes pitch-jobs queue:
+  1. status → prompt_crafting
+  2. Fetch source image R2 keys → presign temporary read URLs (1h TTL)
+  3. Call Anthropic Haiku → craft Higgsfield prompt (see §17.6)
+  4. Save generated_prompt to DB
+  5. status → submitting
+  6. POST to Higgsfield image-to-video API with images + prompt + model
+  7. Store higgsfield_job_id, status → generating
+  8. Poll GET /generations/{jobId} every 15s (or receive webhook at /api/pitch/webhook)
+  9. On complete: fetch output video URL → stream into R2 at pitch/{pitchId}/vignette.mp4
+  10. status → complete, set completed_at, output_r2_key, output_duration_s
+  11. Insert notification: "Pitch vignette for [talent] ready — [production name]"
+  On error: status → failed, set error_text; create error notification
+```
+
+**`wrangler.toml` additions:**
+
+```toml
+[[queues.consumers]]
+queue = "pitch-jobs"
+max_batch_size = 5
+max_batch_timeout = 30
+
+[[queues.producers]]
+binding = "PITCH_QUEUE"
+queue = "pitch-jobs"
+```
+
+**New secret:** `HIGGSFIELD_API_KEY` (`wrangler secret put HIGGSFIELD_API_KEY`)
+
+**New env var (non-secret, in `[vars]`):**
+
+```toml
+HIGGSFIELD_MODEL = "kling-3.0"
+```
+
+---
+
+### 17.6 Higgsfield API Integration
+
+> **Note:** Exact request schema TBC pending API key provisioning. The pattern below matches Higgsfield's documented REST API (image-to-video endpoint).
+
+```typescript
+// lib/higgs/client.ts
+export const runtime = "edge";
+
+export async function submitVignetteJob(env: CloudflareEnv, params: {
+  imageUrls: string[];
+  prompt: string;
+  durationSeconds?: number;
+}): Promise<{ jobId: string }> {
+  const res = await fetch("https://api.higgsfield.ai/v1/generations/image-to-video", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.HIGGSFIELD_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      images: params.imageUrls,
+      prompt: params.prompt,
+      duration: params.durationSeconds ?? 10,
+      model: env.HIGGSFIELD_MODEL ?? "kling-3.0",
+      training: false,    // never permit training on scan data
+    }),
+  });
+  if (!res.ok) throw new Error(`Higgsfield submit: ${res.status} ${await res.text()}`);
+  return res.json() as Promise<{ jobId: string }>;
+}
+
+export async function pollVignetteJob(env: CloudflareEnv, jobId: string): Promise<{
+  status: "pending" | "processing" | "complete" | "failed";
+  videoUrl?: string;
+}> {
+  const res = await fetch(`https://api.higgsfield.ai/v1/generations/${jobId}`, {
+    headers: { Authorization: `Bearer ${env.HIGGSFIELD_API_KEY}` },
+  });
+  if (!res.ok) throw new Error(`Higgsfield poll: ${res.status}`);
+  return res.json();
+}
+```
+
+- `training: false` is sent on every request — scan data must never feed Higgsfield model training.
+- Model selection defaults to `kling-3.0`; Veo 3 available as an upgrade option in Phase 2.
+
+---
+
+### 17.7 Prompt Engineering
+
+Claude Haiku receives:
+- Talent full name + known roles (from `talent_profiles.knownFor` JSON)
+- Character name + description from rep
+- Tone/genre
+- Instruction to produce a Higgsfield-optimised **cinematic video direction** — not a photo description; a motion direction.
+
+**System prompt:**
+
+> You are an AI film director. Given a talent profile and a character brief, write a 2–3 sentence Higgsfield AI video generation prompt. Requirements: include camera movement (push-in, arc, drift, dolly), lighting quality (overcast diffused, dramatic side-key, golden-hour rim, practical interior), atmosphere and texture, and the character's inner emotional state as revealed through micro-expression. The prompt must make the talent feel like they are inhabiting the role, not posing. Output only the prompt text — no preamble, no quotes.
+
+**Example output for a period drama brief:**
+
+> *Slow push-in on a composed British aristocrat, late 40s, cool grey eyes holding layers of grief behind formal composure. English estate exterior, soft overcast light diffused through tall windows, shallow depth of field. Camera drifts from near-profile to three-quarter reveal as a faint tension crosses the jaw — restrained power at the edge of fracture. Muted desaturated palette, period drama register.*
+
+---
+
+### 17.8 UI — Pitches Tab
+
+New tab on `app/(vault)/vault/packages/[packageId]/page.tsx` alongside Files and Activity.
+
+- **Empty state:** `"No pitches yet — generate one to show [talent name] in context for a specific role."`
+- **Vignette card:** production name, character name, tone badge (styled pill), status pill, created-by rep, elapsed time
+- **Generating:** animated stepped progress bar with the current status label
+- **Complete:** inline `<video>` element with controls, muted autoplay on hover; Download / Share / Attach buttons below
+- **Share modal:** generates a `pitch_share:{uuid}` KV token (7-day TTL) → `https://imagevault.io/p/:token` shareable URL, no auth required
+- **Design language:** United Agents aesthetic — black/white/grey, `--color-accent` red on active pills, `text-xs font-medium tracking-widest uppercase` section headers
+
+---
+
+### 17.9 Cost Model & Feature Flag
+
+| Component | Estimated cost |
+|-----------|---------------|
+| Higgsfield Kling 3.0 (10s video) | ~$0.10–$0.50 per generation (TBC from Higgsfield sales) |
+| Claude Haiku prompt crafting | ~$0.001 per generation |
+| R2 storage (MP4 ~15–50 MB each) | $0.015/GB/month |
+
+- Costs logged via `logAiCost(db, { feature: "pitch_vignette", provider: "higgsfield", ... })`
+- Feature flag: `pitch_vignettes` in `aiSettings` — off by default, toggled per-agency by admin
+- Higgsfield spend tracked separately from Anthropic `checkBudget()` ceiling (different API, different ceiling)
+- Future: per-generation credit deducted from agency subscription allowance
+
+---
+
+### 17.10 Consent & Permissions
+
+- Rep can only generate pitches for talent they manage — gated by `talent_reps` delegation check (same as all rep-scoped routes)
+- Talent opts out via `talent_profiles.pitch_vignettes_enabled = 0` — Settings → "Allow reps to generate AI pitch vignettes"
+- `training: false` flag sent to Higgsfield on every request — scan likeness data is never used for third-party model training
+- Sharing a vignette creates an audit log entry: `{ eventType: "pitch.shared", pitchId, sharedBy, recipientEmail }`
+- Vignette output stored under talent's R2 namespace; accessible only via time-limited share token or authenticated stream
+- Vignettes may reference TMDB profile metadata — no additional consent required as TMDB data is already stored during onboarding
+
+---
+
+### 17.11 Phase Breakdown
+
+#### MVP (Phase 17.1)
+
+- [ ] `drizzle/migrations/0031_pitch_vignettes.sql`
+- [ ] `lib/higgs/client.ts` — Higgsfield submit + poll functions
+- [ ] `higgs-worker/` — queue consumer with full job lifecycle
+- [ ] `app/api/pitch/generate/route.ts` + `app/api/pitch/[id]/route.ts`
+- [ ] Pitches tab on package page (card list + status polling + inline player)
+- [ ] Prompt engineering (Haiku system prompt + role brief → cinematic prompt)
+- [ ] Feature flag: `pitch_vignettes`
+- [ ] No audio (Phase 2)
+- [ ] `HIGGSFIELD_API_KEY` secret
+
+#### Phase 2
+
+- [ ] Webhook receiver (`/api/pitch/webhook`) — replace polling loop
+- [ ] Audio toggle — ambient score via Higgsfield audio generation
+- [ ] Share token + `/p/:token` shareable URL for licensees
+- [ ] Attach-to-licence: link vignette to `licences` record for audit trail
+- [ ] Veo 3 model option (higher quality, higher cost)
+
+#### Phase 3 (Deferred)
+
+- [ ] Talent self-serve pitch generation from `/vault/packages/[id]`
+- [ ] Licensee-initiated pitch request from the licence wizard
+- [ ] Batch pitches: one-click generate for every package on a rep's roster
+- [ ] Model selector UI per vignette
+- [ ] ElevenLabs voiceover integration (alt to Higgsfield-native audio)
+
+---
+
+### 17.12 Open Questions
+
+| Question | Owner | Status |
+|----------|-------|--------|
+| Higgsfield exact API request schema (endpoint, field names, image format) | Luke | Pending API key |
+| Higgsfield pricing tier for agency volume (est. 100–500 gens/month) | Luke | Contact Higgsfield sales |
+| Does talent need per-vignette approval, or is the global `pitch_vignettes_enabled` toggle sufficient? | Product | Open |
+| Audio: Higgsfield-native audio generation, or ElevenLabs for voiceover? | Product | Deferred to Phase 2 |
+| Model selection: expose Kling vs Veo vs Sora to reps in UI, or keep configurable by admin only? | Product | Open |

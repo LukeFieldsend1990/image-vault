@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import UploadModal from "../../upload-modal";
 import { FadeImage } from "@/app/(vault)/fade-image";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 import MonitorClient from "../../vault/monitor/monitor-client";
 import type { TalentIdentityForMonitor } from "../../vault/monitor/page";
+import ComplianceClient from "../../compliance/compliance-client";
+import TalentProductionsClient from "../../vault/productions/talent-productions-client";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1154,9 +1157,17 @@ function RevenueTab({ talentId }: { talentId: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-type Tab = "vault" | "licences" | "permissions" | "revenue" | "monitor";
+type Tab = "vault" | "licences" | "permissions" | "revenue" | "monitor" | "compliance" | "productions";
+
+const VALID_TABS = new Set<Tab>(["vault", "licences", "productions", "compliance", "permissions", "revenue", "monitor"]);
 
 export default function RepVaultClient({ talentId }: { talentId: string }) {
+  const searchParams = useSearchParams();
+  const initialTab = useMemo<Tab>(() => {
+    const t = searchParams.get("tab") as Tab | null;
+    return t && VALID_TABS.has(t) ? t : "vault";
+  }, [searchParams]);
+
   const [packages, setPackages] = useState<ScanPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [talent, setTalent] = useState<TalentInfo | null>(null);
@@ -1164,7 +1175,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [addFilesPackageId, setAddFilesPackageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notAllowed, setNotAllowed] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("vault");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -1227,6 +1238,8 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
   const TABS: { id: Tab; label: string }[] = [
     { id: "vault", label: "Vault" },
     { id: "licences", label: "Licences" },
+    { id: "productions", label: "Productions" },
+    { id: "compliance", label: "Compliance" },
     { id: "permissions", label: "Permissions" },
     { id: "revenue", label: "Revenue" },
     { id: "monitor", label: "DeepScan" },
@@ -1358,6 +1371,8 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
         )}
 
         {activeTab === "licences" && <LicencesTab talentId={talentId} />}
+        {activeTab === "productions" && <TalentProductionsClient talentId={talentId} />}
+        {activeTab === "compliance" && <ComplianceClient talentId={talentId} />}
         {activeTab === "permissions" && <PermissionsTab talentId={talentId} />}
         {activeTab === "revenue" && <RevenueTab talentId={talentId} />}
         {activeTab === "monitor" && (() => {

@@ -629,3 +629,36 @@ export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: stri
     `),
   };
 }
+
+export interface RegisterInterestParams {
+  name: string;
+  email: string;
+  company: string;
+  companyType: string;
+  phone?: string;
+  message?: string;
+  submittedAt: number;
+}
+
+export function registerInterestEmail(p: RegisterInterestParams): { subject: string; html: string } {
+  const dt = new Date(p.submittedAt * 1000).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+  });
+  return {
+    subject: `[Image Vault] New access request — ${p.name} (${p.company})`,
+    html: layout(`
+      <p>A new access request has been submitted via the Image Vault registration page.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Name</span><span class="kv-val">${p.name}</span></div>
+        <div class="kv-row"><span class="kv-key">Email</span><span class="kv-val">${p.email}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.company}</span></div>
+        <div class="kv-row"><span class="kv-key">Company type</span><span class="kv-val">${p.companyType}</span></div>
+        ${p.phone ? `<div class="kv-row"><span class="kv-key">Phone</span><span class="kv-val">${p.phone}</span></div>` : ""}
+        ${p.message ? `<div class="kv-row"><span class="kv-key">Message</span><span class="kv-val">${p.message}</span></div>` : ""}
+        <div class="kv-row"><span class="kv-key">Submitted</span><span class="kv-val">${dt}</span></div>
+      </div>
+      <p class="muted">Reply directly to this email to follow up with the applicant.</p>
+    `),
+  };
+}

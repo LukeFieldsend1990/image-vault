@@ -40,6 +40,7 @@ export default async function AdminBridgePage() {
       tokenExpiresAt:       renderBridgeAgents.tokenExpiresAt,
       publishedPackagesJson: renderBridgeAgents.publishedPackagesJson,
       pendingAction:        renderBridgeAgents.pendingAction,
+      buildRevision:        renderBridgeAgents.buildRevision,
       revokedAt:            renderBridgeAgents.revokedAt,
       createdAt:            renderBridgeAgents.createdAt,
     })
@@ -79,6 +80,7 @@ export default async function AdminBridgePage() {
     online:           a.online,
     publishedIds:     a.publishedIds,
     pendingAction:    a.pendingAction,
+    buildRevision:    a.buildRevision ?? null,
     lastHeartbeatAt:  a.lastHeartbeatAt,
     tokenExpiresAt:   a.tokenExpiresAt,
     revokedAt:        a.revokedAt,

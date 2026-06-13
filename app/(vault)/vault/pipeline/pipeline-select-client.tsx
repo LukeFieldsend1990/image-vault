@@ -30,6 +30,14 @@ interface ScanPackage {
   fileCount: number;
 }
 
+interface PipelineJob {
+  id: string;
+  packageName: string;
+  status: string;
+  createdAt: number;
+  completedAt: number | null;
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -42,7 +50,23 @@ function formatDate(ts: number): string {
   });
 }
 
-export default function PipelineSelectClient({ packages }: { packages: ScanPackage[] }) {
+const STATUS_COLOR: Record<string, string> = {
+  queued: "#d97706",
+  processing: "#2563eb",
+  complete: "#166534",
+  failed: "#991b1b",
+  cancelled: "#6b7280",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  queued: "Queued",
+  processing: "Processing",
+  complete: "Complete",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+export default function PipelineSelectClient({ packages, recentJobs = [] }: { packages: ScanPackage[]; recentJobs?: PipelineJob[] }) {
   const router = useRouter();
   const [selectedPkgs, setSelectedPkgs] = useState<Set<string>>(new Set());
   const [selectedSkus, setSelectedSkus] = useState<Set<string>>(new Set(["preview", "realtime", "vfx"]));
@@ -106,9 +130,62 @@ export default function PipelineSelectClient({ packages }: { packages: ScanPacka
         <p className="text-[10px] uppercase tracking-[0.2em] font-semibold mb-1" style={{ color: "var(--color-accent)" }}>
           Digital Double Pipeline
         </p>
-        <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>Start Pipeline</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
-          Select the scan packages to process and the output bundles to generate.
+        <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>Pipeline</h1>
+      </div>
+
+      {/* Recent jobs */}
+      {recentJobs.length > 0 && (
+        <div className="mb-10">
+          <p className="text-[11px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--color-muted)" }}>
+            Jobs
+          </p>
+          <div className="space-y-2">
+            {recentJobs.map((job) => {
+              const color = STATUS_COLOR[job.status] ?? "#9ca3af";
+              const isActive = job.status === "queued" || job.status === "processing";
+              return (
+                <a
+                  key={job.id}
+                  href={`/vault/pipeline/jobs/${job.id}`}
+                  className="flex items-center justify-between gap-4 rounded border px-4 py-3 transition hover:opacity-80"
+                  style={{ borderColor: isActive ? `${color}44` : "var(--color-border)", background: "var(--color-surface)" }}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Status dot */}
+                    <span
+                      className="shrink-0 h-2 w-2 rounded-full"
+                      style={{ background: color, boxShadow: isActive ? `0 0 0 3px ${color}22` : undefined }}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: "var(--color-ink)" }}>
+                        {job.packageName}
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--color-muted)" }}>
+                        {formatDate(job.createdAt)}
+                        {job.completedAt ? ` · ${formatDate(job.completedAt)}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className="shrink-0 text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
+                    style={{ background: `${color}18`, color }}
+                  >
+                    {STATUS_LABEL[job.status] ?? job.status}
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Start new job */}
+      <div className="mb-6">
+        <p className="text-[11px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-muted)" }}>
+          New job
+        </p>
+        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+          Select scan packages and output bundles to process.
         </p>
       </div>
 

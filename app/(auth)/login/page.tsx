@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type Step = "credentials" | "totp";
@@ -14,6 +14,13 @@ function LoginInner() {
   const [totpCode, setTotpCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const codeInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus the code field as soon as the 2FA step appears, so the cursor is
+  // already in the input and the user can type without clicking first.
+  useEffect(() => {
+    if (step === "totp") codeInputRef.current?.focus();
+  }, [step]);
 
   async function handleCredentials(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -97,10 +104,16 @@ function LoginInner() {
       {/* ── Left panel ── */}
       <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
         {/* Wordmark */}
-        <div>
+        <div className="flex items-center justify-between">
           <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-ink]">
             Image Vault
           </span>
+          <a
+            href="/product"
+            className="text-xs font-medium text-[--color-muted] hover:text-[--color-ink] transition"
+          >
+            Explore the platform →
+          </a>
         </div>
 
         {/* Form block */}
@@ -177,7 +190,7 @@ function LoginInner() {
               <p className="mt-8 text-xs text-[--color-muted]">
                 Don&apos;t have an account?{" "}
                 <a
-                  href="/signup"
+                  href="/register-interest"
                   className="font-medium text-[--color-ink] underline underline-offset-2"
                 >
                   Request access
@@ -209,6 +222,7 @@ function LoginInner() {
                     Authentication code
                   </label>
                   <input
+                    ref={codeInputRef}
                     id="code"
                     name="code"
                     type="text"
@@ -275,10 +289,10 @@ function LoginInner() {
           style={{ color: "var(--color-sidebar-muted)" }}
         >
           <span className="font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
-            End-to-end encrypted.
+            Secured by dual-custody access.
           </span>{" "}
-          Files are encrypted in your browser before upload. The platform never
-          holds your plaintext data.
+          Files are encrypted at rest and every download is gated by 2FA from
+          both parties, time-limited, and fully audited.
         </div>
       </div>
     </div>

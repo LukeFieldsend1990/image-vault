@@ -4,7 +4,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { scanPackages, talentSettings } from "@/lib/db/schema";
-import { eq, and, sql, isNull } from "drizzle-orm";
+import { eq, and, sql, isNull, desc } from "drizzle-orm";
+import { pipelineJobs } from "@/lib/db/schema";
 import PipelineSelectClient from "./pipeline-select-client";
 
 async function getSession(): Promise<{ userId: string; role: string } | null> {
@@ -50,5 +51,29 @@ export default async function PipelinePage() {
     ))
     .all();
 
-  return <PipelineSelectClient packages={packages} />;
+  // Fetch all pipeline jobs for this talent with package names
+  const jobs = await db
+    .select({
+      id: pipelineJobs.id,
+      packageName: scanPackages.name,
+      status: pipelineJobs.status,
+      createdAt: pipelineJobs.createdAt,
+      completedAt: pipelineJobs.completedAt,
+    })
+    .from(pipelineJobs)
+    .leftJoin(scanPackages, eq(pipelineJobs.packageId, scanPackages.id))
+    .where(eq(pipelineJobs.talentId, session.userId))
+    .orderBy(desc(pipelineJobs.createdAt))
+    .limit(20)
+    .all();
+
+  const recentJobs = jobs.map((j) => ({
+    id: j.id,
+    packageName: j.packageName ?? "Unknown package",
+    status: j.status,
+    createdAt: j.createdAt,
+    completedAt: j.completedAt ?? null,
+  }));
+
+  return <PipelineSelectClient packages={packages} recentJobs={recentJobs} />;
 }

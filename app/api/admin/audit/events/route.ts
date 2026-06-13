@@ -49,6 +49,22 @@ function fmtGBP(pence: number | null): string {
   return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
+function fmtBridgeDetail(detail: string | null): string | null {
+  if (!detail) return null;
+  try {
+    const d = JSON.parse(detail) as Record<string, unknown>;
+    const parts: string[] = [];
+    if (typeof d.path === "string") parts.push(d.path.split("/").pop() ?? "");
+    if (typeof d.expectedSize === "number" && typeof d.actualSize === "number") {
+      const delta = d.actualSize - d.expectedSize;
+      parts.push(`${delta >= 0 ? "+" : ""}${fmt(delta)} (exp ${fmt(d.expectedSize)})`);
+    }
+    return parts.filter(Boolean).join(" · ") || null;
+  } catch {
+    return detail.slice(0, 80);
+  }
+}
+
 const BASE_LIMIT = 50;
 const FILTERED_LIMIT = 500;
 
@@ -196,7 +212,7 @@ export async function GET(req: NextRequest) {
       timestamp: e.createdAt,
       actor: e.email,
       detail: `${BRIDGE_EVENT_LABEL[e.eventType] ?? e.eventType}${e.packageName ? ` — ${e.packageName}` : ""}`,
-      meta: null,
+      meta: fmtBridgeDetail(e.detail),
       severity: (e.severity === "critical" ? "critical" : e.severity === "warn" ? "warn" : "info") as AuditEvent["severity"],
     });
   }

@@ -145,6 +145,12 @@ export default async function AdminOverviewPage() {
       sub: "strikes · transfers · certificates",
       href: "/admin/compliance",
     },
+    {
+      label: "MCP Integration",
+      value: "Claude",
+      sub: "tokens · tools · audit",
+      href: "/admin/mcp",
+    },
   ];
 
   return (

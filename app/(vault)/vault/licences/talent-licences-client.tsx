@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import OrgMembersPanel from "./org-members-panel";
 
@@ -230,7 +230,7 @@ function RenderBridgePanel({ agent, licencePackageId }: { agent: BridgeAgentStat
   );
 }
 
-export default function TalentLicencesClient({ role = "talent" }: { role?: string }) {
+export default function TalentLicencesClient({ role = "talent", highlight = null }: { role?: string; highlight?: string | null }) {
   const [licences, setLicences] = useState<Licence[]>([]);
   const [loading, setLoading] = useState(true);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -240,6 +240,9 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LicenceTab>("active");
   const [scrubDataById, setScrubDataById] = useState<Record<string, ScrubData | "loading">>({});
+  const [packages, setPackages] = useState<{ id: string; name: string }[]>([]);
+  const [attachingPkg, setAttachingPkg] = useState<Record<string, string>>({});
+  const [attachingId, setAttachingId] = useState<string | null>(null);
 
   // Download Requests tab state
   const [pendingDownloads, setPendingDownloads] = useState<PendingDownload[]>([]);
@@ -247,6 +250,8 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   const [requestsLoaded, setRequestsLoaded] = useState(false);
 
   const agentsByLicence = useBridgeAgents(licences);
+
+  const highlightedRef = useRef(false);
 
   async function load() {
     const r = await fetch("/api/licences");
@@ -256,6 +261,56 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
   }
 
   useEffect(() => { void load(); }, []);
+
+  // Scroll to + expand the highlighted licence once licences are loaded
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!highlight || licences.length === 0 || highlightedRef.current) return;
+    highlightedRef.current = true;
+
+    const target = licences.find((l) => l.id === highlight);
+    if (!target) return;
+
+    const ts = Math.floor(Date.now() / 1000);
+    let tab: LicenceTab = "active";
+    if (target.status === "APPROVED" && target.validTo + 86400 > ts) {
+      tab = "active";
+    } else if (target.status === "EXPIRED" || (target.status === "APPROVED" && target.validTo + 86400 <= ts)) {
+      tab = "expired";
+    } else if (["DENIED", "REVOKED", "SCRUB_PERIOD", "OVERDUE", "CLOSED"].includes(target.status)) {
+      tab = "history";
+    }
+
+    setActiveTab(tab);
+    setExpandedId(highlight);
+    setTimeout(() => {
+      document.getElementById(`licence-${highlight}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+  }, [highlight, licences]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    fetch("/api/vault/packages")
+      .then((r) => r.json())
+      .then((d) => {
+        const data = d as { packages?: { id: string; name: string; status?: string }[] };
+        setPackages((data.packages ?? []).filter((p) => p.status === "ready"));
+      })
+      .catch(() => {/* non-fatal */});
+  }, []);
+
+  async function attachPackage(licenceId: string) {
+    const pkgId = attachingPkg[licenceId];
+    if (!pkgId) return;
+    setAttachingId(licenceId);
+    await fetch(`/api/licences/${licenceId}/attach-package`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ packageId: pkgId }),
+    });
+    await load();
+    setAttachingId(null);
+  }
 
   async function loadRequests() {
     if (requestsLoaded) return;
@@ -459,7 +514,7 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
               const isExpired = l.validTo + 86400 <= now || l.status === "EXPIRED";
 
               return (
-                <div key={l.id} className="rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+                <div key={l.id} id={`licence-${l.id}`} className="rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", scrollMarginTop: 80 }}>
                   <div className="p-5">
                     {/* ── Summary row ─────────────────────────────────────── */}
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -578,6 +633,39 @@ export default function TalentLicencesClient({ role = "talent" }: { role?: strin
                         )}
                       </div>
                     </div>
+
+                    {/* ── Attach scan for APPROVED production licences with no package ── */}
+                    {l.status === "APPROVED" && l.productionId && !l.packageName && packages.length > 0 && (
+                      <div
+                        className="mt-3 rounded border p-3 space-y-2"
+                        style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                      >
+                        <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                          This production licence has no scan attached.
+                        </p>
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <select
+                            value={attachingPkg[l.id] ?? ""}
+                            onChange={(e) => setAttachingPkg((prev) => ({ ...prev, [l.id]: e.target.value }))}
+                            className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+                          >
+                            <option value="">— select a package —</option>
+                            {packages.map((p) => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => void attachPackage(l.id)}
+                            disabled={!attachingPkg[l.id] || attachingId === l.id}
+                            className="rounded px-3 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                            style={{ background: "var(--color-accent)" }}
+                          >
+                            {attachingId === l.id ? "Attaching…" : "Attach"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* ── Expanded details ─────────────────────────────────── */}
                     {expanded && (

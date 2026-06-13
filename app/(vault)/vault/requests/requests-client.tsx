@@ -22,6 +22,7 @@ interface Licence {
   proposedFee: number | null; // pence
   agencySharePct: number | null;
   talentSharePct: number | null;
+  productionId: string | null;
 }
 
 const LICENCE_TYPE_LABELS: Record<string, string> = {
@@ -50,17 +51,55 @@ function fmtGBP(pence: number) {
 
 export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
   const [requests, setRequests] = useState<Licence[]>([]);
+  const [awaitingPackage, setAwaitingPackage] = useState<Licence[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState("");
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [packages, setPackages] = useState<{ id: string; name: string }[]>([]);
+  const [attachingId, setAttachingId] = useState<string | null>(null);
+  const [selectedPkg, setSelectedPkg] = useState<Record<string, string>>({});
+  const [attachError, setAttachError] = useState<Record<string, string>>({});
 
   async function load() {
-    const r = await fetch("/api/licences?status=PENDING");
-    const d = await r.json() as { licences?: Licence[] };
-    setRequests(d.licences ?? []);
+    const [r1, r2, r3] = await Promise.all([
+      fetch("/api/licences?status=PENDING"),
+      fetch("/api/licences?status=AWAITING_PACKAGE"),
+      fetch("/api/vault/packages"),
+    ]);
+    const d1 = await r1.json() as { licences?: Licence[] };
+    const d2 = await r2.json() as { licences?: Licence[] };
+    const d3 = await r3.json() as { packages?: { id: string; name: string; status?: string }[] };
+    setRequests(d1.licences ?? []);
+    setAwaitingPackage(d2.licences ?? []);
+    setPackages((d3.packages ?? []).filter(p => p.status === "ready"));
     setLoading(false);
+  }
+
+  async function attachPackage(licenceId: string) {
+    const pkgId = selectedPkg[licenceId];
+    if (!pkgId) return;
+    setAttachingId(licenceId);
+    const r = await fetch(`/api/licences/${licenceId}/attach-package`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ packageId: pkgId }),
+    });
+    const d = await r.json() as { error?: string };
+    if (!r.ok) {
+      setAttachError(prev => ({ ...prev, [licenceId]: d.error ?? "Failed to attach package" }));
+    } else {
+      await load();
+    }
+    setAttachingId(null);
+  }
+
+  async function acceptInvite(licenceId: string) {
+    setActionId(licenceId);
+    await fetch(`/api/licences/${licenceId}/accept-invite`, { method: "POST" });
+    await load();
+    setActionId(null);
   }
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -99,8 +138,163 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
 
       {loading && <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>}
 
-      {!loading && requests.length === 0 && (
+      {!loading && requests.length === 0 && awaitingPackage.length === 0 && (
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>No pending requests.</p>
+      )}
+
+      {/* ── AWAITING_PACKAGE: Cast Invitations ──────────────────────────── */}
+      {awaitingPackage.length > 0 && (
+        <div className="space-y-4 mb-6">
+          {awaitingPackage.map((r) => (
+            <div
+              key={r.id}
+              className="rounded border"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+            >
+              <div className="p-5">
+                {/* Cast invitation badge */}
+                <div className="mb-3">
+                  <span
+                    className="rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-widest"
+                    style={{ background: "var(--color-accent)", color: "#fff" }}
+                  >
+                    Cast Invitation
+                  </span>
+                </div>
+
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-sm" style={{ color: "var(--color-ink)" }}>
+                        {r.projectName}
+                      </p>
+                      {r.licenceType && (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{ background: "var(--color-border)", color: "var(--color-muted)" }}
+                        >
+                          {LICENCE_TYPE_LABELS[r.licenceType] ?? r.licenceType}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+                      {r.productionCompany}
+                      {r.territory ? ` · ${r.territory}` : ""}
+                    </p>
+                    {r.proposedFee && (
+                      <p className="text-xs mt-1 font-medium" style={{ color: "var(--color-accent)" }}>
+                        Proposed fee: {fmtGBP(r.proposedFee)}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                    className="flex-shrink-0 flex items-center gap-1 rounded border px-2.5 py-1.5 text-xs transition hover:bg-opacity-80"
+                    style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}
+                  >
+                    Details
+                    <svg
+                      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      style={{ transform: expandedId === r.id ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Expanded details for cast invitation */}
+                {expandedId === r.id && (
+                  <div
+                    className="mt-4 rounded border divide-y text-xs"
+                    style={{ borderColor: "var(--color-border)" }}
+                  >
+                    {[
+                      ["Licence period", `${formatDate(r.validFrom)} – ${formatDate(r.validTo)}`],
+                      r.exclusivity ? ["Exclusivity", EXCLUSIVITY_LABELS[r.exclusivity] ?? r.exclusivity] : null,
+                      r.intendedUse ? ["Intended use", r.intendedUse] : null,
+                      ["AI processing", r.permitAiTraining ? "⚠ Requested" : "Not requested"],
+                    ]
+                      .filter((row): row is [string, string] => row !== null)
+                      .map(([key, value]) => (
+                        <div key={key} className="flex justify-between gap-4 px-3 py-2">
+                          <span style={{ color: "var(--color-muted)" }}>{key}</span>
+                          <span
+                            className="font-medium text-right"
+                            style={{
+                              color: key === "AI processing" && r.permitAiTraining ? "#dc2626" : "var(--color-ink)",
+                            }}
+                          >
+                            {value}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {/* Package selector (if existing scan available) */}
+                {packages.length > 0 && (
+                  <div
+                    className="mt-4 rounded border p-3 space-y-3"
+                    style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                  >
+                    <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                      Attach an existing scan package, or accept and get scanned as part of the production.
+                    </p>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <select
+                        value={selectedPkg[r.id] ?? ""}
+                        onChange={(e) => setSelectedPkg(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                        style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+                      >
+                        <option value="">— select a package —</option>
+                        {packages.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => void attachPackage(r.id)}
+                        disabled={!selectedPkg[r.id] || attachingId === r.id}
+                        className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                        style={{ background: "var(--color-accent)" }}
+                      >
+                        {attachingId === r.id ? "Attaching…" : "Attach Package"}
+                      </button>
+                    </div>
+                    {attachError[r.id] && (
+                      <p className="text-xs" style={{ color: "#dc2626" }}>{attachError[r.id]}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Accept / Decline */}
+                <div className="mt-3 flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => void acceptInvite(r.id)}
+                    disabled={actionId === r.id}
+                    className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                    style={{ background: "var(--color-accent)" }}
+                  >
+                    {actionId === r.id ? "Accepting…" : "Accept — get scanned later"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void deny(r.id)}
+                    disabled={actionId === r.id}
+                    className="text-xs transition disabled:opacity-60"
+                    style={{ color: "var(--color-muted)" }}
+                  >
+                    Decline invitation
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="space-y-4">
@@ -262,6 +456,42 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                           <span style={{ color: "var(--color-accent)" }}>{fmtGBP(netEarnings)}</span>
                         </div>
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Package selector for production licences with no scan yet ── */}
+                {r.productionId && !r.packageName && packages.length > 0 && (
+                  <div
+                    className="mt-4 rounded border p-3 space-y-2"
+                    style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                  >
+                    <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                      Attach a scan package to this production licence (optional — you can approve now and attach later).
+                    </p>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <select
+                        value={selectedPkg[r.id] ?? ""}
+                        onChange={(e) => setSelectedPkg(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                        style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+                      >
+                        <option value="">— select a package —</option>
+                        {packages.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => void attachPackage(r.id)}
+                        disabled={!selectedPkg[r.id] || attachingId === r.id}
+                        className="rounded px-3 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                        style={{ background: "var(--color-accent)" }}
+                      >
+                        {attachingId === r.id ? "Attaching…" : "Attach"}
+                      </button>
+                    </div>
+                    {attachError[r.id] && (
+                      <p className="text-xs" style={{ color: "#dc2626" }}>{attachError[r.id]}</p>
                     )}
                   </div>
                 )}

@@ -187,6 +187,7 @@ export const talentProfiles = sqliteTable("talent_profiles", {
   knownFor: text("known_for").notNull().default("[]"), // JSON: [{title, year, type}]
   popularity: real("popularity"),
   onboardedAt: integer("onboarded_at").notNull(), // unix timestamp
+  pitchVignettesEnabled: integer("pitch_vignettes_enabled", { mode: "boolean" }).notNull().default(false),
 });
 
 export const invites = sqliteTable("invites", {
@@ -656,6 +657,7 @@ export const renderBridgeAgents = sqliteTable("render_bridge_agents", {
   lastHeartbeatAt: integer("last_heartbeat_at"),
   publishedPackagesJson: text("published_packages_json").notNull().default("[]"),
   pendingAction: text("pending_action"),               // null | purge | publish | rotate-token
+  buildRevision: text("build_revision"),               // git SHA from heartbeat; null = pre-versioning container
   revokedAt: integer("revoked_at"),
   createdAt: integer("created_at").notNull(),
 });
@@ -830,6 +832,30 @@ export const complianceCertificates = sqliteTable("compliance_certificates", {
 
 // ── Production cast onboarding ────────────────────────────────────────────────
 
+// ── Pitch Vignettes ────────────────────────────────────────────────────────────
+
+export const pitchVignettes = sqliteTable("pitch_vignettes", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull(),
+  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  createdBy: text("created_by").notNull(),
+  productionName: text("production_name").notNull(),
+  characterDescription: text("character_description").notNull(),
+  tone: text("tone").notNull().default("dramatic"),
+  includeAudio: integer("include_audio", { mode: "boolean" }).notNull().default(false),
+  sourceImageKeys: text("source_image_keys").notNull().default("[]"),  // JSON string[]
+  generatedPrompt: text("generated_prompt"),
+  higgsfield_job_id: text("higgsfield_job_id"),
+  status: text("status").notNull().default("pending"),
+  // pending | prompt_crafting | submitting | generating | complete | failed
+  output_r2_key: text("output_r2_key"),
+  output_duration_s: integer("output_duration_s"),
+  error_text: text("error_text"),
+  createdAt: integer("created_at").notNull(),
+  completedAt: integer("completed_at"),
+  deletedAt: integer("deleted_at"),
+});
+
 export const productionCast = sqliteTable("production_cast", {
   id: text("id").primaryKey(),
   productionId: text("production_id").notNull().references(() => productions.id, { onDelete: "cascade" }),
@@ -845,4 +871,29 @@ export const productionCast = sqliteTable("production_cast", {
   addedBy: text("added_by").notNull().references(() => users.id),
   addedAt: integer("added_at").notNull(),
   linkedAt: integer("linked_at"),
+});
+
+// ── Admin MCP integration ─────────────────────────────────────────────────────
+
+export const mcpTokens = sqliteTable("mcp_tokens", {
+  id: text("id").primaryKey(), // UUID
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(), // SHA-256 of raw token
+  displayName: text("display_name").notNull(),
+  scope: text("scope", { enum: ["read", "admin"] }).notNull().default("read"),
+  createdAt: integer("created_at").notNull(),  // unix timestamp
+  expiresAt: integer("expires_at").notNull(),  // unix timestamp; tokens always expire
+  lastUsedAt: integer("last_used_at"),
+  revokedAt: integer("revoked_at"),            // null = active
+});
+
+export const mcpAuditLog = sqliteTable("mcp_audit_log", {
+  id: text("id").primaryKey(), // UUID
+  tokenId: text("token_id").notNull().references(() => mcpTokens.id),
+  userId: text("user_id").notNull().references(() => users.id),
+  tool: text("tool").notNull(), // tool name, or token.created / token.revoked
+  paramsJson: text("params_json"), // redacted parameters (never contains TOTP codes)
+  success: integer("success", { mode: "boolean" }).notNull(),
+  message: text("message"),
+  createdAt: integer("created_at").notNull(), // unix timestamp
 });

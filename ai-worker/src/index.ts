@@ -115,6 +115,9 @@ async function handleFeeGuidance(request: Request, env: Env) {
   const p25 = fees[Math.floor(count * 0.25)];
   const p75 = fees[Math.floor(count * 0.75)];
 
+  const proposedFeeDollars = proposedFee !== null ? Math.round(proposedFee / 100) : null;
+  const feesDollars = fees.map(f => Math.round(f / 100));
+
   const result = await callAi(env, db, {
     feature: "fee_guidance",
     requiresReasoning: true,
@@ -123,15 +126,16 @@ async function handleFeeGuidance(request: Request, env: Env) {
       licenceType,
       territory,
       exclusivity,
-      proposedFee,
-      comparables: fees,
+      proposedFee: proposedFeeDollars,
+      comparables: feesDollars,
     }),
   });
 
   let guidance: string | null = null;
   if (result) {
     try {
-      const parsed = JSON.parse(result.text);
+      const stripped = result.text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+      const parsed = JSON.parse(stripped);
       guidance = parsed.guidance ?? null;
     } catch {
       guidance = result.text.trim() || null;

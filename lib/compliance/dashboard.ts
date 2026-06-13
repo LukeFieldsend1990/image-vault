@@ -21,6 +21,7 @@ import {
   productions,
   replicaTransfers,
   strikeLocks,
+  users,
 } from "@/lib/db/schema";
 import { evaluateObligations } from "./registry";
 import "./regimes";
@@ -275,6 +276,13 @@ type LicenceEventRow = {
 // Status rank: gap beats pending beats met beats n/a
 const STATUS_RANK: Record<string, number> = { gap: 3, pending: 2, met: 1, "n/a": 0 };
 
+// Licences in these statuses do not contribute to the production health score.
+// REVOKED / DENIED — contract is void, obligations never completed.
+// SCRUB_PERIOD / EXPIRED / CLOSED — contract completed normally; scrub attestation
+//   is a producer obligation the talent cannot action, so it must not count against
+//   their compliance record. All obligations show n/a; history remains visible in modal.
+const VOID_STATUSES = new Set(["REVOKED", "DENIED", "SCRUB_PERIOD", "EXPIRED", "CLOSED"]);
+
 function evaluateLicence(
   licence: LicenceRow,
   events: LicenceEventRow[],
@@ -292,6 +300,12 @@ function evaluateLicence(
 
   const results = evaluateObligations(regime, repLicence, evaluated);
   results.push(scrubObligationResult(licence));
+
+  // Void licences: contract is void, obligations don't apply. Mark all n/a so
+  // the modal displays cleanly without any misleading gap indicators.
+  if (VOID_STATUSES.has(licence.status)) {
+    return results.map((o) => ({ ...o, status: "n/a" as const, evidence: null }));
+  }
 
   // Attach the satisfying ledger event to each met obligation
   return results.map((o): ObligationResultWithEvidence => {
@@ -315,15 +329,18 @@ function evaluateLicence(
 }
 
 // Merge per-licence results: worst status per obligation wins.
+// Void licences (REVOKED / DENIED) are excluded from the merge — they must not
+// drag down the production health score since the contract is no longer active.
 function evaluateGroup(
   licenceRows: LicenceRow[],
   eventsByLicence: Map<string, LicenceEventRow[]>,
   regime: RegimeId,
 ): ObligationResult[] {
-  if (licenceRows.length === 0) return [];
+  const activeLicences = licenceRows.filter((l) => !VOID_STATUSES.has(l.status));
+  if (activeLicences.length === 0) return [];
   const merged = new Map<string, ObligationResultWithEvidence>();
 
-  for (const licence of licenceRows) {
+  for (const licence of activeLicences) {
     const results = evaluateLicence(licence, eventsByLicence.get(licence.id) ?? [], regime);
     for (const o of results) {
       const existing = merged.get(o.id);
@@ -792,6 +809,270 @@ export async function buildOrgDashboard(
   return {
     orgId,
     orgName: org.name,
+    regime,
+    healthScore: orgHealthScore,
+    complianceStatus: scoreToStatus(orgHealthScore),
+    summary: {
+      totalProductions: productionResults.length,
+      compliantProductions,
+      totalLicences,
+      requiredGapsTotal,
+      activeStrikes: strikeRows.length,
+      pendingTransfers: transferRows.length,
+    },
+    productions: productionResults,
+    obligationSummary,
+    actionItems,
+    recentCertificates: certRows,
+  };
+}
+
+// ── Talent-level dashboard ─────────────────────────────────────────────────────
+//
+// Same structure as the org dashboard but keyed on the talent's userId.
+// No cast onboarding (that's producer-side); strikes are global-only.
+
+export async function buildTalentDashboard(
+  db: Db,
+  talentId: string,
+  regime: RegimeId,
+): Promise<DashboardData | null> {
+  const talentUser = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, talentId))
+    .get();
+  if (!talentUser) return null;
+
+  const licenceRows = await db
+    .select({
+      id: licences.id,
+      projectName: licences.projectName,
+      productionId: licences.productionId,
+      licenceType: licences.licenceType,
+      permitAiTraining: licences.permitAiTraining,
+      status: licences.status,
+      createdAt: licences.createdAt,
+      lastDownloadAt: licences.lastDownloadAt,
+      scrubAttestedAt: licences.scrubAttestedAt,
+      scrubDeadline: licences.scrubDeadline,
+    })
+    .from(licences)
+    .where(eq(licences.talentId, talentId))
+    .all();
+
+  if (licenceRows.length === 0) {
+    return {
+      orgId: talentId,
+      orgName: talentUser.email,
+      regime,
+      healthScore: 100,
+      complianceStatus: "compliant",
+      summary: {
+        totalProductions: 0,
+        compliantProductions: 0,
+        totalLicences: 0,
+        requiredGapsTotal: 0,
+        activeStrikes: 0,
+        pendingTransfers: 0,
+      },
+      productions: [],
+      obligationSummary: [],
+      actionItems: [],
+      recentCertificates: [],
+    };
+  }
+
+  const licenceIds = licenceRows.map((l) => l.id);
+
+  const eventRows = await db
+    .select({
+      licenceId: complianceEvents.licenceId,
+      eventType: complianceEvents.eventType,
+      scopeJson: complianceEvents.scopeJson,
+      seq: complianceEvents.seq,
+      createdAt: complianceEvents.createdAt,
+      hash: complianceEvents.hash,
+    })
+    .from(complianceEvents)
+    .where(inArray(complianceEvents.licenceId, licenceIds))
+    .orderBy(complianceEvents.seq)
+    .all();
+
+  const eventsByLicence = new Map<string, LicenceEventRow[]>();
+  for (const e of eventRows) {
+    if (!e.licenceId) continue;
+    const list = eventsByLicence.get(e.licenceId) ?? [];
+    list.push({ eventType: e.eventType, scopeJson: e.scopeJson, seq: e.seq, createdAt: e.createdAt, hash: e.hash });
+    eventsByLicence.set(e.licenceId, list);
+  }
+
+  const licenceProductionIds = [
+    ...new Set(licenceRows.map((l) => l.productionId).filter(Boolean)),
+  ] as string[];
+
+  const productionMeta = licenceProductionIds.length > 0
+    ? await db
+        .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
+        .from(productions)
+        .where(inArray(productions.id, licenceProductionIds))
+        .all()
+    : [];
+  const productionMap = new Map(productionMeta.map((p) => [p.id, p]));
+
+  type TalentLicenceGroup = {
+    productionId: string | null;
+    productionName: string;
+    productionType: string | null;
+    productionSagNumber: string | null;
+    licences: typeof licenceRows;
+  };
+
+  const groups = new Map<string, TalentLicenceGroup>();
+  for (const l of licenceRows) {
+    const key = l.productionId ?? `__proj__${l.projectName}`;
+    if (!groups.has(key)) {
+      const prod = l.productionId ? productionMap.get(l.productionId) : null;
+      groups.set(key, {
+        productionId: l.productionId,
+        productionName: prod?.name ?? l.projectName,
+        productionType: prod?.type ?? null,
+        productionSagNumber: prod?.sagProjectNumber ?? null,
+        licences: [],
+      });
+    }
+    groups.get(key)!.licences.push(l);
+  }
+
+  const productionResults: ProductionCompliance[] = [];
+  for (const group of groups.values()) {
+    const obligations = evaluateGroup(group.licences, eventsByLicence, regime);
+    const healthScore = computeHealthScore(obligations);
+    const requiredGaps = obligations.filter(
+      (o) => o.severity === "required" && o.status === "gap",
+    ).length;
+    const licenceSummaries: LicenceSummary[] = group.licences.map((l) => ({
+      id: l.id,
+      projectName: l.projectName,
+      licenceType: l.licenceType,
+      status: l.status,
+      obligations: evaluateLicence(l, eventsByLicence.get(l.id) ?? [], regime),
+    }));
+    productionResults.push({
+      id: group.productionId,
+      name: group.productionName,
+      type: group.productionType,
+      sagProjectNumber: group.productionSagNumber,
+      licenceCount: group.licences.length,
+      healthScore,
+      complianceStatus: scoreToStatus(healthScore),
+      requiredGaps,
+      obligations,
+      licences: licenceSummaries,
+      castOnboarding: null,
+    });
+  }
+
+  productionResults.sort((a, b) => a.healthScore - b.healthScore);
+
+  const totalLicences = licenceRows.length;
+  const weightedScore = productionResults.reduce((sum, p) => sum + p.healthScore * p.licenceCount, 0);
+  const orgHealthScore = totalLicences > 0 ? Math.round(weightedScore / totalLicences) : 100;
+
+  const obligationMap = new Map<string, ObligationSummaryItem>();
+  for (const prod of productionResults) {
+    for (const o of prod.obligations) {
+      if (!obligationMap.has(o.id)) {
+        obligationMap.set(o.id, { id: o.id, clauseRef: o.clauseRef, title: o.title, severity: o.severity, metCount: 0, gapCount: 0, naCount: 0, pendingCount: 0, progressPct: 0 });
+      }
+      const item = obligationMap.get(o.id)!;
+      if (o.status === "met") item.metCount++;
+      else if (o.status === "gap") item.gapCount++;
+      else if (o.status === "pending") item.pendingCount++;
+      else item.naCount++;
+    }
+  }
+  for (const item of obligationMap.values()) {
+    const assessed = item.metCount + item.gapCount;
+    item.progressPct = assessed > 0 ? Math.round((item.metCount / assessed) * 100) : 100;
+  }
+  const obligationSummary = [...obligationMap.values()].sort((a, b) => a.clauseRef.localeCompare(b.clauseRef));
+
+  const actionItems: ActionItem[] = [];
+  for (const group of groups.values()) {
+    for (const licence of group.licences) {
+      const obligations = evaluateLicence(licence, eventsByLicence.get(licence.id) ?? [], regime);
+      for (const o of obligations) {
+        if (o.status !== "gap" && o.status !== "pending") continue;
+        const rem = REMEDIATION[o.id];
+        if (!rem) continue;
+        if (o.status === "pending") {
+          actionItems.push({
+            productionName: group.productionName,
+            licenceId: licence.id,
+            licenceProjectName: licence.projectName,
+            obligationId: o.id,
+            clauseRef: o.clauseRef,
+            title: o.title,
+            severity: o.severity,
+            action: rem.action,
+            actionOwner: rem.owner,
+            urgency: "pending",
+            deadlineLabel: "Required on expiry",
+          });
+        } else {
+          const { urgency, deadlineLabel } = computeUrgency(o.id, o.severity, licence.createdAt, licence.lastDownloadAt);
+          actionItems.push({
+            productionName: group.productionName,
+            licenceId: licence.id,
+            licenceProjectName: licence.projectName,
+            obligationId: o.id,
+            clauseRef: o.clauseRef,
+            title: o.title,
+            severity: o.severity,
+            action: rem.action,
+            actionOwner: rem.owner,
+            urgency,
+            deadlineLabel,
+          });
+        }
+      }
+    }
+  }
+
+  const urgencyOrder: Record<string, number> = { critical: 0, soon: 1, upcoming: 2, info: 3, pending: 4 };
+  actionItems.sort((a, b) => {
+    const u = urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
+    if (u !== 0) return u;
+    return a.severity === "required" && b.severity !== "required" ? -1 : 1;
+  });
+
+  const strikeRows = await db
+    .select({ id: strikeLocks.id })
+    .from(strikeLocks)
+    .where(and(eq(strikeLocks.status, "active"), eq(strikeLocks.scope, "global")))
+    .all();
+
+  const transferRows = await db
+    .select({ id: replicaTransfers.id })
+    .from(replicaTransfers)
+    .where(and(inArray(replicaTransfers.licenceId, licenceIds), eq(replicaTransfers.status, "requested")))
+    .all();
+
+  const certRows = await db
+    .select({ id: complianceCertificates.id, scope: complianceCertificates.scope, generatedAt: complianceCertificates.generatedAt })
+    .from(complianceCertificates)
+    .where(and(eq(complianceCertificates.scope, "talent"), eq(complianceCertificates.scopeId, talentId)))
+    .orderBy(desc(complianceCertificates.generatedAt))
+    .limit(5)
+    .all();
+
+  const requiredGapsTotal = productionResults.reduce((sum, p) => sum + p.requiredGaps, 0);
+  const compliantProductions = productionResults.filter((p) => p.complianceStatus === "compliant").length;
+
+  return {
+    orgId: talentId,
+    orgName: talentUser.email,
     regime,
     healthScore: orgHealthScore,
     complianceStatus: scoreToStatus(orgHealthScore),

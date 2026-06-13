@@ -2,6 +2,9 @@ name = "image-vault-pipeline-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+# Large scan packages (20GB+) need the max CPU time limit
+[limits]
+cpu_ms = 300000
 
 # -------------------------------------------------------------------
 # Queue consumer

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import PitchesTab from "./pitches-tab";
 
 interface Stage {
   id: string;
@@ -149,7 +150,7 @@ function StageRow({ stage }: { stage: Stage }) {
   );
 }
 
-export default function PipelineJobClient({ jobId }: { jobId: string }) {
+export default function PipelineJobClient({ jobId, sessionRole }: { jobId: string; sessionRole?: string }) {
   const [data, setData] = useState<JobDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -293,6 +294,14 @@ export default function PipelineJobClient({ jobId }: { jobId: string }) {
         <p className="mt-6 text-xs" style={{ color: "var(--color-muted)" }}>
           This page refreshes automatically every 5 seconds.
         </p>
+      )}
+
+      {/* Pitch Vignettes — visible once the pipeline job has completed */}
+      {job.status === "complete" && (
+        <PitchesTab
+          packageId={job.packageId}
+          sessionRole={sessionRole ?? "talent"}
+        />
       )}
     </div>
   );

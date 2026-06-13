@@ -156,8 +156,8 @@ export default async function TalentProfilePage({
     aiTags: tagsByPackage[p.id] ?? [],
   }));
 
-  // Deepfake Protection (monitoring_reference) is internal — hide from licensees
-  const visiblePermissions = session.role === "licensee"
+  // Deepfake Protection (monitoring_reference) is internal — hide from licensees and reps (directory view)
+  const visiblePermissions = (session.role === "licensee" || session.role === "rep")
     ? permissions.filter((p) => p.licenceType !== "monitoring_reference")
     : permissions;
 
@@ -169,6 +169,7 @@ export default async function TalentProfilePage({
       permissions={visiblePermissions}
       capabilities={capabilities}
       packages={packagesWithTags}
+      viewerRole={session.role}
     />
   );
 }

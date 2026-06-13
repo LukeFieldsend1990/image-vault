@@ -7,9 +7,9 @@ import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { cookies } from "next/headers";
 import ComplianceClient from "./compliance-client";
+import RepComplianceOverview from "./rep-compliance-overview";
 
 export default async function CompliancePage() {
-  // Read session from cookie (edge-compatible approach used across vault pages)
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session")?.value;
 
@@ -35,8 +35,9 @@ export default async function CompliancePage() {
   // Licensees access compliance through their licence panel, not this page
   if (role === "licensee") redirect("/dashboard");
 
-  // Admins always have access; non-admins check the DB flag
-  if (!isAdmin(email ?? "")) {
+  // Reps always have access (they view their talent's compliance, not their own flag)
+  // Admins always have access; for talent check the per-user DB flag
+  if (role !== "rep" && !isAdmin(email ?? "")) {
     const db = getDb();
     const row = await db
       .select({ complianceEnabled: users.complianceEnabled })
@@ -45,6 +46,11 @@ export default async function CompliancePage() {
       .get();
 
     if (row?.complianceEnabled === false) redirect("/dashboard");
+  }
+
+  // Reps see an aggregated overview of all managed talent — each card links to the talent's roster detail
+  if (role === "rep") {
+    return <RepComplianceOverview />;
   }
 
   return <ComplianceClient />;

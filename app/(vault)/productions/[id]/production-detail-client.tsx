@@ -58,6 +58,7 @@ interface LicenceSummary {
   agreedFee: number | null;
   proposedFee: number | null;
   packageName: string | null;
+  productionId: string | null;
 }
 
 interface LicenceTerms {
@@ -88,6 +89,16 @@ const CAST_STATUS_LABEL: Record<string, string> = {
   consented: "Consented",
   declined: "Declined",
 };
+
+const TERRITORY_OPTIONS = [
+  "Worldwide",
+  "United Kingdom",
+  "United States",
+  "European Union",
+  "North America",
+  "Asia Pacific",
+  "Other",
+];
 
 const LICENCE_TYPE_OPTIONS = [
   { value: "", label: "Select type…" },
@@ -152,6 +163,10 @@ export default function ProductionDetailClient() {
   const [tmdbFetched, setTmdbFetched] = useState(false);
   const [tmdbEmails, setTmdbEmails] = useState<Record<number, string>>({});
   const [tmdbSelected, setTmdbSelected] = useState<Set<number>>(new Set());
+  // TMDB title search (shown when credits are empty)
+  const [tmdbSearchQ, setTmdbSearchQ] = useState("");
+  const [tmdbSearchResults, setTmdbSearchResults] = useState<{ id: number; title: string; mediaType: string; year: number | null }[]>([]);
+  const [tmdbSearching, setTmdbSearching] = useState(false);
 
   // Manual entry
   const [manualEmail, setManualEmail] = useState("");
@@ -192,7 +207,7 @@ export default function ProductionDetailClient() {
         setInvitedCount(d.invitedCount ?? 0);
       }
       if (licRes.ok) {
-        const d = await licRes.json() as { licences?: Array<LicenceSummary & { productionId?: string }> };
+        const d = await licRes.json() as { licences?: LicenceSummary[] };
         setLicences((d.licences ?? []).filter((l) => l.productionId === id));
       }
     } finally {
@@ -211,6 +226,35 @@ export default function ProductionDetailClient() {
       const members: TmdbCastMember[] = d.cast ?? [];
       setTmdbCast(members);
       // Pre-select matched members
+      setTmdbSelected(new Set(members.filter((m) => m.matched).map((m) => m.tmdbId)));
+      setTmdbFetched(true);
+    } finally {
+      setTmdbLoading(false);
+    }
+  }
+
+  async function searchTmdbTitles() {
+    if (!tmdbSearchQ.trim()) return;
+    setTmdbSearching(true);
+    setTmdbSearchResults([]);
+    try {
+      const r = await fetch(`/api/productions/${id}/cast/tmdb/search?q=${encodeURIComponent(tmdbSearchQ)}`);
+      const d = await r.json() as { results?: typeof tmdbSearchResults };
+      setTmdbSearchResults(d.results ?? []);
+    } finally {
+      setTmdbSearching(false);
+    }
+  }
+
+  async function selectTmdbTitle(tmdbId: number) {
+    setTmdbSearchResults([]);
+    setTmdbSearchQ("");
+    setTmdbLoading(true);
+    try {
+      const r = await fetch(`/api/productions/${id}/cast/tmdb?overrideTmdbId=${tmdbId}`);
+      const d = await r.json() as { cast?: TmdbCastMember[] };
+      const members: TmdbCastMember[] = d.cast ?? [];
+      setTmdbCast(members);
       setTmdbSelected(new Set(members.filter((m) => m.matched).map((m) => m.tmdbId)));
       setTmdbFetched(true);
     } finally {
@@ -331,7 +375,7 @@ export default function ProductionDetailClient() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-10 space-y-4">
+      <div className="p-8 max-w-5xl space-y-4">
         {[0, 1, 2].map((i) => <div key={i} className="rounded animate-pulse" style={{ height: 60, background: "var(--color-surface)", border: "1px solid var(--color-border)" }} />)}
       </div>
     );
@@ -339,7 +383,7 @@ export default function ProductionDetailClient() {
 
   if (!production) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-10">
+      <div className="p-8 max-w-5xl">
         <p style={{ color: "var(--color-muted)" }}>Production not found.</p>
         <Link href="/productions" className="text-sm mt-2 block" style={{ color: "var(--color-accent)" }}>← Back to Productions</Link>
       </div>
@@ -350,12 +394,12 @@ export default function ProductionDetailClient() {
   const circumference = 2 * Math.PI * 28;
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="p-8 max-w-5xl">
       {/* Header */}
       <div className="mb-2">
         <Link href="/productions" className="text-xs" style={{ color: "var(--color-muted)" }}>← Productions</Link>
       </div>
-      <div className="flex items-start justify-between mb-8 gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:justify-between mb-8 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h1 className="text-2xl font-semibold" style={{ color: "var(--color-text)" }}>{production.name}</h1>
@@ -379,7 +423,7 @@ export default function ProductionDetailClient() {
 
         {/* Compliance ring */}
         {castTotal > 0 && (
-          <div className="flex items-center gap-3 shrink-0 rounded p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <div className="flex items-center gap-3 self-start sm:shrink-0 rounded p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
             <svg width="64" height="64" viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="28" fill="none" stroke="var(--color-border)" strokeWidth="6" />
               <circle
@@ -464,7 +508,46 @@ export default function ProductionDetailClient() {
                   </button>
                 </div>
               ) : tmdbCast.length === 0 ? (
-                <p className="text-sm" style={{ color: "var(--color-muted)" }}>No TMDB credits found for this production.</p>
+                <div className="space-y-3">
+                  <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                    No TMDB credits found for this production. Search for the correct title to try again.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={tmdbSearchQ}
+                      onChange={(e) => setTmdbSearchQ(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") void searchTmdbTitles(); }}
+                      placeholder="Search TMDB title…"
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => void searchTmdbTitles()}
+                      disabled={tmdbSearching || !tmdbSearchQ.trim()}
+                      className="rounded px-3 py-1.5 text-xs font-medium text-white shrink-0"
+                      style={{ background: tmdbSearching || !tmdbSearchQ.trim() ? "var(--color-muted)" : "var(--color-accent)", cursor: tmdbSearching ? "not-allowed" : "pointer" }}
+                    >
+                      {tmdbSearching ? "Searching…" : "Search"}
+                    </button>
+                  </div>
+                  {tmdbSearchResults.length > 0 && (
+                    <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+                      {tmdbSearchResults.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => void selectTmdbTitle(r.id)}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors border-b last:border-0"
+                          style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+                        >
+                          <span className="font-medium">{r.title}</span>
+                          <span className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>
+                            {r.mediaType === "tv" ? "TV" : "Film"}{r.year ? ` · ${r.year}` : ""}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                   {tmdbCast.map((m) => (
@@ -591,10 +674,13 @@ export default function ProductionDetailClient() {
               </div>
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Territory</label>
-                <input type="text" value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={inputStyle} placeholder="e.g. Worldwide" />
+                <select value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={{ ...inputStyle }}>
+                  <option value="">Select territory…</option>
+                  {TERRITORY_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
               <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Proposed Fee (£)</label>
+                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Proposed Fee ($)</label>
                 <input type="number" min={0} value={terms.proposedFee} onChange={(e) => setTerms((t) => ({ ...t, proposedFee: e.target.value }))} style={inputStyle} placeholder="0" />
               </div>
               <div className="col-span-2 flex items-center gap-2">
@@ -631,8 +717,8 @@ export default function ProductionDetailClient() {
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>Use the Add Cast button to import from TMDB, enter manually, or upload a CSV.</p>
         </div>
       ) : (
-        <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
-          <table className="w-full text-sm">
+        <div className="rounded overflow-x-auto" style={{ border: "1px solid var(--color-border)" }}>
+          <table className="w-full text-sm" style={{ minWidth: 700 }}>
             <thead>
               <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
                 {["Talent", "Character", "Dept", "SAG", "Status", "Licence", ""].map((h) => (
@@ -678,9 +764,15 @@ export default function ProductionDetailClient() {
                   </td>
                   <td className="px-4 py-3">
                     {row.licence ? (
-                      <Link href={`/licences/${row.licence.id}`} className="text-xs" style={{ color: "var(--color-accent)" }}>
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded font-medium"
+                        style={{
+                          background: row.licence.status === "APPROVED" ? "rgba(22,101,52,0.1)" : row.licence.status === "DENIED" ? "rgba(153,27,27,0.1)" : "rgba(180,83,9,0.1)",
+                          color: row.licence.status === "APPROVED" ? "#166534" : row.licence.status === "DENIED" ? "#991b1b" : "#b45309",
+                        }}
+                      >
                         {row.licence.status}
-                      </Link>
+                      </span>
                     ) : (
                       <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
                     )}

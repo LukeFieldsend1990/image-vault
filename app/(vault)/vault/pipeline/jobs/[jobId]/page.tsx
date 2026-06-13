@@ -1,18 +1,19 @@
 export const runtime = "edge";
 
-import { requireSession } from "@/lib/auth/requireSession";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import PipelineJobClient from "./pipeline-job-client";
 
-async function getSessionSub(): Promise<string | null> {
+async function getSessionInfo(): Promise<{ sub: string; role: string } | null> {
   const cookieStore = await cookies();
   const session = cookieStore.get("session")?.value;
   if (!session) return null;
   try {
-    const payload = JSON.parse(atob(session.split(".")[1])) as { sub?: string };
-    return payload.sub ?? null;
+    const payload = JSON.parse(atob(session.split(".")[1])) as { sub?: string; role?: string; email?: string };
+    if (!payload.sub) return null;
+    const role = isAdmin(payload.email ?? "") ? "admin" : (payload.role ?? "talent");
+    return { sub: payload.sub, role };
   } catch {
     return null;
   }
@@ -23,10 +24,10 @@ export default async function PipelineJobPage({
 }: {
   params: Promise<{ jobId: string }>;
 }) {
-  const sub = await getSessionSub();
-  if (!sub) redirect("/login");
+  const info = await getSessionInfo();
+  if (!info) redirect("/login");
 
   const { jobId } = await params;
 
-  return <PipelineJobClient jobId={jobId} />;
+  return <PipelineJobClient jobId={jobId} sessionRole={info.role} />;
 }

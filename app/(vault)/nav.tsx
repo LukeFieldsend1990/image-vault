@@ -42,6 +42,18 @@ const TALENT_NAV = [
     ),
   },
   {
+    href: "/vault/productions",
+    label: "Productions",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="15" rx="2" />
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+        <line x1="12" y1="12" x2="12" y2="16" />
+        <line x1="10" y1="14" x2="14" y2="14" />
+      </svg>
+    ),
+  },
+  {
     href: "/vault/monitor",
     label: "Monitor",
     icon: (
@@ -232,6 +244,28 @@ const REP_NAV = [
     ),
   },
   {
+    href: "/vault/productions",
+    label: "Productions",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="15" rx="2" />
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+        <line x1="12" y1="12" x2="12" y2="16" />
+        <line x1="10" y1="14" x2="14" y2="14" />
+      </svg>
+    ),
+  },
+  {
+    href: "/compliance",
+    label: "Compliance",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
     href: "/inbox",
     label: "Inbox",
     icon: (
@@ -307,7 +341,7 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
     base = base.filter((item) => item.href !== "/inbox");
   }
   if (complianceEnabled === false) {
-    base = base.filter((item) => item.href !== "/compliance/dashboard");
+    base = base.filter((item) => !item.href.startsWith("/compliance"));
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]

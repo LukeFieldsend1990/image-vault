@@ -3,7 +3,7 @@ import { jwtVerify } from "jose";
 import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 
 const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin", "/inbox"];
-const AUTH_PAGES = ["/login", "/signup", "/setup-2fa"];
+const AUTH_PAGES = ["/login", "/signup", "/setup-2fa", "/register-interest"];
 
 function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
@@ -44,7 +44,7 @@ function getTokenPayload(req: NextRequest): { email: string | null; role: string
 // Routes each role is allowed to access
 const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
   talent: ["/dashboard", "/vault", "/licences", "/settings", "/onboarding", "/inbox", "/bookings"],
-  rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences"],
+  rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences", "/talent"],
   licensee: ["/directory", "/talent", "/licences", "/settings", "/inbox"],
 };
 
@@ -152,5 +152,6 @@ export const config = {
     "/login",
     "/signup",
     "/setup-2fa",
+    "/register-interest",
   ],
 };

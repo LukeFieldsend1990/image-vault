@@ -1,0 +1,46 @@
+name = "image-vault-higgs-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+[limits]
+cpu_ms = 300000
+
+# -------------------------------------------------------------------
+# Queue consumer — one pitch job at a time (video gen can take 30–120s)
+# -------------------------------------------------------------------
+[[queues.consumers]]
+queue = "pitch-jobs"
+max_batch_size = 1
+max_batch_timeout = 30
+max_retries = 2
+dead_letter_queue = "pitch-jobs-dlq"
+
+# -------------------------------------------------------------------
+# D1 Database (shared with main app)
+# -------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "image-vault-db"
+database_id = "71665618-0498-48bd-a243-962eb4810769"
+migrations_dir = "../drizzle/migrations"
+
+# -------------------------------------------------------------------
+# R2 Buckets
+# -------------------------------------------------------------------
+[[r2_buckets]]
+binding = "SCANS_BUCKET"
+bucket_name = "image-vault-scans"
+preview_bucket_name = "image-vault-scans-dev"
+
+# -------------------------------------------------------------------
+# Environment Variables
+# -------------------------------------------------------------------
+[vars]
+APP_URL = "https://changling.io"
+HIGGSFIELD_MODEL = "kling-3.0"
+
+# -------------------------------------------------------------------
+# Secrets (set via: wrangler secret put SECRET_NAME --config higgs-worker/wrangler.toml)
+# -------------------------------------------------------------------
+# ANTHROPIC_API_KEY   - Claude Haiku for cinematic prompt crafting
+# HIGGSFIELD_API_KEY  - Higgsfield AI video generation API

@@ -37,6 +37,12 @@
     "**/*.mts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "pipeline-worker",
+    "ai-worker",
+    "ai-cron-worker",
+    "comms-worker",
+    "geo-fingerprint-worker",
+    "higgs-worker"
   ]
 }

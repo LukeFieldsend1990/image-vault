@@ -150,10 +150,10 @@ export default function ForgotPasswordPage() {
           style={{ color: "var(--color-sidebar-muted)" }}
         >
           <span className="font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
-            End-to-end encrypted.
+            Secured by dual-custody access.
           </span>{" "}
-          Files are encrypted in your browser before upload. The platform never
-          holds your plaintext data.
+          Files are encrypted at rest and every download is gated by 2FA from
+          both parties, time-limited, and fully audited.
         </div>
       </div>
     </div>
