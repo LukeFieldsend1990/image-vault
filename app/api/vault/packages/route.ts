@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
+import { mintScanNumber } from "@/lib/codes/codes";
 import { eq, desc, sql, and, isNull, inArray } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
@@ -138,6 +139,8 @@ export async function POST(req: NextRequest) {
     createdAt: now,
     updatedAt: now,
   });
+
+  await mintScanNumber(db, packageId, ownerId);
 
   return NextResponse.json({ packageId }, { status: 201 });
 }

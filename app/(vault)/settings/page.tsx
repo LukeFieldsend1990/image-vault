@@ -15,6 +15,7 @@ import { isIndustryRole } from "@/lib/auth/roles";
 import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
 import DemoToggleCard from "./demo-toggle-card";
 import BillingFees from "./billing-fees";
+import ShowCodesToggle from "./show-codes-toggle";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -241,6 +242,11 @@ export default async function SettingsPage({
             <span style={{ color: "var(--color-text)" }}>{ROLE_LABELS[user?.role ?? "talent"]}</span>
           </div>
         </div>
+      </div>
+
+      {/* ── Code view mode (all roles) ── */}
+      <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <ShowCodesToggle />
       </div>
 
       {/* ── Billing & Fees (talent only; self-hides unless visibility flag is on) ── */}

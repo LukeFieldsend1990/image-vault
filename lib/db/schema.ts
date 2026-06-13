@@ -19,6 +19,10 @@ export const users = sqliteTable("users", {
   complianceEnabled: integer("compliance_enabled", { mode: "boolean" }).notNull().default(true),
   // Gates whether the talent sees the (under-test) upfront fee model. Off by default.
   financialVisibilityEnabled: integer("financial_visibility_enabled", { mode: "boolean" }).notNull().default(false),
+  // Pretty-print code (AH-#### talent, AG-#### rep). System-generated; see lib/codes.
+  shortCode: text("short_code"),
+  // Per-user "code view mode" — decorate the UI with system codes. Off by default.
+  showCodes: integer("show_codes", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -75,6 +79,7 @@ export const scanPackages = sqliteTable("scan_packages", {
   deletedAt: integer("deleted_at"),           // unix timestamp; null = active
   deletedBy: text("deleted_by"),              // user ID who soft-deleted
   searchIndexedAt: integer("search_indexed_at"), // last Vectorize index timestamp
+  scanNumber: integer("scan_number"), // sequential per talent → renders as S## in the chain code
 });
 
 export const scanFiles = sqliteTable("scan_files", {
@@ -357,6 +362,7 @@ export const productions = sqliteTable("productions", {
   organisationId: text("organisation_id").references(() => organisations.id),
   coordinatorId: text("coordinator_id").references(() => users.id),
   sagProjectNumber: text("sag_project_number"),
+  shortCode: text("short_code"), // PR-#### production code. System-generated; see lib/codes.
 });
 
 export const downloadEvents = sqliteTable("download_events", {
@@ -654,6 +660,8 @@ export const organisations = sqliteTable("organisations", {
   orgType: text("org_type", { enum: ORG_TYPES }).notNull().default("production_company"),
   // Environment-audit gate for vendor ("mover") orgs — admin-togglable; gates Bridge provisioning.
   vendorAuditPassed: integer("vendor_audit_passed", { mode: "boolean" }).notNull().default(false),
+  // Pretty-print code by subtype (VX vfx_vendor, CC scan_service, DB dubbing, OG other). System-generated.
+  shortCode: text("short_code"),
 });
 
 export const organisationMembers = sqliteTable("organisation_members", {

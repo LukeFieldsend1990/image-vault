@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { users, talentProfiles, scanPackages, talentReps } from "@/lib/db/schema";
 import { sql } from "drizzle-orm";
 import UserActions from "./user-actions";
+import CodeTag from "@/app/components/code-tag";
 
 type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
@@ -38,6 +39,7 @@ export default async function AdminUsersPage() {
     .select({
       id: users.id,
       email: users.email,
+      shortCode: users.shortCode,
       role: users.role,
       createdAt: users.createdAt,
       suspendedAt: users.suspendedAt,
@@ -144,7 +146,7 @@ export default async function AdminUsersPage() {
                     {u.email[0]?.toUpperCase() ?? "?"}
                   </div>
                 )}
-                <span className="text-sm break-all leading-snug" style={{ color: "var(--color-text)" }}>{u.email}</span>
+                <span className="text-sm break-all leading-snug" style={{ color: "var(--color-text)" }}>{u.email} <CodeTag code={u.shortCode} /></span>
               </div>
 
               {/* Role badge */}

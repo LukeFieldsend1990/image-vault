@@ -12,6 +12,7 @@ import {
   talentReps,
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { mintScanNumber } from "@/lib/codes/codes";
 import { eq, and, inArray, desc } from "drizzle-orm";
 
 // GET /api/transfers — incoming (as talent/rep) + outgoing (as org member) transfers
@@ -191,6 +192,9 @@ export async function POST(req: NextRequest) {
     createdBy: session.sub,
     createdAt: now,
   });
+
+  // Scan number tracks the eventual target talent's sequence, not the staging owner.
+  await mintScanNumber(db, packageId, toTalentId);
 
   return NextResponse.json({ transferId, packageId }, { status: 201 });
 }

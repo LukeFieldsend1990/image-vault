@@ -6,6 +6,7 @@ import { organisations, organisationMembers, productionCompanies } from "@/lib/d
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { isOrgType, type OrgType } from "@/lib/organisations/orgTypes";
+import { mintOrgCode } from "@/lib/codes/codes";
 import { eq } from "drizzle-orm";
 
 // GET /api/organisations — list orgs the calling user belongs to
@@ -104,6 +105,8 @@ export async function POST(req: NextRequest) {
     invitedBy: null,
     joinedAt: now,
   });
+
+  await mintOrgCode(db, orgId, orgType);
 
   return NextResponse.json({ organisationId: orgId }, { status: 201 });
 }

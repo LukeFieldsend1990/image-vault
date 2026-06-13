@@ -1,0 +1,90 @@
+import { getDb } from "@/lib/db";
+import { users, organisations, productions, scanPackages } from "@/lib/db/schema";
+import { and, eq, sql, isNotNull } from "drizzle-orm";
+
+type Db = ReturnType<typeof getDb>;
+
+/**
+ * System-generated pretty-print codes. Decorators only — never licensing keys.
+ * Format: PREFIX-NNNN, zero-padded to a minimum of 4 digits, no upper cap
+ * (247 -> "0247", 12476 -> "12476"). Minted at creation; backfilled in 0060.
+ */
+
+export function formatCode(prefix: string, n: number): string {
+  return `${prefix}-${String(n).padStart(4, "0")}`;
+}
+
+/** Org subtype → code prefix. */
+export function orgPrefix(orgType: string | null | undefined): "VX" | "CC" | "DB" | "OG" {
+  if (orgType === "vfx_vendor") return "VX";
+  if (orgType === "scan_service") return "CC";
+  if (orgType === "dubbing") return "DB";
+  return "OG";
+}
+
+/** Mint the next AH/AG code for a user of the given role (no-op for other roles). */
+export async function mintUserCode(db: Db, userId: string, role: string): Promise<void> {
+  const prefix = role === "talent" ? "AH" : role === "rep" ? "AG" : null;
+  if (!prefix) return;
+  try {
+    const row = await db
+      .select({ n: sql<number>`count(*)` })
+      .from(users)
+      .where(eq(users.role, role as "talent" | "rep"))
+      .get();
+    await db.update(users).set({ shortCode: formatCode(prefix, (row?.n ?? 0)) }).where(eq(users.id, userId));
+  } catch { /* decorator — best effort */ }
+}
+
+/** Mint the next code for an organisation, prefixed by its subtype. */
+export async function mintOrgCode(db: Db, orgId: string, orgType: string): Promise<void> {
+  const prefix = orgPrefix(orgType);
+  try {
+    // Count orgs already carrying this prefix (the new row has no code yet) + 1.
+    const c = await db
+      .select({ n: sql<number>`count(*)` })
+      .from(organisations)
+      .where(and(isNotNull(organisations.shortCode), sql`${organisations.shortCode} LIKE ${prefix + "-%"}`))
+      .get();
+    await db.update(organisations).set({ shortCode: formatCode(prefix, (c?.n ?? 0) + 1) }).where(eq(organisations.id, orgId));
+  } catch { /* best effort */ }
+}
+
+/** Mint the next PR code for a production. */
+export async function mintProductionCode(db: Db, productionId: string): Promise<void> {
+  try {
+    const row = await db.select({ n: sql<number>`count(*)` }).from(productions).get();
+    await db.update(productions).set({ shortCode: formatCode("PR", (row?.n ?? 0)) }).where(eq(productions.id, productionId));
+  } catch { /* best effort */ }
+}
+
+/** Assign the next per-talent scan number to a package (renders as S##). */
+export async function mintScanNumber(db: Db, packageId: string, talentId: string): Promise<void> {
+  try {
+    const row = await db
+      .select({ n: sql<number>`count(*)` })
+      .from(scanPackages)
+      .where(eq(scanPackages.talentId, talentId))
+      .get();
+    await db.update(scanPackages).set({ scanNumber: (row?.n ?? 0) }).where(eq(scanPackages.id, packageId));
+  } catch { /* best effort */ }
+}
+
+/** Render a scan number as S## (min 2 digits). */
+export function formatScan(n: number | null | undefined): string | null {
+  if (n == null) return null;
+  return `S${String(n).padStart(2, "0")}`;
+}
+
+/**
+ * Assemble the compound chain code, e.g. IV-AH-0247-PR-0042-S03. Omits any part
+ * that isn't available so a partial chain still reads cleanly.
+ */
+export function formatChainCode(p: {
+  actorCode?: string | null;
+  productionCode?: string | null;
+  scanNumber?: number | null;
+}): string {
+  const parts = ["IV", p.actorCode, p.productionCode, formatScan(p.scanNumber)].filter(Boolean);
+  return parts.join("-");
+}

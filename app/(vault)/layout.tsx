@@ -5,6 +5,7 @@ import { NavLinks } from "./nav";
 import UserWidget from "./user-widget";
 import SidebarShell from "./sidebar-shell";
 import NotificationBell from "./notification-bell";
+import { CodesProvider } from "@/app/components/code-tag";
 import { getDb } from "@/lib/db";
 import { licences, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -144,6 +145,21 @@ async function getInboundEnabled(userId: string): Promise<boolean> {
   }
 }
 
+async function getShowCodes(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const db = getDb();
+    const row = await db
+      .select({ showCodes: users.showCodes })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
+    return !!row?.showCodes;
+  } catch {
+    return false;
+  }
+}
+
 async function getComplianceEnabled(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
@@ -166,12 +182,13 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled] = await Promise.all([
+  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
     getLicenceAlert(sub, role),
     getComplianceEnabled(sub),
+    getShowCodes(sub),
   ]);
 
   const homeHref = isComplianceRole(role) ? "/evidence" : isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
@@ -208,7 +225,7 @@ export default async function VaultLayout({
 
       {/* ── Main ── */}
       <main className="flex flex-1 flex-col overflow-y-auto bg-[--color-bg] pt-12 lg:pt-0">
-        {children}
+        <CodesProvider show={showCodes}>{children}</CodesProvider>
       </main>
     </div>
   );
