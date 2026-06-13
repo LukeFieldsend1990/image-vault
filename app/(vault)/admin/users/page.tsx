@@ -47,6 +47,7 @@ export default async function AdminUsersPage() {
       geoFingerprintEnabled: users.geoFingerprintEnabled,
       royaltyMeterEnabled: users.royaltyMeterEnabled,
       complianceEnabled: users.complianceEnabled,
+      financialVisibilityEnabled: users.financialVisibilityEnabled,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -229,6 +230,7 @@ export default async function AdminUsersPage() {
                 geoFingerprintEnabled={!!u.geoFingerprintEnabled}
                 royaltyMeterEnabled={u.royaltyMeterEnabled !== false}
                 complianceEnabled={u.complianceEnabled !== false}
+                financialVisibilityEnabled={u.financialVisibilityEnabled === true}
                 pitchVignettesEnabled={!!(profileMap.get(u.id)?.pitchVignettesEnabled)}
               />
             </div>

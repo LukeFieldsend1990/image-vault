@@ -16,6 +16,8 @@ export const users = sqliteTable("users", {
   geoFingerprintEnabled: integer("geo_fingerprint_enabled", { mode: "boolean" }).notNull().default(false),
   royaltyMeterEnabled: integer("royalty_meter_enabled", { mode: "boolean" }).notNull().default(true),
   complianceEnabled: integer("compliance_enabled", { mode: "boolean" }).notNull().default(true),
+  // Gates whether the talent sees the (under-test) upfront fee model. Off by default.
+  financialVisibilityEnabled: integer("financial_visibility_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -262,8 +264,31 @@ export const talentSettings = sqliteTable("talent_settings", {
   talentSharePct: integer("talent_share_pct").notNull().default(65),
   agencySharePct: integer("agency_share_pct").notNull().default(20),
   platformSharePct: integer("platform_share_pct").notNull().default(15),
+  // Upfront tier assignment — see lib/financial/config.ts (emerging | established | a_list | bespoke).
+  tier: text("tier"),
   updatedBy: text("updated_by").references(() => users.id),
   updatedAt: integer("updated_at").notNull(),
+});
+
+// Upfront fee obligations (talent tier fee + production banded access fee).
+export const feeObligations = sqliteTable("fee_obligations", {
+  id: text("id").primaryKey(),
+  type: text("type", { enum: ["talent_tier", "production_access"] }).notNull(),
+  // Who is billed: the talent (tier) or the licensee user (production access).
+  payerUserId: text("payer_user_id").references(() => users.id, { onDelete: "set null" }),
+  talentId: text("talent_id").references(() => users.id, { onDelete: "set null" }),
+  productionId: text("production_id").references(() => productions.id, { onDelete: "set null" }),
+  licenceId: text("licence_id").references(() => licences.id, { onDelete: "set null" }),
+  tier: text("tier"),   // for talent_tier
+  band: text("band"),   // for production_access
+  amountCents: integer("amount_cents"), // null = bespoke / TBD
+  currency: text("currency").notNull().default("usd"),
+  status: text("status", { enum: ["pending", "paid", "waived", "cancelled"] }).notNull().default("pending"),
+  graceDeadline: integer("grace_deadline"), // unix seconds; null = no deadline set
+  notes: text("notes"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  paidAt: integer("paid_at"),
 });
 
 export const pipelineJobs = sqliteTable("pipeline_jobs", {

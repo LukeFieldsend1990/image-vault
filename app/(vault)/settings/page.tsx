@@ -14,6 +14,7 @@ import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
 import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
 import DemoToggleCard from "./demo-toggle-card";
+import BillingFees from "./billing-fees";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -25,6 +26,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/invites", label: "Invites", description: "Manage platform invitations" },
   { href: "/admin/pipeline", label: "Pipeline", description: "Digital double pipeline jobs" },
   { href: "/admin/talent", label: "Talent Settings", description: "Pipeline, fee splits & permissions" },
+  { href: "/admin/financial", label: "Billing & Fees", description: "Tier fees, production bands and obligations" },
   { href: "/admin/audit", label: "Audit Log", description: "Last 500 download events" },
   { href: "/admin/organisations", label: "Organisations", description: "Production organisations and member management" },
   { href: "/admin/productions", label: "Productions", description: "Production entities and companies" },
@@ -239,6 +241,9 @@ export default async function SettingsPage({
           </div>
         </div>
       </div>
+
+      {/* ── Billing & Fees (talent only; self-hides unless visibility flag is on) ── */}
+      {user?.role === "talent" && <BillingFees />}
 
       {/* ── Industry Identity (talent only) ── */}
       {user?.role === "talent" && (
