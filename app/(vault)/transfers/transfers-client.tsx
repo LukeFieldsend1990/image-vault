@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import UploadModal from "../upload-modal";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
 
 interface Transfer {
   id: string;
@@ -12,10 +14,12 @@ interface Transfer {
   fromOrgId: string;
   orgName: string;
   orgType: string | null;
+  orgShortCode: string | null;
   toTalentId: string;
   targetLicenceId: string | null;
   packageId: string;
   packageName: string;
+  packageScanNumber: number | null;
   packageStatus: "uploading" | "ready" | "error";
   packageSizeBytes: number | null;
   createdAt: number;
@@ -200,11 +204,12 @@ export default function TransfersClient() {
             {incoming.map((t) => (
               <div key={t.id} className="flex items-center justify-between px-5 py-3.5 gap-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: "var(--color-ink)" }}>
-                    {t.lookLabel ?? t.packageName}
+                  <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                    <span className="truncate">{t.lookLabel ?? t.packageName}</span>
+                    <CodeTag code={formatScan(t.packageScanNumber)} />
                   </p>
                   <p className="text-[11px] flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
-                    From {t.orgName} <OrgTypeBadge type={t.orgType} /> · {fmtDate(t.createdAt)}
+                    From {t.orgName} <OrgTypeBadge type={t.orgType} /> <CodeTag code={t.orgShortCode} /> · {fmtDate(t.createdAt)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -233,9 +238,12 @@ export default function TransfersClient() {
               {outgoing.map((t) => (
                 <div key={t.id} className="flex items-center justify-between px-5 py-3.5 gap-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate" style={{ color: "var(--color-ink)" }}>{t.lookLabel ?? t.packageName}</p>
-                    <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-                      {t.transferType === "to_licence" ? "To production licence" : "To talent vault"} · {t.orgName} · {fmtDate(t.createdAt)}
+                    <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                      <span className="truncate">{t.lookLabel ?? t.packageName}</span>
+                      <CodeTag code={formatScan(t.packageScanNumber)} />
+                    </p>
+                    <p className="text-[11px] flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                      {t.transferType === "to_licence" ? "To production licence" : "To talent vault"} · {t.orgName} <CodeTag code={t.orgShortCode} /> · {fmtDate(t.createdAt)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

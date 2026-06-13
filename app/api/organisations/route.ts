@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
       website: organisations.website,
       billingEmail: organisations.billingEmail,
       orgType: organisations.orgType,
+      shortCode: organisations.shortCode,
       createdAt: organisations.createdAt,
       memberRole: organisationMembers.memberRole,
       joinedAt: organisationMembers.joinedAt,

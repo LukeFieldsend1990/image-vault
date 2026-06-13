@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [org] = await db
-    .select({ name: organisations.name, orgType: organisations.orgType })
+    .select({ name: organisations.name, orgType: organisations.orgType, shortCode: organisations.shortCode })
     .from(organisations)
     .where(eq(organisations.id, invite.organisationId))
     .limit(1)
@@ -129,6 +129,7 @@ export async function GET(req: NextRequest) {
     organisationId: invite.organisationId,
     organisationName: org?.name ?? "Unknown Organisation",
     organisationType: org?.orgType ?? null,
+    organisationShortCode: org?.shortCode ?? null,
     invitedEmail: invite.invitedEmail,
     expiresAt: invite.expiresAt,
   });

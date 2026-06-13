@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
       id: organisations.id,
       name: organisations.name,
       orgType: organisations.orgType,
+      shortCode: organisations.shortCode,
       vendorAuditPassed: organisations.vendorAuditPassed,
     })
     .from(organisations)

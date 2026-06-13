@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 interface InvitePreview {
   organisationId: string;
   organisationName: string;
   organisationType?: string | null;
+  organisationShortCode?: string | null;
   invitedEmail: string;
   expiresAt: number;
 }
@@ -96,6 +98,7 @@ export default function JoinClient() {
             <h1 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--color-text)", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
               <span>{preview.organisationName}</span>
               <OrgTypeBadge type={preview.organisationType} />
+              <CodeTag code={preview.organisationShortCode} />
             </h1>
             <p style={{ fontSize: "0.8rem", color: "var(--color-muted)", marginBottom: "1.5rem" }}>
               Invited: {preview.invitedEmail} · expires {new Date(preview.expiresAt * 1000).toLocaleDateString()}

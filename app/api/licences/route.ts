@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
       id: licences.id,
       packageId: licences.packageId,
       packageName: scanPackages.name,
+      packageScanNumber: scanPackages.scanNumber,
       packageScanType: scanPackages.scanType,
       packageTags: scanPackages.tags,
       packageHasMesh: scanPackages.hasMesh,
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
       packageHasMotionCapture: scanPackages.hasMotionCapture,
       talentEmail: users.email,
       talentName: talentProfiles.fullName,
+      talentShortCode: users.shortCode,
       projectName: licences.projectName,
       productionCompany: licences.productionCompany,
       intendedUse: licences.intendedUse,
@@ -76,6 +78,7 @@ export async function GET(req: NextRequest) {
       organisationId: licences.organisationId,
       orgName: organisations.name,
       orgType: organisations.orgType,
+      orgShortCode: organisations.shortCode,
       productionId: licences.productionId,
     })
     .from(licences)

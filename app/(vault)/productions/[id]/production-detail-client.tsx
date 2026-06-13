@@ -4,6 +4,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -15,11 +17,13 @@ interface Production {
   year: number | null;
   status: string | null;
   sagProjectNumber: string | null;
+  shortCode?: string | null;
   director: string | null;
   vfxSupervisor: string | null;
   organisationId: string | null;
   orgName?: string | null;
   orgType?: string | null;
+  orgShortCode?: string | null;
   licenceCount: number;
 }
 
@@ -54,6 +58,7 @@ interface LicenceSummary {
   id: string;
   talentName: string | null;
   talentEmail: string | null;
+  talentShortCode?: string | null;
   status: string;
   licenceType: string | null;
   validFrom: number;
@@ -61,6 +66,7 @@ interface LicenceSummary {
   agreedFee: number | null;
   proposedFee: number | null;
   packageName: string | null;
+  packageScanNumber?: number | null;
   productionId: string | null;
 }
 
@@ -405,7 +411,10 @@ export default function ProductionDetailClient() {
       <div className="flex flex-col sm:flex-row items-start sm:justify-between mb-8 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <h1 className="text-2xl font-semibold" style={{ color: "var(--color-text)" }}>{production.name}</h1>
+            <h1 className="text-2xl font-semibold flex items-center gap-2" style={{ color: "var(--color-text)" }}>
+              <span>{production.name}</span>
+              <CodeTag code={production.shortCode} />
+            </h1>
             {production.type && (
               <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}>
                 {production.type.replace("_", " ")}
@@ -417,6 +426,7 @@ export default function ProductionDetailClient() {
               <span className="text-sm flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
                 <span>{production.orgName ?? production.companyName}</span>
                 <OrgTypeBadge type={production.orgType} />
+                <CodeTag code={production.orgShortCode} />
               </span>
             )}
             {production.year && <span className="text-sm" style={{ color: "var(--color-muted)" }}>{production.year}</span>}
@@ -843,10 +853,16 @@ export default function ProductionDetailClient() {
                   return (
                     <tr key={lic.id} style={{ borderBottom: i < licences.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
                       <td className="px-4 py-3">
-                        <Link href={`/licences/${lic.id}`} style={{ color: "var(--color-accent)" }}>
+                        <Link href={`/licences/${lic.id}`} className="inline-flex items-center gap-1.5" style={{ color: "var(--color-accent)" }}>
                           <span className="text-sm font-medium">{lic.talentName ?? lic.talentEmail ?? "—"}</span>
+                          <CodeTag code={lic.talentShortCode} />
                         </Link>
-                        {lic.packageName && <span className="text-xs block" style={{ color: "var(--color-muted)" }}>{lic.packageName}</span>}
+                        {lic.packageName && (
+                          <span className="text-xs flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                            <span>{lic.packageName}</span>
+                            <CodeTag code={formatScan(lic.packageScanNumber)} />
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs" style={{ color: "var(--color-muted)" }}>

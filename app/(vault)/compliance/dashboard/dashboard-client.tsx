@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem, LicenceSummary, ObligationResultWithEvidence, CastOnboarding } from "@/lib/compliance/dashboard";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 interface OrgOption {
   id: string;
   name: string;
   orgType?: string | null;
+  shortCode?: string | null;
   memberRole: string;
 }
 
@@ -45,6 +47,7 @@ function OrgSwitcher({
       >
         {selected.name.toUpperCase()}
         <OrgTypeBadge type={selected.orgType} />
+        <CodeTag code={selected.shortCode} />
         <svg width="7" height="4" viewBox="0 0 7 4" fill="currentColor" style={{ opacity: 0.8 }}>
           <path d="M0 0l3.5 4L7 0H0z" />
         </svg>
@@ -93,6 +96,7 @@ function OrgSwitcher({
                 <span className="flex items-center gap-1.5">
                   <span>{o.name}</span>
                   <OrgTypeBadge type={o.orgType} />
+                  <CodeTag code={o.shortCode} />
                 </span>
                 {o.id === selectedId && (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

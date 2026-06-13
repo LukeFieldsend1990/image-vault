@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 interface OrgMember {
   userId: string;
@@ -16,6 +17,7 @@ interface OrgDetail {
   website: string | null;
   billingEmail: string | null;
   orgType?: string | null;
+  shortCode?: string | null;
 }
 
 interface Props {
@@ -76,6 +78,7 @@ export default function OrgMembersPanel({ organisationId, submittedByUserId }: P
             <p style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--color-muted)", letterSpacing: "0.05em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: "0.4rem" }}>
               <span>{org.name}</span>
               <OrgTypeBadge type={org.orgType} />
+              <CodeTag code={org.shortCode} />
             </p>
             {org.website && (
               <a href={org.website} target="_blank" rel="noreferrer" style={{ fontSize: "0.65rem", color: "var(--color-muted)" }}>

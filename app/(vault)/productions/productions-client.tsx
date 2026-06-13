@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 interface Production {
   id: string;
@@ -12,9 +13,11 @@ interface Production {
   year: number | null;
   status: string | null;
   sagProjectNumber: string | null;
+  shortCode?: string | null;
   organisationId: string | null;
   orgName?: string | null;
   orgType?: string | null;
+  orgShortCode?: string | null;
   createdAt: number;
   licenceCount: number;
   cast: { total: number; consented: number; invited: number; linked: number } | null;
@@ -188,13 +191,15 @@ export default function ProductionsClient() {
               {/* Title + metrics */}
               <div className="flex items-end justify-between gap-6">
                 <div className="min-w-0">
-                  <h2 className="text-xl font-semibold tracking-tight leading-none" style={{ color: "var(--color-ink)" }}>
-                    {p.name}
+                  <h2 className="text-xl font-semibold tracking-tight leading-none flex items-center gap-2" style={{ color: "var(--color-ink)" }}>
+                    <span>{p.name}</span>
+                    <CodeTag code={p.shortCode} />
                   </h2>
                   {(p.orgName ?? p.companyName) && (
                     <p className="mt-1.5 text-sm flex items-center gap-1.5 flex-wrap" style={{ color: "var(--color-muted)" }}>
                       <span>{p.orgName ?? p.companyName}</span>
                       <OrgTypeBadge type={p.orgType} />
+                      <CodeTag code={p.orgShortCode} />
                     </p>
                   )}
                 </div>
