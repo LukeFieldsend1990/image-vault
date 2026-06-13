@@ -1,18 +1,19 @@
 /**
  * Production cast tools.
  *
- * list_productions (read) lets an agent find/confirm production IDs.
- * add_production_cast (mutating) bulk-onboards a cast onto a production —
- * the MCP analogue of POST /api/productions/[id]/cast. The intended flow is:
- *   1. create_production (e.g. "The Matrix 5")
- *   2. the agent sources the cast from public web sources (its own research)
- *   3. add_production_cast persists the whole cast in one call
+ * list_productions (read)      — find/confirm a productionId.
+ * list_production_cast (read)  — enumerate a production's cast incl. placeholders + castIds.
+ * add_production_cast (mutating) — bulk-onboard a cast. Each member is either
+ *   contactable (email) or a placeholder (actorName only, recorded for later).
+ * resolve_cast_member (mutating) — attach an email to a placeholder and promote
+ *   it to an invite/linked licence.
  *
- * For each member: if the email already belongs to a talent account a
- * placeholder licence (AWAITING_PACKAGE) + linked cast row are created and the
- * talent is emailed; otherwise a 7-day talent signup invite + an "invited" cast
- * row (with the licence terms stored for later) are created and the invite is
- * emailed. Identical writes/emails to the in-app bulk-add flow.
+ * Intended flow: create_production ("The Matrix 5") → the agent sources the cast
+ * from public sources → add_production_cast (placeholders where no email is known)
+ * → later, resolve_cast_member as emails surface.
+ *
+ * add_production_cast / resolve_cast_member are mutating: the dispatcher gates
+ * them behind admin scope + a fresh per-call TOTP code and audits every call.
  */
 
 import { getRequestContext } from "@cloudflare/next-on-pages";
@@ -30,13 +31,17 @@ import {
   productionCastInviteEmail,
   productionCastLinkedEmail,
 } from "@/lib/email/templates";
+import {
+  promoteCastMember,
+  CAST_LICENCE_TYPES as LICENCE_TYPES,
+  CAST_EXCLUSIVITIES as EXCLUSIVITIES,
+  type CastLicenceType,
+  type CastExclusivity,
+} from "@/lib/productions/cast";
 import type { McpToolContext } from "../types";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
 const MAX_CAST_PER_CALL = 100;
-
-const LICENCE_TYPES = ["film_double", "game_character", "commercial", "ai_avatar", "training_data", "monitoring_reference"] as const;
-const EXCLUSIVITIES = ["non_exclusive", "sole", "exclusive"] as const;
 
 function getBaseUrl(): string {
   try {
@@ -108,60 +113,139 @@ registerMcpTool({
   },
 });
 
+registerMcpTool({
+  name: "list_production_cast",
+  description:
+    "List a production's cast, including placeholder rows that still need an email. " +
+    "Returns each row's castId, identity, character, status and tmdbId — use the castId with " +
+    "resolve_cast_member to attach an email to a placeholder.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      productionId: { type: "string", description: "Production UUID" },
+    },
+    required: ["productionId"],
+  },
+  mutating: false,
+  async execute({ db }, params) {
+    const productionId = trimmed(params.productionId);
+    if (!productionId) return { success: false, message: "productionId is required." };
+
+    const production = await db
+      .select({ id: productions.id, name: productions.name })
+      .from(productions)
+      .where(eq(productions.id, productionId))
+      .get();
+    if (!production) return { success: false, message: `No production with id ${productionId}.` };
+
+    const rows = await db
+      .select({
+        castId: productionCast.id,
+        name: sql<string>`coalesce(
+          ${productionCast.actorName},
+          (SELECT full_name FROM talent_profiles WHERE user_id = ${productionCast.talentId}),
+          (SELECT email FROM invites WHERE id = ${productionCast.inviteId}),
+          '—'
+        )`,
+        characterName: productionCast.characterName,
+        department: productionCast.department,
+        sagMember: productionCast.sagMember,
+        status: productionCast.status,
+        tmdbId: productionCast.tmdbId,
+        addedAt: productionCast.addedAt,
+      })
+      .from(productionCast)
+      .where(eq(productionCast.productionId, productionId))
+      .orderBy(desc(productionCast.addedAt))
+      .all();
+
+    const placeholders = rows.filter((r) => r.status === "placeholder").length;
+    return {
+      success: true,
+      message: `${rows.length} cast member(s) on "${production.name}" (${placeholders} placeholder${placeholders === 1 ? "" : "s"}).`,
+      data: { productionId, cast: rows },
+    };
+  },
+});
+
+interface CallDefaults {
+  intendedUse: string;
+  validFrom: number | null;
+  validTo: number | null;
+  licenceType: CastLicenceType | null;
+  territory: string | null;
+  exclusivity: CastExclusivity;
+  permitAiTraining: boolean;
+}
+
 interface ResolvedMember {
-  email: string;
+  mode: "email" | "placeholder";
+  email: string | null;
+  actorName: string | null;
+  tmdbId: number | null;
+  sourceNote: string | null;
   characterName: string | null;
   department: string | null;
   sagMember: boolean;
   intendedUse: string;
-  validFrom: number;
-  validTo: number;
-  licenceType: (typeof LICENCE_TYPES)[number] | null;
+  validFrom: number | null;
+  validTo: number | null;
+  licenceType: CastLicenceType | null;
   territory: string | null;
-  exclusivity: (typeof EXCLUSIVITIES)[number];
+  exclusivity: CastExclusivity;
   permitAiTraining: boolean;
-  proposedFee: number | null; // cents
+  proposedFee: number | null;
 }
 
 /** Resolve one raw member against the call-level defaults, or return an error string. */
-function resolveMember(
-  raw: Record<string, unknown>,
-  defaults: {
-    intendedUse: string;
-    validFrom: number | null;
-    validTo: number | null;
-    licenceType: (typeof LICENCE_TYPES)[number] | null;
-    territory: string | null;
-    exclusivity: (typeof EXCLUSIVITIES)[number];
-    permitAiTraining: boolean;
-  }
-): ResolvedMember | string {
+function resolveMember(raw: Record<string, unknown>, defaults: CallDefaults): ResolvedMember | string {
   const email = trimmed(raw.email).toLowerCase();
-  if (!email || !email.includes("@")) return `"${trimmed(raw.email) || "(blank)"}" is not a valid email.`;
+  const actorName = trimmed(raw.actorName);
+  if (!email && !actorName) return "Each member needs an email or an actorName.";
+  if (email && !email.includes("@")) return `"${trimmed(raw.email)}" is not a valid email.`;
 
   const intendedUse = trimmed(raw.intendedUse) || defaults.intendedUse;
-  if (!intendedUse) return `${email}: intendedUse is required (set it per-member or as a call default).`;
 
-  const validFrom = raw.validFrom !== undefined ? parseDate(raw.validFrom) : defaults.validFrom;
-  const validTo = raw.validTo !== undefined ? parseDate(raw.validTo) : defaults.validTo;
-  if (validFrom === null || validTo === null) {
-    return `${email}: validFrom and validTo are required as YYYY-MM-DD (per-member or as a call default).`;
+  // Dates: an explicitly supplied bad date is an error in either mode.
+  let validFrom = defaults.validFrom;
+  if (raw.validFrom !== undefined) {
+    validFrom = parseDate(raw.validFrom);
+    if (validFrom === null) return `${email || actorName}: validFrom must be YYYY-MM-DD.`;
   }
-  if (validTo <= validFrom) return `${email}: validTo must be after validFrom.`;
+  let validTo = defaults.validTo;
+  if (raw.validTo !== undefined) {
+    validTo = parseDate(raw.validTo);
+    if (validTo === null) return `${email || actorName}: validTo must be YYYY-MM-DD.`;
+  }
+  if (validFrom !== null && validTo !== null && validTo <= validFrom) {
+    return `${email || actorName}: validTo must be after validFrom.`;
+  }
+
+  const mode: "email" | "placeholder" = email ? "email" : "placeholder";
+
+  // A contactable member is onboarded immediately, so full terms are required.
+  if (mode === "email") {
+    if (!intendedUse) return `${email}: intendedUse is required (per-member or as a call default).`;
+    if (validFrom === null || validTo === null) {
+      return `${email}: validFrom and validTo (YYYY-MM-DD) are required (per-member or as a call default).`;
+    }
+  }
 
   const licenceTypeRaw = raw.licenceType !== undefined ? raw.licenceType : defaults.licenceType;
-  const licenceType = LICENCE_TYPES.includes(licenceTypeRaw as (typeof LICENCE_TYPES)[number])
-    ? (licenceTypeRaw as (typeof LICENCE_TYPES)[number]) : null;
+  const licenceType = LICENCE_TYPES.includes(licenceTypeRaw as CastLicenceType) ? (licenceTypeRaw as CastLicenceType) : null;
 
   const exclusivityRaw = raw.exclusivity !== undefined ? raw.exclusivity : defaults.exclusivity;
-  const exclusivity = EXCLUSIVITIES.includes(exclusivityRaw as (typeof EXCLUSIVITIES)[number])
-    ? (exclusivityRaw as (typeof EXCLUSIVITIES)[number]) : "non_exclusive";
+  const exclusivity = EXCLUSIVITIES.includes(exclusivityRaw as CastExclusivity) ? (exclusivityRaw as CastExclusivity) : "non_exclusive";
 
-  const proposedFee = typeof raw.proposedFeeCents === "number" && raw.proposedFeeCents > 0
-    ? Math.floor(raw.proposedFeeCents) : null;
+  const proposedFee = typeof raw.proposedFeeCents === "number" && raw.proposedFeeCents > 0 ? Math.floor(raw.proposedFeeCents) : null;
+  const tmdbId = typeof raw.tmdbId === "number" && Number.isFinite(raw.tmdbId) ? Math.floor(raw.tmdbId) : null;
 
   return {
-    email,
+    mode,
+    email: email || null,
+    actorName: actorName || null,
+    tmdbId,
+    sourceNote: trimmed(raw.sourceNote) || null,
     characterName: trimmed(raw.characterName) || null,
     department: trimmed(raw.department) || null,
     sagMember: raw.sagMember === true,
@@ -176,16 +260,33 @@ function resolveMember(
   };
 }
 
+/** Stored licence-terms blob carried on a row until a licence is created. */
+function termsBlob(m: ResolvedMember, production: { name: string; company: string }) {
+  return {
+    intendedUse: m.intendedUse || undefined,
+    validFrom: m.validFrom ?? undefined,
+    validTo: m.validTo ?? undefined,
+    licenceType: m.licenceType,
+    territory: m.territory,
+    exclusivity: m.exclusivity,
+    permitAiTraining: m.permitAiTraining,
+    proposedFee: m.proposedFee,
+    projectName: production.name,
+    productionCompany: production.company,
+  };
+}
+
 registerMcpTool({
   name: "add_production_cast",
   description:
     "Bulk-add cast members to a production (find the productionId via list_productions or create_production). " +
-    "Source the cast from public sources, then pass one members array — each needs an email so the actor can be " +
-    "onboarded. For each member: existing talent accounts get a placeholder licence (AWAITING_PACKAGE) and are " +
-    "emailed a request; everyone else gets a 7-day talent signup invite with the licence terms stored for when " +
-    "they register. Set intendedUse / validFrom / validTo / licenceType / territory / exclusivity / permitAiTraining " +
-    "once at the top level as defaults for every member, or override them per member. Members already cast on this " +
-    "production (or with a pending invite) are skipped. Up to " + MAX_CAST_PER_CALL + " members per call.",
+    "Each member is either CONTACTABLE (give an email — onboarded now: existing talent get a placeholder " +
+    "AWAITING_PACKAGE licence + request email, unknown emails get a 7-day talent invite) or a PLACEHOLDER " +
+    "(give actorName with no email — recorded by name only, no email sent, resolve later with resolve_cast_member). " +
+    "Set intendedUse / validFrom / validTo / licenceType / territory / exclusivity / permitAiTraining once at the " +
+    "top level as defaults, or override per member; contactable members require intendedUse + validFrom + validTo, " +
+    "placeholders don't. Skips members already cast, with a pending invite, or duplicate placeholders (by tmdbId, " +
+    "else by name). Up to " + MAX_CAST_PER_CALL + " members per call.",
   inputSchema: {
     type: "object",
     properties: {
@@ -199,13 +300,16 @@ registerMcpTool({
       permitAiTraining: { type: "boolean", description: "Default: whether the licence permits AI training (default false)" },
       members: {
         type: "array",
-        description: "Cast members to add. Each: { email (required), characterName, department, sagMember, " +
-          "and optional overrides: intendedUse, validFrom, validTo, licenceType, territory, exclusivity, " +
-          "permitAiTraining, proposedFeeCents }.",
+        description: "Cast members. Each: { email OR actorName, characterName, department, sagMember, tmdbId, " +
+          "sourceNote, and optional term overrides: intendedUse, validFrom, validTo, licenceType, territory, " +
+          "exclusivity, permitAiTraining, proposedFeeCents }.",
         items: {
           type: "object",
           properties: {
-            email: { type: "string", description: "Actor's email (required — used to onboard/invite them)" },
+            email: { type: "string", description: "Actor's email — makes the member contactable and onboards them now" },
+            actorName: { type: "string", description: "Public name — use when no email is known yet (creates a placeholder)" },
+            tmdbId: { type: "number", description: "TMDB person id (optional — used to dedupe and enrich later)" },
+            sourceNote: { type: "string", description: "Where the name was sourced (optional provenance)" },
             characterName: { type: "string", description: "Role the actor plays" },
             department: { type: "string", description: "e.g. 'Lead', 'Supporting', 'Stunt'" },
             sagMember: { type: "boolean", description: "Whether the actor is a SAG-AFTRA member" },
@@ -218,7 +322,6 @@ registerMcpTool({
             permitAiTraining: { type: "boolean", description: "Override AI-training permission" },
             proposedFeeCents: { type: "number", description: "Proposed fee for this member, in cents" },
           },
-          required: ["email"],
         },
       },
     },
@@ -238,7 +341,6 @@ registerMcpTool({
       return { success: false, message: `Too many members (${params.members.length}); max ${MAX_CAST_PER_CALL} per call.` };
     }
 
-    // Load the production + a display company name for the cast emails.
     const production = await db
       .select({ id: productions.id, name: productions.name, company: companyNameSql })
       .from(productions)
@@ -246,15 +348,13 @@ registerMcpTool({
       .get();
     if (!production) return { success: false, message: `No production with id ${productionId}.` };
 
-    const defaults = {
+    const defaults: CallDefaults = {
       intendedUse: trimmed(params.intendedUse),
       validFrom: params.validFrom !== undefined ? parseDate(params.validFrom) : null,
       validTo: params.validTo !== undefined ? parseDate(params.validTo) : null,
-      licenceType: LICENCE_TYPES.includes(params.licenceType as (typeof LICENCE_TYPES)[number])
-        ? (params.licenceType as (typeof LICENCE_TYPES)[number]) : null,
+      licenceType: LICENCE_TYPES.includes(params.licenceType as CastLicenceType) ? (params.licenceType as CastLicenceType) : null,
       territory: trimmed(params.territory) || null,
-      exclusivity: EXCLUSIVITIES.includes(params.exclusivity as (typeof EXCLUSIVITIES)[number])
-        ? (params.exclusivity as (typeof EXCLUSIVITIES)[number]) : ("non_exclusive" as const),
+      exclusivity: EXCLUSIVITIES.includes(params.exclusivity as CastExclusivity) ? (params.exclusivity as CastExclusivity) : "non_exclusive",
       permitAiTraining: params.permitAiTraining === true,
     };
 
@@ -264,6 +364,7 @@ registerMcpTool({
 
     let linked = 0;
     let invited = 0;
+    let placeholders = 0;
     const skipped: string[] = [];
     const errors: string[] = [];
     const seen = new Set<string>();
@@ -280,35 +381,78 @@ registerMcpTool({
       }
       const member = resolved;
 
-      // Skip duplicates within this same call.
-      if (seen.has(member.email)) {
-        skipped.push(`${member.email}: listed more than once in this call.`);
+      // Within-call dedupe key (email, tmdb id, or name).
+      const dedupeKey = member.email
+        ? `email:${member.email}`
+        : member.tmdbId != null
+          ? `tmdb:${member.tmdbId}`
+          : `name:${(member.actorName ?? "").toLowerCase()}`;
+      if (seen.has(dedupeKey)) {
+        skipped.push(`${member.email ?? member.actorName}: listed more than once in this call.`);
         continue;
       }
-      seen.add(member.email);
+      seen.add(dedupeKey);
 
       try {
+        if (member.mode === "placeholder") {
+          // Dedupe against existing placeholder/cast rows on this production.
+          const dupe = await db
+            .select({ id: productionCast.id })
+            .from(productionCast)
+            .where(and(
+              eq(productionCast.productionId, productionId),
+              member.tmdbId != null
+                ? eq(productionCast.tmdbId, member.tmdbId)
+                : sql`lower(${productionCast.actorName}) = ${(member.actorName ?? "").toLowerCase()}`,
+            ))
+            .get();
+          if (dupe) {
+            skipped.push(`${member.actorName}: already on this production.`);
+            continue;
+          }
+
+          await db.insert(productionCast).values({
+            id: crypto.randomUUID(),
+            productionId,
+            talentId: null,
+            inviteId: null,
+            licenceId: null,
+            actorName: member.actorName,
+            tmdbId: member.tmdbId,
+            sourceNote: member.sourceNote,
+            characterName: member.characterName,
+            department: member.department,
+            sagMember: member.sagMember,
+            status: "placeholder",
+            licenceTermsJson: JSON.stringify(termsBlob(member, production)),
+            addedBy: token.userId,
+            addedAt: now,
+            linkedAt: null,
+          });
+          placeholders++;
+          continue;
+        }
+
+        // Contactable member (has an email).
+        const email = member.email as string;
         const existingUser = await db
           .select({ id: users.id, role: users.role })
           .from(users)
-          .where(eq(users.email, member.email))
+          .where(eq(users.email, email))
           .get();
 
         if (existingUser && existingUser.role === "talent") {
-          // Guard against re-adding the same talent to this production.
           const alreadyCast = await db
             .select({ id: productionCast.id })
             .from(productionCast)
             .where(and(eq(productionCast.productionId, productionId), eq(productionCast.talentId, existingUser.id)))
             .get();
           if (alreadyCast) {
-            skipped.push(`${member.email}: already cast on this production.`);
+            skipped.push(`${email}: already cast on this production.`);
             continue;
           }
 
           const licenceId = crypto.randomUUID();
-          const castId = crypto.randomUUID();
-
           await db.insert(licences).values({
             id: licenceId,
             talentId: existingUser.id,
@@ -316,8 +460,8 @@ registerMcpTool({
             projectName: production.name,
             productionCompany: production.company,
             intendedUse: member.intendedUse,
-            validFrom: member.validFrom,
-            validTo: member.validTo,
+            validFrom: member.validFrom!,
+            validTo: member.validTo!,
             status: "AWAITING_PACKAGE",
             licenceType: member.licenceType,
             territory: member.territory,
@@ -329,11 +473,14 @@ registerMcpTool({
           });
 
           await db.insert(productionCast).values({
-            id: castId,
+            id: crypto.randomUUID(),
             productionId,
             talentId: existingUser.id,
             inviteId: null,
             licenceId,
+            actorName: member.actorName,
+            tmdbId: member.tmdbId,
+            sourceNote: member.sourceNote,
             characterName: member.characterName,
             department: member.department,
             sagMember: member.sagMember,
@@ -345,7 +492,7 @@ registerMcpTool({
           });
 
           const { subject, html } = productionCastLinkedEmail({
-            recipientEmail: member.email,
+            recipientEmail: email,
             productionName: production.name,
             companyName: production.company,
             coordinatorEmail,
@@ -354,49 +501,33 @@ registerMcpTool({
             proposedFee: member.proposedFee ?? undefined,
             reviewUrl: `${baseUrl}/licences/${licenceId}`,
           });
-          await sendEmail({ to: member.email, subject, html }).catch(() => {});
+          await sendEmail({ to: email, subject, html }).catch(() => {});
 
           linked++;
         } else if (existingUser) {
-          // An existing non-talent account (licensee/rep/admin) can't be cast as talent.
-          skipped.push(`${member.email}: existing ${existingUser.role} account — not eligible as cast talent.`);
+          skipped.push(`${email}: existing ${existingUser.role} account — not eligible as cast talent.`);
         } else {
-          // No account — make sure we aren't duplicating a still-open invite.
           const pendingInvite = await db
             .select({ id: invites.id })
             .from(invites)
             .where(and(
-              eq(invites.email, member.email),
+              eq(invites.email, email),
               eq(invites.productionId, productionId),
               isNull(invites.usedAt),
               gt(invites.expiresAt, now),
             ))
             .get();
           if (pendingInvite) {
-            skipped.push(`${member.email}: already has a pending invite for this production.`);
+            skipped.push(`${email}: already has a pending invite for this production.`);
             continue;
           }
 
           const inviteId = crypto.randomUUID();
-          const castId = crypto.randomUUID();
           const expiresAt = now + SEVEN_DAYS;
-
-          const licenceTerms = {
-            intendedUse: member.intendedUse,
-            validFrom: member.validFrom,
-            validTo: member.validTo,
-            licenceType: member.licenceType,
-            territory: member.territory,
-            exclusivity: member.exclusivity,
-            permitAiTraining: member.permitAiTraining,
-            proposedFee: member.proposedFee,
-            projectName: production.name,
-            productionCompany: production.company,
-          };
 
           await db.insert(invites).values({
             id: inviteId,
-            email: member.email,
+            email,
             role: "talent",
             invitedBy: token.userId,
             talentId: null,
@@ -408,50 +539,126 @@ registerMcpTool({
           });
 
           await db.insert(productionCast).values({
-            id: castId,
+            id: crypto.randomUUID(),
             productionId,
             talentId: null,
             inviteId,
             licenceId: null,
+            actorName: member.actorName,
+            tmdbId: member.tmdbId,
+            sourceNote: member.sourceNote,
             characterName: member.characterName,
             department: member.department,
             sagMember: member.sagMember,
             status: "invited",
-            licenceTermsJson: JSON.stringify(licenceTerms),
+            licenceTermsJson: JSON.stringify(termsBlob(member, production)),
             addedBy: token.userId,
             addedAt: now,
             linkedAt: null,
           });
 
           const { subject, html } = productionCastInviteEmail({
-            recipientEmail: member.email,
+            recipientEmail: email,
             productionName: production.name,
             companyName: production.company,
             coordinatorEmail,
             characterName: member.characterName ?? undefined,
             intendedUse: member.intendedUse,
-            validFrom: member.validFrom,
-            validTo: member.validTo,
+            validFrom: member.validFrom!,
+            validTo: member.validTo!,
             signupUrl: `${baseUrl}/signup?invite=${inviteId}`,
           });
-          await sendEmail({ to: member.email, subject, html }).catch(() => {});
+          await sendEmail({ to: email, subject, html }).catch(() => {});
 
           invited++;
         }
       } catch (err) {
-        errors.push(`${member.email}: ${err instanceof Error ? err.message : String(err)}`);
+        errors.push(`${member.email ?? member.actorName}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
-    const added = linked + invited;
-    const parts = [`${added} added to "${production.name}" (${linked} linked, ${invited} invited)`];
+    const added = linked + invited + placeholders;
+    const parts = [`${added} added to "${production.name}" (${linked} linked, ${invited} invited, ${placeholders} placeholder)`];
     if (skipped.length) parts.push(`${skipped.length} skipped`);
     if (errors.length) parts.push(`${errors.length} error(s)`);
 
     return {
       success: errors.length === 0,
       message: parts.join(", ") + ".",
-      data: { productionId, added, linked, invited, skipped, errors },
+      data: { productionId, added, linked, invited, placeholders, skipped, errors },
+    };
+  },
+});
+
+registerMcpTool({
+  name: "resolve_cast_member",
+  description:
+    "Attach an email to a placeholder cast member and onboard them: existing talent get a placeholder " +
+    "AWAITING_PACKAGE licence + request email; an unknown email gets a 7-day talent signup invite. Find the " +
+    "castId via list_production_cast. Terms come from what was stored on the placeholder; supply intendedUse / " +
+    "validFrom / validTo (and optionally licenceType / territory / exclusivity / permitAiTraining / proposedFeeCents) " +
+    "to fill or override them — they're required if the placeholder didn't already carry them.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      productionId: { type: "string", description: "Production UUID" },
+      castId: { type: "string", description: "Cast row UUID (from list_production_cast)" },
+      email: { type: "string", description: "Email to onboard this cast member with" },
+      intendedUse: { type: "string", description: "Intended use (overrides/fills stored terms)" },
+      validFrom: { type: "string", description: "Licence start date, YYYY-MM-DD" },
+      validTo: { type: "string", description: "Licence end date, YYYY-MM-DD" },
+      licenceType: { type: "string", enum: [...LICENCE_TYPES], description: "Licence type" },
+      territory: { type: "string", description: "Territory" },
+      exclusivity: { type: "string", enum: [...EXCLUSIVITIES], description: "Exclusivity" },
+      permitAiTraining: { type: "boolean", description: "Whether the licence permits AI training" },
+      proposedFeeCents: { type: "number", description: "Proposed fee in cents" },
+    },
+    required: ["productionId", "castId", "email"],
+  },
+  mutating: true,
+  async execute({ db, token }, params) {
+    const productionId = trimmed(params.productionId);
+    const castId = trimmed(params.castId);
+    const email = trimmed(params.email);
+    if (!productionId || !castId || !email) {
+      return { success: false, message: "productionId, castId and email are required." };
+    }
+
+    // Build overrides only from supplied fields. Invalid dates are reported here.
+    const overrides: Parameters<typeof promoteCastMember>[1]["overrides"] = {};
+    if (params.intendedUse !== undefined) overrides.intendedUse = trimmed(params.intendedUse);
+    if (params.validFrom !== undefined) {
+      const v = parseDate(params.validFrom);
+      if (v === null) return { success: false, message: "validFrom must be YYYY-MM-DD." };
+      overrides.validFrom = v;
+    }
+    if (params.validTo !== undefined) {
+      const v = parseDate(params.validTo);
+      if (v === null) return { success: false, message: "validTo must be YYYY-MM-DD." };
+      overrides.validTo = v;
+    }
+    if (params.licenceType !== undefined) overrides.licenceType = params.licenceType as CastLicenceType;
+    if (params.territory !== undefined) overrides.territory = trimmed(params.territory) || null;
+    if (params.exclusivity !== undefined) overrides.exclusivity = params.exclusivity as CastExclusivity;
+    if (params.permitAiTraining !== undefined) overrides.permitAiTraining = params.permitAiTraining === true;
+    if (typeof params.proposedFeeCents === "number" && params.proposedFeeCents > 0) {
+      overrides.proposedFee = Math.floor(params.proposedFeeCents);
+    }
+
+    const result = await promoteCastMember(db, {
+      productionId,
+      castId,
+      email,
+      actorUserId: token.userId,
+      actorEmail: token.email,
+      baseUrl: getBaseUrl(),
+      overrides,
+    });
+
+    return {
+      success: result.ok,
+      message: result.message,
+      data: result.ok ? { castId, status: result.status, licenceId: result.licenceId, inviteId: result.inviteId } : undefined,
     };
   },
 });

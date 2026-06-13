@@ -32,7 +32,9 @@ describe("mcp tool registry", () => {
     expect(names).toContain("create_licence_request");
     // Production cast
     expect(names).toContain("list_productions");
+    expect(names).toContain("list_production_cast");
     expect(names).toContain("add_production_cast");
+    expect(names).toContain("resolve_cast_member");
   });
 
   it("marks corrective tools as mutating and visibility tools as not", () => {
@@ -40,11 +42,11 @@ describe("mcp tool registry", () => {
       "set_user_flag", "set_user_role", "set_user_suspended", "restore_package", "revoke_mcp_token",
       "lock_talent_downloads", "revoke_user_sessions",
       "invite_user", "create_production", "create_licence_request",
-      "add_production_cast",
+      "add_production_cast", "resolve_cast_member",
     ]) {
       expect(getMcpTool(name)?.mutating, name).toBe(true);
     }
-    for (const name of ["get_platform_overview", "list_users", "list_licences", "list_packages", "get_ai_costs", "list_concepts", "list_productions"]) {
+    for (const name of ["get_platform_overview", "list_users", "list_licences", "list_packages", "get_ai_costs", "list_concepts", "list_productions", "list_production_cast"]) {
       expect(getMcpTool(name)?.mutating, name).toBe(false);
     }
   });

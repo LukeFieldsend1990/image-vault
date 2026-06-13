@@ -862,11 +862,17 @@ export const productionCast = sqliteTable("production_cast", {
   talentId: text("talent_id").references(() => users.id),
   inviteId: text("invite_id").references(() => invites.id),
   licenceId: text("licence_id").references(() => licences.id),
+  // Public name for placeholder rows (no talentId/inviteId yet) — e.g. cast sourced
+  // from public listings before an email is known. Renders as the cast row identity.
+  actorName: text("actor_name"),
+  tmdbId: integer("tmdb_id"),          // optional: dedupe + future TMDB enrichment
+  sourceNote: text("source_note"),     // optional provenance, e.g. where the name was sourced
   characterName: text("character_name"),
   department: text("department"),
   sagMember: integer("sag_member", { mode: "boolean" }).notNull().default(false),
   status: text("status").notNull().default("invited"),
-  // invited | linked | scan_uploaded | consented | declined
+  // placeholder | invited | linked | scan_uploaded | consented | declined
+  // placeholder = recorded by name only; promoted to invited/linked once an email is attached.
   licenceTermsJson: text("licence_terms_json"), // stored until talent registers; then licence created
   addedBy: text("added_by").notNull().references(() => users.id),
   addedAt: integer("added_at").notNull(),

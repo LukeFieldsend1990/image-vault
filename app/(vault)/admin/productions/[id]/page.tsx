@@ -7,6 +7,7 @@ import { eq, desc, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ProductionEditForm from "./production-edit-form";
+import CastResolveButton from "./cast-resolve-button";
 
 export default async function AdminProductionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -45,6 +46,7 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
       talentId: productionCast.talentId,
       inviteId: productionCast.inviteId,
       licenceId: productionCast.licenceId,
+      actorName: productionCast.actorName,
       characterName: productionCast.characterName,
       department: productionCast.department,
       sagMember: productionCast.sagMember,
@@ -71,10 +73,10 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
   const inviteMap = new Map(castInvites.map((i) => [i.id, i]));
 
   const CAST_STATUS_COLOR: Record<string, string> = {
-    invited: "#d97706", linked: "#2563eb", scan_uploaded: "#7c3aed", consented: "#059669", declined: "#dc2626",
+    placeholder: "#6b7280", invited: "#d97706", linked: "#2563eb", scan_uploaded: "#7c3aed", consented: "#059669", declined: "#dc2626",
   };
   const CAST_STATUS_LABEL: Record<string, string> = {
-    invited: "Invited", linked: "Linked", scan_uploaded: "Reviewing", consented: "Consented", declined: "Declined",
+    placeholder: "Placeholder", invited: "Invited", linked: "Linked", scan_uploaded: "Reviewing", consented: "Consented", declined: "Declined",
   };
 
   // Cast summary counts
@@ -206,7 +208,9 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
               <span>Added</span>
             </div>
             {castRows.map((c) => {
-              const name = c.talentId ? (profileMap.get(c.talentId) ?? c.talentId.slice(0, 8)) : (inviteMap.get(c.inviteId ?? "")?.email ?? "—");
+              const name = c.talentId
+                ? (profileMap.get(c.talentId) ?? c.talentId.slice(0, 8))
+                : (inviteMap.get(c.inviteId ?? "")?.email ?? c.actorName ?? "—");
               const statusColor = CAST_STATUS_COLOR[c.status] ?? "#6b7280";
               return (
                 <div
@@ -218,10 +222,13 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
                   <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{c.characterName ?? "—"}</span>
                   <span className="text-xs" style={{ color: "var(--color-muted)" }}>{c.department ?? "—"}</span>
                   <span className="text-xs" style={{ color: "var(--color-muted)" }}>{c.sagMember ? "✓" : "—"}</span>
-                  <span>
+                  <span className="inline-flex items-center gap-2">
                     <span className="inline-flex text-[9px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded" style={{ background: `${statusColor}18`, color: statusColor }}>
                       {CAST_STATUS_LABEL[c.status] ?? c.status}
                     </span>
+                    {c.status === "placeholder" && (
+                      <CastResolveButton productionId={id} castId={c.id} actorName={c.actorName ?? "this actor"} />
+                    )}
                   </span>
                   <span className="text-xs" style={{ color: "var(--color-muted)" }}>{ts(c.addedAt)}</span>
                 </div>
