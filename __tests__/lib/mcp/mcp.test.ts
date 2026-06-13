@@ -24,6 +24,8 @@ describe("mcp tool registry", () => {
     // Corrective
     expect(names).toContain("set_user_flag");
     expect(names).toContain("revoke_mcp_token");
+    expect(names).toContain("lock_talent_downloads");
+    expect(names).toContain("revoke_user_sessions");
     // Onboarding
     expect(names).toContain("invite_user");
     expect(names).toContain("create_production");
@@ -38,6 +40,7 @@ describe("mcp tool registry", () => {
   it("marks corrective tools as mutating and visibility tools as not", () => {
     for (const name of [
       "set_user_flag", "set_user_role", "set_user_suspended", "restore_package", "revoke_mcp_token",
+      "lock_talent_downloads", "revoke_user_sessions",
       "invite_user", "create_production", "create_licence_request",
       "add_production_cast", "resolve_cast_member",
     ]) {

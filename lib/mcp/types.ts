@@ -19,6 +19,13 @@ export interface McpTokenPayload {
 export interface McpToolContext {
   db: Db;
   token: McpTokenPayload;
+  /**
+   * KV namespace (SESSIONS_KV). Present when a tool is invoked through the
+   * MCP HTTP dispatcher; absent for in-process callers like the security
+   * agent (which only runs non-mutating tools). Tools that need it must
+   * guard for undefined.
+   */
+  kv?: KVNamespace;
 }
 
 export interface McpToolResult {

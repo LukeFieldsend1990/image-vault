@@ -8,6 +8,7 @@ export interface SessionPayload {
   sub: string;      // userId
   email: string;
   role: string;
+  iat?: number;     // issued-at (epoch seconds) — used for session-revocation checks
 }
 
 function getSecret(secret: string): Uint8Array {
@@ -41,6 +42,7 @@ export async function verifySessionJwt(
       sub: payload.sub as string,
       email: payload.email as string,
       role: payload.role as string,
+      iat: typeof payload.iat === "number" ? payload.iat : undefined,
     };
   } catch {
     return null;

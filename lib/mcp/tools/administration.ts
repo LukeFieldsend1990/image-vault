@@ -7,10 +7,15 @@
  */
 
 import { registerMcpTool } from "../registry";
-import { users, scanPackages, mcpTokens } from "@/lib/db/schema";
+import { users, scanPackages, mcpTokens, refreshTokens } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { SESSION_REVOKED_PREFIX } from "@/lib/auth/requireSession";
 import type { McpToolContext, McpToolResult } from "../types";
+
+// Must outlive any session JWT issued before revocation. Session TTL is 2h;
+// add a clock-skew buffer.
+const SESSION_REVOKE_TTL_SECONDS = 2 * 60 * 60 + 300;
 
 type TargetUser = { id: string; email: string; role: string };
 
@@ -177,5 +182,84 @@ registerMcpTool({
       .set({ revokedAt: Math.floor(Date.now() / 1000) })
       .where(eq(mcpTokens.id, tokenId));
     return { success: true, message: `Revoked MCP token "${row.displayName}".` };
+  },
+});
+
+registerMcpTool({
+  name: "lock_talent_downloads",
+  description:
+    "Lock (or unlock) a talent's vault when they appear to be targeted. While locked, no new licence requests or downloads of that talent's likeness can start, across every licensee and the render bridge. Talent accounts only.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      email: { type: "string", description: "Target talent's account email" },
+      locked: { type: "boolean", description: "true to lock the vault, false to unlock" },
+      reason: { type: "string", description: "Short reason for the audit trail" },
+    },
+    required: ["email", "locked"],
+  },
+  mutating: true,
+  async execute(ctx, params) {
+    if (typeof params.locked !== "boolean") return { success: false, message: "locked must be a boolean." };
+    const target = await findTargetUser(ctx, params.email);
+    if (isResult(target)) return target;
+    if (target.role !== "talent") {
+      return { success: false, message: `${target.email} is a ${target.role} account; vault locking applies to talent only.` };
+    }
+
+    await ctx.db.update(users).set({ vaultLocked: params.locked }).where(eq(users.id, target.id));
+    const reason = typeof params.reason === "string" && params.reason.trim() ? ` (${params.reason.trim()})` : "";
+    return {
+      success: true,
+      message: params.locked
+        ? `Locked ${target.email}'s vault — downloads and new licence requests are blocked${reason}.`
+        : `Unlocked ${target.email}'s vault — downloads can resume${reason}.`,
+    };
+  },
+});
+
+registerMcpTool({
+  name: "revoke_user_sessions",
+  description:
+    "Force-logout a user immediately: deletes their refresh tokens and denylists their live session JWT so it stops working within seconds (a stateless JWT otherwise stays valid up to ~2h). Optionally also suspends the account. The user can log in again afterwards unless suspended. Use for suspicious activity.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      email: { type: "string", description: "Target user email" },
+      suspend: { type: "boolean", description: "Also suspend the account so they cannot log back in (default false)" },
+      reason: { type: "string", description: "Short reason for the audit trail" },
+    },
+    required: ["email"],
+  },
+  mutating: true,
+  async execute(ctx, params) {
+    if (!ctx.kv) return { success: false, message: "Session store unavailable in this context." };
+    const target = await findTargetUser(ctx, params.email);
+    if (isResult(target)) return target;
+
+    const now = Math.floor(Date.now() / 1000);
+    const suspend = params.suspend === true;
+
+    // 1. Stop renewal — drop every refresh token for this user.
+    await ctx.db.delete(refreshTokens).where(eq(refreshTokens.userId, target.id));
+
+    // 2. Kill live JWTs — denylist sessions issued before now (requireSession
+    //    compares the JWT's iat against this timestamp, so re-login still works).
+    await ctx.kv.put(`${SESSION_REVOKED_PREFIX}${target.id}`, String(now), {
+      expirationTtl: SESSION_REVOKE_TTL_SECONDS,
+    });
+
+    // 3. Optionally block re-login entirely.
+    if (suspend) {
+      await ctx.db.update(users).set({ suspendedAt: now }).where(eq(users.id, target.id));
+    }
+
+    const reason = typeof params.reason === "string" && params.reason.trim() ? ` (${params.reason.trim()})` : "";
+    return {
+      success: true,
+      message: suspend
+        ? `Revoked all sessions for ${target.email} and suspended the account${reason}.`
+        : `Revoked all sessions for ${target.email}; they must log in again${reason}.`,
+    };
   },
 });
