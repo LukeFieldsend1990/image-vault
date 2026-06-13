@@ -5,7 +5,6 @@ import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { talentProfiles, users, siteSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
 import PitchVignettesToggle from "./pitch-vignettes-toggle";
 import ChangePassword from "./change-password";
@@ -400,18 +399,6 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* Invite Licensee (talent only) */}
-      {user?.role === "talent" && (
-        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-          <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-muted)" }}>
-            Invite a Licensee
-          </h2>
-          <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
-            Send an invitation to a production company so they can access your vault.
-          </p>
-          <InviteLicensee />
-        </div>
-      )}
 
       {/* Organisation (licensee only) */}
       {isIndustryRole(user?.role) && (
