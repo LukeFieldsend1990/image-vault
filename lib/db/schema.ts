@@ -203,6 +203,7 @@ export const invites = sqliteTable("invites", {
   expiresAt: integer("expires_at").notNull(), // unix timestamp
   createdAt: integer("created_at").notNull(), // unix timestamp
   productionId: text("production_id").references(() => productions.id),
+  orgSubtype: text("org_subtype"), // industry-only: intended org type (OrgType)
 });
 
 export const scanLocations = sqliteTable("scan_locations", {

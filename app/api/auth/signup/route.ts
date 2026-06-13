@@ -231,11 +231,11 @@ export async function POST(req: NextRequest) {
   // Store setup token in KV (30 minute TTL)
   const setupToken = crypto.randomUUID();
   const kv = getRequestContext().env.SESSIONS_KV;
-  await kv.put(
-    `setup:${setupToken}`,
-    JSON.stringify({ userId, email: normalEmail, role }),
-    { expirationTtl: 1800 }
-  );
+  const setupPayload: Record<string, unknown> = { userId, email: normalEmail, role };
+  if (role === "industry" && inviteRow?.orgSubtype) {
+    setupPayload.orgSubtype = inviteRow.orgSubtype;
+  }
+  await kv.put(`setup:${setupToken}`, JSON.stringify(setupPayload), { expirationTtl: 1800 });
 
   return NextResponse.redirect(
     new URL(`/setup-2fa?token=${setupToken}`, req.url),
