@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 interface Authorisation {
   id: string;
   vendorOrgId: string;
   orgName: string;
   orgType: string | null;
+  orgShortCode: string | null;
   vendorAuditPassed: boolean;
   parentAuthorisationId: string | null;
   nominatedByOrgId: string | null;
@@ -30,6 +32,7 @@ interface OrgResult {
   id: string;
   name: string;
   orgType: string | null;
+  shortCode: string | null;
   vendorAuditPassed: boolean;
 }
 
@@ -134,6 +137,7 @@ export default function VendorsClient({ licenceId }: { licenceId: string }) {
             {depth > 0 && <span style={{ color: "var(--color-muted)" }}>↳</span>}
             <span className="text-sm truncate" style={{ color: a.status === "active" ? "var(--color-ink)" : "var(--color-muted)" }}>{a.orgName}</span>
             <OrgTypeBadge type={a.orgType} />
+            <CodeTag code={a.orgShortCode} />
             {a.vendorAuditPassed
               ? <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#16653418", color: "#166534" }}>Audit ✓</span>
               : <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "rgba(217,119,6,0.12)", color: "#b45309" }} title="Vendor cannot pull until the environment audit passes">No audit</span>}
@@ -169,7 +173,7 @@ export default function VendorsClient({ licenceId }: { licenceId: string }) {
           <div className="mt-2 rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
             {results.map((o) => (
               <button key={o.id} onClick={() => onPick(o.id)} disabled={busy} className="w-full flex items-center justify-between px-3 py-2 text-left border-b last:border-0 hover:bg-[var(--color-bg)] disabled:opacity-40" style={{ borderColor: "var(--color-border)" }}>
-                <span className="text-sm flex items-center gap-2" style={{ color: "var(--color-ink)" }}>{o.name} <OrgTypeBadge type={o.orgType} /></span>
+                <span className="text-sm flex items-center gap-2" style={{ color: "var(--color-ink)" }}>{o.name} <OrgTypeBadge type={o.orgType} /> <CodeTag code={o.shortCode} /></span>
                 {!o.vendorAuditPassed && <span className="text-[10px]" style={{ color: "#b45309" }}>no audit</span>}
               </button>
             ))}

@@ -27,9 +27,11 @@ export async function GET(req: NextRequest) {
         year: productions.year,
         status: productions.status,
         sagProjectNumber: productions.sagProjectNumber,
+        shortCode: productions.shortCode,
         organisationId: productions.organisationId,
         orgName: organisations.name,
         orgType: organisations.orgType,
+        orgShortCode: organisations.shortCode,
         createdAt: productions.createdAt,
       })
       .from(productions)
@@ -59,9 +61,11 @@ export async function GET(req: NextRequest) {
         year: productions.year,
         status: productions.status,
         sagProjectNumber: productions.sagProjectNumber,
+        shortCode: productions.shortCode,
         organisationId: productions.organisationId,
         orgName: organisations.name,
         orgType: organisations.orgType,
+        orgShortCode: organisations.shortCode,
         createdAt: productions.createdAt,
       })
       .from(productions)

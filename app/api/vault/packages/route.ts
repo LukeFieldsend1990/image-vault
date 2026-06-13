@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     .select({
       id: scanPackages.id,
       name: scanPackages.name,
+      scanNumber: scanPackages.scanNumber,
       description: scanPackages.description,
       captureDate: scanPackages.captureDate,
       studioName: scanPackages.studioName,

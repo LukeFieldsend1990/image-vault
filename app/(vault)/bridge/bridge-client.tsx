@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { isIndustryRole } from "@/lib/auth/roles";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
 
 interface NamedPackage {
   packageId: string;
@@ -13,7 +15,9 @@ interface AgentLicence {
   licenceId: string;
   packageId: string | null;
   packageName: string | null;
+  packageScanNumber: number | null;
   talentName: string | null;
+  talentShortCode: string | null;
   licenceName: string | null;
   validFrom: number;
   validTo: number;
@@ -28,6 +32,7 @@ interface AgentSummary {
   organisationId: string;
   organisationName: string;
   organisationType?: string | null;
+  organisationShortCode?: string | null;
   status: "active" | "revoked" | "expired";
   lastHeartbeatAt: number | null;
   agentOnline: boolean;
@@ -194,6 +199,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
             <p className="mt-0.5 text-xs truncate flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>
               <span className="truncate">{agent.organisationName}</span>
               <OrgTypeBadge type={agent.organisationType} />
+              <CodeTag code={agent.organisationShortCode} />
             </p>
           </div>
           <span
@@ -312,16 +318,20 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
               {activeLicences.map(l => (
                 <li key={l.licenceId} className="text-xs">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-medium truncate" style={{ color: "var(--color-ink)" }}>
-                      {l.talentName ?? "—"}
+                    <span className="font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                      <span className="truncate">{l.talentName ?? "—"}</span>
+                      <CodeTag code={l.talentShortCode} />
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-3 mt-0.5">
-                    <span className="truncate" style={{ color: "var(--color-muted)" }}>
-                      {l.licenceName ?? "—"}
-                      {l.packageName && (
-                        <> · {l.packageName}</>
-                      )}
+                    <span className="truncate inline-flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                      <span className="truncate">
+                        {l.licenceName ?? "—"}
+                        {l.packageName && (
+                          <> · {l.packageName}</>
+                        )}
+                      </span>
+                      <CodeTag code={formatScan(l.packageScanNumber)} />
                     </span>
                   </div>
                   <div className="mt-0.5 font-mono text-[10px]" style={{ color: "var(--color-muted)" }}>
@@ -345,6 +355,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
               </svg>
               <span style={{ color: "var(--color-ink)" }}>{agent.organisationName}</span>
               <OrgTypeBadge type={agent.organisationType} />
+              <CodeTag code={agent.organisationShortCode} />
               <span style={{ color: "var(--color-muted)" }}>is publishing your data to a render share</span>
             </div>
             {(agent.publishedPackages.length + agent.unauthorisedPublishedPackages.length) > 0 && (

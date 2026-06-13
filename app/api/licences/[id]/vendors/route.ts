@@ -38,6 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       vendorOrgId: vendorAuthorisations.vendorOrgId,
       orgName: organisations.name,
       orgType: organisations.orgType,
+      orgShortCode: organisations.shortCode,
       vendorAuditPassed: organisations.vendorAuditPassed,
       parentAuthorisationId: vendorAuthorisations.parentAuthorisationId,
       nominatedByOrgId: vendorAuthorisations.nominatedByOrgId,

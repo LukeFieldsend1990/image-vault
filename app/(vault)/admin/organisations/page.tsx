@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, users } from "@/lib/db/schema";
 import { eq, desc, count } from "drizzle-orm";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 import { isVendorOrgType } from "@/lib/organisations/orgTypes";
 
 function fmtDate(epoch: number) {
@@ -21,6 +22,7 @@ export default async function AdminOrganisationsPage() {
       id: organisations.id,
       name: organisations.name,
       orgType: organisations.orgType,
+      shortCode: organisations.shortCode,
       vendorAuditPassed: organisations.vendorAuditPassed,
       website: organisations.website,
       billingEmail: organisations.billingEmail,
@@ -89,6 +91,7 @@ export default async function AdminOrganisationsPage() {
                     <p className="text-xs font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
                       <span className="truncate">{org.name}</span>
                       <OrgTypeBadge type={org.orgType} />
+                      <CodeTag code={org.shortCode} />
                       {isVendorOrgType(org.orgType) && (
                         <span
                           className="text-[10px] shrink-0"

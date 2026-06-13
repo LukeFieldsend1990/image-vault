@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 interface Agent {
   id: string;
   displayName: string;
   orgName: string | null;
   orgType?: string | null;
+  orgShortCode?: string | null;
   organisationId: string;
   online: boolean;
   publishedIds: string[];
@@ -82,6 +84,7 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
         <span className="text-xs truncate flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
           <span className="truncate">{a.orgName ?? a.organisationId.slice(0, 8) + "…"}</span>
           <OrgTypeBadge type={a.orgType} />
+          <CodeTag code={a.orgShortCode} />
         </span>
 
         <div className="flex flex-wrap gap-1">
@@ -160,6 +163,7 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
               <span className="text-xs inline-flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
                 <span>{a.orgName ?? "—"}</span>
                 <OrgTypeBadge type={a.orgType} />
+                <CodeTag code={a.orgShortCode} />
               </span>
               <span className="font-mono text-[10px] block" style={{ color: "var(--color-muted)" }}>{a.organisationId}</span>
             </DetailField>

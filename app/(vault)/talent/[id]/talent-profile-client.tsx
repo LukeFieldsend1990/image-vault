@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 import { FadeImage } from "@/app/(vault)/fade-image";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +26,7 @@ interface PermissionRow {
 interface ScanPackage {
   id: string;
   name: string;
+  scanNumber?: number | null;
   description: string | null;
   captureDate: number | null;
   studioName: string | null;
@@ -167,7 +170,7 @@ export default function TalentProfileClient({
   viewerRole,
 }: {
   talentId: string;
-  talent: { id: string; email: string };
+  talent: { id: string; email: string; shortCode?: string | null };
   profile: TalentProfile | null;
   permissions: PermissionRow[];
   capabilities: string[];
@@ -219,8 +222,9 @@ export default function TalentProfileClient({
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-                  {displayName}
+                <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2" style={{ color: "var(--color-ink)" }}>
+                  <span>{displayName}</span>
+                  <CodeTag code={talent.shortCode} />
                 </h1>
                 <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                   {profile?.tmdbId && (
@@ -322,7 +326,10 @@ export default function TalentProfileClient({
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{pkg.name}</p>
+                        <p className="text-sm font-medium flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                          <span>{pkg.name}</span>
+                          <CodeTag code={formatScan(pkg.scanNumber)} />
+                        </p>
                         {pkg.description && (
                           <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>{pkg.description}</p>
                         )}
