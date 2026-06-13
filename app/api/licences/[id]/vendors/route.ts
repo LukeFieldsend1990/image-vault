@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { licences, organisations, vendorAuthorisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isProductionSideOfLicence, isOrgMember } from "@/lib/licences/vendorAccess";
+import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { eq, and, desc } from "drizzle-orm";
 
 // GET /api/licences/[id]/vendors — list vendor authorisations for a licence
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const db = getDb();
   const licence = await db
-    .select({ id: licences.id, licenseeId: licences.licenseeId, organisationId: licences.organisationId, status: licences.status })
+    .select({ id: licences.id, licenseeId: licences.licenseeId, organisationId: licences.organisationId, status: licences.status, talentId: licences.talentId, projectName: licences.projectName })
     .from(licences)
     .where(eq(licences.id, id))
     .get();
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const vendorOrg = await db
-    .select({ id: organisations.id })
+    .select({ id: organisations.id, name: organisations.name })
     .from(organisations)
     .where(eq(organisations.id, body.vendorOrgId))
     .get();
@@ -143,6 +144,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const now = Math.floor(Date.now() / 1000);
 
+  // Notify the talent + their reps that a vendor was granted access (v6 "agent notified").
+  const notifyVendorGranted = () =>
+    notifyTalentAndReps(db, licence.talentId, {
+      type: "vendor_authorised",
+      title: nominatedByOrgId ? "Sub-vendor authorised" : "Vendor authorised",
+      body: `${vendorOrg.name} can now access ${licence.projectName}.`,
+      href: `/licences/${id}/vendors`,
+    });
+
   if (existing) {
     if (existing.status === "active") {
       return NextResponse.json({ error: "Vendor is already authorised" }, { status: 409 });
@@ -151,6 +161,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .update(vendorAuthorisations)
       .set({ status: "active", parentAuthorisationId, nominatedByOrgId, authorisedBy: session.sub, createdAt: now, revokedAt: null, revokedBy: null })
       .where(eq(vendorAuthorisations.id, existing.id));
+    void notifyVendorGranted();
     return NextResponse.json({ id: existing.id, reactivated: true }, { status: 200 });
   }
 
@@ -166,5 +177,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     createdAt: now,
   });
 
+  void notifyVendorGranted();
   return NextResponse.json({ id: authId }, { status: 201 });
 }

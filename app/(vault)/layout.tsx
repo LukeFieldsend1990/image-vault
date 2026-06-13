@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NavLinks } from "./nav";
 import UserWidget from "./user-widget";
 import SidebarShell from "./sidebar-shell";
+import NotificationBell from "./notification-bell";
 import { getDb } from "@/lib/db";
 import { licences, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -193,12 +194,15 @@ export default async function VaultLayout({
             <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} />
           </div>
 
-          <UserWidget
-            email={email}
-            initials={initials}
-            role={role}
-            identity={identity}
-          />
+          <div>
+            <NotificationBell />
+            <UserWidget
+              email={email}
+              initials={initials}
+              role={role}
+              identity={identity}
+            />
+          </div>
         </div>
       </SidebarShell>
 
