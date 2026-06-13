@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, productionCompanies } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { isOrgType, type OrgType } from "@/lib/organisations/orgTypes";
 import { eq } from "drizzle-orm";
 
 // GET /api/organisations — list orgs the calling user belongs to
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
     website?: string;
     billingEmail?: string;
     productionCompanyId?: string;
+    orgType?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -56,6 +58,14 @@ export async function POST(req: NextRequest) {
 
   if (!body.name?.trim()) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
+  }
+
+  let orgType: OrgType = "production_company";
+  if (body.orgType !== undefined) {
+    if (!isOrgType(body.orgType)) {
+      return NextResponse.json({ error: "invalid orgType" }, { status: 400 });
+    }
+    orgType = body.orgType;
   }
 
   if (body.productionCompanyId) {
@@ -81,6 +91,7 @@ export async function POST(req: NextRequest) {
     website: body.website?.trim() ?? null,
     billingEmail: body.billingEmail?.trim() ?? null,
     productionCompanyId: body.productionCompanyId ?? null,
+    orgType,
     createdBy: session.sub,
     createdAt: now,
     updatedAt: now,

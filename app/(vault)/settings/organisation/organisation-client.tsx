@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ORG_TYPES, ORG_TYPE_LABELS, type OrgType } from "@/lib/organisations/orgTypes";
 
 interface OrgMember {
   userId: string;
@@ -31,6 +32,7 @@ export default function OrganisationClient() {
   // Create org state
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
+  const [createType, setCreateType] = useState<OrgType>("production_company");
   const [createWebsite, setCreateWebsite] = useState("");
   const [createBilling, setCreateBilling] = useState("");
   const [creating, setCreating] = useState(false);
@@ -90,7 +92,7 @@ export default function OrganisationClient() {
       const r = await fetch("/api/organisations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: createName, website: createWebsite || undefined, billingEmail: createBilling || undefined }),
+        body: JSON.stringify({ name: createName, orgType: createType, website: createWebsite || undefined, billingEmail: createBilling || undefined }),
       });
       if (!r.ok) {
         const d = await r.json() as { error?: string };
@@ -217,6 +219,15 @@ export default function OrganisationClient() {
               required
               style={{ padding: "0.5rem 0.75rem", fontSize: "0.875rem", border: "1px solid var(--color-border)", borderRadius: 4, background: "var(--color-bg)", color: "var(--color-text)" }}
             />
+            <select
+              value={createType}
+              onChange={e => setCreateType(e.target.value as OrgType)}
+              style={{ padding: "0.5rem 0.75rem", fontSize: "0.875rem", border: "1px solid var(--color-border)", borderRadius: 4, background: "var(--color-bg)", color: "var(--color-text)" }}
+            >
+              {ORG_TYPES.map(t => (
+                <option key={t} value={t}>{ORG_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
             <input
               value={createWebsite}
               onChange={e => setCreateWebsite(e.target.value)}
