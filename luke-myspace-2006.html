@@ -1,0 +1,488 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!--
+  ============================================================
+   LUKE'S PROFILE - DO NOT EDIT (i hacked the css myself - L)
+   if ur reading the source ur a legend. add me. - lukey_strums
+   "the code is the only thing that does what i tell it" haha
+  ============================================================
+  A loving facsimile of a 2006-era MySpace profile.
+  Northern Irish, b.1990, guitar-music obsessed, future programmer.
+  Self-contained: no external assets, all art is inline SVG/CSS.
+-->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Luke | "no future, no future for you" | www.myspace.com/lukey_strums</title>
+<style type="text/css">
+/* ---- LUKE'S CUSTOM CSS (i worked this out from view-source on other ppls pages) ---- */
+html, body {
+  margin: 0; padding: 0;
+  font-family: Verdana, Tahoma, Arial, sans-serif;
+  font-size: 11px;
+  color: #cccccc;
+  /* tiled "grunge" background made of CSS so it loads on dialup ;) */
+  background-color: #0b0b0d;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(192,57,43,0.10), transparent 60%),
+    radial-gradient(circle at 80% 70%, rgba(80,80,90,0.12), transparent 55%),
+    repeating-linear-gradient(45deg, #0d0d10 0px, #0d0d10 12px, #0a0a0c 12px, #0a0a0c 24px);
+  background-attachment: fixed;
+}
+a { color: #d65a4a; text-decoration: none; }
+a:hover { color: #ffffff; text-decoration: underline; }
+table { border-collapse: collapse; }
+
+/* the classic MySpace top blue bar */
+#msbar {
+  background: #2b3a55;
+  background: linear-gradient(#3a4f73, #243049);
+  border-bottom: 1px solid #000;
+  color: #cfe0ff;
+  font: 11px Tahoma, Verdana, sans-serif;
+  padding: 4px 10px;
+}
+#msbar .logo { font-weight: bold; font-size: 15px; color:#fff; letter-spacing:-1px; }
+#msbar .logo span { color:#ff9c00; }
+#msbar a { color:#cfe0ff; }
+#msbar .search { background:#fff; border:1px solid #102; padding:1px 4px; color:#333; }
+
+.wrap { width: 760px; margin: 0 auto; padding: 14px 0 40px; }
+
+.headline {
+  text-align:center; color:#fff; font-family:'Comic Sans MS', Verdana, sans-serif;
+  font-size: 24px; text-shadow: 2px 2px 0 #c0392b, 0 0 14px #c0392b;
+  margin: 6px 0 2px;
+}
+.subhead { text-align:center; color:#8c8c96; font-style:italic; margin-bottom:12px; }
+
+/* left + right column shell, table-based like it's 2006 */
+.col-left { width: 300px; vertical-align: top; }
+.col-right { width: 440px; vertical-align: top; padding-left: 20px; }
+
+.module {
+  border: 1px solid #2b2b30;
+  background: rgba(15,15,18,0.85);
+  margin-bottom: 14px;
+}
+.module .bar {
+  background: linear-gradient(#3a4f73, #243049);
+  color: #fff; font-weight: bold; letter-spacing: 1px;
+  padding: 4px 8px; font-size: 10px; text-transform: uppercase;
+  border-bottom: 1px solid #000;
+}
+.module .body { padding: 10px; }
+
+.pfp {
+  display:block; width: 280px; height: 280px; margin: 0 auto 8px;
+  border: 4px solid #1a1a1d; outline: 1px solid #c0392b;
+  background:#000;
+}
+.pfp-cap { text-align:center; color:#9a9aa2; font-style:italic; }
+
+.online { color:#7CFC00; font-weight:bold; }
+.online .dot { color:#7CFC00; }
+
+/* contact box buttons, lo-fi */
+.contact td {
+  text-align:center; padding:6px 3px; width:50%;
+  border:1px solid #2b2b30; font-size:10px; color:#d65a4a; cursor:pointer;
+  background: linear-gradient(#1c1c20, #131316);
+}
+.contact td:hover { color:#fff; background: linear-gradient(#2a2a31, #17171b); }
+
+dl { margin:0; }
+dt { color:#9aa6c0; font-weight:bold; float:left; clear:left; width:84px; }
+dd { margin:0 0 4px 92px; color:#d6d6dc; }
+
+.intblock b { color:#d65a4a; display:block; margin-top:6px; }
+
+blockquote { margin: 0 0 8px; padding-left:10px; border-left:3px solid #c0392b; color:#d6d6dc; }
+
+/* "now playing" player skin */
+.player {
+  background: linear-gradient(#15151a, #0c0c0f);
+  border:1px solid #2b2b30; padding:8px; color:#bfeebf;
+}
+.player .lcd {
+  background:#06120a; border:1px solid #1f3a26; color:#7CFC00;
+  font-family:'Courier New', monospace; padding:5px 8px; font-size:11px;
+  text-shadow:0 0 4px #7CFC0080; overflow:hidden; white-space:nowrap;
+}
+.player .controls { margin-top:6px; color:#888; font-size:14px; letter-spacing:2px; }
+.player .controls .play { color:#7CFC00; }
+
+/* top 8 friends grid */
+.friends td { width:25%; text-align:center; padding:8px 4px; vertical-align:top; }
+.fpic { width:80px; height:80px; border:2px solid #1a1a1d; outline:1px solid #444; display:block; margin:0 auto 4px; }
+.fname { color:#d65a4a; font-weight:bold; font-size:10px; }
+
+/* comments */
+.cmt { border-top:1px solid #222; padding:8px 0; }
+.cmt .ava { width:50px; height:50px; border:2px solid #1a1a1d; vertical-align:top; }
+.cmt .who { color:#d65a4a; font-weight:bold; }
+.cmt .when { color:#666; font-size:9px; }
+.cmt .txt { color:#d0d0d6; padding-left:8px; }
+
+.blinkbar { text-align:center; color:#c0392b; font-weight:bold; padding:4px; }
+.counter {
+  font-family:'Courier New', monospace; background:#000; color:#39ff14;
+  border:1px solid #1f3a26; padding:2px 6px; letter-spacing:3px;
+}
+.footer { text-align:center; color:#55555c; margin-top:18px; font-size:10px; }
+marquee { color:#ff9c00; }
+
+@keyframes blink { 50% { opacity: 0.15; } }
+.blink { animation: blink 1s steps(1) infinite; }
+@keyframes eq { 0%{height:4px} 50%{height:16px} 100%{height:6px} }
+.eq span { display:inline-block; width:3px; background:#7CFC00; margin:0 1px; vertical-align:bottom;
+  animation: eq 0.6s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<!-- ===================== MYSPACE TOP BAR ===================== -->
+<div id="msbar">
+  <table width="100%"><tr>
+    <td class="logo">myspace<span>.</span><span style="color:#fff;font-size:11px;font-weight:normal">&nbsp;a place for friends</span></td>
+    <td align="right">
+      <a href="#">Home</a> | <a href="#">Browse</a> | <a href="#">Search</a> |
+      <a href="#">Invite</a> | <a href="#">Film</a> | <a href="#">Mail</a> |
+      <a href="#">Blog</a> | <a href="#">Favorites</a> | <a href="#">Forum</a> |
+      <a href="#">Music</a> &nbsp;
+      <input class="search" size="14" value="search..." />
+    </td>
+  </tr></table>
+</div>
+
+<div class="wrap">
+
+  <marquee scrollamount="4" behavior="scroll">
+    +++ thanks for the adds +++ no random adds, message me first +++ ASH // SNOW PATROL // ARCTIC MONKEYS forever +++
+    learning to play "munich" on the strat +++ msn: lukey_strums@hotmail.co.uk +++ 4 8 15 16 23 42 +++
+  </marquee>
+
+  <div class="headline">~*~ LuKeY ~*~</div>
+  <div class="subhead">"i'm a northern monkey and proud" &middot; Belfast &middot; 16 &middot; guitar / code / not much else</div>
+
+  <table width="760"><tr>
+
+    <!-- =================== LEFT COLUMN =================== -->
+    <td class="col-left">
+
+      <div class="module">
+        <div class="body" style="text-align:center;">
+          <!-- profile pic: inline SVG so it works with no internet, classic moody MySpace angle shot -->
+          <svg class="pfp" viewBox="0 0 280 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="grainy black and white self portrait holding a guitar">
+            <defs>
+              <linearGradient id="bw" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#2a2a2e"/><stop offset="1" stop-color="#050506"/>
+              </linearGradient>
+              <radialGradient id="vig" cx="0.4" cy="0.35" r="0.8">
+                <stop offset="0.5" stop-color="#000" stop-opacity="0"/>
+                <stop offset="1" stop-color="#000" stop-opacity="0.85"/>
+              </radialGradient>
+            </defs>
+            <rect width="280" height="280" fill="url(#bw)"/>
+            <!-- the obligatory held-above-the-head webcam angle -->
+            <g fill="#bdbdc4" opacity="0.92">
+              <ellipse cx="120" cy="120" rx="46" ry="56"/>            <!-- face -->
+              <path d="M74 118 q-6 -64 46 -70 q52 6 46 70 q-2 -34 -46 -36 q-44 2 -46 36z" fill="#1b1b1f"/> <!-- side fringe -->
+              <rect x="86" y="170" width="68" height="80" rx="14" fill="#141417"/>  <!-- band tee -->
+            </g>
+            <!-- thin guitar neck across the frame -->
+            <g stroke="#3a2a1e" stroke-width="10"><line x1="150" y1="250" x2="270" y2="150"/></g>
+            <g stroke="#cfcfcf" stroke-width="1" opacity="0.5">
+              <line x1="146" y1="252" x2="266" y2="152"/><line x1="150" y1="256" x2="270" y2="156"/>
+            </g>
+            <text x="140" y="200" fill="#0b0b0d" font-family="Verdana" font-size="9" text-anchor="middle" opacity="0.6">SLF</text>
+            <rect width="280" height="280" fill="url(#vig)"/>
+            <text x="10" y="270" fill="#c0392b" font-family="Comic Sans MS, cursive" font-size="12">xX_self_timer_Xx</text>
+          </svg>
+          <div class="pfp-cap">"bathroom mirror, flash on, dead arty" haha</div>
+          <p style="margin:8px 0 2px;color:#fff;font-weight:bold;">Luke</p>
+          <p style="margin:0;"><span class="online">&#9679; online now!</span></p>
+          <p style="margin:6px 0 0;color:#9a9aa2;">Male &middot; 16 years old<br/>BELFAST, Co. Antrim<br/>United Kingdom</p>
+          <p style="margin:6px 0 0;"><span class="blink" style="color:#ff9c00;font-weight:bold;">&#9733; LAST LOGIN: 6/6/2006 &#9733;</span></p>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="bar">Contacting LuKeY</div>
+        <div class="body" style="padding:6px;">
+          <table width="100%" class="contact"><tr>
+            <td>&#9993; Send Message</td><td>&#9734; Add to Friends</td>
+          </tr><tr>
+            <td>&#128247; Add to Favs</td><td>&#9758; Instant Message</td>
+          </tr><tr>
+            <td>&#9888; Block User</td><td>&#9851; Forward to Friend</td>
+          </tr></table>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="bar">Luke's URL</div>
+        <div class="body">
+          <code style="color:#7CFC00;font-size:10px;">www.myspace.com/lukey_strums</code><br/>
+          <span style="color:#666;font-size:9px;">(yes i changed it from the number one, took me ages)</span>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="bar">Luke's Details</div>
+        <div class="body">
+          <dl>
+            <dt>Status:</dt><dd>Single (ish)</dd>
+            <dt>Here for:</dt><dd>Friends, Networking, gigs</dd>
+            <dt>Hometown:</dt><dd>Belfast</dd>
+            <dt>Body type:</dt><dd>Slim / skinny jeans</dd>
+            <dt>Religion:</dt><dd>Other / don't get me started</dd>
+            <dt>Zodiac:</dt><dd>see blog</dd>
+            <dt>Children:</dt><dd>Someday maybe</dd>
+            <dt>Smoke/Drink:</dt><dd>No / cans at the weekend</dd>
+            <dt>Occupation:</dt><dd>GCSE survivor. Saturday job in a shop. building websites for the band for free</dd>
+            <dt>Income:</dt><dd>£20 a week + whatever's down the back of the sofa</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="bar">Luke's Schools</div>
+        <div class="body">
+          <b style="color:#d65a4a;">Some Grammar School</b><br/>
+          Belfast &middot; 2001 to present<br/>
+          <span style="color:#9a9aa2;">Doing: Maths, Further Maths, Physics, Tech &amp; Design. Mr. ___ says i should "do something with computers". we'll see.</span>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="bar">Mood</div>
+        <div class="body" style="text-align:center;">
+          <span style="font-size:22px;">&#9835;</span><br/>
+          <b style="color:#ff9c00;">current mood:</b> restless<br/>
+          <span style="color:#9a9aa2;">listening to: <i>Whatever People Say I Am, That's What I'm Not</i></span>
+        </div>
+      </div>
+
+    </td>
+
+    <!-- =================== RIGHT COLUMN =================== -->
+    <td class="col-right">
+
+      <!-- NOW PLAYING / AUTOPLAY (the page that blasts music when you open it) -->
+      <div class="module">
+        <div class="bar">&#9836; Luke's Profile Song &mdash; AUTOPLAY ON (sorry not sorry)</div>
+        <div class="body">
+          <div class="player">
+            <div class="lcd" id="lcd">&#9654; NOW PLAYING: Arctic Monkeys &mdash; "I Bet You Look Good on the Dancefloor"</div>
+            <div class="controls">
+              <span class="eq" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span>
+              &nbsp; <span class="play">&#9654;</span> &#10074;&#10074; &#9632; &#9664;&#9664; &#9654;&#9654;
+              &nbsp;&nbsp; vol <span style="color:#7CFC00;">|||||||</span><span style="color:#234">||</span>
+              &nbsp;&nbsp; <span style="color:#666;">02:14 / 02:53</span>
+            </div>
+          </div>
+          <p style="color:#666;font-size:9px;margin:6px 0 0;">
+            * if it's not loading blame your dial-up. press F5. *
+          </p>
+        </div>
+      </div>
+
+      <div class="blinkbar"><span class="blink">&#9733;&#9733;&#9733; WELCOME TO MY PAGE &mdash; SIGN MY COMMENTS OR DON'T BOTHER ADDIN ME &#9733;&#9733;&#9733;</span></div>
+
+      <div class="module">
+        <div class="bar">About Me</div>
+        <div class="body" style="line-height:1.6;">
+          <blockquote>"don't believe the hype" &middot; "this is a low" &middot; "i'd rather be a forester than sit in a maths class" (not a real quote i made it up)</blockquote>
+          <p>alright. it's Luke. 16, from Belfast, you probably know me off the bus or from gigs in the
+          <b>Limelight</b> / <b>Spring &amp; Airbrake</b> / the wee all-ages shows at <b>Auntie Annie's</b>. da's a
+          sparky, ma works in an office, we're not loaded but there's always a guitar in the house so that'll do me.</p>
+
+          <p>i basically play <b>guitar</b> every spare hour &mdash; got a battered <b>Squier Strat</b> i'm saving to
+          replace, a <b>Boss DS-1</b> and a practice amp i've gaffer-taped back together about nine times. me and a
+          couple of lads have a band (name changes every fortnight, currently <b>"The Tannoy"</b>, don't laugh). we've
+          done exactly two gigs and one of them was a youth club.</p>
+
+          <p>other thing i'm into: <b>messing with computers</b>. i taught myself <b>HTML</b> off the view-source button
+          and a Neopets guide, then did this whole profile myself &mdash; the CSS, the layout, the lot
+          (<a href="#" onclick="alert('view source then. it&apos;s all hand-typed in Notepad. - L'); return false;">go on, view source</a>).
+          built the band a website on a free <b>Geocities/Freewebs</b> thing with a hit counter and everything. half
+          tempted to do this for a living. apparently you can study it at <b>Queen's</b>. we'll see where i am in 10 yrs
+          &mdash; bet it's something daft like running engineering teams in London ha, as if.</p>
+
+          <p><b style="color:#d65a4a;">don't:</b> add me then send nothing. i'm not a number. <br/>
+             <b style="color:#7CFC00;">do:</b> tell me a band i've not heard. tab me something good.</p>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="bar">Who I'd Like to Meet</div>
+        <div class="body" style="line-height:1.6;">
+          <b style="color:#d65a4a;">Tim Wheeler</b> from <b>Ash</b> (a Co. Down fella did it, so there's hope for us).
+          whoever produces <b>Arctic Monkeys</b>. <b>Gary Lightbody</b> to ask how Snow Patrol got out of here.
+          anyone with a spare <b>distortion pedal</b>. and honestly &mdash; whoever wrote the browser, so i can ask
+          how it actually <i>works</i> under the bonnet.
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="bar">Interests</div>
+        <div class="body intblock" style="line-height:1.7;">
+          <b>General</b>
+          guitars, FX pedals, tabbing songs by ear, Notepad + HTML, the John Peel-y end of the radio,
+          recording demos on a borrowed 4-track, charity-shop band tees, skinny jeans my ma hates,
+          arguing about which Strokes album is best (Is This It).
+
+          <b>Music</b>
+          <span style="color:#d6d6dc;">
+          <b>Arctic Monkeys</b> &middot; <b>Ash</b> &middot; <b>Snow Patrol</b> &middot; <b>The Strokes</b> &middot;
+          <b>Franz Ferdinand</b> &middot; <b>Bloc Party</b> &middot; <b>Kasabian</b> &middot; <b>Razorlight</b> &middot;
+          <b>The Libertines</b> / Babyshambles &middot; <b>Biffy Clyro</b> &middot; <b>Foo Fighters</b> &middot;
+          <b>Kaiser Chiefs</b> &middot; <b>Maxïmo Park</b> &middot; <b>The Killers</b> &middot; <b>Therapy?</b> &middot;
+          <b>Stiff Little Fingers</b> &middot; <b>Two Door</b>... (lads from Bangor, mate of a mate reckons they'll be huge) &middot;
+          The Smiths, Oasis &amp; Nirvana for the homework. <span style="color:#666;">(NO emo slagging, Fightstar are sound)</span>
+          </span>
+
+          <b>Films</b>
+          This Is England, Trainspotting, Almost Famous, anything with a decent soundtrack, late night ITV.
+
+          <b>Television</b>
+          Skins (when it's on), Top of the Pops 2, Later... with Jools, MTV2, <b>LOST</b> (4 8 15 16 23 42).
+
+          <b>Books</b>
+          NME every week (that counts), guitar tab books, started one about how computers work, didn't finish it.
+
+          <b>Heroes</b>
+          my da (can fix anything), Tim Wheeler, Alex Turner's lyrics, and whoever invented the undo button.
+        </div>
+      </div>
+
+      <!-- TOP 8, the most important thing on the entire internet -->
+      <div class="module">
+        <div class="bar">Luke's Friend Space (Top 8 of 187 friends)</div>
+        <div class="body">
+          <table width="100%" class="friends">
+            <tr>
+              <!-- Tom is ALWAYS your first friend -->
+              <td>
+                <svg class="fpic" viewBox="0 0 80 80"><rect width="80" height="80" fill="#dfe7f2"/><circle cx="40" cy="30" r="15" fill="#9fb4d4"/><rect x="18" y="50" width="44" height="30" fill="#7e95ba"/><text x="40" y="46" font-size="8" fill="#fff" text-anchor="middle" font-family="Verdana">:)</text></svg>
+                <span class="fname">Tom</span><br/><span style="color:#666;font-size:9px;">(myspace)</span>
+              </td>
+              <td>
+                <svg class="fpic" viewBox="0 0 80 80"><rect width="80" height="80" fill="#111"/><rect x="14" y="40" width="52" height="10" fill="#c0392b"/><text x="40" y="26" font-size="13" fill="#fff" text-anchor="middle" font-family="Impact, sans-serif">ASH</text></svg>
+                <span class="fname">Ash</span><br/><span style="color:#666;font-size:9px;">band</span>
+              </td>
+              <td>
+                <svg class="fpic" viewBox="0 0 80 80"><rect width="80" height="80" fill="#1c1c1c"/><text x="40" y="36" font-size="9" fill="#fff" text-anchor="middle" font-family="Verdana">ARCTIC</text><text x="40" y="50" font-size="9" fill="#ff9c00" text-anchor="middle" font-family="Verdana">MONKEYS</text></svg>
+                <span class="fname">Arctic Monkeys</span><br/><span style="color:#666;font-size:9px;">band</span>
+              </td>
+              <td>
+                <svg class="fpic" viewBox="0 0 80 80"><rect width="80" height="80" fill="#0a2233"/><circle cx="40" cy="40" r="20" fill="none" stroke="#bfe3ff" stroke-width="3"/><text x="40" y="44" font-size="8" fill="#bfe3ff" text-anchor="middle" font-family="Verdana">SNOW P.</text></svg>
+                <span class="fname">Snow Patrol</span><br/><span style="color:#666;font-size:9px;">NI lads</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <svg class="fpic" viewBox="0 0 80 80"><rect width="80" height="80" fill="#2a2a2e"/><ellipse cx="40" cy="32" rx="13" ry="16" fill="#cfcfd4"/><rect x="26" y="52" width="28" height="28" fill="#15151a"/></svg>
+                <span class="fname">Conor (lead gtr)</span><br/><span style="color:#666;font-size:9px;">The Tannoy</span>
+              </td>
+              <td>
+                <svg class="fpic" viewBox="0 0 80 80"><rect width="80" height="80" fill="#2a2a2e"/><ellipse cx="40" cy="32" rx="13" ry="16" fill="#d8c4a8"/><rect x="24" y="52" width="32" height="28" fill="#3a2f22"/></svg>
+                <span class="fname">Niamh x</span><br/><span style="color:#666;font-size:9px;">gig buddy</span>
+              </td>
+              <td>
+                <svg class="fpic" viewBox="0 0 80 80"><rect width="80" height="80" fill="#2a2a2e"/><ellipse cx="40" cy="32" rx="13" ry="16" fill="#c9b39a"/><rect x="26" y="52" width="28" height="28" fill="#222"/></svg>
+                <span class="fname">Decko (drums)</span><br/><span style="color:#666;font-size:9px;">always late</span>
+              </td>
+              <td>
+                <svg class="fpic" viewBox="0 0 80 80"><rect width="80" height="80" fill="#101510"/><text x="40" y="30" font-size="9" fill="#7CFC00" text-anchor="middle" font-family="Courier New">&lt;html&gt;</text><text x="40" y="46" font-size="9" fill="#7CFC00" text-anchor="middle" font-family="Courier New">&lt;/body&gt;</text></svg>
+                <span class="fname">w3schools</span><br/><span style="color:#666;font-size:9px;">teacher really</span>
+              </td>
+            </tr>
+          </table>
+          <div style="text-align:right;"><a href="#">View All of Luke's Friends</a></div>
+        </div>
+      </div>
+
+      <!-- BLOG -->
+      <div class="module">
+        <div class="bar">Luke's Latest Blog Entry [Subscribe]</div>
+        <div class="body" style="line-height:1.6;">
+          <b style="color:#fff;">got the DS-1 working again!!!</b><br/>
+          <span style="color:#666;font-size:9px;">Currently: buzzing &nbsp;|&nbsp; Music: Ash - Burn Baby Burn &nbsp;|&nbsp; 14 Kudos &nbsp;|&nbsp; 9 comments</span>
+          <p>so the input jack was loose the whole time, soldered it at the kitchen table, ma went spare about
+          the smell. anyway it WORKS. spent the whole night learning the riff off Brianstorm even tho it's not
+          out yet, played it off a ropey download. band practice sat in Decko's garage if it's not lashing.</p>
+          <p>also figured out how to do <code style="color:#7CFC00;">:hover</code> in CSS today so the buttons on this
+          page light up now. small things. <a href="#">[read more]</a></p>
+        </div>
+      </div>
+
+      <!-- COMMENTS -->
+      <div class="module">
+        <div class="bar">Luke's Comments &mdash; Displaying 4 of 1,204</div>
+        <div class="body">
+          <table class="cmt-tbl">
+            <tr class="cmt"><td><svg class="ava" viewBox="0 0 50 50"><rect width="50" height="50" fill="#2a2a2e"/><ellipse cx="25" cy="20" rx="9" ry="11" fill="#d8c4a8"/><rect x="14" y="33" width="22" height="17" fill="#3a2f22"/></svg></td>
+              <td class="txt"><span class="who">Niamh x</span> <span class="when">Jun 6 2006 9:42 PM</span><br/>
+              are u going to the all-ages thing at auntie annies sat?? text me. luv ya xoxo &lt;3 ~*~rate my new pic~*~</td></tr>
+
+            <tr class="cmt"><td><svg class="ava" viewBox="0 0 50 50"><rect width="50" height="50" fill="#2a2a2e"/><ellipse cx="25" cy="20" rx="9" ry="11" fill="#cfcfd4"/><rect x="16" y="33" width="18" height="17" fill="#15151a"/></svg></td>
+              <td class="txt"><span class="who">Conor (lead gtr)</span> <span class="when">Jun 5 2006 11:18 PM</span><br/>
+              bandname idea: "The Tannoy" is bin mate. counter-proposal: "Static Belfast". practice sat. bring the new pedal or ur dead</td></tr>
+
+            <tr class="cmt"><td><svg class="ava" viewBox="0 0 50 50"><rect width="50" height="50" fill="#dfe7f2"/><circle cx="25" cy="19" r="9" fill="#9fb4d4"/><rect x="11" y="31" width="28" height="19" fill="#7e95ba"/></svg></td>
+              <td class="txt"><span class="who">Tom</span> <span class="when">Jun 1 2006 12:00 PM</span><br/>
+              Hey! Thanks for adding me. Welcome to MySpace! - Tom</td></tr>
+
+            <tr class="cmt"><td><svg class="ava" viewBox="0 0 50 50"><rect width="50" height="50" fill="#101510"/><text x="25" y="30" font-size="18" fill="#7CFC00" text-anchor="middle" font-family="Courier New">{}</text></svg></td>
+              <td class="txt"><span class="who">davey_codes</span> <span class="when">May 28 2006 4:03 PM</span><br/>
+              how'd u get ur top banner to stay put?? mine keeps breakin the layout. teach me ur ways sensei lol</td></tr>
+          </table>
+          <div style="text-align:right;margin-top:6px;"><a href="#">View All Comments</a> &middot; <a href="#">Add Comment</a></div>
+        </div>
+      </div>
+
+      <div class="module">
+        <div class="body" style="text-align:center;">
+          <span style="color:#9a9aa2;">you are visitor number:</span><br/>
+          <span class="counter">0&nbsp;0&nbsp;0&nbsp;1&nbsp;4&nbsp;7&nbsp;2</span><br/>
+          <span style="color:#666;font-size:9px;">&copy; 2006 &middot; best viewed in <b>Internet Explorer 6</b> @ 1024&times;768 &middot; tune your speakers</span>
+        </div>
+      </div>
+
+    </td>
+  </tr></table>
+
+  <div class="footer">
+    &copy;2003-2006 MySpace.com. All Rights Reserved. &middot; a place for friends &middot;
+    <a href="#">About</a> | <a href="#">FAQ</a> | <a href="#">Terms</a> | <a href="#">Privacy</a> | <a href="#">Safety Tips</a><br/>
+    <span style="color:#3a3a40;">(facsimile &mdash; a loving 2006 recreation, not a real archived page)</span>
+  </div>
+</div>
+
+<script type="text/javascript">
+/* tiny bit of JS - the 2006 "now playing" ticker. nothing tracks you, it's all local. */
+(function () {
+  var songs = [
+    'Arctic Monkeys — "I Bet You Look Good on the Dancefloor"',
+    'Ash — "Girl From Mars"',
+    'Snow Patrol — "Run"',
+    'The Strokes — "Reptilia"',
+    'Biffy Clyro — "Glitter and Trauma"',
+    'Bloc Party — "Banquet"',
+    'Kasabian — "Club Foot"'
+  ];
+  var i = 0, lcd = document.getElementById('lcd');
+  setInterval(function () {
+    i = (i + 1) % songs.length;
+    if (lcd) lcd.innerHTML = '▶ NOW PLAYING: ' + songs[i];
+  }, 4000);
+  // eq bars get random delays so they look alive
+  var bars = document.querySelectorAll('.eq span');
+  for (var b = 0; b < bars.length; b++) {
+    bars[b].style.animationDelay = (Math.random() * 0.6).toFixed(2) + 's';
+  }
+})();
+</script>
+</body>
+</html>
