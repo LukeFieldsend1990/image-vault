@@ -22,7 +22,9 @@
     "deploy:geo-fingerprint-worker": "wrangler deploy --config geo-fingerprint-worker/wrangler.toml",
     "geo-fingerprint-worker:dev": "wrangler dev --config geo-fingerprint-worker/wrangler.toml",
     "deploy:higgs-worker": "wrangler deploy --config higgs-worker/wrangler.toml",
-    "higgs-worker:dev": "wrangler dev --config higgs-worker/wrangler.toml"
+    "higgs-worker:dev": "wrangler dev --config higgs-worker/wrangler.toml",
+    "deploy:comms-worker": "wrangler deploy --config comms-worker/wrangler.toml",
+    "comms-worker:dev": "wrangler dev --config comms-worker/wrangler.toml"
   },
   "dependencies": {
     "aws4fetch": "^1.0.20",

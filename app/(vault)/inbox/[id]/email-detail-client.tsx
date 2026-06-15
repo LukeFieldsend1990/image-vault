@@ -243,6 +243,24 @@ export default function EmailDetailClient() {
       )}
 
       {/* AI Triage Card */}
+      {!latestTriage && (
+        <div
+          className="rounded p-4 mb-6 flex items-center justify-between"
+          style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <span className="text-sm" style={{ color: "var(--color-muted)" }}>
+            {email.processingStatus === "processing" ? "Triage pending…" : "No triage result"}
+          </span>
+          <button
+            onClick={handleRetriage}
+            disabled={retriaging}
+            className="px-3 py-1 text-xs rounded transition"
+            style={{ border: "1px solid var(--color-border)", color: "var(--color-muted)" }}
+          >
+            {retriaging ? "Triaging..." : "Run triage"}
+          </button>
+        </div>
+      )}
       {latestTriage && (
         <div
           className="rounded p-4 mb-6"
