@@ -2,14 +2,19 @@
 --
 -- 0006_invites.sql created invites with CHECK(role IN ('talent','rep','licensee')).
 -- 0000_auth.sql created users with CHECK(role IN ('talent','rep','licensee','admin')).
--- Both predate the industry and compliance roles. SQLite *does* enforce CHECK
--- constraints on INSERT, so creating an invite or account with those roles
--- throws a constraint violation at the DB layer.
+-- Both predate the industry and compliance roles. SQLite enforces CHECK constraints
+-- on INSERT, so creating an invite or account with those roles throws a DB error.
 --
 -- SQLite cannot ALTER a CHECK constraint — the tables must be recreated.
--- D1 has PRAGMA foreign_keys = OFF by default, so DROP TABLE is safe.
+-- Strategy: rename old → create new → copy → drop old.
 --
--- Strategy: rename old → create new → copy → drop old (data is always present).
+-- PRAGMA legacy_alter_table = ON is required: modern SQLite (3.26+) propagates a
+-- table RENAME into FK references in child tables, so DROP TABLE users_old would
+-- fail because child tables (refresh_tokens, etc.) would now reference "users_old".
+-- With legacy_alter_table ON, child FK references are NOT updated on rename and
+-- still point to "users", making DROP TABLE users_old safe.
+
+PRAGMA legacy_alter_table = ON;
 
 -- ── users ─────────────────────────────────────────────────────────────────────
 ALTER TABLE users RENAME TO users_old;
@@ -83,3 +88,5 @@ FROM invites_old;
 DROP TABLE invites_old;
 
 CREATE INDEX IF NOT EXISTS idx_invites_created_at ON invites(created_at);
+
+PRAGMA legacy_alter_table = OFF;
