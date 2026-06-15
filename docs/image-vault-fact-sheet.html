@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Image Vault — By the Numbers</title>
+<style>
+  :root {
+    --ink: #111111;
+    --muted: #6b6b6b;
+    --line: #e2e2e2;
+    --surface: #ffffff;
+    --bg: #fafafa;
+    --accent: #c0392b;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 56px 40px 80px; }
+
+  /* Header */
+  header { border-bottom: 3px solid var(--ink); padding-bottom: 28px; margin-bottom: 8px; }
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.32em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; margin: 0 0 14px;
+  }
+  h1 { font-size: 52px; line-height: 1.02; margin: 0 0 14px; letter-spacing: -0.02em; font-weight: 800; }
+  .lede { font-size: 17px; color: var(--muted); max-width: 720px; margin: 0; }
+  .meta {
+    display: flex; gap: 28px; flex-wrap: wrap; margin-top: 22px;
+    font-size: 12px; letter-spacing: 0.04em; color: var(--muted);
+  }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  /* Section */
+  section { margin-top: 52px; }
+  .sec-head {
+    display: flex; align-items: baseline; gap: 14px;
+    border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 24px;
+  }
+  .sec-head h2 {
+    font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase;
+    font-weight: 700; margin: 0;
+  }
+  .sec-head .num { font-size: 12px; color: var(--accent); font-weight: 700; }
+  .sec-head .sub { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+  /* Stat grid */
+  .grid { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .stat { background: var(--surface); padding: 22px 20px; }
+  .stat .figure {
+    font-size: 40px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .stat .figure .unit { font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+  .stat .label { margin-top: 10px; font-size: 13px; font-weight: 600; }
+  .stat .desc { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+  .stat .figure.accent { color: var(--accent); }
+
+  /* Callout rows */
+  .rows { border: 1px solid var(--line); background: var(--surface); }
+  .row { display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line); align-items: baseline; }
+  .row:last-child { border-bottom: 0; }
+  .row .k { font-size: 13px; font-weight: 700; min-width: 200px; }
+  .row .v { font-size: 13px; color: #333; }
+  .row .v b { color: var(--ink); }
+  .tag {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border: 1px solid var(--line);
+    border-radius: 3px; margin: 2px 4px 2px 0; color: #444; background: #fafafa;
+  }
+
+  /* Pricing table */
+  table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: 13px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td .big { font-weight: 700; }
+  .accent-text { color: var(--accent); font-weight: 700; }
+
+  .note { font-size: 11.5px; color: var(--muted); margin-top: 12px; font-style: italic; }
+
+  footer {
+    margin-top: 64px; padding-top: 22px; border-top: 3px solid var(--ink);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    font-size: 11.5px; color: var(--muted);
+  }
+  footer b { color: var(--ink); }
+
+  @media print {
+    body { background: #fff; }
+    .wrap { padding: 24px; max-width: none; }
+    section { margin-top: 34px; page-break-inside: avoid; }
+    h1 { font-size: 40px; }
+  }
+  @media (max-width: 720px) {
+    .g4, .g3 { grid-template-columns: repeat(2, 1fr); }
+    h1 { font-size: 38px; }
+    .wrap { padding: 32px 20px 60px; }
+    .row { flex-direction: column; gap: 4px; }
+    .row .k { min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Image Vault &mdash; Confidential Briefing</p>
+    <h1>By the Numbers</h1>
+    <p class="lede">A secure biometric likeness archive for actors. Talent store large 3D scan packages of their likeness and license controlled, auditable access to production companies &mdash; gated by dual-custody 2FA, time-limited download tokens, and a full chain-of-custody ledger.</p>
+    <div class="meta">
+      <span>Prepared for <b>UTA repitch</b></span>
+      <span>Live production platform &mdash; <b>not a prototype</b></span>
+      <span>Figures pulled from codebase &amp; live infrastructure, <b>June 2026</b></span>
+    </div>
+  </header>
+
+  <!-- PLATFORM SCALE -->
+  <section>
+    <div class="sec-head">
+      <span class="num">01</span>
+      <h2>Platform Scale</h2>
+      <span class="sub">What's actually built and shipping</span>
+    </div>
+    <div class="grid g4">
+      <div class="stat"><div class="figure">195</div><div class="label">API endpoints</div><div class="desc">Across 28 domain groups &mdash; auth, vault, licences, bridge, compliance, royalties, AI.</div></div>
+      <div class="stat"><div class="figure">66</div><div class="label">Database tables</div><div class="desc">One relational model spanning auth, licensing, compliance &amp; delivery (61 live in production D1).</div></div>
+      <div class="stat"><div class="figure">62</div><div class="label">Schema migrations</div><div class="desc">Sequential, versioned database evolution since launch.</div></div>
+      <div class="stat"><div class="figure accent">~46k</div><div class="label">Lines of TypeScript</div><div class="desc">Production application code across app, libraries &amp; workers.</div></div>
+      <div class="stat"><div class="figure">5</div><div class="label">Edge workers live</div><div class="desc">Pipeline, AI, AI-cron, comms &amp; geo-fingerprint &mdash; a 6th (video) in build.</div></div>
+      <div class="stat"><div class="figure">23</div><div class="label">Transactional emails</div><div class="desc">Templated comms for the full licence &amp; custody lifecycle.</div></div>
+      <div class="stat"><div class="figure">6</div><div class="label">User roles</div><div class="desc">Talent, rep/agency, industry, licensee, compliance, admin.</div></div>
+      <div class="stat"><div class="figure">100<span class="unit">%</span></div><div class="label">Edge-native</div><div class="desc">Every route &amp; worker runs on Cloudflare's global edge &mdash; no origin servers.</div></div>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section>
+    <div class="sec-head">
+      <span class="num">02</span>
+      <h2>Security &amp; Custody</h2>
+      <span class="sub">The moat: control, not just storage</span>
+    </div>
+    <div class="grid g3">
+      <div class="stat"><div class="figure accent">AES&#8209;256</div><div class="label">Encryption at rest</div><div class="desc">Scan data encrypted at rest on Cloudflare R2; <b>TLS&nbsp;1.3</b> in transit.</div></div>
+      <div class="stat"><div class="figure">2&times;</div><div class="label">Dual-custody download</div><div class="desc">Both licensee <em>and</em> talent/rep must clear 2FA before a token issues. No single party releases a likeness.</div></div>
+      <div class="stat"><div class="figure">SHA&#8209;256</div><div class="label">Integrity hashing</div><div class="desc">Every scan file &amp; token streamed-hashed for tamper detection.</div></div>
+    </div>
+    <div class="rows" style="margin-top:24px;">
+      <div class="row"><span class="k">Authentication</span><span class="v">RFC&nbsp;6238 <b>TOTP 2FA</b>, JWT sessions, 7-day refresh tokens. Admin actions require a <b>fresh per-action TOTP code</b> (dual-custody analogue).</span></div>
+      <div class="row"><span class="k">Download tokens</span><span class="v"><b>Time-limited</b>, single-purpose tokens &mdash; never standing access.</span></div>
+      <div class="row"><span class="k">Admin API tokens</span><span class="v">Expire in <b>&le;90 days</b>, always revocable, SHA-256 hashed (never stored in plaintext). Rate-limited to <b>120 calls/min</b>; 5 TOTP attempts / 5 min.</span></div>
+      <div class="row"><span class="k">Audit logging</span><span class="v">Every privileged action logged with secrets redacted. Security &amp; download events captured with IP, device &amp; timestamp.</span></div>
+      <div class="row"><span class="k">Compliance ledger</span><span class="v"><b>SAG-AFTRA Article 39</b> obligations tracked in an append-only, <b>SHA-256 hash-chained</b> ledger &mdash; court-admissible chain of custody.</span></div>
+      <div class="row"><span class="k">Anti-piracy</span><span class="v">Geometry fingerprinting &amp; watermarking (128-bit) on assets flowing into render engines via the controlled Render Bridge.</span></div>
+    </div>
+    <p class="note">Security model is access-control based &mdash; server-mediated, with storage-provider encryption at rest. It is deliberately <b>not</b> marketed as "zero-knowledge" or "end-to-end encrypted."</p>
+  </section>
+
+  <!-- AI -->
+  <section>
+    <div class="sec-head">
+      <span class="num">03</span>
+      <h2>AI &amp; Operating Cost</h2>
+      <span class="sub">Capable, governed, and cheap to run</span>
+    </div>
+    <div class="grid g4">
+      <div class="stat"><div class="figure">6</div><div class="label">AI features</div><div class="desc">Rep suggestions, fee guidance, metadata tagging, licence summaries, security alerts &amp; an investigating security agent.</div></div>
+      <div class="stat"><div class="figure">$1<span class="unit">/ $5</span></div><div class="label">Per 1M tokens</div><div class="desc">Claude Haiku input / output. Free Workers AI fallback when the budget is spent.</div></div>
+      <div class="stat"><div class="figure accent">$1</div><div class="label">Rolling AI ceiling</div><div class="desc">Hard budget cap over any 14-day window &mdash; every call cost-tracked. AI spend is negligible.</div></div>
+      <div class="stat"><div class="figure">46</div><div class="label">ML tag vocabulary</div><div class="desc">Auto-classification of scans across 8 categories (type, quality, engine compatibility, lighting&hellip;).</div></div>
+    </div>
+    <div class="rows" style="margin-top:24px;">
+      <div class="row"><span class="k">Inbound email triage</span><span class="v">AI classifies every inbound email into <b>11 categories</b> with <b>4 urgency levels</b>, extracting talent, production, dates &amp; amounts.</span></div>
+      <div class="row"><span class="k">Prompt-injection defence</span><span class="v"><b>6 risk flags</b> &mdash; <span class="tag">prompt_injection</span><span class="tag">suspicious_sender</span><span class="tag">urgent_pressure</span><span class="tag">financial_request</span><span class="tag">legal_threat</span><span class="tag">pii_exposure</span></span></div>
+      <div class="row"><span class="k">Automation surface</span><span class="v"><b>5 one-click skills</b> (invite, find licence/package, onboarding, cast linking) + a <b>30-tool admin MCP server</b> for Claude-driven operations &mdash; all gated by session permissions &amp; TOTP.</span></div>
+    </div>
+  </section>
+
+  <!-- PRODUCT BREADTH -->
+  <section>
+    <div class="sec-head">
+      <span class="num">04</span>
+      <h2>Product Breadth</h2>
+      <span class="sub">A system of record, not a folder</span>
+    </div>
+    <div class="grid g4">
+      <div class="stat"><div class="figure">6</div><div class="label">Licence types</div><div class="desc">Film double, game character, commercial, AI avatar, training data, monitoring reference.</div></div>
+      <div class="stat"><div class="figure">12</div><div class="label">Organisation types</div><div class="desc">Studios, VFX vendors, agencies, brands, game &amp; AI companies, broadcasters&hellip;</div></div>
+      <div class="stat"><div class="figure">5</div><div class="label">Pipeline stages</div><div class="desc">Validate &rarr; classify &rarr; assemble &rarr; bundle &rarr; notify, per scan package.</div></div>
+      <div class="stat"><div class="figure">1<span class="unit">TB</span></div><div class="label">Per-package scale</div><div class="desc">200&nbsp;GB&ndash;1&nbsp;TB 3D scan packages, uploaded direct-to-R2 via presigned multipart.</div></div>
+    </div>
+    <p class="note">Built modules in production: auth, vault &amp; upload, licensing, rep delegation, processing pipeline, render bridge, royalties, compliance, inbound email triage and AI features.</p>
+  </section>
+
+  <!-- BUSINESS MODEL -->
+  <section>
+    <div class="sec-head">
+      <span class="num">05</span>
+      <h2>Business Model</h2>
+      <span class="sub">Tiered commission + recurring agency revenue</span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Tier</th><th>Target talent</th><th>Platform commission</th><th>Storage</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="big">Vault</td><td>A-list (&pound;100k+ avg deal)</td><td><span class="accent-text">12% &rarr; 18%</span> progressive</td><td>2 TB</td></tr>
+        <tr><td class="big">Studio</td><td>Mid-career (&pound;25k&ndash;&pound;100k)</td><td>15% flat</td><td>500 GB</td></tr>
+        <tr><td class="big">Launchpad</td><td>Emerging / breaking</td><td>10% (agency-subsidised)</td><td>100 GB</td></tr>
+      </tbody>
+    </table>
+    <div class="grid g3" style="margin-top:24px;">
+      <div class="stat"><div class="figure">8</div><div class="label">Revenue streams</div><div class="desc">Commission, agency subscription, roster credits, AI monitoring, storage overage, security surcharge, micro-licences.</div></div>
+      <div class="stat"><div class="figure">65/20/15</div><div class="label">Default split</div><div class="desc">Talent / agency / platform on metered usage royalties. Sports vertical runs 80/10/10.</div></div>
+      <div class="stat"><div class="figure accent">~&pound;2.4M</div><div class="label">Illustrative agency ARR</div><div class="desc">Modelled roster of 100 talent across all three tiers + agency subscription.</div></div>
+    </div>
+    <p class="note">Agency subscription &pound;50k&ndash;&pound;150k/yr &middot; roster credit &pound;500/seat/yr &middot; AI monitoring &pound;2k&ndash;&pound;5k/talent/yr &middot; enhanced-custody surcharge &pound;5k&ndash;&pound;25k/licence. Lock-in compounds: scan archive, licence history and chain-of-custody all live on-platform.</p>
+  </section>
+
+  <footer>
+    <span><b>Image Vault</b> &mdash; the system of record for likeness rights.</span>
+    <span>Stack: <b>Next.js 15 &middot; React 19 &middot; Tailwind 4 &middot; Drizzle ORM &middot; Cloudflare Pages / D1 / R2 / KV / Queues</b></span>
+  </footer>
+
+</div>
+</body>
+</html>
