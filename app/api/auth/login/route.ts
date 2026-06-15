@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     const kv = getRequestContext().env.SESSIONS_KV;
     await kv.put(
       `setup:${setupToken}`,
-      JSON.stringify({ userId: user.id, email: user.email, role: user.role }),
+      JSON.stringify({ userId: user.id, email: user.email, role: user.trueRole ?? user.role }),
       { expirationTtl: 1800 }
     );
     return NextResponse.json({ redirect: `/setup-2fa?token=${setupToken}` }, { status: 200 });
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   const kv = getRequestContext().env.SESSIONS_KV;
   await kv.put(
     `pending:${pendingToken}`,
-    JSON.stringify({ userId: user.id, email: user.email, role: user.role }),
+    JSON.stringify({ userId: user.id, email: user.email, role: user.trueRole ?? user.role }),
     { expirationTtl: 300 }
   );
 

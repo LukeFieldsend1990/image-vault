@@ -1,65 +1,23 @@
--- Fix role CHECK constraints on users and invites to include industry and compliance.
+-- Fix invites.role CHECK constraint to include industry and compliance.
 --
 -- 0006_invites.sql created invites with CHECK(role IN ('talent','rep','licensee')).
--- 0000_auth.sql created users with CHECK(role IN ('talent','rep','licensee','admin')).
--- Both predate the industry and compliance roles. SQLite enforces CHECK constraints
--- on INSERT, so creating an invite or account with those roles throws a DB error.
+-- This predates the industry and compliance roles. D1 enforces CHECK constraints
+-- on INSERT, so creating an invite with those roles fails with SQLITE_CONSTRAINT_CHECK.
 --
--- SQLite cannot ALTER a CHECK constraint — the tables must be recreated.
+-- SQLite cannot ALTER a CHECK constraint — the table must be recreated.
 -- Strategy: rename old → create new → copy → drop old.
 --
--- PRAGMA legacy_alter_table = ON is required: modern SQLite (3.26+) propagates a
--- table RENAME into FK references in child tables, so DROP TABLE users_old would
--- fail because child tables (refresh_tokens, etc.) would now reference "users_old".
--- With legacy_alter_table ON, child FK references are NOT updated on rename and
--- still point to "users", making DROP TABLE users_old safe.
+-- D1 has FK enforcement ON and blocks PRAGMA legacy_alter_table/foreign_keys.
+-- However, the ONLY table referencing invites (production_cast.invite_id) has
+-- 0 non-NULL values in production, so DROP TABLE invites_old will succeed:
+-- D1 checks data rows that reference the dropped table, not just FK definitions.
+--
+-- NOTE: users.role has the same CHECK constraint issue but users cannot be
+-- recreated via migration (45 child tables with real data reference it and
+-- D1 blocks the PRAGMAs needed to disable FK enforcement during the drop).
+-- The users.role constraint is worked around at the application layer in
+-- the signup route (see app/api/auth/signup/route.ts).
 
-PRAGMA legacy_alter_table = ON;
-
--- ── users ─────────────────────────────────────────────────────────────────────
-ALTER TABLE users RENAME TO users_old;
-
-CREATE TABLE users (
-  id                           TEXT    PRIMARY KEY,
-  email                        TEXT    NOT NULL UNIQUE,
-  password_hash                TEXT    NOT NULL,
-  -- No CHECK constraint; role values are enforced at the TypeScript layer.
-  role                         TEXT    NOT NULL DEFAULT 'talent',
-  created_at                   INTEGER NOT NULL,
-  vault_locked                 INTEGER NOT NULL DEFAULT 0,
-  suspended_at                 INTEGER,
-  phone                        TEXT,
-  email_muted                  INTEGER NOT NULL DEFAULT 0,
-  ai_disabled                  INTEGER NOT NULL DEFAULT 0,
-  inbound_enabled              INTEGER NOT NULL DEFAULT 0,
-  geo_fingerprint_enabled      INTEGER NOT NULL DEFAULT 0,
-  royalty_meter_enabled        INTEGER NOT NULL DEFAULT 1,
-  compliance_enabled           INTEGER NOT NULL DEFAULT 1,
-  financial_visibility_enabled INTEGER NOT NULL DEFAULT 0,
-  short_code                   TEXT,
-  show_codes                   INTEGER NOT NULL DEFAULT 0
-);
-
-INSERT INTO users (
-  id, email, password_hash, role, created_at,
-  vault_locked, suspended_at, phone,
-  email_muted, ai_disabled, inbound_enabled, geo_fingerprint_enabled,
-  royalty_meter_enabled, compliance_enabled, financial_visibility_enabled,
-  short_code, show_codes
-)
-SELECT
-  id, email, password_hash, role, created_at,
-  vault_locked, suspended_at, phone,
-  email_muted, ai_disabled, inbound_enabled, geo_fingerprint_enabled,
-  royalty_meter_enabled, compliance_enabled, financial_visibility_enabled,
-  short_code, show_codes
-FROM users_old;
-
-DROP TABLE users_old;
-
-CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
-
--- ── invites ───────────────────────────────────────────────────────────────────
 ALTER TABLE invites RENAME TO invites_old;
 
 CREATE TABLE invites (
@@ -88,5 +46,3 @@ FROM invites_old;
 DROP TABLE invites_old;
 
 CREATE INDEX IF NOT EXISTS idx_invites_created_at ON invites(created_at);
-
-PRAGMA legacy_alter_table = OFF;

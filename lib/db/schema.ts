@@ -23,6 +23,10 @@ export const users = sqliteTable("users", {
   shortCode: text("short_code"),
   // Per-user "code view mode" — decorate the UI with system codes. Off by default.
   showCodes: integer("show_codes", { mode: "boolean" }).notNull().default(false),
+  // Stores the actual role for industry/compliance users. users.role is constrained
+  // to legacy values by a CHECK that cannot be removed in D1 without recreating
+  // the table. Effective role = trueRole ?? role. NULL for talent/rep/admin/licensee.
+  trueRole: text("true_role"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
