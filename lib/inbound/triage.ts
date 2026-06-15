@@ -89,10 +89,15 @@ export async function triageEmail(
   if (!result) return null;
 
   try {
-    // Extract JSON from the response (handle markdown code blocks)
+    // Extract JSON — handle markdown fences, missing closing fences, and leading prose
     let jsonStr = result.text.trim();
-    if (jsonStr.startsWith("```")) {
-      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/);
+    if (fenceMatch) {
+      jsonStr = fenceMatch[1].trim();
+    } else {
+      // Fall back to the first { ... } block in the response
+      const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (objectMatch) jsonStr = objectMatch[0];
     }
     const parsed = JSON.parse(jsonStr);
 
