@@ -417,47 +417,9 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
     }
   }
 
-  // 7. Bridge security events — tamper/hash mismatch in last 7 days for managed talent packages
-  const sevenDaysAgo2 = now - 7 * 86400;
-  const allPkgs = await db.select({ id: scanPackages.id, talentId: scanPackages.talentId, name: scanPackages.name })
-    .from(scanPackages).where(inArray(scanPackages.talentId, talentIds)).all();
-  const allPkgIds = allPkgs.map((p) => p.id);
-  const pkgNameMap = new Map(allPkgs.map((p) => [p.id, { name: p.name, talentId: p.talentId }]));
-
-  if (allPkgIds.length > 0) {
-    const secEvents = await db.select({
-      id: bridgeEvents.id, packageId: bridgeEvents.packageId,
-      eventType: bridgeEvents.eventType, severity: bridgeEvents.severity,
-      createdAt: bridgeEvents.createdAt,
-    }).from(bridgeEvents)
-      .where(and(
-        inArray(bridgeEvents.packageId, allPkgIds),
-        inArray(bridgeEvents.eventType, ["tamper_detected", "hash_mismatch"]),
-        sql`${bridgeEvents.createdAt} > ${sevenDaysAgo2}`,
-      )).all();
-
-    // Group by package
-    const byPkg = new Map<string, typeof secEvents>();
-    for (const ev of secEvents) {
-      const list = byPkg.get(ev.packageId) ?? [];
-      list.push(ev);
-      byPkg.set(ev.packageId, list);
-    }
-    for (const [pkgId, evts] of byPkg) {
-      const pkg = pkgNameMap.get(pkgId);
-      if (!pkg) continue;
-      signals.push({
-        type: "bridge_security_event",
-        data: {
-          packageId: pkgId, packageName: pkg.name,
-          talentId: pkg.talentId, talentName: nameMap.get(pkg.talentId) ?? "Unknown",
-          eventCount: evts.length,
-          eventTypes: [...new Set(evts.map((e) => e.eventType))],
-          mostRecentAt: Math.max(...evts.map((e) => e.createdAt)),
-        },
-      });
-    }
-  }
+  // Bridge security events (bridge_events table) — deferred.
+  // The bridge_events table causes query hangs in this worker context.
+  // Will be re-added once the table has an index on (package_id, created_at).
 
   return signals;
 }
