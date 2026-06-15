@@ -50,7 +50,8 @@ Respond with ONLY valid JSON matching this schema:
   "confidence": 0.0 to 1.0,
   "structured_data": {
     "talent_name": "if mentioned",
-    "production_name": "if mentioned",
+    "package_name": "the specific scan package name being requested or referenced (e.g. 'Base_Scan_26') — distinct from the production name",
+    "production_name": "the film, series, or project being produced (e.g. 'Gambit') — distinct from the package name",
     "company_name": "if mentioned",
     "licence_type": "if relevant: commercial | film_double | game_character | ai_avatar | training_data",
     "dates_mentioned": ["any dates referenced"],

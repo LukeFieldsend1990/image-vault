@@ -13,7 +13,7 @@ const skill: SkillDefinition = {
   name: "Onboard Production",
   description:
     "Register a production company and production, then invite the coordinator to join as an industry user",
-  categories: ["onboarding", "introduction"],
+  categories: ["onboarding", "introduction", "licence_request"],
   parameters: [
     {
       name: "coordinator_email",
