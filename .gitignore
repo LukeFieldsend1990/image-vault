@@ -2,6 +2,12 @@
 
 # dependencies
 /node_modules
+pipeline-worker/node_modules
+ai-worker/node_modules
+ai-cron-worker/node_modules
+higgs-worker/node_modules
+geo-fingerprint-worker/node_modules
+comms-worker/node_modules
 /.pnp
 .pnp.*
 .yarn/*
