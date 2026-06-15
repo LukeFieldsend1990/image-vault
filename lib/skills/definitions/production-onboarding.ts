@@ -30,8 +30,8 @@ const skill: SkillDefinition = {
     {
       name: "company_name",
       type: "string",
-      description: "Production company name",
-      required: true,
+      description: "Production company name — leave blank if unknown",
+      required: false,
     },
     {
       name: "production_type",
@@ -71,7 +71,7 @@ const skill: SkillDefinition = {
 
     const email = (params.coordinator_email as string)?.toLowerCase().trim();
     const productionName = (params.production_name as string)?.trim();
-    const companyName = (params.company_name as string)?.trim();
+    const companyName = (params.company_name as string)?.trim() || null;
     const productionType = params.production_type as
       | "film"
       | "tv_series"
@@ -84,11 +84,8 @@ const skill: SkillDefinition = {
     const intendedUse = (params.intended_use as string | undefined) ?? null;
     const messageParam = (params.message as string)?.trim() || null;
 
-    if (!email || !productionName || !companyName) {
-      return {
-        success: false,
-        message: "Coordinator email, production name, and company name are required.",
-      };
+    if (!email || !productionName) {
+      return { success: false, message: "Coordinator email and production name are required." };
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -113,29 +110,36 @@ const skill: SkillDefinition = {
       return { success: false, message: "A pending invite already exists for that email." };
     }
 
-    // Upsert production company — exact name match first, then create
-    let company = await db
-      .select({ id: productionCompanies.id, name: productionCompanies.name })
-      .from(productionCompanies)
-      .where(like(productionCompanies.name, companyName))
-      .get();
+    // Upsert production company (optional — skip if no name provided)
+    let company: { id: string; name: string } | null = null;
+    if (companyName) {
+      company = await db
+        .select({ id: productionCompanies.id, name: productionCompanies.name })
+        .from(productionCompanies)
+        .where(like(productionCompanies.name, companyName))
+        .get() ?? null;
 
-    if (!company) {
-      const companyId = crypto.randomUUID();
-      await db.insert(productionCompanies).values({
-        id: companyId,
-        name: companyName,
-        createdAt: now,
-        updatedAt: now,
-      });
-      company = { id: companyId, name: companyName };
+      if (!company) {
+        const companyId = crypto.randomUUID();
+        await db.insert(productionCompanies).values({
+          id: companyId,
+          name: companyName,
+          createdAt: now,
+          updatedAt: now,
+        });
+        company = { id: companyId, name: companyName };
+      }
     }
 
-    // Upsert production — match by name within the company, then create
+    // Upsert production — match by name (scoped to company if known), then create
+    const productionWhere = company
+      ? and(like(productions.name, productionName), eq(productions.companyId, company.id))
+      : like(productions.name, productionName);
+
     let production = await db
       .select({ id: productions.id, name: productions.name })
       .from(productions)
-      .where(and(like(productions.name, productionName), eq(productions.companyId, company.id)))
+      .where(productionWhere)
       .get();
 
     if (!production) {
@@ -143,7 +147,7 @@ const skill: SkillDefinition = {
       await db.insert(productions).values({
         id: productionId,
         name: productionName,
-        companyId: company.id,
+        companyId: company?.id ?? null,
         type: productionType ?? null,
         status: "pre_production",
         coordinatorId: session.sub,
@@ -156,9 +160,10 @@ const skill: SkillDefinition = {
     const inviteId = crypto.randomUUID();
     const expiresAt = now + SEVEN_DAYS;
 
+    const productionLabel = companyName ? `${productionName} (${companyName})` : productionName;
     const message =
       messageParam ??
-      `You've been invited to manage scan licence access for ${productionName} (${companyName}) on Image Vault.${intendedUse ? ` Intended use: ${intendedUse.replace(/_/g, " ")}.` : ""}`;
+      `You've been invited to manage scan licence access for ${productionLabel} on Image Vault.${intendedUse ? ` Intended use: ${intendedUse.replace(/_/g, " ")}.` : ""}`;
 
     await db.insert(invites).values({
       id: inviteId,
