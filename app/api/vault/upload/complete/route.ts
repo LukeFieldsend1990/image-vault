@@ -7,6 +7,7 @@ import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, sql, and } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
+import { sha256HexFromStream } from "@/lib/crypto/hash";
 
 function cfEnv(key: string): string | undefined {
   try {
@@ -95,12 +96,51 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Reconcile size_bytes to the *confirmed* R2 object size. The value stored at
+  // initiate is client-declared and may differ from the bytes actually stored;
+  // the render bridge compares this against the file it downloads, so a stale
+  // value produces false tamper_detected events. A HEAD is a cheap metadata
+  // call, so we do it inline before recomputing the package total below.
+  const { ctx, env } = getRequestContext();
+  let confirmedSize: number | null = null;
+  try {
+    const head = await env.SCANS_BUCKET.head(uploadSession.r2Key);
+    if (head) confirmedSize = head.size;
+  } catch {
+    // R2 HEAD unavailable — keep the client-declared size as a best effort.
+  }
+
   // Update scan_file status + record completion time
   const completedAt = Math.floor(Date.now() / 1000);
   await db
     .update(scanFiles)
-    .set({ uploadStatus: "complete", completedAt })
+    .set({
+      uploadStatus: "complete",
+      completedAt,
+      ...(confirmedSize !== null ? { sizeBytes: confirmedSize } : {}),
+    })
     .where(eq(scanFiles.id, fileId));
+
+  // Compute the SHA-256 of the stored object so the render-bridge grant
+  // manifest can carry an authoritative content hash (the bridge verifies
+  // cached files against it instead of falling back to a size-only check).
+  // Streamed via crypto.DigestStream so large scans aren't buffered in memory,
+  // and done after the response so the upload loop isn't blocked.
+  ctx.waitUntil(
+    (async () => {
+      try {
+        const obj = await env.SCANS_BUCKET.get(uploadSession.r2Key);
+        if (!obj?.body) return;
+        const sha256 = await sha256HexFromStream(obj.body);
+        await db
+          .update(scanFiles)
+          .set({ sha256 })
+          .where(eq(scanFiles.id, fileId));
+      } catch {
+        // Leave sha256 null — the bridge gracefully falls back to size check.
+      }
+    })()
+  );
 
   // Remove upload session
   await db
