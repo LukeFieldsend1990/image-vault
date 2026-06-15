@@ -41,18 +41,10 @@ const skill: SkillDefinition = {
       options: ["film", "tv_series", "tv_movie", "commercial", "game", "music_video", "other"],
     },
     {
-      name: "intended_use",
-      type: "select",
-      description: "Intended licence use for the scan data",
+      name: "year",
+      type: "number",
+      description: "Production year (e.g. 2026)",
       required: false,
-      options: [
-        "film_double",
-        "game_character",
-        "commercial",
-        "ai_avatar",
-        "training_data",
-        "monitoring_reference",
-      ],
     },
     {
       name: "message",
@@ -81,7 +73,7 @@ const skill: SkillDefinition = {
       | "music_video"
       | "other"
       | undefined;
-    const intendedUse = (params.intended_use as string | undefined) ?? null;
+    const year = typeof params.year === "number" ? Math.floor(params.year) : null;
     const messageParam = (params.message as string)?.trim() || null;
 
     if (!email || !productionName) {
@@ -113,11 +105,12 @@ const skill: SkillDefinition = {
     // Upsert production company (optional — skip if no name provided)
     let company: { id: string; name: string } | null = null;
     if (companyName) {
-      company = await db
-        .select({ id: productionCompanies.id, name: productionCompanies.name })
-        .from(productionCompanies)
-        .where(like(productionCompanies.name, companyName))
-        .get() ?? null;
+      company =
+        (await db
+          .select({ id: productionCompanies.id, name: productionCompanies.name })
+          .from(productionCompanies)
+          .where(like(productionCompanies.name, companyName))
+          .get()) ?? null;
 
       if (!company) {
         const companyId = crypto.randomUUID();
@@ -149,6 +142,7 @@ const skill: SkillDefinition = {
         name: productionName,
         companyId: company?.id ?? null,
         type: productionType ?? null,
+        year,
         status: "pre_production",
         coordinatorId: session.sub,
         createdAt: now,
@@ -163,7 +157,7 @@ const skill: SkillDefinition = {
     const productionLabel = companyName ? `${productionName} (${companyName})` : productionName;
     const message =
       messageParam ??
-      `You've been invited to manage scan licence access for ${productionLabel} on Image Vault.${intendedUse ? ` Intended use: ${intendedUse.replace(/_/g, " ")}.` : ""}`;
+      `You've been invited to manage scan licence access for ${productionLabel} on Image Vault.`;
 
     await db.insert(invites).values({
       id: inviteId,
