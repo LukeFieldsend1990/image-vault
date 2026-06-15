@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   }
 
   const user = await db
-    .select({ id: users.id, email: users.email, role: users.role, suspendedAt: users.suspendedAt })
+    .select({ id: users.id, email: users.email, role: users.role, trueRole: users.trueRole, suspendedAt: users.suspendedAt })
     .from(users)
     .where(eq(users.id, token.userId))
     .get();
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   const secret = process.env.JWT_SECRET!;
   const sessionJwt = await signSessionJwt(
-    { sub: user.id, email: user.email, role: user.role },
+    { sub: user.id, email: user.email, role: user.trueRole ?? user.role },
     secret,
   );
 
