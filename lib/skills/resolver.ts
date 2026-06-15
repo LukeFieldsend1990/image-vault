@@ -21,6 +21,16 @@ const ACTION_ITEM_SIGNALS: Array<{ pattern: RegExp; skillId: string }> = [
   { pattern: /\bsign[- ]?up\b/i, skillId: "send-signup-invite" },
   { pattern: /\bcreate\s+(an?\s+)?account\b/i, skillId: "send-signup-invite" },
   { pattern: /\bregister\b/i, skillId: "send-signup-invite" },
+  // Production company wanting to join the platform
+  {
+    pattern:
+      /\b(production\s*co(?:mpany)?|studio|film\s*co(?:mpany)?)\b.{0,60}\b(onboard|register|sign\s*up|join|access)\b|\b(onboard|register|sign\s*up|join|access)\b.{0,60}\b(production\s*co(?:mpany)?|studio|film\s*co(?:mpany)?)\b/i,
+    skillId: "production-onboarding",
+  },
+  // Adding cast members or talent to a production
+  { pattern: /\badd\b.{0,40}\b(cast|talent|actor|performer)\b/i, skillId: "add-cast-member" },
+  { pattern: /\b(cast|talent|actor|performer)\b.{0,40}\b(add|onboard|invite|join)\b/i, skillId: "add-cast-member" },
+  { pattern: /\bcast\s*member\b/i, skillId: "add-cast-member" },
 ];
 
 /** Try to extract an email address from a string */
@@ -93,6 +103,63 @@ function prefillSkill(
       }
       if (typeof structuredData.licence_type === "string") {
         prefilled.licence_type = structuredData.licence_type;
+      }
+      break;
+    }
+
+    case "production-onboarding": {
+      if (fromEmail) {
+        prefilled.coordinator_email = fromEmail;
+      } else {
+        const people = structuredData.people_mentioned;
+        if (Array.isArray(people) && typeof people[0] === "string") {
+          const emailMatch = (people[0] as string).match(/[\w.+-]+@[\w.-]+\.\w{2,}/);
+          if (emailMatch) prefilled.coordinator_email = emailMatch[0];
+        }
+      }
+      if (typeof structuredData.production_name === "string") {
+        prefilled.production_name = structuredData.production_name;
+      }
+      if (typeof structuredData.company_name === "string") {
+        prefilled.company_name = structuredData.company_name;
+      }
+      if (typeof structuredData.licence_type === "string") {
+        prefilled.intended_use = structuredData.licence_type;
+      }
+      break;
+    }
+
+    case "add-cast-member": {
+      if (typeof structuredData.production_name === "string") {
+        prefilled.production_name = structuredData.production_name;
+      }
+      // talent_name from triage is the actor, not the coordinator
+      if (typeof structuredData.talent_name === "string") {
+        prefilled.actor_name = structuredData.talent_name;
+      }
+      if (typeof structuredData.licence_type === "string") {
+        prefilled.intended_use = structuredData.licence_type;
+        prefilled.licence_type = structuredData.licence_type;
+      }
+      // Scan people_mentioned for an email that isn't the sender (likely the actor)
+      const people = structuredData.people_mentioned;
+      if (Array.isArray(people)) {
+        for (const p of people) {
+          if (typeof p !== "string") continue;
+          const emailMatch = p.match(/[\w.+-]+@[\w.-]+\.\w{2,}/);
+          if (emailMatch && emailMatch[0] !== fromEmail) {
+            prefilled.actor_email = emailMatch[0];
+            break;
+          }
+        }
+      }
+      // dates_mentioned: try to fill valid_from / valid_to
+      const dates = structuredData.dates_mentioned;
+      if (Array.isArray(dates) && dates.length >= 1 && typeof dates[0] === "string") {
+        prefilled.valid_from = dates[0];
+      }
+      if (Array.isArray(dates) && dates.length >= 2 && typeof dates[1] === "string") {
+        prefilled.valid_to = dates[1];
       }
       break;
     }
