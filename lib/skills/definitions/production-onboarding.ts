@@ -195,8 +195,8 @@ const skill: SkillDefinition = {
       message: `${productionName} registered and invite sent to ${email}.`,
       data: {
         inviteId,
-        companyId: company.id,
-        companyName: company.name,
+        companyId: company?.id ?? null,
+        companyName: company?.name ?? null,
         productionId: production.id,
         productionName: production.name,
         coordinatorEmail: email,
