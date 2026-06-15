@@ -11,6 +11,7 @@ import {
   isRenderBridgeTokenError,
 } from "@/lib/auth/requireRenderBridgeToken";
 import { beginScrubPeriod } from "@/lib/licences/expire";
+import { dedupeFilesByPath } from "@/lib/bridge/manifestFiles";
 
 const PRESIGN_TTL_SECS = 86400; // 24 h
 
@@ -150,6 +151,8 @@ export async function GET(
           sizeBytes: scanFiles.sizeBytes,
           sha256: scanFiles.sha256,
           uploadStatus: scanFiles.uploadStatus,
+          completedAt: scanFiles.completedAt,
+          createdAt: scanFiles.createdAt,
         })
         .from(scanFiles)
         .where(eq(scanFiles.packageId, licence.packageId!))
@@ -166,6 +169,12 @@ export async function GET(
           // malformed fileScope — fall back to all completed files
         }
       }
+
+      // A re-uploaded file leaves more than one completed row at the same
+      // filename; emitting both at the same manifest `path` makes the bridge's
+      // integrity map non-deterministic and triggers false tamper events.
+      // Collapse each path to its canonical (latest completed) row.
+      scopedFiles = dedupeFilesByPath(scopedFiles);
 
       const files = await Promise.all(
         scopedFiles.map(async (f) => ({
