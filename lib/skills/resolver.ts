@@ -124,9 +124,6 @@ function prefillSkill(
       if (typeof structuredData.company_name === "string") {
         prefilled.company_name = structuredData.company_name;
       }
-      if (typeof structuredData.licence_type === "string") {
-        prefilled.intended_use = structuredData.licence_type;
-      }
       break;
     }
 
