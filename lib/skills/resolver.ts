@@ -82,8 +82,9 @@ function prefillSkill(
     }
 
     case "find-package": {
-      if (typeof structuredData.production_name === "string") {
-        prefilled.package_name = structuredData.production_name;
+      // package_name is the scan package (e.g. "Base_Scan_26"), not the production title
+      if (typeof structuredData.package_name === "string") {
+        prefilled.package_name = structuredData.package_name;
       }
       if (typeof structuredData.talent_name === "string") {
         prefilled.talent_name = structuredData.talent_name;
