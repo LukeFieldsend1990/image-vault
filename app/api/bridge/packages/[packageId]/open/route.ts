@@ -294,7 +294,7 @@ export async function POST(
         filename: f.filename,
         path: f.filename, // Bridge organises files in a folder named after the package
         size: f.sizeBytes,
-        sha256: f.sha256 ?? null, // null if not yet backfilled — Bridge will skip integrity check
+        sha256: f.sha256 ?? null, // null only for pre-hash legacy files — Bridge then falls back to size check
         sourceUrl,
       };
     })
