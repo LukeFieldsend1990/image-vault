@@ -5,6 +5,7 @@ import { isIndustryRole } from "@/lib/auth/roles";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 import { formatScan } from "@/lib/codes/codes";
+import { computePurgeGrace, formatGraceRemaining } from "@/lib/bridge/purgeGrace";
 
 interface NamedPackage {
   packageId: string;
@@ -87,6 +88,12 @@ function formatDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function formatDateTime(ts: number): string {
+  return new Date(ts * 1000).toLocaleString("en-GB", {
+    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+}
+
 function StatusDot({ online, revoked, pending }: { online: boolean; revoked: boolean; pending: string | null }) {
   if (revoked) {
     return (
@@ -154,6 +161,18 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
     l => l.status === "APPROVED" && l.validTo + 86400 > nowSec
   );
 
+  // Approximate offline-purge countdown (display-only — see lib/bridge/purgeGrace.ts).
+  // Only meaningful when the agent actually has files on the share to lose.
+  const grace = computePurgeGrace({
+    lastHeartbeatAt: agent.lastHeartbeatAt,
+    revoked: isRevoked,
+    pendingAction: agent.pendingAction,
+    now: nowSec,
+  });
+  const showGrace =
+    agent.publishedPackages.length > 0 &&
+    (grace.kind === "counting" || grace.kind === "elapsed");
+
   // Build a unified package list from both licences and published packages
   const packageMap = new Map<string, { name: string; hasAnyLicence: boolean; hasBridgeLicence: boolean }>();
   for (const l of agent.licences) {
@@ -217,6 +236,34 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
             {agent.lastHeartbeatAt ? timeSince(agent.lastHeartbeatAt) : "no heartbeat"}
           </span>
         </div>
+
+        {/* Offline purge grace — approximate, display-only countdown */}
+        {showGrace && grace.kind === "counting" && (
+          <div
+            className="mt-3 rounded px-2.5 py-2"
+            style={{ background: "rgba(180,83,9,0.18)", border: "1px solid rgba(180,83,9,0.45)" }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#f59e0b" }}>
+              Auto-purge in {formatGraceRemaining(grace.secondsRemaining)}
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+              Est. {formatDateTime(grace.deadlineUnix)} unless it reconnects
+            </p>
+          </div>
+        )}
+        {showGrace && grace.kind === "elapsed" && (
+          <div
+            className="mt-3 rounded px-2.5 py-2"
+            style={{ background: "rgba(192,57,43,0.18)", border: "1px solid rgba(192,57,43,0.5)" }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#ef4444" }}>
+              Grace elapsed · cache likely purged
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+              Offline &gt; 48h since {formatDateTime(grace.deadlineUnix)}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Body */}
