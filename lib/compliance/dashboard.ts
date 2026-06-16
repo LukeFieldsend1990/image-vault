@@ -277,11 +277,13 @@ type LicenceEventRow = {
 const STATUS_RANK: Record<string, number> = { gap: 3, pending: 2, met: 1, "n/a": 0 };
 
 // Licences in these statuses do not contribute to the production health score.
+// AWAITING_PACKAGE / PENDING — talent has not yet accepted the licence; compliance
+//   obligations cannot be assessed before agreement, so they must not count as gaps.
 // REVOKED / DENIED — contract is void, obligations never completed.
 // SCRUB_PERIOD / EXPIRED / CLOSED — contract completed normally; scrub attestation
 //   is a producer obligation the talent cannot action, so it must not count against
 //   their compliance record. All obligations show n/a; history remains visible in modal.
-const VOID_STATUSES = new Set(["REVOKED", "DENIED", "SCRUB_PERIOD", "EXPIRED", "CLOSED"]);
+const VOID_STATUSES = new Set(["AWAITING_PACKAGE", "PENDING", "REVOKED", "DENIED", "SCRUB_PERIOD", "EXPIRED", "CLOSED"]);
 
 function evaluateLicence(
   licence: LicenceRow,
