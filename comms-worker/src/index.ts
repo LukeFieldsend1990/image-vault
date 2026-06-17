@@ -235,7 +235,34 @@ async function runTriage(
       outputTokens = data.usage.output_tokens;
     } catch (err) {
       console.error("[comms] Anthropic failed, trying Workers AI:", err);
-      // Fall through to Workers AI
+      // Workers AI fallback — wrapped so a Workers AI failure doesn't kill the queue message
+      try {
+        const response = await env.AI.run("@cf/meta/llama-3.1-8b-instruct" as Parameters<Ai["run"]>[0], {
+          messages: [
+            { role: "system", content: TRIAGE_SYSTEM },
+            { role: "user", content: userMessage },
+          ],
+          max_tokens: 1024,
+        }) as { response?: string };
+        text = response?.response ?? "";
+        modelName = "@cf/meta/llama-3.1-8b-instruct";
+        inputTokens = Math.ceil(userMessage.length / 4);
+        outputTokens = Math.ceil(text.length / 4);
+      } catch (workerErr) {
+        console.error("[comms] Workers AI fallback also failed:", workerErr);
+        try {
+          await db.insert(aiCostLog).values({
+            id: uuid(), provider: "workers_ai", model: "@cf/meta/llama-3.1-8b-instruct",
+            feature: "email_triage", inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+            error: String(workerErr), prompt: userMessage.slice(0, 2000), createdAt: now(),
+          });
+        } catch { /* logging must not throw */ }
+        return null;
+      }
+    }
+  } else {
+    // Workers AI only
+    try {
       const response = await env.AI.run("@cf/meta/llama-3.1-8b-instruct" as Parameters<Ai["run"]>[0], {
         messages: [
           { role: "system", content: TRIAGE_SYSTEM },
@@ -247,37 +274,38 @@ async function runTriage(
       modelName = "@cf/meta/llama-3.1-8b-instruct";
       inputTokens = Math.ceil(userMessage.length / 4);
       outputTokens = Math.ceil(text.length / 4);
+    } catch (workerErr) {
+      console.error("[comms] Workers AI failed:", workerErr);
+      try {
+        await db.insert(aiCostLog).values({
+          id: uuid(), provider: "workers_ai", model: "@cf/meta/llama-3.1-8b-instruct",
+          feature: "email_triage", inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+          error: String(workerErr), prompt: userMessage.slice(0, 2000), createdAt: now(),
+        });
+      } catch { /* logging must not throw */ }
+      return null;
     }
-  } else {
-    // Workers AI only
-    const response = await env.AI.run("@cf/meta/llama-3.1-8b-instruct" as Parameters<Ai["run"]>[0], {
-      messages: [
-        { role: "system", content: TRIAGE_SYSTEM },
-        { role: "user", content: userMessage },
-      ],
-      max_tokens: 1024,
-    }) as { response?: string };
-    text = response?.response ?? "";
-    modelName = "@cf/meta/llama-3.1-8b-instruct";
-    inputTokens = Math.ceil(userMessage.length / 4);
-    outputTokens = Math.ceil(text.length / 4);
   }
 
-  // Log cost
-  const costPerInput = modelName.includes("haiku") ? 0.25 / 1_000_000 : 0;
-  const costPerOutput = modelName.includes("haiku") ? 1.25 / 1_000_000 : 0;
-  await db.insert(aiCostLog).values({
-    id: uuid(),
-    provider: modelName.includes("haiku") ? "anthropic" : "workers_ai",
-    model: modelName,
-    feature: "email_triage",
-    inputTokens,
-    outputTokens,
-    estimatedCostUsd: inputTokens * costPerInput + outputTokens * costPerOutput,
-    prompt: userMessage.slice(0, 2000),
-    response: text.slice(0, 4000),
-    createdAt: now(),
-  });
+  // Log cost — non-fatal: a logging failure must not kill triage
+  try {
+    const costPerInput = modelName.includes("haiku") ? 0.25 / 1_000_000 : 0;
+    const costPerOutput = modelName.includes("haiku") ? 1.25 / 1_000_000 : 0;
+    await db.insert(aiCostLog).values({
+      id: uuid(),
+      provider: modelName.includes("haiku") ? "anthropic" : "workers_ai",
+      model: modelName,
+      feature: "email_triage",
+      inputTokens,
+      outputTokens,
+      estimatedCostUsd: inputTokens * costPerInput + outputTokens * costPerOutput,
+      prompt: userMessage.slice(0, 2000),
+      response: text.slice(0, 4000),
+      createdAt: now(),
+    });
+  } catch (err) {
+    console.error("[comms] Failed to log AI cost (non-fatal):", err);
+  }
 
   // Parse response
   try {

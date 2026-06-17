@@ -5,6 +5,8 @@ import Link from "next/link";
 import UploadModal from "../upload-modal";
 import { FadeImage } from "@/app/(vault)/fade-image";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
 
 interface AiTag {
   packageId: string;
@@ -16,6 +18,7 @@ interface AiTag {
 interface ScanPackage {
   id: string;
   name: string;
+  scanNumber?: number | null;
   description: string | null;
   captureDate: number | null;
   studioName: string | null;
@@ -416,7 +419,10 @@ function PackageCard({
         {/* Meta */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <p className="text-sm font-medium text-[--color-ink] truncate">{pkg.name}</p>
+            <p className="text-sm font-medium text-[--color-ink] truncate flex items-center gap-1.5">
+              <span className="truncate">{pkg.name}</span>
+              <CodeTag code={formatScan(pkg.scanNumber)} />
+            </p>
             {pkg.status === "uploading" ? (
               <>
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-amber-100 text-amber-700">

@@ -6,6 +6,7 @@ import { invites, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and, isNull, gt, inArray } from "drizzle-orm";
+import { isOrgType } from "@/lib/organisations/orgTypes";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
 
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
         roleFilter
           ? and(
               eq(invites.invitedBy, session.sub),
-              eq(invites.role, roleFilter as "talent" | "rep" | "licensee")
+              eq(invites.role, roleFilter as "talent" | "rep" | "industry" | "compliance")
             )
           : eq(invites.invitedBy, session.sub)
       );
@@ -71,26 +72,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { email?: string; role?: string; message?: string; skipEmail?: boolean };
+  let body: { email?: string; role?: string; message?: string; skipEmail?: boolean; orgSubtype?: string };
   try {
     body = JSON.parse(await req.text());
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { email, role, message, skipEmail } = body;
+  const { email, role, message, skipEmail, orgSubtype } = body;
 
   if (!email || !role) {
     return NextResponse.json({ error: "email and role are required" }, { status: 400 });
   }
 
-  if (!["talent", "rep", "licensee"].includes(role)) {
+  if (!["talent", "rep", "industry", "compliance"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
-  // Talent can only invite rep or licensee; admins can invite any role
+  // Talent can only invite rep or industry; admins can invite any role
   if (!isAdmin(session.email) && session.role === "talent" && role === "talent") {
-    return NextResponse.json({ error: "Talent accounts can only invite reps or licensees" }, { status: 403 });
+    return NextResponse.json({ error: "Talent accounts can only invite reps or industry users" }, { status: 403 });
+  }
+
+  if (orgSubtype !== undefined && !isOrgType(orgSubtype)) {
+    return NextResponse.json({ error: "Invalid org subtype" }, { status: 400 });
   }
 
   const db = getDb();
@@ -131,13 +136,14 @@ export async function POST(req: NextRequest) {
   await db.insert(invites).values({
     id: inviteId,
     email: normalEmail,
-    role: role as "talent" | "rep" | "licensee",
+    role: role as "talent" | "rep" | "industry" | "compliance",
     invitedBy: session.sub,
     talentId: session.role === "talent" && role === "rep" ? session.sub : null,
     message: message?.trim() ?? null,
     usedAt: null,
     expiresAt,
     createdAt: now,
+    orgSubtype: role === "industry" && orgSubtype ? orgSubtype : null,
   });
 
   if (!skipEmail) {
@@ -145,7 +151,7 @@ export async function POST(req: NextRequest) {
     const { subject, html } = inviteEmail({
       to: normalEmail,
       inviterEmail: session.email,
-      role: role as "talent" | "rep" | "licensee",
+      role: role as "talent" | "rep" | "industry" | "compliance",
       message: message?.trim() ?? null,
       signupUrl: `${baseUrl}/signup?invite=${inviteId}`,
       expiresAt,

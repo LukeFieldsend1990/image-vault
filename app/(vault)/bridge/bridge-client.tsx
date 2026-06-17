@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { isIndustryRole } from "@/lib/auth/roles";
+import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
+import { computePurgeGrace, formatGraceRemaining } from "@/lib/bridge/purgeGrace";
 
 interface NamedPackage {
   packageId: string;
@@ -11,7 +16,9 @@ interface AgentLicence {
   licenceId: string;
   packageId: string | null;
   packageName: string | null;
+  packageScanNumber: number | null;
   talentName: string | null;
+  talentShortCode: string | null;
   licenceName: string | null;
   validFrom: number;
   validTo: number;
@@ -25,6 +32,8 @@ interface AgentSummary {
   displayName: string;
   organisationId: string;
   organisationName: string;
+  organisationType?: string | null;
+  organisationShortCode?: string | null;
   status: "active" | "revoked" | "expired";
   lastHeartbeatAt: number | null;
   agentOnline: boolean;
@@ -77,6 +86,12 @@ function tokenPct(tokenExpiresAt: number | null): number {
 
 function formatDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function formatDateTime(ts: number): string {
+  return new Date(ts * 1000).toLocaleString("en-GB", {
+    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 function StatusDot({ online, revoked, pending }: { online: boolean; revoked: boolean; pending: string | null }) {
@@ -146,6 +161,18 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
     l => l.status === "APPROVED" && l.validTo + 86400 > nowSec
   );
 
+  // Approximate offline-purge countdown (display-only — see lib/bridge/purgeGrace.ts).
+  // Only meaningful when the agent actually has files on the share to lose.
+  const grace = computePurgeGrace({
+    lastHeartbeatAt: agent.lastHeartbeatAt,
+    revoked: isRevoked,
+    pendingAction: agent.pendingAction,
+    now: nowSec,
+  });
+  const showGrace =
+    agent.publishedPackages.length > 0 &&
+    (grace.kind === "counting" || grace.kind === "elapsed");
+
   // Build a unified package list from both licences and published packages
   const packageMap = new Map<string, { name: string; hasAnyLicence: boolean; hasBridgeLicence: boolean }>();
   for (const l of agent.licences) {
@@ -188,8 +215,10 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
             <p className="font-mono text-sm font-semibold truncate" style={{ color: "#ffffff" }}>
               {agent.displayName}
             </p>
-            <p className="mt-0.5 text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>
-              {agent.organisationName}
+            <p className="mt-0.5 text-xs truncate flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>
+              <span className="truncate">{agent.organisationName}</span>
+              <OrgTypeBadge type={agent.organisationType} />
+              <CodeTag code={agent.organisationShortCode} />
             </p>
           </div>
           <span
@@ -207,6 +236,34 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
             {agent.lastHeartbeatAt ? timeSince(agent.lastHeartbeatAt) : "no heartbeat"}
           </span>
         </div>
+
+        {/* Offline purge grace — approximate, display-only countdown */}
+        {showGrace && grace.kind === "counting" && (
+          <div
+            className="mt-3 rounded px-2.5 py-2"
+            style={{ background: "rgba(180,83,9,0.18)", border: "1px solid rgba(180,83,9,0.45)" }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#f59e0b" }}>
+              Auto-purge in {formatGraceRemaining(grace.secondsRemaining)}
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+              Est. {formatDateTime(grace.deadlineUnix)} unless it reconnects
+            </p>
+          </div>
+        )}
+        {showGrace && grace.kind === "elapsed" && (
+          <div
+            className="mt-3 rounded px-2.5 py-2"
+            style={{ background: "rgba(192,57,43,0.18)", border: "1px solid rgba(192,57,43,0.5)" }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#ef4444" }}>
+              Grace elapsed · cache likely purged
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+              Offline &gt; 48h since {formatDateTime(grace.deadlineUnix)}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -299,7 +356,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
         </div>
 
         {/* Licences covered */}
-        {role === "licensee" && activeLicences.length > 0 && (
+        {isIndustryRole(role) && activeLicences.length > 0 && (
           <div className="px-5 py-4">
             <p className="text-[10px] font-semibold tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
               Licences covered
@@ -308,16 +365,20 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
               {activeLicences.map(l => (
                 <li key={l.licenceId} className="text-xs">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-medium truncate" style={{ color: "var(--color-ink)" }}>
-                      {l.talentName ?? "—"}
+                    <span className="font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                      <span className="truncate">{l.talentName ?? "—"}</span>
+                      <CodeTag code={l.talentShortCode} />
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between gap-3 mt-0.5">
-                    <span className="truncate" style={{ color: "var(--color-muted)" }}>
-                      {l.licenceName ?? "—"}
-                      {l.packageName && (
-                        <> · {l.packageName}</>
-                      )}
+                    <span className="truncate inline-flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                      <span className="truncate">
+                        {l.licenceName ?? "—"}
+                        {l.packageName && (
+                          <> · {l.packageName}</>
+                        )}
+                      </span>
+                      <CodeTag code={formatScan(l.packageScanNumber)} />
                     </span>
                   </div>
                   <div className="mt-0.5 font-mono text-[10px]" style={{ color: "var(--color-muted)" }}>
@@ -340,6 +401,8 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               </svg>
               <span style={{ color: "var(--color-ink)" }}>{agent.organisationName}</span>
+              <OrgTypeBadge type={agent.organisationType} />
+              <CodeTag code={agent.organisationShortCode} />
               <span style={{ color: "var(--color-muted)" }}>is publishing your data to a render share</span>
             </div>
             {(agent.publishedPackages.length + agent.unauthorisedPublishedPackages.length) > 0 && (
@@ -375,7 +438,7 @@ function AgentCard({ agent, role, onRevoke }: { agent: AgentSummary; role: strin
           <p className="mt-3 text-[10px] font-mono truncate" style={{ color: "var(--color-border)" }}>
             {agent.agentId}
           </p>
-          {!isRevoked && role === "licensee" && (
+          {!isRevoked && isIndustryRole(role) && (
             <button
               onClick={() => void handleRevoke()}
               disabled={revoking}
@@ -405,10 +468,10 @@ function EmptyState({ role }: { role: string }) {
         </svg>
       </div>
       <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-        {role === "licensee" ? "No render-bridge agents enrolled" : "No render-bridge access active"}
+        {isIndustryRole(role) ? "No render-bridge agents enrolled" : "No render-bridge access active"}
       </p>
       <p className="mt-1 max-w-xs text-xs" style={{ color: "var(--color-muted)" }}>
-        {role === "licensee"
+        {isIndustryRole(role)
           ? "Enrol a Docker agent on your render farm using a bridge PAT from Settings → Bridge Tokens."
           : "None of your active licences have a render-bridge agent connected."}
       </p>
@@ -444,8 +507,8 @@ export default function BridgeClient({ role }: { role: string }) {
 
   const onlineCount = agents.filter(a => a.agentOnline).length;
 
-  const pageTitle = role === "licensee" ? "Render Bridge" : "Bridge Access";
-  const pageSubtitle = role === "licensee"
+  const pageTitle = isIndustryRole(role) ? "Render Bridge" : "Bridge Access";
+  const pageSubtitle = isIndustryRole(role)
     ? "Automated delivery to your facility's render share"
     : "Render-bridge agents accessing your licensed assets";
 

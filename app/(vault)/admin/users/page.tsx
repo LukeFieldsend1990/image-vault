@@ -5,12 +5,14 @@ import { getDb } from "@/lib/db";
 import { users, talentProfiles, scanPackages, talentReps } from "@/lib/db/schema";
 import { sql } from "drizzle-orm";
 import UserActions from "./user-actions";
+import CodeTag from "@/app/components/code-tag";
 
-type Role = "talent" | "rep" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
 const ROLE_LABEL: Record<Role, string> = {
   talent: "Talent",
   rep: "Rep",
+  industry: "Industry",
   licensee: "Licensee",
   admin: "Admin",
 };
@@ -18,6 +20,7 @@ const ROLE_LABEL: Record<Role, string> = {
 const ROLE_COLOR: Record<Role, string> = {
   talent: "#4f46e5",
   rep: "#0891b2",
+  industry: "#059669",
   licensee: "#059669",
   admin: "#c0392b",
 };
@@ -36,6 +39,7 @@ export default async function AdminUsersPage() {
     .select({
       id: users.id,
       email: users.email,
+      shortCode: users.shortCode,
       role: users.role,
       createdAt: users.createdAt,
       suspendedAt: users.suspendedAt,
@@ -45,6 +49,7 @@ export default async function AdminUsersPage() {
       geoFingerprintEnabled: users.geoFingerprintEnabled,
       royaltyMeterEnabled: users.royaltyMeterEnabled,
       complianceEnabled: users.complianceEnabled,
+      financialVisibilityEnabled: users.financialVisibilityEnabled,
     })
     .from(users)
     .orderBy(sql`created_at desc`)
@@ -141,7 +146,7 @@ export default async function AdminUsersPage() {
                     {u.email[0]?.toUpperCase() ?? "?"}
                   </div>
                 )}
-                <span className="text-sm break-all leading-snug" style={{ color: "var(--color-text)" }}>{u.email}</span>
+                <span className="text-sm break-all leading-snug" style={{ color: "var(--color-text)" }}>{u.email} <CodeTag code={u.shortCode} /></span>
               </div>
 
               {/* Role badge */}
@@ -227,6 +232,7 @@ export default async function AdminUsersPage() {
                 geoFingerprintEnabled={!!u.geoFingerprintEnabled}
                 royaltyMeterEnabled={u.royaltyMeterEnabled !== false}
                 complianceEnabled={u.complianceEnabled !== false}
+                financialVisibilityEnabled={u.financialVisibilityEnabled === true}
                 pitchVignettesEnabled={!!(profileMap.get(u.id)?.pitchVignettesEnabled)}
               />
             </div>

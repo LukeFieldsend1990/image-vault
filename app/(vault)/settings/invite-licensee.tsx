@@ -20,7 +20,7 @@ export default function InviteLicensee() {
       const res = await fetch("/api/invites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), role: "licensee", message: message.trim() || undefined }),
+        body: JSON.stringify({ email: email.trim(), role: "industry", message: message.trim() || undefined }),
       });
       const d = await res.json() as { error?: string; inviteId?: string };
       if (!res.ok) {

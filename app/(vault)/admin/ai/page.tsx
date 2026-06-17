@@ -3,8 +3,8 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { aiSettings, aiCostLog, aiBatchRuns } from "@/lib/db/schema";
-import { sql, desc } from "drizzle-orm";
+import { aiSettings, aiCostLog, aiBatchRuns, suggestions, users } from "@/lib/db/schema";
+import { sql, desc, eq, isNull, gt, asc } from "drizzle-orm";
 import { AiSettingsClient } from "./ai-settings-client";
 
 export default async function AdminAiPage() {
@@ -13,7 +13,9 @@ export default async function AdminAiPage() {
 
   const fourteenDaysAgo = Math.floor(Date.now() / 1000) - 14 * 86400;
 
-  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow, recentBatchRuns, recentLogs] =
+  const now = Math.floor(Date.now() / 1000);
+
+  const [settingsRows, totalSpendRow, byFeatureRows, byProviderRows, ceilingRow, recentBatchRuns, repSuggestionsRows, recentLogs] =
     await Promise.all([
       db.select({ key: aiSettings.key, value: aiSettings.value }).from(aiSettings).all(),
       db
@@ -65,6 +67,27 @@ export default async function AdminAiPage() {
         .from(aiBatchRuns)
         .orderBy(desc(aiBatchRuns.startedAt))
         .limit(10)
+        .all(),
+      db
+        .select({
+          id: suggestions.id,
+          repId: suggestions.userId,
+          repEmail: users.email,
+          category: suggestions.category,
+          title: suggestions.title,
+          body: suggestions.body,
+          deepLink: suggestions.deepLink,
+          entityType: suggestions.entityType,
+          priority: suggestions.priority,
+          expiresAt: suggestions.expiresAt,
+          createdAt: suggestions.createdAt,
+        })
+        .from(suggestions)
+        .innerJoin(users, eq(suggestions.userId, users.id))
+        .where(
+          sql`${suggestions.acknowledgedAt} IS NULL AND ${suggestions.expiresAt} > ${now} AND ${users.role} = 'rep'`
+        )
+        .orderBy(users.email, asc(suggestions.priority))
         .all(),
       db
         .select({
@@ -138,6 +161,7 @@ export default async function AdminAiPage() {
       <AiSettingsClient
         initialSettings={initialSettings}
         initialCosts={initialCosts}
+        repSuggestions={repSuggestionsRows}
         recentBatchRuns={recentBatchRuns.map((r) => ({
           id: r.id,
           triggerType: r.triggerType,

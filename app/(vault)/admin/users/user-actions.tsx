@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Role = "talent" | "rep" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
 const ROLE_COLOR: Record<Role, string> = {
   talent: "#4f46e5",
   rep: "#0891b2",
+  industry: "#059669",
   licensee: "#059669",
   admin: "#c0392b",
 };
@@ -23,12 +24,13 @@ interface Props {
   geoFingerprintEnabled: boolean;
   royaltyMeterEnabled: boolean;
   complianceEnabled: boolean;
+  financialVisibilityEnabled: boolean;
   pitchVignettesEnabled: boolean;
 }
 
-export default function UserActions({ userId, role, isSuspended, isCurrentUser, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled, complianceEnabled, pitchVignettesEnabled }: Props) {
+export default function UserActions({ userId, role, isSuspended, isCurrentUser, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled, complianceEnabled, financialVisibilityEnabled, pitchVignettesEnabled }: Props) {
   const router = useRouter();
-  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | "geo" | "royalty" | "compliance" | "pitch" | "role" | null>(null);
+  const [loading, setLoading] = useState<"suspend" | "delete" | "email" | "ai" | "inbound" | "geo" | "royalty" | "compliance" | "financial" | "pitch" | "role" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleRoleChange(newRole: Role) {
@@ -200,6 +202,27 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
     }
   }
 
+  async function handleFinancialToggle() {
+    setLoading("financial");
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ financialVisibilityEnabled: !financialVisibilityEnabled }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "Failed");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(null);
+    }
+  }
+
   async function handlePitchVignettesToggle() {
     setLoading("pitch");
     setError(null);
@@ -255,6 +278,7 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
         >
           <option value="talent">Talent</option>
           <option value="rep">Rep</option>
+          <option value="industry">Industry</option>
           <option value="licensee">Licensee</option>
         </select>
       )}
@@ -337,6 +361,20 @@ export default function UserActions({ userId, role, isSuspended, isCurrentUser, 
       >
         {loading === "compliance" ? "…" : complianceEnabled ? "Compliance On" : "Compliance Off"}
       </button>
+      {role === "talent" && (
+        <button
+          onClick={handleFinancialToggle}
+          disabled={loading !== null}
+          className="text-[10px] font-semibold px-2.5 py-1 rounded border transition disabled:opacity-40 whitespace-nowrap"
+          title="Show the under-test fee model to this talent"
+          style={financialVisibilityEnabled
+            ? { borderColor: "rgba(124,138,87,0.4)", color: "#5d6b3a", background: "rgba(124,138,87,0.08)" }
+            : { borderColor: "rgba(107,114,128,0.3)", color: "#6b7280", background: "rgba(107,114,128,0.06)" }
+          }
+        >
+          {loading === "financial" ? "…" : financialVisibilityEnabled ? "Fees Visible" : "Fees Hidden"}
+        </button>
+      )}
       {role === "talent" && (
         <button
           onClick={handlePitchVignettesToggle}

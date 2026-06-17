@@ -3,15 +3,18 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { getDb } from "@/lib/db";
-import { talentProfiles, users } from "@/lib/db/schema";
+import { talentProfiles, users, siteSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import InviteLicensee from "./invite-licensee";
 import VaultLockToggle from "./vault-lock-toggle";
 import PitchVignettesToggle from "./pitch-vignettes-toggle";
 import ChangePassword from "./change-password";
 import PhoneField from "./phone-field";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
+import DemoToggleCard from "./demo-toggle-card";
+import BillingFees from "./billing-fees";
+import ShowCodesToggle from "./show-codes-toggle";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -23,15 +26,20 @@ const ADMIN_SECTIONS = [
   { href: "/admin/invites", label: "Invites", description: "Manage platform invitations" },
   { href: "/admin/pipeline", label: "Pipeline", description: "Digital double pipeline jobs" },
   { href: "/admin/talent", label: "Talent Settings", description: "Pipeline, fee splits & permissions" },
+  { href: "/admin/financial", label: "Billing & Fees", description: "Tier fees, production bands and obligations" },
   { href: "/admin/audit", label: "Audit Log", description: "Last 500 download events" },
   { href: "/admin/organisations", label: "Organisations", description: "Production organisations and member management" },
   { href: "/admin/productions", label: "Productions", description: "Production entities and companies" },
   { href: "/admin/storage", label: "Storage", description: "Per-talent storage usage" },
   { href: "/admin/bridge", label: "Bridge", description: "Active Bridge sessions and tamper event log" },
   { href: "/admin/ai", label: "AI Features", description: "AI settings, cost tracking and batch controls" },
+  { href: "/admin/skills", label: "Triage", description: "Whitelisted email triage skills" },
+  { href: "/admin/compliance", label: "Compliance", description: "Art. 39 strikes, transfers and certificates" },
+  { href: "/admin/compliance-access", label: "Compliance Access", description: "Grant Union/Regulator/Insurer read-only evidence access" },
+  { href: "/admin/mcp", label: "MCP Integration", description: "Claude tokens, tools and audit log" },
 ];
 
-type Role = "talent" | "rep" | "licensee" | "admin";
+type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
 
 interface KnownForEntry {
   title: string;
@@ -58,6 +66,7 @@ async function getSessionData(): Promise<{ userId: string; email: string; role: 
 const ROLE_LABELS: Record<Role, string> = {
   talent: "Talent",
   rep: "Representative / Agency",
+  industry: "Industry",
   licensee: "Licensee",
   admin: "Platform Admin",
 };
@@ -82,10 +91,20 @@ export default async function SettingsPage({
   } | null = null;
 
   let inboundEnabled = false;
+  let demoEnabled = false;
 
   if (user?.userId) {
     try {
       const db = getDb();
+
+      if (userIsAdmin) {
+        const demoSetting = await db
+          .select({ value: siteSettings.value })
+          .from(siteSettings)
+          .where(eq(siteSettings.key, "demo_enabled"))
+          .get();
+        demoEnabled = demoSetting?.value === "true";
+      }
 
       if (user.role === "talent") {
         const row = await db
@@ -154,7 +173,10 @@ export default async function SettingsPage({
           </p>
           <div className="mb-4">
             <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>Platform Features</p>
-            <RoyaltyMeterPlatformToggle />
+            <div className="space-y-3">
+              <RoyaltyMeterPlatformToggle />
+              <DemoToggleCard initialEnabled={demoEnabled} />
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {ADMIN_SECTIONS.map((s) => (
@@ -220,6 +242,14 @@ export default async function SettingsPage({
           </div>
         </div>
       </div>
+
+      {/* ── Code view mode (all roles) ── */}
+      <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <ShowCodesToggle />
+      </div>
+
+      {/* ── Billing & Fees (talent only; self-hides unless visibility flag is on) ── */}
+      {user?.role === "talent" && <BillingFees />}
 
       {/* ── Industry Identity (talent only) ── */}
       {user?.role === "talent" && (
@@ -369,21 +399,9 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* Invite Licensee (talent only) */}
-      {user?.role === "talent" && (
-        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-          <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-muted)" }}>
-            Invite a Licensee
-          </h2>
-          <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
-            Send an invitation to a production company so they can access your vault.
-          </p>
-          <InviteLicensee />
-        </div>
-      )}
 
       {/* Organisation (licensee only) */}
-      {user?.role === "licensee" && (
+      {isIndustryRole(user?.role) && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Organisation</h2>
           <Link
@@ -403,7 +421,7 @@ export default async function SettingsPage({
       )}
 
       {/* CAS Bridge (licensee + rep + talent) */}
-      {(user?.role === "licensee" || user?.role === "rep" || user?.role === "talent") && (
+      {(isIndustryRole(user?.role) || user?.role === "rep" || user?.role === "talent") && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>CAS Bridge</h2>
           <Link
@@ -411,13 +429,13 @@ export default async function SettingsPage({
             className="flex items-center justify-between text-sm"
             style={{ color: "var(--color-ink)" }}
           >
-            <span>{user?.role === "licensee" ? "Manage API tokens & devices" : "View active bridge sessions"}</span>
+            <span>{isIndustryRole(user?.role) ? "Manage API tokens & devices" : "View active bridge sessions"}</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </Link>
           <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
-            {user?.role === "licensee"
+            {isIndustryRole(user?.role)
               ? "Connect the CAS Bridge app to access licensed scan data in Nuke, Houdini, and Maya."
               : "Monitor when licensees access files via the CAS Bridge desktop app."}
           </p>

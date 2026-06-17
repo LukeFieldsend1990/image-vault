@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, scanFiles, users, talentProfiles } from "@/lib/db/schema";
+import { licences, scanPackages, scanFiles, users, talentProfiles, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and, count } from "drizzle-orm";
@@ -69,7 +69,18 @@ export async function GET(
 
   const isOwner = lic.talentId === session.sub || lic.licenseeId === session.sub;
   const admin = isAdmin(session.email);
-  if (!isOwner && !admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  let isRep = false;
+  if (!isOwner && !admin && session.role === "rep") {
+    const repRow = await db
+      .select({ talentId: talentReps.talentId })
+      .from(talentReps)
+      .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, lic.talentId)))
+      .get();
+    isRep = !!repRow;
+  }
+
+  if (!isOwner && !isRep && !admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   if (!lic.packageId) {
     return NextResponse.json({ error: "Licence has no package attached" }, { status: 409 });

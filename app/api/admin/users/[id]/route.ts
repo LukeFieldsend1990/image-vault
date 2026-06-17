@@ -26,7 +26,7 @@ export async function PATCH(
   if (isErrorResponse(session)) return session;
   if (session instanceof NextResponse) return session;
 
-  let body: { suspended?: boolean; emailMuted?: boolean; aiDisabled?: boolean; inboundEnabled?: boolean; geoFingerprintEnabled?: boolean; royaltyMeterEnabled?: boolean; complianceEnabled?: boolean; pitchVignettesEnabled?: boolean; role?: string } = {};
+  let body: { suspended?: boolean; emailMuted?: boolean; aiDisabled?: boolean; inboundEnabled?: boolean; geoFingerprintEnabled?: boolean; royaltyMeterEnabled?: boolean; complianceEnabled?: boolean; financialVisibilityEnabled?: boolean; pitchVignettesEnabled?: boolean; role?: string } = {};
   try {
     body = JSON.parse(await req.text());
   } catch { /* ok */ }
@@ -38,12 +38,13 @@ export async function PATCH(
   const hasGeoFingerprintEnabled = typeof body.geoFingerprintEnabled === "boolean";
   const hasRoyaltyMeterEnabled = typeof body.royaltyMeterEnabled === "boolean";
   const hasComplianceEnabled = typeof body.complianceEnabled === "boolean";
+  const hasFinancialVisibilityEnabled = typeof body.financialVisibilityEnabled === "boolean";
   const hasPitchVignettesEnabled = typeof body.pitchVignettesEnabled === "boolean";
-  const validRoles = ["talent", "rep", "licensee"] as const;
+  const validRoles = ["talent", "rep", "industry", "licensee"] as const;
   const hasRole = typeof body.role === "string" && validRoles.includes(body.role as typeof validRoles[number]);
 
-  if (!hasSuspended && !hasEmailMuted && !hasAiDisabled && !hasInboundEnabled && !hasGeoFingerprintEnabled && !hasRoyaltyMeterEnabled && !hasComplianceEnabled && !hasPitchVignettesEnabled && !hasRole) {
-    return NextResponse.json({ error: "suspended, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled, complianceEnabled, pitchVignettesEnabled, or role is required" }, { status: 400 });
+  if (!hasSuspended && !hasEmailMuted && !hasAiDisabled && !hasInboundEnabled && !hasGeoFingerprintEnabled && !hasRoyaltyMeterEnabled && !hasComplianceEnabled && !hasFinancialVisibilityEnabled && !hasPitchVignettesEnabled && !hasRole) {
+    return NextResponse.json({ error: "suspended, emailMuted, aiDisabled, inboundEnabled, geoFingerprintEnabled, royaltyMeterEnabled, complianceEnabled, financialVisibilityEnabled, pitchVignettesEnabled, or role is required" }, { status: 400 });
   }
 
   const db = getDb();
@@ -103,6 +104,13 @@ export async function PATCH(
       .where(eq(users.id, id));
   }
 
+  if (hasFinancialVisibilityEnabled) {
+    await db
+      .update(users)
+      .set({ financialVisibilityEnabled: body.financialVisibilityEnabled! })
+      .where(eq(users.id, id));
+  }
+
   if (hasPitchVignettesEnabled) {
     await db
       .update(talentProfiles)
@@ -113,7 +121,7 @@ export async function PATCH(
   if (hasRole) {
     await db
       .update(users)
-      .set({ role: body.role as "talent" | "rep" | "licensee" | "admin" })
+      .set({ role: body.role as "talent" | "rep" | "industry" | "licensee" | "admin" })
       .where(eq(users.id, id));
   }
 

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
 
   const conditions = [like(users.email, `%${email}%`)];
-  if (role) conditions.push(eq(users.role, role as "talent" | "rep" | "licensee" | "admin"));
+  if (role) conditions.push(eq(users.role, role as "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin"));
 
   const rows = await db
     .select({ id: users.id, email: users.email, role: users.role })

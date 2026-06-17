@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, productionCompanies } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isIndustryRole } from "@/lib/auth/roles";
+import { isOrgType, type OrgType } from "@/lib/organisations/orgTypes";
+import { mintOrgCode } from "@/lib/codes/codes";
 import { eq } from "drizzle-orm";
 
 // GET /api/organisations — list orgs the calling user belongs to
@@ -20,6 +23,7 @@ export async function GET(req: NextRequest) {
       website: organisations.website,
       billingEmail: organisations.billingEmail,
       orgType: organisations.orgType,
+      shortCode: organisations.shortCode,
       createdAt: organisations.createdAt,
       memberRole: organisationMembers.memberRole,
       joinedAt: organisationMembers.joinedAt,
@@ -37,7 +41,7 @@ export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "licensee" && session.role !== "admin") {
+  if (!isIndustryRole(session.role) && session.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -46,6 +50,7 @@ export async function POST(req: NextRequest) {
     website?: string;
     billingEmail?: string;
     productionCompanyId?: string;
+    orgType?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -55,6 +60,14 @@ export async function POST(req: NextRequest) {
 
   if (!body.name?.trim()) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
+  }
+
+  let orgType: OrgType = "production_company";
+  if (body.orgType !== undefined) {
+    if (!isOrgType(body.orgType)) {
+      return NextResponse.json({ error: "invalid orgType" }, { status: 400 });
+    }
+    orgType = body.orgType;
   }
 
   if (body.productionCompanyId) {
@@ -80,6 +93,7 @@ export async function POST(req: NextRequest) {
     website: body.website?.trim() ?? null,
     billingEmail: body.billingEmail?.trim() ?? null,
     productionCompanyId: body.productionCompanyId ?? null,
+    orgType,
     createdBy: session.sub,
     createdAt: now,
     updatedAt: now,
@@ -92,6 +106,8 @@ export async function POST(req: NextRequest) {
     invitedBy: null,
     joinedAt: now,
   });
+
+  await mintOrgCode(db, orgId, orgType);
 
   return NextResponse.json({ organisationId: orgId }, { status: 201 });
 }

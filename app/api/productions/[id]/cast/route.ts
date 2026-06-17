@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import {
@@ -51,7 +52,7 @@ export async function GET(
 
   // Auth check: admin or licensee org member
   if (!isAdmin(session.email)) {
-    if (session.role !== "licensee") {
+    if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (production.organisationId) {
@@ -148,13 +149,16 @@ export async function GET(
 }
 
 interface CastMemberInput {
-  email: string;
+  email?: string;       // contactable member — onboarded now
+  actorName?: string;   // placeholder — recorded by name only, resolve later
+  tmdbId?: number;
+  sourceNote?: string;
   characterName?: string;
   department?: string;
   sagMember?: boolean;
-  intendedUse: string;
-  validFrom: number;
-  validTo: number;
+  intendedUse?: string;
+  validFrom?: number;
+  validTo?: number;
   licenceType?: string;
   territory?: string;
   exclusivity?: string;
@@ -192,7 +196,7 @@ export async function POST(
 
   // Auth check: admin or licensee org owner/admin
   if (!isAdmin(session.email)) {
-    if (session.role !== "licensee") {
+    if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (production.organisationId) {
@@ -230,23 +234,32 @@ export async function POST(
       return NextResponse.json({ error: "Each member must be an object" }, { status: 400 });
     }
     const member = m as Record<string, unknown>;
-    if (typeof member.email !== "string" || !member.email) {
-      return NextResponse.json({ error: "email is required for each member" }, { status: 400 });
+    const email = typeof member.email === "string" ? member.email.toLowerCase().trim() : "";
+    const actorName = typeof member.actorName === "string" ? member.actorName.trim() : "";
+    if (!email && !actorName) {
+      return NextResponse.json({ error: "each member needs an email or an actorName" }, { status: 400 });
     }
-    if (typeof member.intendedUse !== "string" || !member.intendedUse) {
-      return NextResponse.json({ error: "intendedUse is required for each member" }, { status: 400 });
-    }
-    if (typeof member.validFrom !== "number" || typeof member.validTo !== "number") {
-      return NextResponse.json({ error: "validFrom and validTo are required for each member" }, { status: 400 });
+    // Contactable members are onboarded immediately, so full terms are required.
+    // Placeholders (actorName only) carry whatever terms are known, no email sent.
+    if (email) {
+      if (typeof member.intendedUse !== "string" || !member.intendedUse) {
+        return NextResponse.json({ error: "intendedUse is required for contactable members" }, { status: 400 });
+      }
+      if (typeof member.validFrom !== "number" || typeof member.validTo !== "number") {
+        return NextResponse.json({ error: "validFrom and validTo are required for contactable members" }, { status: 400 });
+      }
     }
     members.push({
-      email: (member.email as string).toLowerCase().trim(),
+      email: email || undefined,
+      actorName: actorName || undefined,
+      tmdbId: typeof member.tmdbId === "number" ? Math.floor(member.tmdbId) : undefined,
+      sourceNote: typeof member.sourceNote === "string" ? member.sourceNote : undefined,
       characterName: typeof member.characterName === "string" ? member.characterName : undefined,
       department: typeof member.department === "string" ? member.department : undefined,
       sagMember: typeof member.sagMember === "boolean" ? member.sagMember : false,
-      intendedUse: member.intendedUse as string,
-      validFrom: member.validFrom as number,
-      validTo: member.validTo as number,
+      intendedUse: typeof member.intendedUse === "string" ? member.intendedUse : undefined,
+      validFrom: typeof member.validFrom === "number" ? member.validFrom : undefined,
+      validTo: typeof member.validTo === "number" ? member.validTo : undefined,
       licenceType: typeof member.licenceType === "string" ? member.licenceType : undefined,
       territory: typeof member.territory === "string" ? member.territory : undefined,
       exclusivity: typeof member.exclusivity === "string" ? member.exclusivity : undefined,
@@ -279,15 +292,61 @@ export async function POST(
   let created = 0;
   let linked = 0;
   let invited = 0;
+  let placeholders = 0;
   const errors: string[] = [];
+
+  // Stored licence-terms blob carried on a row until a licence is created.
+  const termsBlob = (member: CastMemberInput) => ({
+    intendedUse: member.intendedUse,
+    validFrom: member.validFrom,
+    validTo: member.validTo,
+    licenceType: member.licenceType ?? null,
+    territory: member.territory ?? null,
+    exclusivity: member.exclusivity ?? "non_exclusive",
+    permitAiTraining: member.permitAiTraining ?? false,
+    proposedFee: member.proposedFee ?? null,
+    projectName: production.name,
+    productionCompany: companyName,
+  });
 
   for (const member of members) {
     try {
+      // Placeholder: recorded by name only, no email/invite yet.
+      if (!member.email) {
+        await db.insert(productionCast).values({
+          id: crypto.randomUUID(),
+          productionId: id,
+          talentId: null,
+          inviteId: null,
+          licenceId: null,
+          actorName: member.actorName ?? null,
+          tmdbId: member.tmdbId ?? null,
+          sourceNote: member.sourceNote ?? null,
+          characterName: member.characterName ?? null,
+          department: member.department ?? null,
+          sagMember: member.sagMember ?? false,
+          status: "placeholder",
+          licenceTermsJson: JSON.stringify(termsBlob(member)),
+          addedBy: session.sub,
+          addedAt: now,
+          linkedAt: null,
+        });
+        placeholders++;
+        created++;
+        continue;
+      }
+
+      // Contactable member — email + full terms validated above.
+      const email = member.email;
+      const intendedUse = member.intendedUse as string;
+      const validFrom = member.validFrom as number;
+      const validTo = member.validTo as number;
+
       // Look up user by email
       const existingUser = await db
         .select({ id: users.id, role: users.role })
         .from(users)
-        .where(eq(users.email, member.email))
+        .where(eq(users.email, email))
         .get();
 
       if (existingUser && existingUser.role === "talent") {
@@ -301,9 +360,9 @@ export async function POST(
           licenseeId: session.sub,
           projectName: production.name,
           productionCompany: companyName,
-          intendedUse: member.intendedUse,
-          validFrom: member.validFrom,
-          validTo: member.validTo,
+          intendedUse,
+          validFrom,
+          validTo,
           status: "AWAITING_PACKAGE",
           licenceType: (member.licenceType as typeof licences.$inferInsert["licenceType"]) ?? null,
           territory: member.territory ?? null,
@@ -333,16 +392,16 @@ export async function POST(
         // Fire-and-forget email to talent
         void (async () => {
           const { subject, html } = productionCastLinkedEmail({
-            recipientEmail: member.email,
+            recipientEmail: email,
             productionName: production.name,
             companyName,
             coordinatorEmail,
             characterName: member.characterName,
-            intendedUse: member.intendedUse,
+            intendedUse,
             proposedFee: member.proposedFee,
             reviewUrl: `${baseUrl}/licences/${licenceId}`,
           });
-          await sendEmail({ to: member.email, subject, html });
+          await sendEmail({ to: email, subject, html });
         })();
 
         linked++;
@@ -352,9 +411,9 @@ export async function POST(
         const expiresAt = now + 7 * 24 * 60 * 60; // 7 days
 
         const licenceTerms = {
-          intendedUse: member.intendedUse,
-          validFrom: member.validFrom,
-          validTo: member.validTo,
+          intendedUse,
+          validFrom,
+          validTo,
           licenceType: member.licenceType ?? null,
           territory: member.territory ?? null,
           exclusivity: member.exclusivity ?? "non_exclusive",
@@ -366,7 +425,7 @@ export async function POST(
 
         await db.insert(invites).values({
           id: inviteId,
-          email: member.email,
+          email,
           role: "talent",
           invitedBy: session.sub,
           talentId: null,
@@ -397,17 +456,17 @@ export async function POST(
         // Fire-and-forget invite email
         void (async () => {
           const { subject, html } = productionCastInviteEmail({
-            recipientEmail: member.email,
+            recipientEmail: email,
             productionName: production.name,
             companyName,
             coordinatorEmail,
             characterName: member.characterName,
-            intendedUse: member.intendedUse,
-            validFrom: member.validFrom,
-            validTo: member.validTo,
+            intendedUse,
+            validFrom,
+            validTo,
             signupUrl: `${baseUrl}/signup?invite=${inviteId}`,
           });
-          await sendEmail({ to: member.email, subject, html });
+          await sendEmail({ to: email, subject, html });
         })();
 
         invited++;
@@ -415,9 +474,9 @@ export async function POST(
 
       created++;
     } catch (err) {
-      errors.push(`${member.email}: ${err instanceof Error ? err.message : String(err)}`);
+      errors.push(`${member.email ?? member.actorName}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  return NextResponse.json({ created, linked, invited, errors }, { status: 201 });
+  return NextResponse.json({ created, linked, invited, placeholders, errors }, { status: 201 });
 }

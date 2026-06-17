@@ -6,10 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 const ROLES = [
   { value: "talent", label: "Talent", description: "Actor, performer or model storing their own scans" },
   { value: "rep", label: "Representative", description: "Agent or agency managing talent" },
+  { value: "industry", label: "Industry", description: "Production company licensing scans" },
   { value: "licensee", label: "Licensee", description: "Production company licensing scans" },
 ] as const;
 
-type Role = "talent" | "rep" | "licensee";
+type Role = "talent" | "rep" | "industry" | "licensee";
 const INVITE_REQUIRED: Role[] = ["talent", "rep"];
 
 interface InviteInfo {

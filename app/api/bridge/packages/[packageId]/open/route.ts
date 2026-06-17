@@ -14,6 +14,7 @@ import {
   resolveAccessWindow,
   recordAccessWindowDownload,
 } from "@/lib/bridge/accessWindows";
+import { dedupeFilesByPath } from "@/lib/bridge/manifestFiles";
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -252,6 +253,8 @@ export async function POST(
       sizeBytes: scanFiles.sizeBytes,
       sha256: scanFiles.sha256,
       uploadStatus: scanFiles.uploadStatus,
+      completedAt: scanFiles.completedAt,
+      createdAt: scanFiles.createdAt,
     })
     .from(scanFiles)
     .where(eq(scanFiles.packageId, packageId))
@@ -269,6 +272,12 @@ export async function POST(
     }
   }
 
+  // A re-uploaded file leaves more than one completed row at the same filename;
+  // emitting both at the same manifest `path` makes the bridge's integrity map
+  // non-deterministic and triggers false tamper events. Collapse each path to
+  // its canonical (latest completed) row.
+  scopedFiles = dedupeFilesByPath(scopedFiles);
+
   if (scopedFiles.length === 0) {
     return NextResponse.json(
       { error: "No completed files found in this package" },
@@ -285,7 +294,7 @@ export async function POST(
         filename: f.filename,
         path: f.filename, // Bridge organises files in a folder named after the package
         size: f.sizeBytes,
-        sha256: f.sha256 ?? null, // null if not yet backfilled — Bridge will skip integrity check
+        sha256: f.sha256 ?? null, // null only for pre-hash legacy files — Bridge then falls back to size check
         sourceUrl,
       };
     })

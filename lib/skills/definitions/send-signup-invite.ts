@@ -5,6 +5,7 @@ import { eq, and, isNull, gt } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { ORG_TYPES, isOrgType } from "@/lib/organisations/orgTypes";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
 
@@ -25,8 +26,15 @@ const skill: SkillDefinition = {
       type: "select",
       description: "Account type for the invitee",
       required: true,
-      options: ["talent", "rep", "licensee"],
+      options: ["talent", "rep", "industry"],
       default: "talent",
+    },
+    {
+      name: "orgSubtype",
+      type: "select",
+      description: "Organisation type — only applies when role is 'industry'",
+      required: false,
+      options: [...ORG_TYPES],
     },
     {
       name: "message",
@@ -45,20 +53,22 @@ const skill: SkillDefinition = {
     }
 
     const email = (params.email as string)?.toLowerCase().trim();
-    const role = params.role as "talent" | "rep" | "licensee";
+    const role = params.role as "talent" | "rep" | "industry";
+    const orgSubtypeRaw = params.orgSubtype as string | undefined;
+    const orgSubtype = role === "industry" && orgSubtypeRaw && isOrgType(orgSubtypeRaw) ? orgSubtypeRaw : null;
     const message = (params.message as string)?.trim() || null;
 
     if (!email || !role) {
       return { success: false, message: "Email and role are required." };
     }
 
-    if (!["talent", "rep", "licensee"].includes(role)) {
+    if (!["talent", "rep", "industry"].includes(role)) {
       return { success: false, message: "Invalid role." };
     }
 
-    // Talent can only invite rep or licensee
+    // Talent can only invite rep or industry
     if (!isAdmin(session.email) && session.role === "talent" && role === "talent") {
-      return { success: false, message: "Talent accounts can only invite reps or licensees." };
+      return { success: false, message: "Talent accounts can only invite reps or industry users." };
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -104,6 +114,7 @@ const skill: SkillDefinition = {
       usedAt: null,
       expiresAt,
       createdAt: now,
+      orgSubtype,
     });
 
     const baseUrl = (ctx.env.NEXT_PUBLIC_BASE_URL as string) ?? "https://changling.io";

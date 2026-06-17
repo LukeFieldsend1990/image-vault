@@ -6,6 +6,7 @@ import { scanPackages, packageTags, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { semanticSearch } from "@/lib/search/query";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { and, isNull, inArray } from "drizzle-orm";
 
 /**
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   if (isErrorResponse(session)) return session;
 
   // Licensee-only for now
-  if (session.role !== "licensee" && session.role !== "admin") {
+  if (!isIndustryRole(session.role) && session.role !== "admin") {
     return NextResponse.json(
       { error: "Semantic search is available to licensees" },
       { status: 403 }

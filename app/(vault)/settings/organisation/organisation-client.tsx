@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ORG_TYPES, ORG_TYPE_LABELS, type OrgType } from "@/lib/organisations/orgTypes";
+import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 interface OrgMember {
   userId: string;
@@ -14,6 +17,8 @@ interface Organisation {
   name: string;
   website: string | null;
   billingEmail: string | null;
+  orgType?: string | null;
+  shortCode?: string | null;
   memberRole: "owner" | "admin" | "member";
   joinedAt: number;
 }
@@ -31,6 +36,7 @@ export default function OrganisationClient() {
   // Create org state
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
+  const [createType, setCreateType] = useState<OrgType>("production_company");
   const [createWebsite, setCreateWebsite] = useState("");
   const [createBilling, setCreateBilling] = useState("");
   const [creating, setCreating] = useState(false);
@@ -90,7 +96,7 @@ export default function OrganisationClient() {
       const r = await fetch("/api/organisations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: createName, website: createWebsite || undefined, billingEmail: createBilling || undefined }),
+        body: JSON.stringify({ name: createName, orgType: createType, website: createWebsite || undefined, billingEmail: createBilling || undefined }),
       });
       if (!r.ok) {
         const d = await r.json() as { error?: string };
@@ -217,6 +223,15 @@ export default function OrganisationClient() {
               required
               style={{ padding: "0.5rem 0.75rem", fontSize: "0.875rem", border: "1px solid var(--color-border)", borderRadius: 4, background: "var(--color-bg)", color: "var(--color-text)" }}
             />
+            <select
+              value={createType}
+              onChange={e => setCreateType(e.target.value as OrgType)}
+              style={{ padding: "0.5rem 0.75rem", fontSize: "0.875rem", border: "1px solid var(--color-border)", borderRadius: 4, background: "var(--color-bg)", color: "var(--color-text)" }}
+            >
+              {ORG_TYPES.map(t => (
+                <option key={t} value={t}>{ORG_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
             <input
               value={createWebsite}
               onChange={e => setCreateWebsite(e.target.value)}
@@ -261,7 +276,11 @@ export default function OrganisationClient() {
               borderRadius: 6, padding: "1rem", cursor: "pointer", width: "100%",
             }}
           >
-            <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--color-text)" }}>{org.name}</div>
+            <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--color-text)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <span>{org.name}</span>
+              <OrgTypeBadge type={org.orgType} />
+              <CodeTag code={org.shortCode} />
+            </div>
             <div style={{ fontSize: "0.75rem", color: "var(--color-muted)", marginTop: 2 }}>
               {org.memberRole} · joined {new Date(org.joinedAt * 1000).toLocaleDateString()}
             </div>
@@ -297,7 +316,11 @@ export default function OrganisationClient() {
                 </form>
               ) : (
                 <div style={{ fontSize: "0.875rem", display: "flex", flexDirection: "column", gap: "0.25rem", color: "var(--color-text)" }}>
-                  <div>{selected.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span>{selected.name}</span>
+                    <OrgTypeBadge type={selected.orgType} />
+                    <CodeTag code={selected.shortCode} />
+                  </div>
                   {selected.website && <div style={{ color: "var(--color-muted)" }}>{selected.website}</div>}
                   {selected.billingEmail && <div style={{ color: "var(--color-muted)" }}>Billing: {selected.billingEmail}</div>}
                 </div>

@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
 import { cookies } from "next/headers";
 import ComplianceClient from "./compliance-client";
 import RepComplianceOverview from "./rep-compliance-overview";
@@ -32,8 +33,11 @@ export default async function CompliancePage() {
 
   if (!userId) redirect("/login");
 
+  // Compliance watchers only see their own read-only evidence area.
+  if (isComplianceRole(role)) redirect("/evidence");
+
   // Licensees access compliance through their licence panel, not this page
-  if (role === "licensee") redirect("/dashboard");
+  if (isIndustryRole(role)) redirect("/dashboard");
 
   // Reps always have access (they view their talent's compliance, not their own flag)
   // Admins always have access; for talent check the per-user DB flag

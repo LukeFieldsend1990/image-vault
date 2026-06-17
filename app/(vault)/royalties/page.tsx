@@ -3,6 +3,7 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import RoyaltiesClient from "./royalties-client";
+import { isIndustryRole } from "@/lib/auth/roles";
 
 async function getRole(): Promise<string | null> {
   const cookieStore = await cookies();
@@ -19,6 +20,6 @@ async function getRole(): Promise<string | null> {
 export default async function RoyaltiesPage() {
   const role = await getRole();
   // Licensees don't earn royalties; send them home.
-  if (role === "licensee") redirect("/dashboard");
+  if (isIndustryRole(role)) redirect("/dashboard");
   return <RoyaltiesClient />;
 }

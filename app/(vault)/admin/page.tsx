@@ -3,9 +3,8 @@ export const runtime = "edge";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, licences, downloadEvents, scanFiles, siteSettings, geometryFingerprints } from "@/lib/db/schema";
-import { sql, inArray, eq } from "drizzle-orm";
-import DemoToggleCard from "./demo-toggle-card";
+import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails } from "@/lib/db/schema";
+import { sql, inArray } from "drizzle-orm";
 import { getAllSkills } from "@/lib/skills/registry";
 import "@/lib/skills/definitions";
 
@@ -40,13 +39,6 @@ export default async function AdminOverviewPage() {
   await requireAdmin();
   const db = getDb();
 
-  const demoSetting = await db
-    .select({ value: siteSettings.value })
-    .from(siteSettings)
-    .where(eq(siteSettings.key, "demo_enabled"))
-    .get();
-  const demoEnabled = demoSetting?.value === "true";
-
   const [
     userCount,
     talentCount,
@@ -61,11 +53,12 @@ export default async function AdminOverviewPage() {
     recentDls,
     recentLicences,
     fpCount,
+    inboundFailedCount,
   ] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(users).get(),
     db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'talent'`).get(),
     db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'rep'`).get(),
-    db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'licensee'`).get(),
+    db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role IN ('licensee', 'industry')`).get(),
     db.select({ n: sql<number>`count(*)` }).from(scanPackages).get(),
     db.select({ total: sql<number>`coalesce(sum(total_size_bytes),0)` }).from(scanPackages).get(),
     db.select({ n: sql<number>`count(*)` }).from(licences).get(),
@@ -85,6 +78,7 @@ export default async function AdminOverviewPage() {
       createdAt: licences.createdAt,
     }).from(licences).orderBy(sql`created_at desc`).limit(6).all(),
     db.select({ n: sql<number>`count(*)` }).from(geometryFingerprints).where(sql`status = 'ready'`).get(),
+    db.select({ n: sql<number>`count(*)` }).from(receivedEmails).where(sql`processing_status IN ('failed', 'processing')`).get(),
   ]);
 
   // Resolve emails and filenames for recent downloads
@@ -151,6 +145,12 @@ export default async function AdminOverviewPage() {
       sub: "tokens · tools · audit",
       href: "/admin/mcp",
     },
+    {
+      label: "Inbound Triage",
+      value: String(inboundFailedCount?.n ?? 0),
+      sub: "stuck or failed emails",
+      href: "/admin/inbound",
+    },
   ];
 
   return (
@@ -186,11 +186,6 @@ export default async function AdminOverviewPage() {
             <p className="text-xs mt-1" style={{ color: "var(--color-muted)" }}>{c.sub}</p>
           </Link>
         ))}
-      </div>
-
-      {/* Platform settings */}
-      <div className="mb-8 max-w-sm">
-        <DemoToggleCard initialEnabled={demoEnabled} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

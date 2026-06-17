@@ -7,11 +7,11 @@ import { users, invites, talentReps, productionCast, licences, productions, orga
 import { hashPassword } from "@/lib/auth/password";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
-const VALID_ROLES = ["talent", "rep", "licensee"] as const;
+const VALID_ROLES = ["talent", "rep", "industry", "licensee", "compliance"] as const;
 type Role = (typeof VALID_ROLES)[number];
 
 // Roles that require an invite token
-const INVITE_REQUIRED_ROLES: Role[] = ["talent", "rep"];
+const INVITE_REQUIRED_ROLES: Role[] = ["talent", "rep", "industry", "compliance"];
 
 export async function POST(req: NextRequest) {
   let body: { email?: string; password?: string; role?: string; inviteToken?: string };
@@ -112,11 +112,18 @@ export async function POST(req: NextRequest) {
   const passwordHash = await hashPassword(password);
   const nowDate = new Date();
 
+  // users.role has a legacy CHECK(role IN ('talent','rep','licensee','admin')) that
+  // predates industry/compliance. Store 'licensee' in users.role and the actual
+  // role in users.true_role; JWT creation reads COALESCE(true_role, role).
+  const storedRole = (role === "industry" || role === "compliance") ? "licensee" : role;
+  const trueRole = (role === "industry" || role === "compliance") ? role : null;
+
   await db.insert(users).values({
     id: userId,
     email: normalEmail,
     passwordHash,
-    role: role as Role,
+    role: storedRole as "talent" | "rep" | "licensee" | "admin",
+    trueRole,
     createdAt: nowDate,
   });
 
@@ -231,11 +238,11 @@ export async function POST(req: NextRequest) {
   // Store setup token in KV (30 minute TTL)
   const setupToken = crypto.randomUUID();
   const kv = getRequestContext().env.SESSIONS_KV;
-  await kv.put(
-    `setup:${setupToken}`,
-    JSON.stringify({ userId, email: normalEmail, role }),
-    { expirationTtl: 1800 }
-  );
+  const setupPayload: Record<string, unknown> = { userId, email: normalEmail, role };
+  if (role === "industry" && inviteRow?.orgSubtype) {
+    setupPayload.orgSubtype = inviteRow.orgSubtype;
+  }
+  await kv.put(`setup:${setupToken}`, JSON.stringify(setupPayload), { expirationTtl: 1800 });
 
   return NextResponse.redirect(
     new URL(`/setup-2fa?token=${setupToken}`, req.url),

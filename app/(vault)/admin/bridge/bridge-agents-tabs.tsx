@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { computePurgeGrace, formatGraceRemaining } from "@/lib/bridge/purgeGrace";
+import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
 
 interface Agent {
   id: string;
   displayName: string;
   orgName: string | null;
+  orgType?: string | null;
+  orgShortCode?: string | null;
   organisationId: string;
   online: boolean;
   publishedIds: string[];
@@ -47,6 +52,17 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
     ? Math.max(0, Math.ceil((a.tokenExpiresAt - now) / 86400))
     : null;
 
+  // Approximate offline-purge countdown (display-only — see lib/bridge/purgeGrace.ts).
+  // Computed against the server-rendered `now`; refresh to advance it.
+  const grace = computePurgeGrace({
+    lastHeartbeatAt: a.lastHeartbeatAt,
+    revoked: isRevoked,
+    pendingAction: a.pendingAction,
+    now,
+  });
+  const showGrace = a.publishedIds.length > 0
+    && (grace.kind === "counting" || grace.kind === "elapsed");
+
   return (
     <>
       <div
@@ -77,8 +93,10 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
           </div>
         </div>
 
-        <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
-          {a.orgName ?? a.organisationId.slice(0, 8) + "…"}
+        <span className="text-xs truncate flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+          <span className="truncate">{a.orgName ?? a.organisationId.slice(0, 8) + "…"}</span>
+          <OrgTypeBadge type={a.orgType} />
+          <CodeTag code={a.orgShortCode} />
         </span>
 
         <div className="flex flex-wrap gap-1">
@@ -120,8 +138,18 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
           )}
         </span>
 
-        <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-          {a.lastHeartbeatAt ? timeSince(a.lastHeartbeatAt, now) : "never"}
+        <span className="text-xs flex flex-col gap-0.5" style={{ color: "var(--color-muted)" }}>
+          <span>{a.lastHeartbeatAt ? timeSince(a.lastHeartbeatAt, now) : "never"}</span>
+          {showGrace && grace.kind === "counting" && (
+            <span className="text-[10px] font-semibold" style={{ color: "#b45309" }}>
+              purge in {formatGraceRemaining(grace.secondsRemaining)}
+            </span>
+          )}
+          {showGrace && grace.kind === "elapsed" && (
+            <span className="text-[10px] font-semibold" style={{ color: "#991b1b" }}>
+              purged (grace elapsed)
+            </span>
+          )}
         </span>
 
         <div className="flex items-center justify-between">
@@ -154,7 +182,11 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
               <span className="text-xs" style={{ color: "var(--color-ink)" }}>{a.displayName}</span>
             </DetailField>
             <DetailField label="Organisation">
-              <span className="text-xs" style={{ color: "var(--color-ink)" }}>{a.orgName ?? "—"}</span>
+              <span className="text-xs inline-flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                <span>{a.orgName ?? "—"}</span>
+                <OrgTypeBadge type={a.orgType} />
+                <CodeTag code={a.orgShortCode} />
+              </span>
               <span className="font-mono text-[10px] block" style={{ color: "var(--color-muted)" }}>{a.organisationId}</span>
             </DetailField>
             <DetailField label="Status">
@@ -179,6 +211,29 @@ function AgentRow({ a, now }: { a: Agent; now: number }) {
                 </span>
               )}
             </DetailField>
+            {showGrace && (
+              <DetailField label="Offline Purge (est.)">
+                {grace.kind === "counting" ? (
+                  <>
+                    <span className="text-xs font-semibold" style={{ color: "#b45309" }}>
+                      ~{formatGraceRemaining(grace.secondsRemaining)} remaining
+                    </span>
+                    <span className="text-[10px] block" style={{ color: "var(--color-muted)" }}>
+                      est. {fmtDate(grace.deadlineUnix)} unless it reconnects
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs font-semibold" style={{ color: "#991b1b" }}>
+                      Grace elapsed
+                    </span>
+                    <span className="text-[10px] block" style={{ color: "var(--color-muted)" }}>
+                      offline &gt; 48h — cache likely purged
+                    </span>
+                  </>
+                )}
+              </DetailField>
+            )}
             {a.buildRevision && (
               <DetailField label="Build">
                 <span className="font-mono text-xs" style={{ color: "var(--color-ink)" }}>

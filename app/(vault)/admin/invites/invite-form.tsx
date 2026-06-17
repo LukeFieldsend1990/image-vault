@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ORG_TYPES, ORG_TYPE_LABELS } from "@/lib/organisations/orgTypes";
 
 interface Invite {
   id: string;
   email: string;
-  role: "talent" | "rep" | "licensee";
+  role: "talent" | "rep" | "industry" | "compliance";
+  orgSubtype: string | null;
   invitedByEmail: string | null;
   message: string | null;
   status: "pending" | "used" | "expired";
@@ -34,7 +36,8 @@ export default function InviteManager() {
 
   // Create form state
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"talent" | "rep" | "licensee">("talent");
+  const [role, setRole] = useState<"talent" | "rep" | "industry" | "compliance">("talent");
+  const [orgSubtype, setOrgSubtype] = useState("");
   const [message, setMessage] = useState("");
   const [skipEmail, setSkipEmail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -68,7 +71,13 @@ export default function InviteManager() {
       const res = await fetch("/api/invites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), role, message: message.trim() || undefined, skipEmail }),
+        body: JSON.stringify({
+          email: email.trim(),
+          role,
+          orgSubtype: role === "industry" && orgSubtype ? orgSubtype : undefined,
+          message: message.trim() || undefined,
+          skipEmail,
+        }),
       });
       const d = await res.json() as { error?: string; inviteId?: string };
       if (!res.ok) {
@@ -135,15 +144,35 @@ export default function InviteManager() {
               </label>
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as typeof role)}
+                onChange={(e) => { setRole(e.target.value as typeof role); setOrgSubtype(""); }}
                 className="w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1"
                 style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
               >
                 <option value="talent">Talent</option>
                 <option value="rep">Representative</option>
-                <option value="licensee">Licensee</option>
+                <option value="industry">Industry</option>
+                <option value="compliance">Compliance (Union / Regulator)</option>
               </select>
             </div>
+
+            {role === "industry" && (
+              <div className="w-48">
+                <label className="block text-xs font-medium uppercase tracking-wide mb-1.5" style={{ color: "var(--color-muted)" }}>
+                  Org type <span style={{ color: "var(--color-border)" }}>(optional)</span>
+                </label>
+                <select
+                  value={orgSubtype}
+                  onChange={(e) => setOrgSubtype(e.target.value)}
+                  className="w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1"
+                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+                >
+                  <option value="">— select —</option>
+                  {ORG_TYPES.map((t) => (
+                    <option key={t} value={t}>{ORG_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div>

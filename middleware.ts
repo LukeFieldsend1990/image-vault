@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 
-const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin", "/inbox"];
+const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin", "/inbox", "/evidence"];
 const AUTH_PAGES = ["/login", "/signup", "/setup-2fa", "/register-interest"];
 
 function getSecret(): Uint8Array {
@@ -46,6 +46,9 @@ const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
   talent: ["/dashboard", "/vault", "/licences", "/settings", "/onboarding", "/inbox", "/bookings"],
   rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences", "/talent"],
   licensee: ["/directory", "/talent", "/licences", "/settings", "/inbox"],
+  industry: ["/directory", "/talent", "/licences", "/settings", "/inbox"],
+  // Read-only watcher: evidence + account settings only. Everything else redirects to /evidence.
+  compliance: ["/evidence", "/settings"],
 };
 
 // Default landing page per role (for redirecting on denied access)
@@ -53,6 +56,8 @@ const ROLE_HOME: Record<string, string> = {
   talent: "/dashboard",
   rep: "/roster",
   licensee: "/directory",
+  industry: "/directory",
+  compliance: "/evidence",
 };
 
 export async function middleware(req: NextRequest) {
@@ -149,6 +154,7 @@ export const config = {
     "/onboarding",
     "/admin/:path*",
     "/inbox/:path*",
+    "/evidence/:path*",
     "/login",
     "/signup",
     "/setup-2fa",

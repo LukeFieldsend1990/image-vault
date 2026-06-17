@@ -1,10 +1,13 @@
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { ORG_TYPES } from "@/lib/organisations/orgTypes";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(), // UUID
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: text("role", { enum: ["talent", "rep", "licensee", "admin"] }).notNull().default("talent"),
+  // "licensee" retained for the transition window; new accounts use "industry". Gate via isIndustryRole().
+  // "compliance" = read-only Union/Regulator/Insurer watcher (no data-plane access).
+  role: text("role", { enum: ["talent", "rep", "industry", "licensee", "compliance", "admin"] }).notNull().default("talent"),
   vaultLocked: integer("vault_locked", { mode: "boolean" }).notNull().default(false),
   suspendedAt: integer("suspended_at"), // unix timestamp; null = active
   phone: text("phone"), // optional, E.164 format
@@ -14,6 +17,16 @@ export const users = sqliteTable("users", {
   geoFingerprintEnabled: integer("geo_fingerprint_enabled", { mode: "boolean" }).notNull().default(false),
   royaltyMeterEnabled: integer("royalty_meter_enabled", { mode: "boolean" }).notNull().default(true),
   complianceEnabled: integer("compliance_enabled", { mode: "boolean" }).notNull().default(true),
+  // Gates whether the talent sees the (under-test) upfront fee model. Off by default.
+  financialVisibilityEnabled: integer("financial_visibility_enabled", { mode: "boolean" }).notNull().default(false),
+  // Pretty-print code (AH-#### talent, AG-#### rep). System-generated; see lib/codes.
+  shortCode: text("short_code"),
+  // Per-user "code view mode" — decorate the UI with system codes. Off by default.
+  showCodes: integer("show_codes", { mode: "boolean" }).notNull().default(false),
+  // Stores the actual role for industry/compliance users. users.role is constrained
+  // to legacy values by a CHECK that cannot be removed in D1 without recreating
+  // the table. Effective role = trueRole ?? role. NULL for talent/rep/admin/licensee.
+  trueRole: text("true_role"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -70,6 +83,7 @@ export const scanPackages = sqliteTable("scan_packages", {
   deletedAt: integer("deleted_at"),           // unix timestamp; null = active
   deletedBy: text("deleted_by"),              // user ID who soft-deleted
   searchIndexedAt: integer("search_indexed_at"), // last Vectorize index timestamp
+  scanNumber: integer("scan_number"), // sequential per talent → renders as S## in the chain code
 });
 
 export const scanFiles = sqliteTable("scan_files", {
@@ -193,7 +207,7 @@ export const talentProfiles = sqliteTable("talent_profiles", {
 export const invites = sqliteTable("invites", {
   id: text("id").primaryKey(), // UUID (the token in the invite link)
   email: text("email").notNull(),
-  role: text("role", { enum: ["talent", "rep", "licensee"] }).notNull(),
+  role: text("role", { enum: ["talent", "rep", "industry", "licensee", "compliance"] }).notNull(),
   invitedBy: text("invited_by").notNull().references(() => users.id, { onDelete: "cascade" }),
   talentId: text("talent_id").references(() => users.id, { onDelete: "cascade" }),
   message: text("message"),
@@ -201,6 +215,7 @@ export const invites = sqliteTable("invites", {
   expiresAt: integer("expires_at").notNull(), // unix timestamp
   createdAt: integer("created_at").notNull(), // unix timestamp
   productionId: text("production_id").references(() => productions.id),
+  orgSubtype: text("org_subtype"), // industry-only: intended org type (OrgType)
 });
 
 export const scanLocations = sqliteTable("scan_locations", {
@@ -260,8 +275,31 @@ export const talentSettings = sqliteTable("talent_settings", {
   talentSharePct: integer("talent_share_pct").notNull().default(65),
   agencySharePct: integer("agency_share_pct").notNull().default(20),
   platformSharePct: integer("platform_share_pct").notNull().default(15),
+  // Upfront tier assignment — see lib/financial/config.ts (emerging | established | a_list | bespoke).
+  tier: text("tier"),
   updatedBy: text("updated_by").references(() => users.id),
   updatedAt: integer("updated_at").notNull(),
+});
+
+// Upfront fee obligations (talent tier fee + production banded access fee).
+export const feeObligations = sqliteTable("fee_obligations", {
+  id: text("id").primaryKey(),
+  type: text("type", { enum: ["talent_tier", "production_access"] }).notNull(),
+  // Who is billed: the talent (tier) or the licensee user (production access).
+  payerUserId: text("payer_user_id").references(() => users.id, { onDelete: "set null" }),
+  talentId: text("talent_id").references(() => users.id, { onDelete: "set null" }),
+  productionId: text("production_id").references(() => productions.id, { onDelete: "set null" }),
+  licenceId: text("licence_id").references(() => licences.id, { onDelete: "set null" }),
+  tier: text("tier"),   // for talent_tier
+  band: text("band"),   // for production_access
+  amountCents: integer("amount_cents"), // null = bespoke / TBD
+  currency: text("currency").notNull().default("usd"),
+  status: text("status", { enum: ["pending", "paid", "waived", "cancelled"] }).notNull().default("pending"),
+  graceDeadline: integer("grace_deadline"), // unix seconds; null = no deadline set
+  notes: text("notes"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  paidAt: integer("paid_at"),
 });
 
 export const pipelineJobs = sqliteTable("pipeline_jobs", {
@@ -329,6 +367,7 @@ export const productions = sqliteTable("productions", {
   organisationId: text("organisation_id").references(() => organisations.id),
   coordinatorId: text("coordinator_id").references(() => users.id),
   sagProjectNumber: text("sag_project_number"),
+  shortCode: text("short_code"), // PR-#### production code. System-generated; see lib/codes.
 });
 
 export const downloadEvents = sqliteTable("download_events", {
@@ -622,8 +661,12 @@ export const organisations = sqliteTable("organisations", {
   createdBy: text("created_by").notNull().references(() => users.id),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
-  // values: production_company | studio | vfx_vendor | advertising_agency | brand | publisher | game_studio | ai_company | broadcaster | scan_service | other
-  orgType: text("org_type").notNull().default("production_company"),
+  // Subtype decoration — see lib/organisations/orgTypes.ts (single source of truth).
+  orgType: text("org_type", { enum: ORG_TYPES }).notNull().default("production_company"),
+  // Environment-audit gate for vendor ("mover") orgs — admin-togglable; gates Bridge provisioning.
+  vendorAuditPassed: integer("vendor_audit_passed", { mode: "boolean" }).notNull().default(false),
+  // Pretty-print code by subtype (VX vfx_vendor, CC scan_service, DB dubbing, OG other). System-generated.
+  shortCode: text("short_code"),
 });
 
 export const organisationMembers = sqliteTable("organisation_members", {
@@ -642,6 +685,49 @@ export const organisationInvites = sqliteTable("organisation_invites", {
   expiresAt: integer("expires_at").notNull(),
   acceptedAt: integer("accepted_at"),
   createdAt: integer("created_at").notNull(),
+});
+
+// ── Scan transfers (capture-company upload-on-behalf) ─────────────────────────
+// A scan_service / vendor org uploads a package either into a talent's vault
+// (to_talent) or against a production licence's pending scan (to_licence). The
+// staged package is owned by the uploading org member until the transfer is
+// accepted, at which point ownership reassigns to the target talent.
+export const scanTransfers = sqliteTable("scan_transfers", {
+  id: text("id").primaryKey(),
+  fromOrgId: text("from_org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  transferType: text("transfer_type", { enum: ["to_talent", "to_licence"] }).notNull(),
+  // Target talent — set directly for to_talent, derived from the licence for to_licence.
+  toTalentId: text("to_talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetLicenceId: text("target_licence_id").references(() => licences.id, { onDelete: "set null" }),
+  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  lookLabel: text("look_label"), // human-readable look name, e.g. "Base Look"
+  status: text("status", {
+    enum: ["pending", "submitted", "accepted", "rejected", "cancelled"],
+  }).notNull().default("pending"),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  submittedAt: integer("submitted_at"),
+  decidedAt: integer("decided_at"),
+  decidedBy: text("decided_by").references(() => users.id),
+});
+
+// ── Vendor authorisations (producer → vendor access within a licence) ─────────
+// A production (the licence holder) authorises specific vendor orgs to pull the
+// licensed scan via the Bridge, bounded by the licence's type/time. An
+// authorised vendor can nominate a sub-vendor under its own authorisation
+// (parentAuthorisationId set, nominatedByOrgId = the parent vendor org).
+export const vendorAuthorisations = sqliteTable("vendor_authorisations", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  vendorOrgId: text("vendor_org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  // null = direct production→vendor; set = sub-vendor nominated under the parent auth (plain id, app-enforced).
+  parentAuthorisationId: text("parent_authorisation_id"),
+  nominatedByOrgId: text("nominated_by_org_id").references(() => organisations.id),
+  authorisedBy: text("authorised_by").notNull().references(() => users.id),
+  status: text("status", { enum: ["active", "revoked"] }).notNull().default("active"),
+  createdAt: integer("created_at").notNull(),
+  revokedAt: integer("revoked_at"),
+  revokedBy: text("revoked_by").references(() => users.id),
 });
 
 // ── Render-bridge agents ──────────────────────────────────────────────────────
@@ -862,11 +948,17 @@ export const productionCast = sqliteTable("production_cast", {
   talentId: text("talent_id").references(() => users.id),
   inviteId: text("invite_id").references(() => invites.id),
   licenceId: text("licence_id").references(() => licences.id),
+  // Public name for placeholder rows (no talentId/inviteId yet) — e.g. cast sourced
+  // from public listings before an email is known. Renders as the cast row identity.
+  actorName: text("actor_name"),
+  tmdbId: integer("tmdb_id"),          // optional: dedupe + future TMDB enrichment
+  sourceNote: text("source_note"),     // optional provenance, e.g. where the name was sourced
   characterName: text("character_name"),
   department: text("department"),
   sagMember: integer("sag_member", { mode: "boolean" }).notNull().default(false),
   status: text("status").notNull().default("invited"),
-  // invited | linked | scan_uploaded | consented | declined
+  // placeholder | invited | linked | scan_uploaded | consented | declined
+  // placeholder = recorded by name only; promoted to invited/linked once an email is attached.
   licenceTermsJson: text("licence_terms_json"), // stored until talent registers; then licence created
   addedBy: text("added_by").notNull().references(() => users.id),
   addedAt: integer("added_at").notNull(),
@@ -896,4 +988,29 @@ export const mcpAuditLog = sqliteTable("mcp_audit_log", {
   success: integer("success", { mode: "boolean" }).notNull(),
   message: text("message"),
   createdAt: integer("created_at").notNull(), // unix timestamp
+});
+
+// In-app notification centre (migration 0026; lightweight, poll-based).
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // e.g. vendor_authorised | scan_delivery | licence_status
+  title: text("title").notNull(),
+  body: text("body"),
+  href: text("href"),
+  read: integer("read", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull(), // unix timestamp
+});
+
+// Compliance-role access grants (Union / Regulator / Insurer "watchers").
+// A compliance user only sees evidence for scopes granted here.
+export const complianceGrants = sqliteTable("compliance_grants", {
+  id: text("id").primaryKey(),
+  complianceUserId: text("compliance_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  subtype: text("subtype", { enum: ["union", "regulator", "insurer"] }).notNull(),
+  scope: text("scope", { enum: ["platform", "organisation", "production", "talent"] }).notNull(),
+  scopeId: text("scope_id"), // null = platform-wide
+  grantedBy: text("granted_by").references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  revokedAt: integer("revoked_at"),
 });

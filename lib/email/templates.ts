@@ -3,6 +3,8 @@
  * Minimal, black/white, typography-led, red accent.
  */
 
+import { isIndustryRole } from "@/lib/auth/roles";
+
 function formatDate(unix: number): string {
   return new Date(unix * 1000).toLocaleDateString("en-GB", {
     day: "numeric",
@@ -192,12 +194,12 @@ export interface PackageAttachedParams {
   recipientEmail: string;
   projectName: string;
   packageName: string;
-  role: "licensee" | "talent";
+  role: "industry" | "licensee" | "talent";
   viewUrl: string;
 }
 
 export function packageAttachedEmail(p: PackageAttachedParams): { subject: string; html: string } {
-  const body = p.role === "licensee"
+  const body = isIndustryRole(p.role)
     ? `<p>The scan package for your licence has been uploaded and attached. The licence is now awaiting talent approval.</p>`
     : `<p>A scan package has been attached to an awaiting licence. Please review and approve when ready.</p>`;
   return {
@@ -285,16 +287,18 @@ export function licenceRevokedEmail(p: LicenceRevokedParams): { subject: string;
 export interface InviteEmailParams {
   to: string;
   inviterEmail: string;
-  role: "talent" | "rep" | "licensee";
+  role: "talent" | "rep" | "industry" | "licensee" | "compliance";
   message: string | null;
   signupUrl: string;
   expiresAt: number; // unix timestamp
 }
 
-const ROLE_LABELS: Record<"talent" | "rep" | "licensee", string> = {
+const ROLE_LABELS: Record<"talent" | "rep" | "industry" | "licensee" | "compliance", string> = {
   talent: "Talent",
   rep: "Representative",
+  industry: "Industry",
   licensee: "Licensee",
+  compliance: "Compliance (Union / Regulator / Insurer)",
 };
 
 export function inviteEmail(p: InviteEmailParams): { subject: string; html: string } {
@@ -659,6 +663,119 @@ export function registerInterestEmail(p: RegisterInterestParams): { subject: str
         <div class="kv-row"><span class="kv-key">Submitted</span><span class="kv-val">${dt}</span></div>
       </div>
       <p class="muted">Reply directly to this email to follow up with the applicant.</p>
+    `),
+  };
+}
+
+// ── Security alert (ambient security agent) ─────────────────────────────────
+
+/**
+ * Escape untrusted text for HTML interpolation. The security agent's verdict
+ * is LLM output derived from attacker-influenced event fields, so unlike the
+ * other templates (trusted platform data) escaping is mandatory here.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export interface SecurityAlertEmailParams {
+  severity: "critical" | "high" | "medium";
+  headline: string;
+  narrative: string;
+  eventType: string;
+  entityLabel: string;
+  recommendedActions: Array<{ tool: string; reason: string }>;
+  toolCallCount: number;
+  degraded?: boolean;
+  adminMcpUrl: string;
+  occurredAt: number;
+}
+
+export function securityAlertEmail(p: SecurityAlertEmailParams): { subject: string; html: string } {
+  const severityBadge =
+    p.severity === "critical"
+      ? `<span class="badge badge-denied">Critical</span>`
+      : p.severity === "high"
+        ? `<span class="badge badge-pending">High</span>`
+        : `<span class="badge badge-revoked">Medium</span>`;
+
+  const actionsList = p.recommendedActions.length
+    ? `<p><strong>Recommended actions</strong> (run via your MCP client — each requires your TOTP code):</p>
+       <ul style="font-size:13px;color:#333;line-height:1.6;margin:0 0 16px;padding-left:18px;">
+         ${p.recommendedActions
+           .map((a) => `<li><code>${escapeHtml(a.tool)}</code> — ${escapeHtml(a.reason)}</li>`)
+           .join("")}
+       </ul>`
+    : "";
+
+  const investigatedNote = p.degraded
+    ? "Automated investigation was unavailable — this is a template alert from the trigger data."
+    : `The security agent investigated this event with ${p.toolCallCount} read-only tool call${p.toolCallCount !== 1 ? "s" : ""} (see /admin/mcp activity).`;
+
+  return {
+    subject: `[Security] ${p.severity.toUpperCase()}: ${p.headline}`,
+    html: layout(`
+      <p><strong>${escapeHtml(p.headline)}</strong></p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Severity</span><span class="kv-val">${severityBadge}</span></div>
+        <div class="kv-row"><span class="kv-key">Event</span><span class="kv-val">${escapeHtml(p.eventType.replace(/_/g, " "))}</span></div>
+        <div class="kv-row"><span class="kv-key">Entity</span><span class="kv-val">${escapeHtml(p.entityLabel)}</span></div>
+        <div class="kv-row"><span class="kv-key">When</span><span class="kv-val">${formatDate(p.occurredAt)}</span></div>
+      </div>
+      <p>${escapeHtml(p.narrative)}</p>
+      ${actionsList}
+      <p class="muted">${investigatedNote} Corrective action is never taken automatically.</p>
+      <a class="btn" href="${p.adminMcpUrl}">Review MCP activity</a>
+    `),
+  };
+}
+
+export interface ScanTransferReceivedParams {
+  fromOrgName: string;
+  lookLabel: string;
+  forTalentName?: string;
+  viewUrl: string;
+}
+
+// To talent/rep: a capture company has delivered a scan awaiting acceptance.
+export function scanTransferReceivedEmail(p: ScanTransferReceivedParams): { subject: string; html: string } {
+  return {
+    subject: `Scan delivery awaiting your acceptance — ${p.lookLabel}`,
+    html: layout(`
+      <p>${escapeHtml(p.fromOrgName)} has delivered a scan package${p.forTalentName ? ` for ${escapeHtml(p.forTalentName)}` : ""}. It is held pending your acceptance — nothing enters the vault until you accept.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">From</span><span class="kv-val">${escapeHtml(p.fromOrgName)}</span></div>
+        <div class="kv-row"><span class="kv-key">Look</span><span class="kv-val">${escapeHtml(p.lookLabel)}</span></div>
+      </div>
+      <a class="btn" href="${p.viewUrl}">Review delivery</a>
+    `),
+  };
+}
+
+export interface ScanTransferDecisionParams {
+  lookLabel: string;
+  decision: "accepted" | "rejected";
+  decidedByLabel?: string;
+  viewUrl: string;
+}
+
+// To the capture org: the target talent/rep accepted or rejected the delivery.
+export function scanTransferDecisionEmail(p: ScanTransferDecisionParams): { subject: string; html: string } {
+  const accepted = p.decision === "accepted";
+  return {
+    subject: `Scan delivery ${p.decision} — ${p.lookLabel}`,
+    html: layout(`
+      <p>Your scan delivery was <strong>${p.decision}</strong>${p.decidedByLabel ? ` by ${escapeHtml(p.decidedByLabel)}` : ""}.${accepted ? " The package is now in the talent's vault." : " The staged package has been discarded."}</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Look</span><span class="kv-val">${escapeHtml(p.lookLabel)}</span></div>
+        <div class="kv-row"><span class="kv-key">Outcome</span><span class="kv-val">${p.decision}</span></div>
+      </div>
+      <a class="btn" href="${p.viewUrl}">View transfers</a>
     `),
   };
 }

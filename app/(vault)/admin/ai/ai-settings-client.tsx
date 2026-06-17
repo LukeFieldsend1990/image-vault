@@ -37,9 +37,24 @@ interface LogEntry {
   createdAt: number;
 }
 
+interface RepSuggestion {
+  id: string;
+  repId: string;
+  repEmail: string;
+  category: string;
+  title: string;
+  body: string;
+  deepLink: string | null;
+  entityType: string | null;
+  priority: number;
+  expiresAt: number;
+  createdAt: number;
+}
+
 interface Props {
   initialSettings: Record<string, string>;
   initialCosts: CostData;
+  repSuggestions: RepSuggestion[];
   recentBatchRuns: LastBatch[];
   recentLogs: LogEntry[];
 }
@@ -66,7 +81,7 @@ function timeAgo(unix: number): string {
   return `${days}d ago`;
 }
 
-export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRuns, recentLogs }: Props) {
+export function AiSettingsClient({ initialSettings, initialCosts, repSuggestions, recentBatchRuns, recentLogs }: Props) {
   const [settings, setSettings] = useState(initialSettings);
   const [costs] = useState(initialCosts);
   const [saving, setSaving] = useState<string | null>(null);
@@ -179,6 +194,15 @@ export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRun
             checked={settings["metadata_tags_enabled"] === "true"}
             saving={saving === "metadata_tags_enabled"}
             onToggle={() => toggleSetting("metadata_tags_enabled")}
+          />
+
+          {/* Security agent */}
+          <ToggleRow
+            label="Security Agent"
+            sublabel="Autonomous investigation of critical security events"
+            checked={settings["security_agent_enabled"] === "true"}
+            saving={saving === "security_agent_enabled"}
+            onToggle={() => toggleSetting("security_agent_enabled")}
           />
 
           {/* Budget ceiling */}
@@ -436,6 +460,9 @@ export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRun
           )}
         </div>
       </div>
+      {/* ── Rep Suggestions ─────────────────────────────────────────────── */}
+      <RepSuggestionsPanel suggestions={repSuggestions} cardStyle={cardStyle} headerStyle={headerStyle} labelStyle={labelStyle} />
+
       {/* ── AI Call Logs ────────────────────────────────────────────────── */}
       <div style={cardStyle}>
         <div style={headerStyle}>
@@ -458,6 +485,134 @@ export function AiSettingsClient({ initialSettings, initialCosts, recentBatchRun
 }
 
 /* ── Sub-components ────────────────────────────────────────────────────────── */
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  action_required: { bg: "rgba(220,38,38,0.10)", text: "#991b1b" },
+  attention:       { bg: "rgba(217,119,6,0.10)",  text: "#92400e" },
+  insight:         { bg: "rgba(22,163,74,0.10)",  text: "#166534" },
+  security:        { bg: "rgba(124,58,237,0.10)", text: "#5b21b6" },
+};
+
+function RepSuggestionsPanel({
+  suggestions,
+  cardStyle,
+  headerStyle,
+  labelStyle,
+}: {
+  suggestions: RepSuggestion[];
+  cardStyle: React.CSSProperties;
+  headerStyle: React.CSSProperties;
+  labelStyle: React.CSSProperties;
+}) {
+  const [openReps, setOpenReps] = useState<Set<string>>(new Set());
+
+  const byRep = new Map<string, { email: string; items: RepSuggestion[] }>();
+  for (const s of suggestions) {
+    if (!byRep.has(s.repId)) byRep.set(s.repId, { email: s.repEmail, items: [] });
+    byRep.get(s.repId)!.items.push(s);
+  }
+  const reps = [...byRep.entries()];
+
+  const toggle = (id: string) =>
+    setOpenReps((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  return (
+    <div style={cardStyle}>
+      <div style={headerStyle}>
+        <h2 style={labelStyle}>
+          Active Rep Suggestions ({suggestions.length} across {reps.length} rep{reps.length !== 1 ? "s" : ""})
+        </h2>
+      </div>
+      <div style={{ padding: 20 }}>
+        {reps.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--color-muted)" }}>No active suggestions.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {reps.map(([repId, { email, items }]) => {
+              const open = openReps.has(repId);
+              const actionCount = items.filter((i) => i.category === "action_required").length;
+              return (
+                <div
+                  key={repId}
+                  style={{
+                    border: actionCount > 0 ? "1px solid rgba(220,38,38,0.25)" : "1px solid var(--color-border)",
+                    borderRadius: 6,
+                    overflow: "hidden",
+                  }}
+                >
+                  <button
+                    onClick={() => toggle(repId)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      textAlign: "left",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-ink)" }}>{email}</span>
+                      <span style={{ fontSize: 11, color: "var(--color-muted)" }}>
+                        {items.length} suggestion{items.length !== 1 ? "s" : ""}
+                      </span>
+                      {actionCount > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "rgba(220,38,38,0.10)", color: "#991b1b", textTransform: "uppercase" }}>
+                          {actionCount} action{actionCount !== 1 ? "s" : ""} required
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 10, color: "var(--color-muted)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▼</span>
+                  </button>
+                  {open && (
+                    <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                      {items.map((s) => {
+                        const colors = CATEGORY_COLORS[s.category] ?? CATEGORY_COLORS.insight;
+                        return (
+                          <div
+                            key={s.id}
+                            style={{
+                              padding: "10px 12px",
+                              borderRadius: 6,
+                              border: "1px solid var(--color-border)",
+                              background: "var(--color-surface)",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
+                              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 4, background: colors.bg, color: colors.text, textTransform: "uppercase", flexShrink: 0, marginTop: 1 }}>
+                                {s.category.replace("_", " ")}
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-ink)" }}>{s.title}</span>
+                            </div>
+                            <p style={{ fontSize: 11, color: "var(--color-muted)", margin: "0 0 6px" }}>{s.body}</p>
+                            <div style={{ display: "flex", gap: 12, fontSize: 10, color: "var(--color-muted)" }}>
+                              {s.deepLink && <span>→ {s.deepLink}</span>}
+                              {s.entityType && <span>{s.entityType}</span>}
+                              <span>created {timeAgo(s.createdAt)}</span>
+                              <span>expires {formatTimestamp(s.expiresAt)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function BatchRunCard({ run }: { run: LastBatch }) {
   const [expanded, setExpanded] = useState(false);

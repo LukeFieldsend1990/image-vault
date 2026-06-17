@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { VaultMockup, LicenceMockup, InboxMockup, RoyaltiesMockup, ComplianceMockup } from "./mockups";
+import { VaultMockup, LicenceMockup, InboxMockup, MonitorMockup, RoyaltiesMockup, ComplianceMockup } from "./mockups";
 
 export const metadata: Metadata = {
   title: "Image Vault — Your likeness. Your terms.",
@@ -229,6 +229,36 @@ export default function ProductPage() {
             <div className="md:order-1">
               <ComplianceMockup />
             </div>
+          </div>
+
+          {/* Monitor */}
+          <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
+            <div>
+              <SectionLabel>Likeness Monitor</SectionLabel>
+              <h3 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+                Catch misuse before it spreads
+              </h3>
+              <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
+                Licensing is only half the job — the other half is knowing when your
+                face turns up where it shouldn&apos;t. The Likeness Monitor continuously
+                sweeps public video, social, stock, and AI-generation platforms for
+                unauthorised use of a verified talent, and surfaces every match for
+                review against the licences actually on file.
+              </p>
+              <ul className="mt-6 space-y-2.5">
+                {[
+                  "Eight monitored surfaces — YouTube, TikTok, Reels, X, Google, Getty, and AI platforms",
+                  "Matches cross-checked against active licences to separate sanctioned use from misuse",
+                  "Feeds the same tamper-evident ledger, so a takedown has evidence behind it",
+                ].map((item) => (
+                  <li key={item} className="flex gap-3 text-sm" style={{ color: "var(--color-text)" }}>
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full" style={{ background: "var(--color-accent)" }} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <MonitorMockup />
           </div>
         </div>
       </section>

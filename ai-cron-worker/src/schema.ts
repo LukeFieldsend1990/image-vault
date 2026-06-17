@@ -66,6 +66,16 @@ export const licences = sqliteTable("licences", {
   downloadCount: integer("download_count").notNull().default(0),
   validTo: integer("valid_to").notNull(),
   status: text("status", { enum: ["AWAITING_PACKAGE", "PENDING", "APPROVED", "DENIED", "REVOKED", "EXPIRED", "SCRUB_PERIOD", "CLOSED", "OVERDUE"] }).notNull().default("PENDING"),
+  scrubAttestedAt: integer("scrub_attested_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const bridgeEvents = sqliteTable("bridge_events", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull(),
+  eventType: text("event_type").notNull(),
+  severity: text("severity").notNull().default("warn"),
+  detail: text("detail"),
   createdAt: integer("created_at").notNull(),
 });
 

@@ -14,7 +14,7 @@ export const runtime = "edge";
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, getKv } from "@/lib/db";
 import { totpCredentials } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireMcpToken, isMcpTokenError } from "@/lib/auth/requireMcpToken";
@@ -125,7 +125,7 @@ async function handleToolCall(
 
   let result: McpToolResult;
   try {
-    result = await tool.execute({ db, token }, args);
+    result = await tool.execute({ db, token, kv: getKv() }, args);
   } catch (err) {
     result = { success: false, message: `Tool failed: ${err instanceof Error ? err.message : "unknown error"}` };
   }

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { organisationInvites, organisationMembers, organisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 
 // POST /api/organisations/join — accept an invite token
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role !== "licensee" && session.role !== "admin") {
+  if (!isIndustryRole(session.role) && session.role !== "admin") {
     return NextResponse.json({ error: "Only licensee accounts can join organisations" }, { status: 403 });
   }
 
@@ -118,7 +119,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [org] = await db
-    .select({ name: organisations.name })
+    .select({ name: organisations.name, orgType: organisations.orgType, shortCode: organisations.shortCode })
     .from(organisations)
     .where(eq(organisations.id, invite.organisationId))
     .limit(1)
@@ -127,6 +128,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     organisationId: invite.organisationId,
     organisationName: org?.name ?? "Unknown Organisation",
+    organisationType: org?.orgType ?? null,
+    organisationShortCode: org?.shortCode ?? null,
     invitedEmail: invite.invitedEmail,
     expiresAt: invite.expiresAt,
   });

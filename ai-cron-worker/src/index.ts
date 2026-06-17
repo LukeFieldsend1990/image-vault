@@ -16,6 +16,7 @@ import {
   talentProfiles,
   licences,
   scanPackages,
+  bridgeEvents,
   suggestions,
   aiSettings,
   aiCostLog,
@@ -84,9 +85,15 @@ Your job is to:
 5. Suggest a clear next action (e.g., "review the request", "contact the licensee").
 6. If a package signal indicates no licence activity for 90+ days, phrase it that way.
    Do not describe the package as "stale".
-7. Only use valid app paths for deepLink. Use "/vault/requests" for pending licence
-   work, "/vault/licences" for licence/download follow-up, and "/roster/<talentId>"
-   for talent or package follow-up. Do not invent other paths.
+7. Only use valid app paths for deepLink:
+   - "/vault/requests" — pending licence work
+   - "/vault/licences" — licence/download/scrub follow-up
+   - "/compliance" — compliance overview, scrub attestation overdue
+   - "/roster/<talentId>" — talent or package follow-up
+   - "/settings/bridge" — render bridge security events
+   Do not invent other paths.
+8. For scrub_pending signals: the licensee (production company) must attest they have deleted all scan copies. Frame the suggestion as following up with the production company to complete their scrub attestation, not as something the talent/rep does themselves.
+9. For bridge_security_event signals: describe the specific event type (tamper detected, hash mismatch) and the package name. These are high-priority security issues.
 
 Return a JSON array of suggestion objects. Maximum 10 suggestions.
 
@@ -193,8 +200,13 @@ async function createBatchRun(db: Db, entry: {
 
 async function completeBatchRun(db: Db, result: BatchRunResult) {
   const now = Math.floor(Date.now() / 1000);
+  const hasLlmFailures = result.skipped.some((s) => s.startsWith("llm_failed_"));
+  const status =
+    hasLlmFailures && result.suggestionsCreated === 0 && result.repsTargeted > 0
+      ? "failed"
+      : "completed";
   await db.update(aiBatchRuns).set({
-    status: "completed",
+    status,
     repsTargeted: result.repsTargeted,
     repsProcessed: result.repsProcessed,
     suggestionsCreated: result.suggestionsCreated,
@@ -373,6 +385,42 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
     });
   }
 
+  // 6. Scrub attestation pending — licences in SCRUB_PERIOD/OVERDUE with no attestation
+  const scrubPending = await db.select({
+    id: licences.id, talentId: licences.talentId, projectName: licences.projectName,
+    productionCompany: licences.productionCompany, status: licences.status,
+    licenseeId: licences.licenseeId, agreedFee: licences.agreedFee, validTo: licences.validTo,
+  }).from(licences)
+    .where(and(
+      inArray(licences.talentId, talentIds),
+      inArray(licences.status, ["SCRUB_PERIOD", "OVERDUE"]),
+      isNull(licences.scrubAttestedAt),
+    )).all();
+
+  if (scrubPending.length > 0) {
+    const licenseeIds2 = [...new Set(scrubPending.map((s) => s.licenseeId))];
+    const licensees2 = await db.select({ id: users.id, email: users.email })
+      .from(users).where(inArray(users.id, licenseeIds2)).all();
+    const lMap2 = new Map(licensees2.map((l) => [l.id, l]));
+
+    for (const s of scrubPending) {
+      signals.push({
+        type: "scrub_pending",
+        data: {
+          licenceId: s.id, talentId: s.talentId, talentName: nameMap.get(s.talentId) ?? "Unknown",
+          projectName: s.projectName, productionCompany: s.productionCompany,
+          status: s.status, agreedFee: fmtUSD(s.agreedFee),
+          licenseeEmail: lMap2.get(s.licenseeId)?.email ?? null,
+          daysSinceExpiry: Math.floor((now - s.validTo) / 86400),
+        },
+      });
+    }
+  }
+
+  // Bridge security events (bridge_events table) — deferred.
+  // The bridge_events table causes query hangs in this worker context.
+  // Will be re-added once the table has an index on (package_id, created_at).
+
   return signals;
 }
 
@@ -381,23 +429,47 @@ async function gatherSignals(db: Db, repId: string): Promise<Signal[]> {
 async function callLLM(
   env: Env, db: Db, signalsJson: string
 ): Promise<{ text: string; provider: string; model: string; inputTokens: number; outputTokens: number } | null> {
+  const WAI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
   // Try Workers AI first (free)
   try {
-    const res = await env.AI.run("@cf/meta/llama-3.1-8b-instruct" as Parameters<Ai["run"]>[0], {
+    const res = await env.AI.run(WAI_MODEL as Parameters<Ai["run"]>[0], {
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: signalsJson },
       ],
       max_tokens: 1024,
-    }) as { response?: string };
-    const text = res?.response ?? "";
+    }) as { response?: string | unknown[] };
+    const raw = res?.response;
+    // Newer CF models can return response as an array of objects directly
+    const text = Array.isArray(raw)
+      ? JSON.stringify(raw)
+      : typeof raw === "string"
+        ? raw
+        : "";
     if (text.includes("[")) {
       const inputTokens = Math.ceil((SYSTEM_PROMPT.length + signalsJson.length) / 4);
       const outputTokens = Math.ceil(text.length / 4);
-      return { text, provider: "workers_ai", model: "@cf/meta/llama-3.1-8b-instruct", inputTokens, outputTokens };
+      return { text, provider: "workers_ai", model: WAI_MODEL, inputTokens, outputTokens };
     }
+    // Workers AI returned something but not a JSON array — log and fall through
+    await logCost(db, {
+      provider: "workers_ai", model: WAI_MODEL, feature: "suggestions",
+      inputTokens: Math.ceil((SYSTEM_PROMPT.length + signalsJson.length) / 4),
+      outputTokens: Math.ceil(text.length / 4),
+      estimatedCostUsd: 0,
+      error: "Workers AI response did not contain a JSON array — falling back to Anthropic",
+      prompt: signalsJson.slice(0, 2000),
+      response: text.slice(0, 500),
+    });
   } catch (error) {
-    console.log("Workers AI failed for suggestion batch, falling back to Anthropic", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.log("Workers AI failed for suggestion batch, falling back to Anthropic", errMsg);
+    await logCost(db, {
+      provider: "workers_ai", model: WAI_MODEL, feature: "suggestions",
+      inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+      error: errMsg,
+      prompt: signalsJson.slice(0, 2000),
+    });
   }
 
   // Fallback: Anthropic
@@ -419,7 +491,16 @@ async function callLLM(
         messages: [{ role: "user", content: signalsJson }],
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "(unreadable)");
+      await logCost(db, {
+        provider: "anthropic", model: "claude-haiku-4-5-20251001", feature: "suggestions",
+        inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+        error: `Anthropic HTTP ${res.status}: ${errBody.slice(0, 300)}`,
+        prompt: signalsJson.slice(0, 2000),
+      });
+      return null;
+    }
     const data = await res.json() as {
       content: Array<{ type: string; text: string }>;
       usage: { input_tokens: number; output_tokens: number };
@@ -429,7 +510,14 @@ async function callLLM(
       text, provider: "anthropic", model: "claude-haiku-4-5-20251001",
       inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens,
     };
-  } catch {
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    await logCost(db, {
+      provider: "anthropic", model: "claude-haiku-4-5-20251001", feature: "suggestions",
+      inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0,
+      error: `Anthropic exception: ${errMsg}`,
+      prompt: signalsJson.slice(0, 2000),
+    });
     return null;
   }
 }
@@ -438,7 +526,7 @@ async function callLLM(
 
 const VALID_CATEGORIES = new Set(["action_required", "attention", "insight", "security"]);
 const VALID_ENTITY_TYPES = new Set(["licence", "package", "talent", "download"]);
-const STATIC_DEEP_LINKS = new Set(["/roster", "/vault/requests", "/vault/licences", "/settings/bridge"]);
+const STATIC_DEEP_LINKS = new Set(["/roster", "/vault/requests", "/vault/licences", "/settings/bridge", "/compliance"]);
 
 function parseSuggestions(text: string): SuggestionFromLLM[] {
   let jsonStr = text.trim();

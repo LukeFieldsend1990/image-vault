@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { productionCastInviteEmail } from "@/lib/email/templates";
@@ -41,7 +42,7 @@ export async function POST(
 
   // Auth check
   if (!isAdmin(session.email)) {
-    if (session.role !== "licensee") {
+    if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (production.organisationId) {

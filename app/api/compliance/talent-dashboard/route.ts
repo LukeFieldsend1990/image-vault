@@ -6,6 +6,7 @@ import { talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { buildTalentDashboard } from "@/lib/compliance/dashboard";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { isIndustryRole } from "@/lib/auth/roles";
 import type { RegimeId } from "@/lib/compliance/types";
 import { and, eq } from "drizzle-orm";
 
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (session.role === "licensee") {
+  if (isIndustryRole(session.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

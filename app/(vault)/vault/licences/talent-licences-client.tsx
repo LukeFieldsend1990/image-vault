@@ -3,6 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import OrgMembersPanel from "./org-members-panel";
+import OrgTypeBadge from "@/app/components/org-type-badge";
+import CodeTag from "@/app/components/code-tag";
+import { formatScan } from "@/lib/codes/codes";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -19,6 +22,7 @@ type LicenceTab = "active" | "requests" | "expired" | "history";
 interface Licence {
   id: string;
   packageName: string | null;
+  packageScanNumber?: number | null;
   projectName: string;
   productionCompany: string;
   intendedUse: string;
@@ -46,6 +50,10 @@ interface Licence {
   contractUrl: string | null;
   contractUploadedAt: number | null;
   organisationId: string | null;
+  orgName?: string | null;
+  orgType?: string | null;
+  orgShortCode?: string | null;
+  talentShortCode?: string | null;
   productionId: string | null;
   licenseeId: string;
 }
@@ -520,7 +528,10 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-sm" style={{ color: "var(--color-ink)" }}>{l.projectName}</p>
+                          <p className="font-medium text-sm flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                            <span>{l.projectName}</span>
+                            <CodeTag code={l.talentShortCode} />
+                          </p>
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
                             style={{ background: `${STATUS_COLOURS[l.status]}18`, color: STATUS_COLOURS[l.status] }}>
                             {l.status}
@@ -555,8 +566,12 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
-                          {l.productionCompany}{l.organisationId ? "" : ""} · {l.packageName ?? "—"}
+                        <p className="mt-0.5 text-xs flex items-center gap-1.5 flex-wrap" style={{ color: "var(--color-muted)" }}>
+                          <span>{l.productionCompany}</span>
+                          {l.organisationId && <OrgTypeBadge type={l.orgType} />}
+                          {l.organisationId && <CodeTag code={l.orgShortCode} />}
+                          <span>· {l.packageName ?? "—"}</span>
+                          <CodeTag code={formatScan(l.packageScanNumber)} />
                         </p>
                         {l.organisationId && (
                           <OrgMembersPanel organisationId={l.organisationId} submittedByUserId={l.licenseeId} />

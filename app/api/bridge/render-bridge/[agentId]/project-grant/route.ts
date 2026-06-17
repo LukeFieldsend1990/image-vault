@@ -4,13 +4,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
-import { licences, scanFiles, organisations, organisationMembers } from "@/lib/db/schema";
+import { licences, scanFiles, organisations, organisationMembers, vendorAuthorisations } from "@/lib/db/schema";
 import { and, eq, gt, inArray, isNotNull, or, sql, lte } from "drizzle-orm";
 import {
   requireRenderBridgeToken,
   isRenderBridgeTokenError,
 } from "@/lib/auth/requireRenderBridgeToken";
 import { beginScrubPeriod } from "@/lib/licences/expire";
+import { dedupeFilesByPath } from "@/lib/bridge/manifestFiles";
 
 const PRESIGN_TTL_SECS = 86400; // 24 h
 
@@ -64,7 +65,7 @@ export async function GET(
   const now = Math.floor(Date.now() / 1000);
 
   const org = await db
-    .select({ name: organisations.name })
+    .select({ name: organisations.name, vendorAuditPassed: organisations.vendorAuditPassed })
     .from(organisations)
     .where(eq(organisations.id, auth.organisationId))
     .get();
@@ -77,16 +78,28 @@ export async function GET(
     .all();
   const memberIds = memberRows.map(r => r.userId);
 
+  // Licences this org may pull as an authorised vendor (producer→vendor auth).
+  // Gated by the environment-audit flag: no audit, no vendor-authorised access.
+  let vendorLicenceIds: string[] = [];
+  if (org?.vendorAuditPassed) {
+    const vRows = await db
+      .select({ licenceId: vendorAuthorisations.licenceId })
+      .from(vendorAuthorisations)
+      .where(and(eq(vendorAuthorisations.vendorOrgId, auth.organisationId), eq(vendorAuthorisations.status, "active")))
+      .all();
+    vendorLicenceIds = vRows.map((r) => r.licenceId);
+  }
+
+  // An org reaches a licence as the licensee (org-scoped or via a member) OR as an audited authorised vendor.
+  const accessClauses = [eq(licences.organisationId, auth.organisationId)];
+  if (memberIds.length > 0) accessClauses.push(inArray(licences.licenseeId, memberIds));
+  if (vendorLicenceIds.length > 0) accessClauses.push(inArray(licences.id, vendorLicenceIds));
+
   const licenceFilter = and(
     eq(licences.status, "APPROVED"),
     gt(licences.validTo, now - 86400),
     isNotNull(licences.packageId),
-    memberIds.length > 0
-      ? or(
-          eq(licences.organisationId, auth.organisationId),
-          inArray(licences.licenseeId, memberIds)
-        )
-      : eq(licences.organisationId, auth.organisationId)
+    accessClauses.length > 1 ? or(...accessClauses) : accessClauses[0]
   );
 
   const activeLicences = await db
@@ -138,6 +151,8 @@ export async function GET(
           sizeBytes: scanFiles.sizeBytes,
           sha256: scanFiles.sha256,
           uploadStatus: scanFiles.uploadStatus,
+          completedAt: scanFiles.completedAt,
+          createdAt: scanFiles.createdAt,
         })
         .from(scanFiles)
         .where(eq(scanFiles.packageId, licence.packageId!))
@@ -154,6 +169,12 @@ export async function GET(
           // malformed fileScope — fall back to all completed files
         }
       }
+
+      // A re-uploaded file leaves more than one completed row at the same
+      // filename; emitting both at the same manifest `path` makes the bridge's
+      // integrity map non-deterministic and triggers false tamper events.
+      // Collapse each path to its canonical (latest completed) row.
+      scopedFiles = dedupeFilesByPath(scopedFiles);
 
       const files = await Promise.all(
         scopedFiles.map(async (f) => ({
