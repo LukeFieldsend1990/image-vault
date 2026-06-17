@@ -169,6 +169,22 @@ export const CONCEPTS: ConceptEntry[] = [
     related: ["data-model", "auth-sessions-2fa"],
   },
   {
+    id: "tmdb-cast-suggestions",
+    name: "TMDB Cast Suggestion & Population Flow",
+    summary: "Three MCP tools that use the TMDB API to suggest cast for a production and bulk-populate the cast list, then outreach rep agencies for unlinked actors.",
+    details:
+      "Flow: (1) suggest_production_cast — given a production with a tmdbId, fetches TMDB /movie or /tv credits and cross-references " +
+      "talentProfiles.tmdbId to show platformStatus per actor: 'registered' (matched in system), 'on_cast' (already added), or 'not_on_platform'. " +
+      "(2) populate_cast_from_tmdb — takes selected actors from the suggestion; registered talent get an AWAITING_PACKAGE licence + linked cast row + email; " +
+      "others become placeholder rows with licenceTermsJson stored for later. " +
+      "(3) outreach_unlinked_cast — for placeholder rows, looks up reps linked to talent with the same TMDB ID (specific outreach), " +
+      "or falls back to emailing all rep users in the system, asking 'do you represent [actor]?' so the connection can be established. " +
+      "After a rep confirms, resolve_cast_member attaches an email and issues an invite. " +
+      "Requires TMDB_API_KEY env secret. Production must have tmdbId set before suggest_production_cast will work.",
+    codePaths: ["lib/mcp/tools/tmdb-cast.ts", "lib/email/templates.ts (repRepresentationEnquiryEmail)"],
+    related: ["product-overview", "licensing-lifecycle", "mcp-admin-integration"],
+  },
+  {
     id: "mcp-admin-integration",
     name: "Admin MCP Integration",
     summary: "This integration: an MCP server at /api/mcp giving whitelisted admins visibility and corrective tools over the platform.",
