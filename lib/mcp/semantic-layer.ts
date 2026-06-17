@@ -171,17 +171,26 @@ export const CONCEPTS: ConceptEntry[] = [
   {
     id: "tmdb-cast-suggestions",
     name: "TMDB Cast Suggestion & Population Flow",
-    summary: "Three MCP tools that use the TMDB API to suggest cast for a production and bulk-populate the cast list, then outreach rep agencies for unlinked actors.",
+    summary: "Four MCP tools using the TMDB API: auto-search by production title, save the TMDB ID, suggest cast with platform matching, bulk-populate, and outreach reps for unlinked actors.",
     details:
-      "Flow: (1) suggest_production_cast — given a production with a tmdbId, fetches TMDB /movie or /tv credits and cross-references " +
-      "talentProfiles.tmdbId to show platformStatus per actor: 'registered' (matched in system), 'on_cast' (already added), or 'not_on_platform'. " +
-      "(2) populate_cast_from_tmdb — takes selected actors from the suggestion; registered talent get an AWAITING_PACKAGE licence + linked cast row + email; " +
-      "others become placeholder rows with licenceTermsJson stored for later. " +
-      "(3) outreach_unlinked_cast — for placeholder rows, looks up reps linked to talent with the same TMDB ID (specific outreach), " +
-      "or falls back to emailing all rep users in the system, asking 'do you represent [actor]?' so the connection can be established. " +
-      "After a rep confirms, resolve_cast_member attaches an email and issues an invite. " +
-      "Requires TMDB_API_KEY env secret. Production must have tmdbId set before suggest_production_cast will work.",
-    codePaths: ["lib/mcp/tools/tmdb-cast.ts", "lib/email/templates.ts (repRepresentationEnquiryEmail)"],
+      "Mirrors the webapp's production cast UI flow end-to-end. " +
+      "Flow: (1) suggest_production_cast — if the production has no tmdbId, automatically searches TMDB by production title via /search/multi " +
+      "and returns up to 8 title candidates (same as the webapp's title-search UI). " +
+      "(2) link_production_tmdb (mutating) — saves the chosen tmdbId to the production record; infers production type from TMDB mediaType if not set. " +
+      "(3) suggest_production_cast again — now fetches TMDB /movie or /tv credits; matches talent by TMDB ID first, then by full name (case-insensitive), " +
+      "mirroring /api/productions/[id]/cast/tmdb. platformStatus per actor: 'registered', 'on_cast', or 'not_on_platform'. " +
+      "overrideTmdbId param lets the admin preview a specific tmdbId without saving it first. " +
+      "(4) populate_cast_from_tmdb — takes selected actors; registered talent (matched by tmdbId or name) get an AWAITING_PACKAGE licence + linked cast row + email; " +
+      "others become placeholder rows. " +
+      "(5) outreach_unlinked_cast — for placeholder rows, targets reps linked to a talent with the same tmdbId, or all rep users in the system, " +
+      "asking 'do you represent [actor]?' After a rep confirms, resolve_cast_member issues the invite. " +
+      "Requires TMDB_API_KEY env secret.",
+    codePaths: [
+      "lib/mcp/tools/tmdb-cast.ts",
+      "app/api/productions/[id]/cast/tmdb/route.ts (webapp equivalent)",
+      "app/api/productions/[id]/cast/tmdb/search/route.ts (title search equivalent)",
+      "lib/email/templates.ts (repRepresentationEnquiryEmail)",
+    ],
     related: ["product-overview", "licensing-lifecycle", "mcp-admin-integration"],
   },
   {

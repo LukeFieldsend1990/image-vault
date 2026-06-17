@@ -1,20 +1,28 @@
 /**
  * TMDB-backed cast suggestion and bulk population tools.
  *
- * suggest_production_cast (read)    — fetch TMDB credits for a production and
- *   report which actors are already on the platform vs. new.
+ * suggest_production_cast (read)    — fetch TMDB credits for a production.
+ *   If the production has no tmdbId, searches TMDB by title first and returns
+ *   candidates (same flow as the webapp's title-search UI). Matches platform
+ *   talent by TMDB ID and by name, mirroring /api/productions/[id]/cast/tmdb.
+ *
+ * link_production_tmdb (mutating)   — save the chosen TMDB ID to the production
+ *   record (and infer production type from TMDB media type if not set).
  *
  * populate_cast_from_tmdb (mutating) — add selected TMDB actors to a production:
- *   registered talent get a linked AWAITING_PACKAGE licence; others become placeholders.
+ *   registered talent (matched by TMDB ID or name) get a linked AWAITING_PACKAGE
+ *   licence; others become placeholders.
  *
  * outreach_unlinked_cast (mutating) — email rep users asking whether they represent
  *   a placeholder cast member so the connection can be established and an invite sent.
  *
  * Intended flow:
- *   1. suggest_production_cast       → pick actors to add
- *   2. populate_cast_from_tmdb       → adds linked (registered) + placeholder rows
- *   3. outreach_unlinked_cast        → emails reps for the placeholder rows
- *   4. resolve_cast_member           → once a rep confirms, attach email + invite
+ *   1. suggest_production_cast       → if no tmdbId, returns title candidates
+ *   2. link_production_tmdb          → saves chosen TMDB ID to production record
+ *   3. suggest_production_cast       → now returns cast suggestions with platform status
+ *   4. populate_cast_from_tmdb       → adds linked (registered) + placeholder rows
+ *   5. outreach_unlinked_cast        → emails reps for placeholder rows
+ *   6. resolve_cast_member           → once a rep confirms, attach email + invite
  */
 
 import { getRequestContext } from "@cloudflare/next-on-pages";
@@ -90,6 +98,13 @@ interface TmdbCreditRow {
   popularity: number;
 }
 
+interface TmdbTitleCandidate {
+  tmdbId: number;
+  title: string;
+  mediaType: "movie" | "tv";
+  year: number | null;
+}
+
 async function fetchTmdbCredits(
   tmdbId: number,
   prodType: string | null,
@@ -105,20 +120,60 @@ async function fetchTmdbCredits(
   return data.cast ?? [];
 }
 
+async function searchTmdbByTitle(title: string): Promise<TmdbTitleCandidate[] | null> {
+  const apiKey = getTmdbKey();
+  if (!apiKey) return null;
+  const url = `${TMDB_BASE}/search/multi?api_key=${apiKey}&query=${encodeURIComponent(title)}&include_adult=false`;
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!res.ok) return null;
+  const data = await res.json() as {
+    results?: Array<{
+      id: number;
+      media_type: string;
+      title?: string;
+      name?: string;
+      release_date?: string;
+      first_air_date?: string;
+    }>;
+  };
+  return (data.results ?? [])
+    .filter((r) => r.media_type === "movie" || r.media_type === "tv")
+    .slice(0, 8)
+    .map((r) => {
+      const dateStr = r.release_date ?? r.first_air_date ?? "";
+      const year = dateStr ? parseInt(dateStr.slice(0, 4), 10) : null;
+      return {
+        tmdbId: r.id,
+        title: r.title ?? r.name ?? "Untitled",
+        mediaType: r.media_type as "movie" | "tv",
+        year: year && !isNaN(year) ? year : null,
+      };
+    });
+}
+
 // ── suggest_production_cast ──────────────────────────────────────────────────
 
 registerMcpTool({
   name: "suggest_production_cast",
   description:
     "Fetch the TMDB cast list for a production and show which actors are already on Image Vault. " +
-    "The production must have a tmdbId set (visible in list_productions). " +
-    "Each actor is returned with platformStatus: 'registered' (matched by tmdbId in talentProfiles), " +
-    "'on_cast' (already added to this production's cast), or 'not_on_platform'. " +
-    "Pass selected tmdbPersonIds and names to populate_cast_from_tmdb to bulk-add them.",
+    "If the production has no tmdbId set, this tool automatically searches TMDB by the production title " +
+    "and returns up to 8 title candidates — the same flow as the webapp's title-search UI. " +
+    "Pick the correct candidate and call link_production_tmdb to save its tmdbId, then call this tool again " +
+    "to see the cast. Alternatively, pass overrideTmdbId to preview a specific TMDB ID without saving it. " +
+    "Platform matching uses both TMDB ID and full name (case-insensitive), mirroring the webapp. " +
+    "Each actor's platformStatus: 'registered' (on Image Vault), 'on_cast' (already added to this production), " +
+    "or 'not_on_platform'. Pass selected actors to populate_cast_from_tmdb.",
   inputSchema: {
     type: "object",
     properties: {
       productionId: { type: "string", description: "Production UUID" },
+      overrideTmdbId: {
+        type: "number",
+        description:
+          "Use this TMDB ID for the credits fetch without saving it to the production record. " +
+          "Useful for previewing candidates before committing. Use link_production_tmdb to save.",
+      },
       limit: {
         type: "number",
         description: `Max cast members to return in billing order (default 20, max ${MAX_SUGGEST})`,
@@ -131,6 +186,10 @@ registerMcpTool({
     const productionId = trimmed(params.productionId);
     if (!productionId) return { success: false, message: "productionId is required." };
 
+    if (!getTmdbKey()) {
+      return { success: false, message: "TMDB_API_KEY is not configured on this environment." };
+    }
+
     const production = await db
       .select({
         id: productions.id,
@@ -142,23 +201,49 @@ registerMcpTool({
       .where(eq(productions.id, productionId))
       .get();
     if (!production) return { success: false, message: `No production with id ${productionId}.` };
-    if (!production.tmdbId) {
+
+    const overrideTmdbId =
+      typeof params.overrideTmdbId === "number" && params.overrideTmdbId > 0
+        ? Math.floor(params.overrideTmdbId)
+        : null;
+    const resolvedTmdbId = overrideTmdbId ?? production.tmdbId;
+
+    // No tmdbId and no override → search by title and return candidates
+    if (!resolvedTmdbId) {
+      const candidates = await searchTmdbByTitle(production.name);
+      if (!candidates) {
+        return {
+          success: false,
+          message: `TMDB title search failed for "${production.name}".`,
+        };
+      }
+      if (candidates.length === 0) {
+        return {
+          success: false,
+          message:
+            `No TMDB results found for "${production.name}". ` +
+            "Try link_production_tmdb with a tmdbId found via TMDB directly.",
+        };
+      }
       return {
-        success: false,
+        success: true,
         message:
-          `Production "${production.name}" has no TMDB ID. ` +
-          "Set one via the admin panel before using this tool.",
+          `"${production.name}" has no TMDB ID. ${candidates.length} title candidate(s) found. ` +
+          "Pick the correct one and call link_production_tmdb(productionId, tmdbId) to save it, " +
+          "then call suggest_production_cast again to see the cast list.",
+        data: {
+          productionId,
+          needsTmdbLink: true,
+          candidates,
+        },
       };
     }
-    if (!getTmdbKey()) {
-      return { success: false, message: "TMDB_API_KEY is not configured on this environment." };
-    }
 
-    const credits = await fetchTmdbCredits(production.tmdbId, production.type);
+    const credits = await fetchTmdbCredits(resolvedTmdbId, production.type);
     if (!credits) {
       return {
         success: false,
-        message: `Could not fetch TMDB credits for "${production.name}" (tmdbId: ${production.tmdbId}).`,
+        message: `Could not fetch TMDB credits (tmdbId: ${resolvedTmdbId}).`,
       };
     }
 
@@ -170,26 +255,29 @@ registerMcpTool({
     if (topCast.length === 0) {
       return {
         success: true,
-        message: "No cast found on TMDB for this production.",
+        message: `No cast found on TMDB for "${production.name}".`,
         data: { productionId, cast: [] },
       };
     }
 
-    const tmdbIds = topCast.map((c) => c.id);
+    // Load all talent profiles for matching (by tmdbId and by name) — same as webapp
+    const allProfiles = await db
+      .select({
+        userId: talentProfiles.userId,
+        fullName: talentProfiles.fullName,
+        tmdbId: talentProfiles.tmdbId,
+      })
+      .from(talentProfiles)
+      .all();
 
-    const registeredProfiles =
-      tmdbIds.length > 0
-        ? await db
-            .select({ userId: talentProfiles.userId, tmdbId: talentProfiles.tmdbId })
-            .from(talentProfiles)
-            .where(inArray(talentProfiles.tmdbId, tmdbIds))
-            .all()
-        : [];
-    const registeredByTmdbId = new Map<number, string>();
-    for (const p of registeredProfiles) {
-      if (p.tmdbId != null) registeredByTmdbId.set(p.tmdbId, p.userId);
+    const profileByTmdbId = new Map<number, string>(); // tmdbId → userId
+    const profileByName = new Map<string, string>();    // lower name → userId
+    for (const p of allProfiles) {
+      if (p.tmdbId != null) profileByTmdbId.set(p.tmdbId, p.userId);
+      profileByName.set(p.fullName.toLowerCase(), p.userId);
     }
 
+    // Existing cast rows on this production (by tmdbId for status reporting)
     const existingCastRows = await db
       .select({ tmdbId: productionCast.tmdbId, status: productionCast.status, id: productionCast.id })
       .from(productionCast)
@@ -202,7 +290,12 @@ registerMcpTool({
 
     const cast = topCast.map((member) => {
       const existing = existingByTmdbId.get(member.id);
-      const talentId = registeredByTmdbId.get(member.id);
+      // Match by TMDB ID first, fall back to name (same as webapp)
+      const talentId =
+        profileByTmdbId.get(member.id) ??
+        profileByName.get(member.name.toLowerCase()) ??
+        null;
+
       const platformStatus: "registered" | "on_cast" | "not_on_platform" = existing
         ? "on_cast"
         : talentId
@@ -217,20 +310,96 @@ registerMcpTool({
         platformStatus,
         existingCastId: existing?.castId ?? null,
         existingCastStatus: existing?.status ?? null,
-        talentId: talentId ?? null,
+        talentId,
       };
     });
 
     const registered = cast.filter((c) => c.platformStatus === "registered").length;
     const onCast = cast.filter((c) => c.platformStatus === "on_cast").length;
     const notOnPlatform = cast.filter((c) => c.platformStatus === "not_on_platform").length;
+    const overrideNote = overrideTmdbId ? ` (using override tmdbId ${overrideTmdbId} — call link_production_tmdb to save it)` : "";
 
     return {
       success: true,
       message:
-        `${cast.length} cast member(s) from TMDB for "${production.name}": ` +
+        `${cast.length} cast member(s) from TMDB for "${production.name}"${overrideNote}: ` +
         `${registered} registered on platform, ${onCast} already on cast, ${notOnPlatform} not on platform.`,
-      data: { productionId, productionName: production.name, cast },
+      data: { productionId, productionName: production.name, tmdbId: resolvedTmdbId, cast },
+    };
+  },
+});
+
+// ── link_production_tmdb ─────────────────────────────────────────────────────
+
+const PRODUCTION_TYPES_MAP: Record<string, "film" | "tv_series" | "tv_movie"> = {
+  movie: "film",
+  tv: "tv_series",
+};
+
+registerMcpTool({
+  name: "link_production_tmdb",
+  description:
+    "Save a TMDB ID to a production record so suggest_production_cast can fetch its cast. " +
+    "Call suggest_production_cast first (it returns title candidates when no tmdbId is set), " +
+    "pick the correct one, then call this tool with its tmdbId. " +
+    "If the production type is not yet set, it is inferred from the TMDB mediaType (movie → film, tv → tv_series).",
+  inputSchema: {
+    type: "object",
+    properties: {
+      productionId: { type: "string", description: "Production UUID" },
+      tmdbId: {
+        type: "number",
+        description: "TMDB title ID to save (from the candidates returned by suggest_production_cast)",
+      },
+      mediaType: {
+        type: "string",
+        enum: ["movie", "tv"],
+        description: "TMDB media type of the chosen candidate — used to infer the production type if not already set",
+      },
+    },
+    required: ["productionId", "tmdbId"],
+  },
+  mutating: true,
+  async execute({ db }, params) {
+    const productionId = trimmed(params.productionId);
+    if (!productionId) return { success: false, message: "productionId is required." };
+
+    const tmdbId =
+      typeof params.tmdbId === "number" && Number.isFinite(params.tmdbId) && params.tmdbId > 0
+        ? Math.floor(params.tmdbId)
+        : null;
+    if (!tmdbId) return { success: false, message: "A valid tmdbId (positive integer) is required." };
+
+    const production = await db
+      .select({ id: productions.id, name: productions.name, tmdbId: productions.tmdbId, type: productions.type })
+      .from(productions)
+      .where(eq(productions.id, productionId))
+      .get();
+    if (!production) return { success: false, message: `No production with id ${productionId}.` };
+
+    const mediaType =
+      params.mediaType === "movie" || params.mediaType === "tv" ? params.mediaType : null;
+    const inferredType =
+      !production.type && mediaType ? PRODUCTION_TYPES_MAP[mediaType] ?? null : null;
+
+    const now = Math.floor(Date.now() / 1000);
+    await db
+      .update(productions)
+      .set({
+        tmdbId,
+        ...(inferredType ? { type: inferredType } : {}),
+        updatedAt: now,
+      })
+      .where(eq(productions.id, productionId));
+
+    const prev = production.tmdbId ? ` (was ${production.tmdbId})` : "";
+    const typeNote = inferredType ? ` Production type set to ${inferredType}.` : "";
+    return {
+      success: true,
+      message:
+        `TMDB ID ${tmdbId} saved to "${production.name}"${prev}.${typeNote} ` +
+        "Call suggest_production_cast to fetch the cast list.",
+      data: { productionId, tmdbId, inferredType },
     };
   },
 });
@@ -242,7 +411,8 @@ registerMcpTool({
   description:
     "Add selected TMDB actors to a production's cast. Pass members from suggest_production_cast " +
     "(tmdbPersonId + name, optionally characterName/department/sagMember). " +
-    "Registered talent (platformStatus 'registered') get an AWAITING_PACKAGE licence + linked cast row + email. " +
+    "Platform matching uses TMDB ID first, then falls back to full name (case-insensitive), " +
+    "mirroring the webapp. Registered talent get an AWAITING_PACKAGE licence + linked cast row + email. " +
     "Others become placeholder cast rows. Actors already on the cast are skipped. " +
     "Set intendedUse/validFrom/validTo — required for linked (registered) members, stored on placeholders for later. " +
     "Run outreach_unlinked_cast next to email reps about placeholder members.",
@@ -284,14 +454,8 @@ registerMcpTool({
             },
             name: { type: "string", description: "Actor's full name" },
             characterName: { type: "string", description: "Character they play" },
-            department: {
-              type: "string",
-              description: "e.g. 'Lead', 'Supporting', 'Stunt'",
-            },
-            sagMember: {
-              type: "boolean",
-              description: "Whether the actor is a SAG-AFTRA member",
-            },
+            department: { type: "string", description: "e.g. 'Lead', 'Supporting', 'Stunt'" },
+            sagMember: { type: "boolean", description: "Whether the actor is a SAG-AFTRA member" },
           },
           required: ["tmdbPersonId", "name"],
         },
@@ -361,6 +525,7 @@ registerMcpTool({
       const sagMember = member.sagMember === true;
 
       try {
+        // Skip if already on this production's cast
         const existingRow = await db
           .select({ id: productionCast.id, status: productionCast.status })
           .from(productionCast)
@@ -376,11 +541,20 @@ registerMcpTool({
           continue;
         }
 
-        const profile = await db
+        // Match by TMDB ID first, then by name — same as the webapp
+        let profile = await db
           .select({ userId: talentProfiles.userId })
           .from(talentProfiles)
           .where(eq(talentProfiles.tmdbId, tmdbPersonId))
-          .get();
+          .get() ?? null;
+
+        if (!profile) {
+          profile = await db
+            .select({ userId: talentProfiles.userId })
+            .from(talentProfiles)
+            .where(sql`lower(${talentProfiles.fullName}) = ${name.toLowerCase()}`)
+            .get() ?? null;
+        }
 
         const licenceTermsJson = JSON.stringify({
           intendedUse: intendedUse || undefined,
@@ -465,7 +639,7 @@ registerMcpTool({
           }
           linked++;
         } else {
-          // Unknown — placeholder row
+          // Not on platform — placeholder row
           await db.insert(productionCast).values({
             id: crypto.randomUUID(),
             productionId,
