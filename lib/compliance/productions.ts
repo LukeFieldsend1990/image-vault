@@ -24,6 +24,12 @@ import {
   type LicenceEventRow,
   type LicenceRow,
 } from "./dashboard";
+import {
+  detectUseViolation,
+  detectUseViolationsForLicences,
+  isViolation,
+  type UseViolationKind,
+} from "./violations";
 import type { RegimeId } from "./types";
 import type { getDb } from "@/lib/db";
 
@@ -65,7 +71,8 @@ export interface ProductionOverviewRow {
   healthScore: number;
   complianceStatus: ComplianceStatus;
   requiredGaps: number;
-  coverageGaps: number;        // licences in use without recorded 39.B consent
+  coverageGaps: number;        // licences in use without recorded 39.B consent (current state)
+  useViolations: number;       // licences provably used before/without consent (39.B breach)
   cast: CastSummary;
 }
 
@@ -111,6 +118,25 @@ export async function buildProductionsOverview(db: Db, regime: RegimeId): Promis
     : [];
   const metaMap = new Map(metaRows.map((m) => [m.id, m]));
 
+  // Consent-before-use violations per production (batch, no N+1). A breach here is
+  // a permanent historical fact — the likeness was downloaded/metered before any
+  // 39.B consent existed — so unlike the coverage gap it is detected across every
+  // licence regardless of current status.
+  const violationsByProd = new Map<string, number>();
+  if (prodIds.length) {
+    const licRows = await db
+      .select({ id: licences.id, productionId: licences.productionId, lastDownloadAt: licences.lastDownloadAt })
+      .from(licences)
+      .where(inArray(licences.productionId, prodIds))
+      .all();
+    const violations = await detectUseViolationsForLicences(db, licRows);
+    for (const l of licRows) {
+      if (l.productionId && isViolation(violations.get(l.id)?.kind ?? "none")) {
+        violationsByProd.set(l.productionId, (violationsByProd.get(l.productionId) ?? 0) + 1);
+      }
+    }
+  }
+
   // Cast onboarding counts per production (batch, no N+1).
   const castByProd = new Map<string, { status: string; sagMember: boolean }[]>();
   if (prodIds.length) {
@@ -149,13 +175,16 @@ export async function buildProductionsOverview(db: Db, regime: RegimeId): Promis
       complianceStatus: p.complianceStatus,
       requiredGaps: p.requiredGaps,
       coverageGaps,
+      useViolations: violationsByProd.get(p.id) ?? 0,
       cast: countCast(castByProd.get(p.id) ?? []),
     });
   }
 
-  // Sort worst-health first, but float active productions above wound-down ones.
+  // Sort worst first: active above wound-down, then most consent-before-use
+  // violations (the union's hard cases), then lowest health.
   rows.sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1;
+    if (a.useViolations !== b.useViolations) return b.useViolations - a.useViolations;
     return a.healthScore - b.healthScore;
   });
 
@@ -171,7 +200,8 @@ export interface CastMember {
   status: string;
   talentId: string | null;
   licenceId: string | null;
-  coverageGap: boolean;  // likeness licensed without a recorded 39.B consent
+  coverageGap: boolean;            // likeness licensed without a recorded 39.B consent (current state)
+  useViolation: UseViolationKind;  // likeness provably used before/without consent (39.B breach)
 }
 
 export interface ProductionCastDetail {
@@ -211,6 +241,7 @@ export async function getProductionCast(
     .all();
 
   const gapLicenceIds = new Set<string>();
+  const violationByLicence = new Map<string, UseViolationKind>();
   if (licenceRows.length) {
     const eventRows = await db
       .select({
@@ -235,11 +266,13 @@ export async function getProductionCast(
     }
 
     for (const l of licenceRows) {
+      const events = eventsByLicence.get(l.id) ?? [];
       const row: LicenceRow = { ...l };
-      const obligations = evaluateLicence(row, eventsByLicence.get(l.id) ?? [], regime);
+      const obligations = evaluateLicence(row, events, regime);
       if (obligations.some((o) => o.id === CONSENT_OBLIGATION_ID && o.status === "gap")) {
         gapLicenceIds.add(l.id);
       }
+      violationByLicence.set(l.id, detectUseViolation(l, events).kind);
     }
   }
 
@@ -272,10 +305,14 @@ export async function getProductionCast(
     talentId: r.talentId,
     licenceId: r.licenceId,
     coverageGap: !!r.licenceId && gapLicenceIds.has(r.licenceId),
+    useViolation: (r.licenceId && violationByLicence.get(r.licenceId)) || "none",
   }));
 
-  // SAG members and coverage gaps first — the union's priority cases.
+  // Hard violations first, then coverage gaps, then SAG members — the union's
+  // priority order.
   cast.sort((a, b) => {
+    const av = isViolation(a.useViolation), bv = isViolation(b.useViolation);
+    if (av !== bv) return av ? -1 : 1;
     if (a.coverageGap !== b.coverageGap) return a.coverageGap ? -1 : 1;
     if (a.sagMember !== b.sagMember) return a.sagMember ? -1 : 1;
     return a.name.localeCompare(b.name);

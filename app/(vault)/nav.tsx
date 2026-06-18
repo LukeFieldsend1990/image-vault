@@ -330,6 +330,18 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
+    // Repeat-offender scorecard — same platform-wide grant gate as Productions.
+    href: "/oversight",
+    label: "Scorecard",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: (
@@ -398,10 +410,10 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
   if (complianceEnabled === false) {
     base = base.filter((item) => !item.href.startsWith("/compliance"));
   }
-  // The oversight Productions tracker is only for compliance watchers holding a
-  // platform-wide grant; hide it for scoped watchers.
+  // The oversight Productions tracker + repeat-offender Scorecard are only for
+  // compliance watchers holding a platform-wide grant; hide them for scoped watchers.
   if (isComplianceRole(role) && !platformOversight) {
-    base = base.filter((item) => item.href !== "/productions");
+    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight");
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]

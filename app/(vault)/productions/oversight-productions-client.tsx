@@ -30,8 +30,11 @@ interface ProductionRow {
   complianceStatus: "compliant" | "partial" | "gap" | "critical";
   requiredGaps: number;
   coverageGaps: number;
+  useViolations: number;
   cast: CastSummary;
 }
+
+type UseViolationKind = "none" | "used_without_consent" | "used_before_consent";
 
 interface CastMember {
   id: string;
@@ -43,6 +46,7 @@ interface CastMember {
   talentId: string | null;
   licenceId: string | null;
   coverageGap: boolean;
+  useViolation: UseViolationKind;
 }
 
 interface CastDetail {
@@ -83,6 +87,15 @@ const CAST_STATUS_COLOURS: Record<string, string> = {
   placeholder: "#6b7280", invited: "#b45309", linked: "#7c6d0a",
   scan_uploaded: "#7c3aed", consented: "#1a7f37", declined: "#c0392b",
 };
+
+const USE_VIOLATION_LABELS: Record<Exclude<UseViolationKind, "none">, string> = {
+  used_without_consent: "⛔ Used, no consent",
+  used_before_consent: "⛔ Used pre-consent",
+};
+
+function isUseViolation(k: UseViolationKind): k is Exclude<UseViolationKind, "none"> {
+  return k === "used_without_consent" || k === "used_before_consent";
+}
 
 function PhaseIndicator({ status }: { status: string | null }) {
   if (!status) return null;
@@ -136,6 +149,7 @@ function CastModal({ production, onClose }: { production: ProductionRow; onClose
   }, [production.id]);
 
   const gapCount = detail?.cast.filter((c) => c.coverageGap).length ?? 0;
+  const violationCount = detail?.cast.filter((c) => isUseViolation(c.useViolation)).length ?? 0;
 
   return (
     <>
@@ -151,6 +165,9 @@ function CastModal({ production, onClose }: { production: ProductionRow; onClose
             <h2 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>{production.name}</h2>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
               {production.orgName ?? "Independent"} · Cast roster
+              {violationCount > 0 && (
+                <span style={{ color: "#7f1d1d", fontWeight: 600 }}> · {violationCount} consent-before-use breach{violationCount !== 1 ? "es" : ""}</span>
+              )}
               {gapCount > 0 && (
                 <span style={{ color: "#c0392b", fontWeight: 600 }}> · {gapCount} coverage gap{gapCount !== 1 ? "s" : ""}</span>
               )}
@@ -169,9 +186,10 @@ function CastModal({ production, onClose }: { production: ProductionRow; onClose
           <div className="rounded border divide-y" style={{ borderColor: "var(--color-border)" }}>
             {detail.cast.map((m) => {
               const sc = CAST_STATUS_COLOURS[m.status] ?? "var(--color-muted)";
+              const violation = isUseViolation(m.useViolation);
               return (
                 <div key={m.id} className="flex items-center gap-3 px-4 py-2.5"
-                  style={{ background: m.coverageGap ? "rgba(192,57,43,0.05)" : undefined }}>
+                  style={{ background: violation ? "rgba(127,29,29,0.07)" : m.coverageGap ? "rgba(192,57,43,0.05)" : undefined }}>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium flex items-center gap-2" style={{ color: "var(--color-text)" }}>
                       <span className="truncate">{m.name}</span>
@@ -184,12 +202,17 @@ function CastModal({ production, onClose }: { production: ProductionRow; onClose
                       {m.characterName ?? "—"}{m.department ? ` · ${m.department}` : ""}
                     </p>
                   </div>
-                  {m.coverageGap && (
+                  {isUseViolation(m.useViolation) ? (
+                    <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded shrink-0"
+                      style={{ color: "#7f1d1d", border: "1px solid #7f1d1d44", background: "rgba(127,29,29,0.1)" }}>
+                      {USE_VIOLATION_LABELS[m.useViolation]}
+                    </span>
+                  ) : m.coverageGap ? (
                     <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded shrink-0"
                       style={{ color: "#c0392b", border: "1px solid #c0392b44", background: "rgba(192,57,43,0.08)" }}>
                       ⚠ No consent
                     </span>
-                  )}
+                  ) : null}
                   <span className="text-[10px] font-semibold uppercase tracking-widest w-24 text-right shrink-0" style={{ color: sc }}>
                     {CAST_STATUS_LABELS[m.status] ?? m.status}
                   </span>
@@ -200,8 +223,10 @@ function CastModal({ production, onClose }: { production: ProductionRow; onClose
         )}
 
         <p className="text-[11px] mt-4" style={{ color: "var(--color-muted)" }}>
-          A <strong>coverage gap</strong> means the member&apos;s likeness is licensed on this production with no recorded
-          Article&nbsp;39.B consent in the compliance ledger.
+          A <strong>coverage gap</strong> means the member&apos;s likeness is licensed with no current Article&nbsp;39.B
+          consent on record. A <strong style={{ color: "#7f1d1d" }}>consent-before-use breach</strong> is stronger: the
+          ledger shows the likeness was downloaded or metered <em>before</em> any consent existed (or with none recorded
+          at all) — a permanent Article&nbsp;39.B violation that stands even if consent is later back-filled.
         </p>
       </div>
     </>
@@ -246,6 +271,7 @@ export default function OversightProductionsClient() {
 
   const activeCount = rows.filter((r) => r.active).length;
   const totalCoverageGaps = rows.reduce((s, r) => s + r.coverageGaps, 0);
+  const totalUseViolations = rows.reduce((s, r) => s + r.useViolations, 0);
 
   return (
     <div className="p-8 max-w-5xl">
@@ -272,6 +298,12 @@ export default function OversightProductionsClient() {
           <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />
           Active only{!loading && ` (${activeCount})`}
         </label>
+        {totalUseViolations > 0 && (
+          <span className="text-[11px] font-semibold px-2 py-1 rounded"
+            style={{ color: "#7f1d1d", background: "rgba(127,29,29,0.08)", border: "1px solid rgba(127,29,29,0.3)" }}>
+            {totalUseViolations} consent-before-use breach{totalUseViolations !== 1 ? "es" : ""} platform-wide
+          </span>
+        )}
         {totalCoverageGaps > 0 && (
           <span className="text-[11px] font-semibold px-2 py-1 rounded"
             style={{ color: "#c0392b", background: "rgba(192,57,43,0.08)", border: "1px solid rgba(192,57,43,0.3)" }}>
@@ -326,6 +358,12 @@ export default function OversightProductionsClient() {
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <HealthBadge score={p.healthScore} status={p.complianceStatus} />
+                    {p.useViolations > 0 && (
+                      <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
+                        style={{ color: "#7f1d1d", border: "1px solid #7f1d1d44", background: "rgba(127,29,29,0.1)" }}>
+                        ⛔ {p.useViolations} pre-consent use{p.useViolations !== 1 ? "s" : ""}
+                      </span>
+                    )}
                     {p.coverageGaps > 0 && (
                       <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
                         style={{ color: "#c0392b", border: "1px solid #c0392b44", background: "rgba(192,57,43,0.08)" }}>
