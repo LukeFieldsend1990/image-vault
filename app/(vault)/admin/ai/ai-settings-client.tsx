@@ -205,6 +205,38 @@ export function AiSettingsClient({ initialSettings, initialCosts, repSuggestions
             onToggle={() => toggleSetting("security_agent_enabled")}
           />
 
+          {/* Watchlist discovery */}
+          <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 600, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+                Watchlist Discovery
+              </p>
+              <ToggleRow
+                label="TMDB Pre-Production Discovery"
+                sublabel="Nightly job that surfaces upcoming productions not yet on Image Vault"
+                checked={settings["watchlist_discovery_enabled"] !== "false"}
+                saving={saving === "watchlist_discovery_enabled"}
+                onToggle={() => toggleSetting("watchlist_discovery_enabled")}
+              />
+            </div>
+            <InputRow
+              label="Discovery interval (days)"
+              value={settings["watchlist_discovery_interval_days"] ?? "5"}
+              saving={saving === "watchlist_discovery_interval_days"}
+              onCommit={(v) => updateSetting("watchlist_discovery_interval_days", v)}
+            />
+            {settings["watchlist_discovery_last_run"] && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>Last discovery run</p>
+                <p style={{ fontSize: 12, color: "var(--color-muted)" }}>
+                  {timeAgo(parseInt(settings["watchlist_discovery_last_run"]))}
+                  {" · "}
+                  {formatTimestamp(parseInt(settings["watchlist_discovery_last_run"]))}
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Budget ceiling */}
           <InputRow
             label="Budget Ceiling (USD)"

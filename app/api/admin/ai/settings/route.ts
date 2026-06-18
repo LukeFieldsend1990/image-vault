@@ -16,6 +16,8 @@ const VALID_KEYS = [
   "vision_max_images",
   "metadata_tags_enabled",
   "security_agent_enabled",
+  "watchlist_discovery_enabled",
+  "watchlist_discovery_interval_days",
 ];
 
 /**
