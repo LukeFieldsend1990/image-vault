@@ -64,9 +64,11 @@ export async function POST(req: NextRequest) {
   }
 
   const db = getDb();
-  const target = await db.select({ id: users.id, role: users.role }).from(users).where(eq(users.id, body.complianceUserId)).get();
+  const target = await db.select({ id: users.id, role: users.role, trueRole: users.trueRole }).from(users).where(eq(users.id, body.complianceUserId)).get();
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
-  if (!isComplianceRole(target.role)) {
+  // Effective role = true_role ?? role. Compliance accounts persist role="licensee"
+  // with true_role="compliance", so check the effective role, not the raw column.
+  if (!isComplianceRole(target.trueRole ?? target.role)) {
     return NextResponse.json({ error: "Target user is not a compliance account" }, { status: 400 });
   }
 

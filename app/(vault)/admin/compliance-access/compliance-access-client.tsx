@@ -26,6 +26,7 @@ export default function ComplianceAccessClient() {
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserResult[]>([]);
+  const [searching, setSearching] = useState(false);
   const [watcher, setWatcher] = useState<UserResult | null>(null);
   const [subtype, setSubtype] = useState("union");
   const [scope, setScope] = useState("production");
@@ -46,13 +47,15 @@ export default function ComplianceAccessClient() {
   function onQuery(v: string) {
     setQuery(v); setWatcher(null);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (v.trim().length < 2) { setResults([]); return; }
+    if (v.trim().length < 2) { setResults([]); setSearching(false); return; }
+    setSearching(true);
     searchTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/admin/users/search?role=compliance&email=${encodeURIComponent(v.trim())}`);
         const d = (await res.json()) as { users?: UserResult[] };
         setResults(d.users ?? []);
       } catch { setResults([]); }
+      finally { setSearching(false); }
     }, 300);
   }
 
@@ -97,6 +100,9 @@ export default function ComplianceAccessClient() {
             <div className="absolute z-10 left-0 right-0 mt-1 rounded border overflow-hidden" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}>
               {results.map((u) => <button type="button" key={u.id} onClick={() => { setWatcher(u); setResults([]); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface)]" style={{ color: "var(--color-ink)" }}>{u.email}</button>)}
             </div>
+          )}
+          {!watcher && query.trim().length >= 2 && !searching && results.length === 0 && (
+            <p className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>No compliance accounts match. Check the account has accepted its invite and completed signup.</p>
           )}
         </div>
         <div className="flex gap-2 flex-wrap">
