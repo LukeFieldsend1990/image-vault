@@ -7,6 +7,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceDeniedEmail } from "@/lib/email/templates";
+import { createNotification } from "@/lib/notifications/create";
 
 // POST /api/licences/[id]/deny — talent/rep denies a pending licence request
 export async function POST(
@@ -82,6 +83,13 @@ export async function POST(
       reason: body.reason ?? null,
     });
     await sendEmail({ to: licenseeUser.email, subject, html });
+    await createNotification(db, {
+      userId: licence.licenseeId,
+      type: "licence_denied",
+      title: "Licence request declined",
+      body: licence.projectName,
+      href: `/licences`,
+    });
   })();
 
   return NextResponse.json({ ok: true });

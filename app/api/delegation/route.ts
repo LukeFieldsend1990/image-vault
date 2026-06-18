@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { talentReps, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
+import { createNotification } from "@/lib/notifications/create";
 
 /** GET /api/delegation — list reps linked to the authed talent */
 export async function GET(req: NextRequest) {
@@ -91,6 +92,14 @@ export async function POST(req: NextRequest) {
     repId: rep.id,
     invitedBy: session.sub,
     createdAt: now,
+  });
+
+  void createNotification(db, {
+    userId: rep.id,
+    type: "rep_linked",
+    title: "New talent representation",
+    body: `You have been linked as a representative`,
+    href: `/roster`,
   });
 
   return NextResponse.json({ id, repId: rep.id, email: body.email.trim().toLowerCase() }, { status: 201 });

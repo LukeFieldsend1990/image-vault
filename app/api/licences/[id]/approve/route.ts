@@ -10,6 +10,7 @@ import { licenceApprovedEmail } from "@/lib/email/templates";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { sha256Hex, generateRoyaltyKey } from "@/lib/auth/requireRoyaltySource";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
+import { createNotification } from "@/lib/notifications/create";
 
 // POST /api/licences/[id]/approve — talent/rep approves a pending licence request
 export async function POST(
@@ -198,6 +199,13 @@ export async function POST(
       downloadUrl: `${baseUrl}/licences`,
     });
     await sendEmail({ to: licenseeUser.email, subject, html });
+    await createNotification(db, {
+      userId: licence.licenseeId,
+      type: "licence_approved",
+      title: "Licence approved",
+      body: licence.projectName,
+      href: `/licences`,
+    });
   })();
 
   return NextResponse.json({ ok: true, ...(royaltyKey ? { royaltyKey } : {}) });
