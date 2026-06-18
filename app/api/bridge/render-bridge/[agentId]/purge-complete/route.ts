@@ -2,8 +2,10 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { renderBridgeAgents } from "@/lib/db/schema";
+import { renderBridgeAgents, bridgeEvents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { sendEmail } from "@/lib/email/send";
+import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 import {
   requireRenderBridgeToken,
   isRenderBridgeTokenError,
@@ -28,8 +30,21 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  let body: { purgedPaths?: string[] };
+  try {
+    body = await req.json() as typeof body;
+  } catch {
+    body = {};
+  }
+
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
+
+  const agent = await db
+    .select({ displayName: renderBridgeAgents.displayName })
+    .from(renderBridgeAgents)
+    .where(eq(renderBridgeAgents.id, agentId))
+    .get();
 
   await db
     .update(renderBridgeAgents)
@@ -39,6 +54,28 @@ export async function POST(
       lastHeartbeatAt: now,
     })
     .where(eq(renderBridgeAgents.id, agentId));
+
+  void (async () => {
+    await db.insert(bridgeEvents).values({
+      id: crypto.randomUUID(),
+      grantId: null,
+      packageId: null,
+      deviceId: agentId,
+      userId: null,
+      eventType: "agent_purge_complete",
+      severity: "warn",
+      detail: JSON.stringify({ purgedPathCount: body.purgedPaths?.length ?? 0 }),
+      createdAt: now,
+    });
+
+    if (agent) {
+      await sendEmail({
+        to: [...ADMIN_EMAILS],
+        subject: `Render bridge self-purged: ${agent.displayName}`,
+        html: `<p>Render bridge agent <strong>${agent.displayName}</strong> completed a self-purge (${body.purgedPaths?.length ?? 0} paths cleared from render share).</p><p style="color:#6b7280;font-size:12px">Agent ID: ${agentId}</p>`,
+      });
+    }
+  })();
 
   return NextResponse.json({ ok: true });
 }

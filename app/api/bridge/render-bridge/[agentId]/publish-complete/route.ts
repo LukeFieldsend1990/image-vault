@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { renderBridgeAgents } from "@/lib/db/schema";
+import { renderBridgeAgents, bridgeEvents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import {
   requireRenderBridgeToken,
@@ -61,10 +61,27 @@ export async function POST(
     publishedPackages.push(body.packageId);
   }
 
+  const now = Math.floor(Date.now() / 1000);
+
   await db
     .update(renderBridgeAgents)
     .set({ publishedPackagesJson: JSON.stringify(publishedPackages) })
     .where(eq(renderBridgeAgents.id, agentId));
+
+  void db.insert(bridgeEvents).values({
+    id: crypto.randomUUID(),
+    grantId: null,
+    packageId: body.packageId,
+    deviceId: agentId,
+    userId: null,
+    eventType: "agent_publish_complete",
+    severity: "info",
+    detail: JSON.stringify({
+      packageId: body.packageId,
+      publishedPathCount: body.publishedPaths?.length ?? 0,
+    }),
+    createdAt: now,
+  });
 
   return NextResponse.json({ ok: true });
 }

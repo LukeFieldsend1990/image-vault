@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 interface BridgeEvent {
   id: string;
   grantId: string | null;
-  packageId: string;
+  packageId: string | null;
   deviceId: string;
   userId: string | null;
   eventType: string;
@@ -38,7 +38,17 @@ const EVENT_LABELS: Record<string, string> = {
   file_in_use:             "File in use",
   file_removed_from_cache: "File removed",
   re_access_denied:        "Re-access denied",
+  agent_enrolled:          "Agent enrolled",
+  agent_online:            "Agent online",
+  agent_purge_complete:    "Self-purge complete",
+  agent_publish_complete:  "Package published",
+  agent_revoked:           "Agent revoked",
 };
+
+const LIFECYCLE_EVENT_TYPES = new Set([
+  "agent_enrolled", "agent_online", "agent_purge_complete",
+  "agent_publish_complete", "agent_revoked",
+]);
 
 function tsTime(unix: number): string {
   return new Date(unix * 1000).toLocaleString("en-GB", {
@@ -98,7 +108,7 @@ export function BridgeEventLog({ agentNames }: Props) {
           : e.deviceId.slice(0, 8);
       return [
         tsTime(e.createdAt),
-        pkgNames[e.packageId] ?? e.packageId,
+        e.packageId ? (pkgNames[e.packageId] ?? e.packageId) : "—",
         source,
         e.userId ? (userEmails[e.userId] ?? e.userId) : "—",
         e.eventType,
@@ -178,6 +188,7 @@ export function BridgeEventLog({ agentNames }: Props) {
           const { pretty, flat } = formatDetail(e.detail);
           const agentName = agentNames[e.deviceId];
           const isRenderBridge = agentName !== undefined;
+          const isLifecycle = LIFECYCLE_EVENT_TYPES.has(e.eventType);
           const isExpanded = expandedId === e.id;
 
           return (
@@ -189,8 +200,10 @@ export function BridgeEventLog({ agentNames }: Props) {
               >
                 <span style={{ color: "var(--color-muted)" }}>{tsTime(e.createdAt)}</span>
 
-                <span className="truncate font-medium" style={{ color: "var(--color-ink)" }}>
-                  {pkgNames[e.packageId] ?? e.packageId.slice(0, 8) + "…"}
+                <span className="truncate font-medium" style={{ color: isLifecycle ? "var(--color-muted)" : "var(--color-ink)" }}>
+                  {e.packageId
+                    ? (pkgNames[e.packageId] ?? e.packageId.slice(0, 8) + "…")
+                    : "—"}
                 </span>
 
                 <span>
