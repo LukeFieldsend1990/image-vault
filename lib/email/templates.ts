@@ -572,6 +572,42 @@ export function productionCastInviteEmail(p: ProductionCastInviteEmailParams): {
   };
 }
 
+export interface InsurerInviteEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  coordinatorEmail: string;
+  /** Set when inviting a brand-new account; otherwise link to the evidence area. */
+  signupUrl?: string;
+  evidenceUrl?: string;
+}
+
+export function insurerInviteEmail(p: InsurerInviteEmailParams): { subject: string; html: string } {
+  const isNewAccount = Boolean(p.signupUrl);
+  const ctaUrl = p.signupUrl ?? p.evidenceUrl ?? "";
+  const ctaLabel = isNewAccount ? "Create your account" : "View production";
+  return {
+    subject: `You've been granted oversight of ${p.productionName} on Image Vault`,
+    html: layout(`
+      <p>${p.companyName} has added you as an <strong>insurer</strong> on the production <strong>${p.productionName}</strong>.</p>
+      <p>You now have read-only oversight of this production's likeness consent and custody evidence — scoped to this production only. You cannot access scan files or any other production.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Granted by</span><span class="kv-val">${p.coordinatorEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Access</span><span class="kv-val">Read-only evidence, this production</span></div>
+      </div>
+      ${
+        isNewAccount
+          ? `<p>Create your Image Vault account to view the production's compliance evidence and underwriting view.</p>`
+          : `<p>Sign in to view the production's compliance evidence and underwriting view.</p>`
+      }
+      <a class="btn" href="${ctaUrl}">${ctaLabel}</a>
+      <p class="muted" style="margin-top: 24px;">Access is revocable by the production at any time, typically when the policy ends.</p>
+    `),
+  };
+}
+
 export interface ProductionCastLinkedEmailParams {
   recipientEmail: string;
   productionName: string;
