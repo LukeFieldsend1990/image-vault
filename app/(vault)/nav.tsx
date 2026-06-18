@@ -353,6 +353,18 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
+    // Union member roster (CSV upload) — who's on Image Vault. Same grant gate.
+    href: "/members",
+    label: "Members",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: (
@@ -424,7 +436,7 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
   // The oversight Productions tracker + repeat-offender Scorecard are only for
   // compliance watchers holding a platform-wide grant; hide them for scoped watchers.
   if (isComplianceRole(role) && !platformOversight) {
-    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight" && item.href !== "/watchlist");
+    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight" && item.href !== "/watchlist" && item.href !== "/members");
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]

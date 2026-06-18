@@ -392,6 +392,17 @@ export const productionWatchlist = sqliteTable("production_watchlist", {
   archivedAt: integer("archived_at"),
 });
 
+// Union member roster: a union's membership list (plain names), so it can see which
+// members are already on Image Vault. Visibility only — onboarding is not mandated.
+// "On platform" is derived at read time by matching against talent profiles.
+export const unionMembers = sqliteTable("union_members", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  addedBy: text("added_by").notNull().references(() => users.id),
+  addedAt: integer("added_at").notNull(),
+  archivedAt: integer("archived_at"),
+});
+
 export const downloadEvents = sqliteTable("download_events", {
   id: text("id").primaryKey(), // UUID
   licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }), // null for talent's own downloads

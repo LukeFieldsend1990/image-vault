@@ -172,6 +172,43 @@ const REMEDIATION: Record<string, { action: string; owner: "producer" | "talent"
     action: "Attest deletion of all replica assets after licence expiry",
     owner: "producer",
   },
+  // UK Equity regime
+  "equity-explicit-consent": {
+    action: "Obtain the performer's explicit consent to process their biometric likeness",
+    owner: "talent",
+  },
+  "equity-performers-consent": {
+    action: "Record the performer's consent to record and exploit the performance (CDPA 1988)",
+    owner: "talent",
+  },
+  "equity-specified-use": {
+    action: "Record the specified, lawful purpose for this digital-likeness use",
+    owner: "producer",
+  },
+  "equity-data-security": {
+    action: "Attest appropriate security measures for the biometric data (UK GDPR Art 32)",
+    owner: "producer",
+  },
+  "equity-data-minimisation": {
+    action: "Attest the biometric data is isolated and not retained for unrelated uses",
+    owner: "producer",
+  },
+  "equity-fair-remuneration": {
+    action: "Enable use metering so each replica use is fairly remunerated",
+    owner: "platform",
+  },
+  "equity-dub-consent": {
+    action: "Record the performer's consent for each dubbing language",
+    owner: "talent",
+  },
+  "equity-ai-training-notice": {
+    action: "File the AI-training use notice and consent",
+    owner: "producer",
+  },
+  "equity-onward-transfer": {
+    action: "Obtain approval before transferring the replica to a third party",
+    owner: "producer",
+  },
 };
 
 // Days from licence creation (or first download) by which each obligation must be met.
