@@ -133,3 +133,27 @@ export const aiBatchRuns = sqliteTable("ai_batch_runs", {
   completedAt: integer("completed_at"),
   updatedAt: integer("updated_at").notNull(),
 });
+
+export const productions = sqliteTable("productions", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  tmdbId: integer("tmdb_id"),
+});
+
+export const productionWatchlist = sqliteTable("production_watchlist", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  companyName: text("company_name"),
+  tmdbId: integer("tmdb_id"),
+  type: text("type"),
+  expectedStage: text("expected_stage").notNull().default("pre_production"),
+  expectedStartDate: integer("expected_start_date"),
+  source: text("source").notNull().default("manual"),
+  notes: text("notes"),
+  flaggedForOutreach: integer("flagged_for_outreach", { mode: "boolean" }).notNull().default(false),
+  outreachNotes: text("outreach_notes"),
+  addedBy: text("added_by").notNull(),
+  addedAt: integer("added_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  archivedAt: integer("archived_at"),
+});

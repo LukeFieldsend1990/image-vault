@@ -36,4 +36,5 @@ APP_URL = "https://changling.io"
 # Secrets (set via: wrangler secret put SECRET_NAME --config ai-cron-worker/wrangler.toml)
 # -------------------------------------------------------------------
 # ANTHROPIC_API_KEY  - Anthropic API key for Claude Haiku
+# TMDB_API_KEY       - TMDB API key for nightly pre-production watchlist discovery
 # CRON_SECRET        - Shared secret for authenticating batch API calls (optional, direct D1 access used instead)
