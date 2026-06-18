@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 
+const LIFECYCLE_SENTINEL = "_lifecycle_";
+
 interface BridgeEvent {
   id: string;
   grantId: string | null;
-  packageId: string | null;
+  packageId: string;
   deviceId: string;
   userId: string | null;
   eventType: string;
@@ -108,7 +110,7 @@ export function BridgeEventLog({ agentNames }: Props) {
           : e.deviceId.slice(0, 8);
       return [
         tsTime(e.createdAt),
-        e.packageId ? (pkgNames[e.packageId] ?? e.packageId) : "—",
+        e.packageId === LIFECYCLE_SENTINEL ? "—" : (pkgNames[e.packageId] ?? e.packageId),
         source,
         e.userId ? (userEmails[e.userId] ?? e.userId) : "—",
         e.eventType,
@@ -201,9 +203,9 @@ export function BridgeEventLog({ agentNames }: Props) {
                 <span style={{ color: "var(--color-muted)" }}>{tsTime(e.createdAt)}</span>
 
                 <span className="truncate font-medium" style={{ color: isLifecycle ? "var(--color-muted)" : "var(--color-ink)" }}>
-                  {e.packageId
-                    ? (pkgNames[e.packageId] ?? e.packageId.slice(0, 8) + "…")
-                    : "—"}
+                  {e.packageId === LIFECYCLE_SENTINEL
+                    ? "—"
+                    : (pkgNames[e.packageId] ?? e.packageId.slice(0, 8) + "…")}
                 </span>
 
                 <span>

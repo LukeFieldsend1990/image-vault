@@ -505,7 +505,7 @@ export const aiBatchRuns = sqliteTable("ai_batch_runs", {
 export const bridgeEvents = sqliteTable("bridge_events", {
   id: text("id").primaryKey(),
   grantId: text("grant_id").references(() => bridgeGrants.id),
-  packageId: text("package_id"),
+  packageId: text("package_id").notNull(),
   deviceId: text("device_id").notNull(),
   userId: text("user_id"),
   eventType: text("event_type").notNull(), // tamper_detected|unexpected_copy|hash_mismatch|lease_expired|cache_purged|open_denied|purge_started|purge_partial|file_in_use|purge_stalled|purge_failed|file_removed_from_cache|re_access_denied|agent_enrolled|agent_online|agent_purge_complete|agent_publish_complete|agent_revoked
