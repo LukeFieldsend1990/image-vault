@@ -107,6 +107,18 @@ export async function POST(req: NextRequest) {
     createdAt: now,
   });
 
+  await db.insert(bridgeEvents).values({
+    id: crypto.randomUUID(),
+    grantId: null,
+    packageId: null,
+    deviceId: agentId,
+    userId: auth.userId,
+    eventType: "agent_enrolled",
+    severity: "info",
+    detail: JSON.stringify({ organisationId, displayName }),
+    createdAt: now,
+  });
+
   return NextResponse.json(
     { agentId, serviceToken, tokenExpiresAt: new Date(tokenExpiresAt * 1000).toISOString() },
     { status: 201 }

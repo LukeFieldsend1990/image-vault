@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { renderBridgeAgents, organisationMembers } from "@/lib/db/schema";
+import { renderBridgeAgents, organisationMembers, bridgeEvents } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 
@@ -63,6 +63,18 @@ export async function POST(
     .update(renderBridgeAgents)
     .set({ status: "revoked", revokedAt: now, pendingAction: "purge" })
     .where(and(eq(renderBridgeAgents.id, agentId), isNull(renderBridgeAgents.revokedAt)));
+
+  void db.insert(bridgeEvents).values({
+    id: crypto.randomUUID(),
+    grantId: null,
+    packageId: null,
+    deviceId: agentId,
+    userId: session.sub,
+    eventType: "agent_revoked",
+    severity: "warn",
+    detail: JSON.stringify({ revokedBy: session.email, role: session.role }),
+    createdAt: now,
+  });
 
   return NextResponse.json({ ok: true });
 }
