@@ -1047,3 +1047,22 @@ export const complianceGrants = sqliteTable("compliance_grants", {
   createdAt: integer("created_at").notNull(),
   revokedAt: integer("revoked_at"),
 });
+
+// The insurance policy an insurer holds against a production (Phase 8 §3.2).
+// Drives the underwriting dashboard's policy panel and the lapsed/uninsured-use
+// flags. Bound to the insurer's production-scoped compliance grant.
+export const insurerPolicies = sqliteTable("insurer_policies", {
+  id: text("id").primaryKey(),
+  grantId: text("grant_id").notNull().references(() => complianceGrants.id),
+  productionId: text("production_id").notNull().references(() => productions.id),
+  policyNumber: text("policy_number"),
+  policyLine: text("policy_line", { enum: ["eo", "cyber", "completion_bond", "other"] }).notNull(),
+  coverageLimit: integer("coverage_limit"),
+  currency: text("currency").default("USD"),
+  effectiveFrom: integer("effective_from"),
+  effectiveTo: integer("effective_to"),
+  notes: text("notes"),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  archivedAt: integer("archived_at"),
+});
