@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     .limit(100)
     .all();
 
-  const pkgIds = [...new Set(events.map(e => e.packageId).filter((id): id is string => id !== null))];
+  const pkgIds = [...new Set(events.map(e => e.packageId).filter(id => id !== "_lifecycle_"))];
   const pkgRows = pkgIds.length > 0
     ? await db.select({ id: scanPackages.id, name: scanPackages.name })
         .from(scanPackages).where(inArray(scanPackages.id, pkgIds)).all()

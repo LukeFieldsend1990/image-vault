@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
   await db.insert(bridgeEvents).values({
     id: crypto.randomUUID(),
     grantId: null,
-    packageId: null,
+    packageId: "_lifecycle_",
     deviceId: agentId,
     userId: auth.userId,
     eventType: "agent_enrolled",
