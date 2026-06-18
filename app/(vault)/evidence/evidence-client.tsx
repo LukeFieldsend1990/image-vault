@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import ComplianceClient from "../compliance/compliance-client";
 
 interface Grant {
   id: string;
@@ -73,6 +74,20 @@ export default function EvidenceClient() {
   }
 
   if (loading) return <p className="p-8 text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>;
+
+  // A platform-wide grant subsumes every scope — surface the full interactive
+  // compliance control centre (read-only) instead of a per-scope drill-down.
+  const hasPlatform = grants.some((g) => g.scope === "platform");
+  if (hasPlatform) {
+    return (
+      <ComplianceClient
+        readOnly
+        dashboardUrl="/api/compliance/platform-dashboard"
+        title="Platform Compliance"
+        subtitle="Read-only · platform-wide access across every production, licence and obligation."
+      />
+    );
+  }
 
   return (
     <div className="p-8 max-w-3xl space-y-6">
