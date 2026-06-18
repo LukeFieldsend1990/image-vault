@@ -76,7 +76,8 @@
       "Bash(CLOUDFLARE_ACCOUNT_ID=2db6ad770fad71b79fa3249b202c6c37 npx wrangler pages deployment tail 2d807ef9-1179-41ab-a7c0-1c44374dfcac --project-name image-vault 2>&1)",
       "Bash(CLOUDFLARE_ACCOUNT_ID=2db6ad770fad71b79fa3249b202c6c37 npx wrangler pages deployment list --project-name image-vault)",
       "Bash(CLOUDFLARE_ACCOUNT_ID=2db6ad770fad71b79fa3249b202c6c37 npx wrangler pages deployment tail 6de76cf2-e373-4334-8975-4cdc3e692970 --project-name image-vault 2>&1)",
-      "mcp__Cloudflare_Developer_Platform__d1_database_query"
+      "mcp__Cloudflare_Developer_Platform__d1_database_query",
+      "mcp__Cloudflare_Developer_Platform__d1_databases_list"
     ]
   }
 }
