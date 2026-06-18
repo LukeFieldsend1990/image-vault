@@ -370,6 +370,28 @@ export const productions = sqliteTable("productions", {
   shortCode: text("short_code"), // PR-#### production code. System-generated; see lib/codes.
 });
 
+// Upcoming productions believed to be heading into pre-production that are NOT yet
+// ratified on Image Vault. Gives the union read visibility (and an outreach flag)
+// without mandating onboarding. "Ratified" is derived at read time by matching
+// tmdbId / name against `productions`, never stored.
+export const productionWatchlist = sqliteTable("production_watchlist", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  companyName: text("company_name"),
+  tmdbId: integer("tmdb_id"),
+  type: text("type", { enum: ["film", "tv_series", "tv_movie", "commercial", "game", "music_video", "other"] }),
+  expectedStage: text("expected_stage", { enum: ["development", "pre_production", "production", "unknown"] }).notNull().default("pre_production"),
+  expectedStartDate: integer("expected_start_date"),
+  source: text("source", { enum: ["tmdb", "manual"] }).notNull().default("manual"),
+  notes: text("notes"),
+  flaggedForOutreach: integer("flagged_for_outreach", { mode: "boolean" }).notNull().default(false),
+  outreachNotes: text("outreach_notes"),
+  addedBy: text("added_by").notNull().references(() => users.id),
+  addedAt: integer("added_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  archivedAt: integer("archived_at"),
+});
+
 export const downloadEvents = sqliteTable("download_events", {
   id: text("id").primaryKey(), // UUID
   licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }), // null for talent's own downloads

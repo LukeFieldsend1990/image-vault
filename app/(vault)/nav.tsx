@@ -342,6 +342,17 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
+    // Upcoming productions not yet on Image Vault — same platform-wide grant gate.
+    href: "/watchlist",
+    label: "Watchlist",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: (
@@ -413,7 +424,7 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
   // The oversight Productions tracker + repeat-offender Scorecard are only for
   // compliance watchers holding a platform-wide grant; hide them for scoped watchers.
   if (isComplianceRole(role) && !platformOversight) {
-    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight");
+    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight" && item.href !== "/watchlist");
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]

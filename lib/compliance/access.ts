@@ -9,7 +9,8 @@ import { licences, organisationMembers, productions, talentReps, users } from "@
 import type { getDb } from "@/lib/db";
 import type { SessionPayload } from "@/lib/auth/jwt";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { isIndustryRole } from "@/lib/auth/roles";
+import { isComplianceRole, isIndustryRole } from "@/lib/auth/roles";
+import { hasGrantForScope } from "./grants";
 
 // Admin is determined by the email whitelist (lib/auth/adminEmails), not the JWT
 // role — platform admins keep their original role (e.g. talent) and gain admin via
@@ -129,6 +130,13 @@ export async function authorizeScope(
   }
 
   if (isAdminSession(session)) return { ok: true };
+
+  // Compliance watchers (union/regulator/insurer) read certificates within their
+  // granted scope: a platform-wide grant authorises any scope; a scoped grant must
+  // match this scope + id. This also covers certs they minted themselves.
+  if (isComplianceRole(session.role) && await hasGrantForScope(db, session.sub, scope, scopeId)) {
+    return { ok: true };
+  }
 
   if (scope === "licence") {
     const a = await authorizeLicence(db, session, scopeId, "read");
