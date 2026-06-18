@@ -22,6 +22,7 @@ import {
   aiCostLog,
   aiBatchRuns,
 } from "./schema";
+import { runTmdbDiscovery } from "./tmdb-discovery";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ interface Env {
   DB: D1Database;
   AI: Ai;
   ANTHROPIC_API_KEY?: string;
+  TMDB_API_KEY?: string;
   APP_URL: string;
 }
 
@@ -777,9 +779,19 @@ const handler = {
     return Response.json({ error: "Not found" }, { status: 404 });
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+  async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
     const db = drizzle(env.DB);
     const startedAt = Math.floor(Date.now() / 1000);
+
+    // TMDB watchlist discovery — once per day on the morning run only.
+    if (event.cron === "0 7 * * *" && env.TMDB_API_KEY) {
+      try {
+        await runTmdbDiscovery(env.TMDB_API_KEY, db);
+      } catch (err) {
+        console.error("TMDB discovery error:", err instanceof Error ? err.message : String(err));
+      }
+    }
+
     const batchId = crypto.randomUUID();
     await createBatchRun(db, {
       id: batchId,
