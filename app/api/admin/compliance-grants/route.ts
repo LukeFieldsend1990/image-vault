@@ -6,6 +6,7 @@ import { complianceGrants, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isComplianceRole } from "@/lib/auth/roles";
+import { isAllowedScopeForSubtype, INSURER_ALLOWED_SCOPES } from "@/lib/compliance/grants";
 import { eq, isNull, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
@@ -61,6 +62,14 @@ export async function POST(req: NextRequest) {
   }
   if (body.scope !== "platform" && !body.scopeId) {
     return NextResponse.json({ error: "scopeId is required unless scope is platform" }, { status: 400 });
+  }
+  // Insurance is bound per production — refuse org-/platform-wide insurer grants
+  // even for admins (data minimisation). See INSURER_ALLOWED_SCOPES.
+  if (!isAllowedScopeForSubtype(body.subtype, body.scope)) {
+    return NextResponse.json(
+      { error: `insurer grants are limited to scopes: ${INSURER_ALLOWED_SCOPES.join(" | ")}` },
+      { status: 400 },
+    );
   }
 
   const db = getDb();

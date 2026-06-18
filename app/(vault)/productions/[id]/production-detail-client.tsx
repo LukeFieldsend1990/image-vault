@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
+import InsurersPanel from "./insurers-panel";
 import { formatScan } from "@/lib/codes/codes";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -892,6 +893,9 @@ export default function ProductionDetailClient() {
           </div>
         </div>
       )}
+
+      {/* Insurers */}
+      <InsurersPanel productionId={id} />
     </div>
   );
 }

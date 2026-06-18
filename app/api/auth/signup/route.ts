@@ -5,6 +5,7 @@ import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { users, invites, talentReps, productionCast, licences, productions, organisations } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
+import { createGrant } from "@/lib/compliance/grants";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
 const VALID_ROLES = ["talent", "rep", "industry", "licensee", "compliance"] as const;
@@ -143,6 +144,26 @@ export async function POST(req: NextRequest) {
         invitedBy: inviteRow.invitedBy,
         createdAt: now,
       });
+    }
+
+    // Auto-grant a production-scoped compliance grant when an invited watcher
+    // (e.g. an insurer added per production) completes signup. The invite's
+    // orgSubtype carries the compliance subtype; default to insurer.
+    if (inviteRow.productionId && role === "compliance") {
+      try {
+        await createGrant(db, {
+          complianceUserId: userId,
+          subtype: (inviteRow.orgSubtype === "union" || inviteRow.orgSubtype === "regulator"
+            ? inviteRow.orgSubtype
+            : "insurer"),
+          scope: "production",
+          scopeId: inviteRow.productionId,
+          grantedBy: inviteRow.invitedBy,
+        });
+      } catch {
+        // Don't block signup if the grant can't be created; the producer can
+        // re-add the insurer, which is idempotent.
+      }
     }
 
     // Auto-link production cast if this invite has a production_id and the role is talent
