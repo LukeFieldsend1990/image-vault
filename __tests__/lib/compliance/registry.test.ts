@@ -10,11 +10,13 @@ const clause = (results: ReturnType<typeof evaluateObligations>, ref: string) =>
   results.find((o) => o.clauseRef === ref);
 
 describe("regime registration", () => {
-  it("registers SAG-AFTRA plus the three stubs", () => {
+  it("registers SAG-AFTRA + UK Equity plus the two stubs", () => {
     const ids = listRegimes().map((r) => r.id).sort();
     expect(ids).toEqual(["bipa", "equity", "gdpr", "sag_aftra"]);
     expect(getRegime("sag_aftra")?.obligations.length).toBeGreaterThan(0);
-    expect(getRegime("equity")?.obligations).toEqual([]);
+    expect(getRegime("equity")?.obligations.length).toBeGreaterThan(0);
+    // gdpr / bipa remain stubs pending review
+    expect(getRegime("gdpr")?.obligations).toEqual([]);
   });
 });
 
@@ -85,5 +87,41 @@ describe("SAG-AFTRA obligation evaluation", () => {
         "39.I",
       )?.status,
     ).toBe("met");
+  });
+});
+
+describe("UK Equity obligation evaluation", () => {
+  const byId = (results: ReturnType<typeof evaluateObligations>, id: string) => results.find((o) => o.id === id);
+
+  it("explicit consent + performers' consent are both met by a licence grant", () => {
+    const r = evaluateObligations("equity", aiLicence, [
+      { eventType: "consent.granted", scope: { useType: "ai_avatar" } },
+    ]);
+    expect(byId(r, "equity-explicit-consent")?.status).toBe("met");
+    expect(byId(r, "equity-performers-consent")?.status).toBe("met");
+  });
+
+  it("a withdrawn (revoked) consent drops explicit consent back to a gap", () => {
+    const events: EvaluatedEvent[] = [
+      { eventType: "consent.granted", scope: { useType: "ai_avatar" } },
+      { eventType: "consent.revoked", scope: { useType: "ai_avatar" } },
+    ];
+    expect(byId(evaluateObligations("equity", aiLicence, events), "equity-explicit-consent")?.status).toBe("gap");
+  });
+
+  it("security + data-minimisation are gaps until attested", () => {
+    const r = evaluateObligations("equity", aiLicence, []);
+    expect(byId(r, "equity-data-security")?.status).toBe("gap");
+    expect(byId(r, "equity-data-minimisation")?.status).toBe("gap");
+  });
+
+  it("fair-remuneration metering only applies to AI-bearing licences", () => {
+    expect(evaluateObligations("equity", filmDoubleLicence, []).some((o) => o.id === "equity-fair-remuneration")).toBe(false);
+    expect(evaluateObligations("equity", aiLicence, []).some((o) => o.id === "equity-fair-remuneration")).toBe(true);
+  });
+
+  it("onward transfer is n/a until requested, then gap until approved", () => {
+    expect(byId(evaluateObligations("equity", aiLicence, []), "equity-onward-transfer")?.status).toBe("n/a");
+    expect(byId(evaluateObligations("equity", aiLicence, [{ eventType: "transfer.requested" }]), "equity-onward-transfer")?.status).toBe("gap");
   });
 });
