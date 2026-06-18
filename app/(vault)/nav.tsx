@@ -316,6 +316,32 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
+    // Platform-wide oversight productions tracker — only shown to watchers with a
+    // platform-wide grant (filtered in NavLinks via platformOversight).
+    href: "/productions",
+    label: "Productions",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="15" rx="2" />
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+        <line x1="12" y1="12" x2="12" y2="16" />
+        <line x1="10" y1="14" x2="14" y2="14" />
+      </svg>
+    ),
+  },
+  {
+    // Repeat-offender scorecard — same platform-wide grant gate as Productions.
+    href: "/oversight",
+    label: "Scorecard",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: (
@@ -375,7 +401,7 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean }) {
+export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   if (!inboundEnabled) {
@@ -383,6 +409,11 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
   }
   if (complianceEnabled === false) {
     base = base.filter((item) => !item.href.startsWith("/compliance"));
+  }
+  // The oversight Productions tracker + repeat-offender Scorecard are only for
+  // compliance watchers holding a platform-wide grant; hide them for scoped watchers.
+  if (isComplianceRole(role) && !platformOversight) {
+    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight");
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]

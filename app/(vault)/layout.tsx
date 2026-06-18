@@ -10,6 +10,8 @@ import { getDb } from "@/lib/db";
 import { licences, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
+import { isAdmin } from "@/lib/auth/adminEmails";
+import { hasPlatformGrant } from "@/lib/compliance/grants";
 
 type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
 
@@ -160,6 +162,18 @@ async function getShowCodes(userId: string): Promise<boolean> {
   }
 }
 
+// Compliance watchers see the oversight Productions tracker only with a
+// platform-wide grant; admins always.
+async function getPlatformOversight(userId: string, email: string, role: Role): Promise<boolean> {
+  if (isAdmin(email)) return true;
+  if (!isComplianceRole(role) || !userId) return false;
+  try {
+    return await hasPlatformGrant(getDb(), userId);
+  } catch {
+    return false;
+  }
+}
+
 async function getComplianceEnabled(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
@@ -182,13 +196,14 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes] = await Promise.all([
+  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
     getLicenceAlert(sub, role),
     getComplianceEnabled(sub),
     getShowCodes(sub),
+    getPlatformOversight(sub, email, role),
   ]);
 
   const homeHref = isComplianceRole(role) ? "/evidence" : isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
@@ -208,7 +223,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} />
+            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} />
           </div>
 
           <div>
