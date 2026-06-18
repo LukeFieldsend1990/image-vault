@@ -11,6 +11,7 @@ import { downloadCompleteEmail } from "@/lib/email/templates";
 import { triggerAiService } from "@/lib/ai/service";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import type { DualCustodySession } from "../initiate/route";
+import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
 
 const DOWNLOAD_TOKEN_TTL = 48 * 60 * 60; // 48 hours in seconds
 
@@ -208,6 +209,19 @@ export async function POST(
             ...downloadCompleteEmail({ ...params, recipientEmail: talentUser.email, isLicensee: false }),
           })
         : Promise.resolve(),
+      createNotification(db, {
+        userId: dcSession.licenseeId,
+        type: "download_complete",
+        title: "Download ready",
+        body: licenceRow.projectName,
+        href: `/licences`,
+      }),
+      notifyTalentAndReps(db, dcSession.talentId, {
+        type: "download_complete",
+        title: "Download completed",
+        body: `${packageName} · ${licenceRow.projectName}`,
+        href: `/vault/licences`,
+      }),
     ]);
   })();
 

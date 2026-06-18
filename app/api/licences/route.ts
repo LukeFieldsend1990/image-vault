@@ -9,6 +9,7 @@ import { sendEmail } from "@/lib/email/send";
 import { licenceRequestedEmail, placeholderLicenceCreatedEmail } from "@/lib/email/templates";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { notifyTalentAndReps } from "@/lib/notifications/create";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -379,6 +380,12 @@ export async function POST(req: NextRequest) {
       reviewUrl: `${baseUrl}/vault/licences`,
     });
     await sendEmail({ to: talentUser.email, subject, html });
+    await notifyTalentAndReps(db, resolvedTalentId, {
+      type: "licence_requested",
+      title: "New licence request",
+      body: `${productionCompany.trim()} · ${projectName.trim()}`,
+      href: `/vault/licences`,
+    });
   })();
 
   return NextResponse.json({ licenceId, status: isPlaceholder ? "AWAITING_PACKAGE" : "PENDING" }, { status: 201 });

@@ -7,6 +7,7 @@ import { licences, users, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
+import { notifyTalentAndReps } from "@/lib/notifications/create";
 
 export interface DualCustodySession {
   licenceId: string;
@@ -47,6 +48,7 @@ export async function POST(
       status: licences.status,
       validTo: licences.validTo,
       deliveryMode: licences.deliveryMode,
+      projectName: licences.projectName,
     })
     .from(licences)
     .where(eq(licences.id, id))
@@ -130,6 +132,13 @@ export async function POST(
 
   await kv.put(`dual_custody:${id}`, JSON.stringify(session_data), {
     expirationTtl: 3600,
+  });
+
+  void notifyTalentAndReps(db, licence.talentId, {
+    type: "download_initiated",
+    title: "Download approval needed",
+    body: licence.projectName,
+    href: `/vault/licences`,
   });
 
   return NextResponse.json({ step: "awaiting_licensee" });

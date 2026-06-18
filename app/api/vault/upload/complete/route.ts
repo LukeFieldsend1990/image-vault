@@ -8,6 +8,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, sql, and } from "drizzle-orm";
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { sha256HexFromStream } from "@/lib/crypto/hash";
+import { notifyTalentAndReps } from "@/lib/notifications/create";
 
 function cfEnv(key: string): string | undefined {
   try {
@@ -191,6 +192,20 @@ export async function POST(req: NextRequest) {
         updatedAt: now,
       })
       .where(eq(scanPackages.id, packageId));
+
+    if (allComplete) {
+      const pkgRow = await db
+        .select({ name: scanPackages.name })
+        .from(scanPackages)
+        .where(eq(scanPackages.id, packageId))
+        .get();
+      void notifyTalentAndReps(db, session.sub, {
+        type: "upload_complete",
+        title: "Package ready",
+        body: pkgRow?.name ?? null,
+        href: `/vault`,
+      });
+    }
 
   }
 
