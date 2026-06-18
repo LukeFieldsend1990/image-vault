@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem, LicenceSummary, ObligationResultWithEvidence, CastOnboarding } from "@/lib/compliance/dashboard";
+import { RegimeSelector, useRegime, withRegime } from "../regime-selector";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 
@@ -757,6 +758,7 @@ export default function ComplianceDashboardClient() {
   const [modalProd, setModalProd] = useState<ProductionCompliance | null>(null);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [regime, setRegime] = useRegime();
 
   // Load user's org list on mount — populates the switcher
   useEffect(() => {
@@ -773,10 +775,10 @@ export default function ComplianceDashboardClient() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const url = selectedOrgId
+    const base = selectedOrgId
       ? `/api/compliance/dashboard?orgId=${encodeURIComponent(selectedOrgId)}`
       : "/api/compliance/dashboard";
-    fetch(url)
+    fetch(withRegime(base, regime))
       .then((r) => r.json())
       .then((raw) => {
         const d = raw as DashboardData | { error: string };
@@ -785,7 +787,7 @@ export default function ComplianceDashboardClient() {
       })
       .catch(() => setError("Failed to load compliance data."))
       .finally(() => setLoading(false));
-  }, [selectedOrgId]);
+  }, [selectedOrgId, regime]);
 
   async function generateCertificate() {
     if (!data) return;
@@ -812,10 +814,10 @@ export default function ComplianceDashboardClient() {
         certWindow.location.href = json.url;
       }
       // Refresh dashboard to show the new cert in the vault
-      const refreshUrl = selectedOrgId
+      const refreshBase = selectedOrgId
         ? `/api/compliance/dashboard?orgId=${encodeURIComponent(selectedOrgId)}`
         : "/api/compliance/dashboard";
-      const refreshed = await fetch(refreshUrl).then((r) => r.json()) as DashboardData;
+      const refreshed = await fetch(withRegime(refreshBase, regime)).then((r) => r.json()) as DashboardData;
       setData(refreshed);
     } catch (e) {
       certWindow?.close();
@@ -832,7 +834,7 @@ export default function ComplianceDashboardClient() {
     background: "var(--color-surface)",
   };
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-12">
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
@@ -878,7 +880,8 @@ export default function ComplianceDashboardClient() {
             )}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-2">
+          <RegimeSelector value={regime} onChange={setRegime} disabled={loading} />
           <button
             onClick={generateCertificate}
             disabled={generatingCert}

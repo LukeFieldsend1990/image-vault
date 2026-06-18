@@ -9,6 +9,7 @@ import type {
   LicenceSummary,
   ObligationResultWithEvidence,
 } from "@/lib/compliance/dashboard";
+import { RegimeSelector, useRegime, withRegime } from "./regime-selector";
 
 // ── colour helpers ────────────────────────────────────────────────────────────
 
@@ -775,13 +776,17 @@ export default function ComplianceClient({
   const [certError, setCertError] = useState<string | null>(null);
   const [showAllActions, setShowAllActions] = useState(false);
   const [modalProd, setModalProd] = useState<ProductionCompliance | null>(null);
+  const [regime, setRegime] = useRegime();
 
   const dashboardUrl = dashboardUrlProp ?? (talentId
     ? `/api/compliance/talent-dashboard?talentId=${encodeURIComponent(talentId)}`
     : "/api/compliance/talent-dashboard");
+  const regimeUrl = withRegime(dashboardUrl, regime);
 
   useEffect(() => {
-    fetch(dashboardUrl)
+    setLoading(true);
+    setError(null);
+    fetch(regimeUrl)
       .then((r) => r.json())
       .then((raw) => {
         const d = raw as DashboardData | { error: string };
@@ -790,7 +795,7 @@ export default function ComplianceClient({
       })
       .catch(() => setError("Failed to load compliance data."))
       .finally(() => setLoading(false));
-  }, [dashboardUrl]);
+  }, [regimeUrl]);
 
   async function generateCertificate() {
     if (!data) return;
@@ -810,7 +815,7 @@ export default function ComplianceClient({
         return;
       }
       if (certWindow && json.url) certWindow.location.href = json.url;
-      const refreshed = await fetch(dashboardUrl).then((r) => r.json()) as DashboardData;
+      const refreshed = await fetch(regimeUrl).then((r) => r.json()) as DashboardData;
       setData(refreshed);
     } catch (e) {
       certWindow?.close();
@@ -824,7 +829,7 @@ export default function ComplianceClient({
   const card = "rounded p-4";
   const cardStyle = { border: "1px solid var(--color-border)", background: "var(--color-surface)" };
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-12">
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading compliance data…</p>
@@ -862,19 +867,22 @@ export default function ComplianceClient({
             <p className="text-xs mt-1" style={{ color: "var(--color-muted)" }}>{subtitle}</p>
           )}
         </div>
-        {!readOnly && (
-          <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={() => void generateCertificate()}
-              disabled={generatingCert}
-              className="text-xs px-4 py-2 rounded disabled:opacity-50"
-              style={{ background: "var(--color-accent)", color: "#fff" }}
-            >
-              {generatingCert ? "Generating…" : "Generate Certificate"}
-            </button>
-            {certError && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{certError}</p>}
-          </div>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          <RegimeSelector value={regime} onChange={setRegime} disabled={loading} />
+          {!readOnly && (
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={() => void generateCertificate()}
+                disabled={generatingCert}
+                className="text-xs px-4 py-2 rounded disabled:opacity-50"
+                style={{ background: "var(--color-accent)", color: "#fff" }}
+              >
+                {generatingCert ? "Generating…" : "Generate Certificate"}
+              </button>
+              {certError && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{certError}</p>}
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Health score + stat cards */}
