@@ -1,10 +1,12 @@
 export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
+import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { declareStrike, listStrikes, type StrikeScope } from "@/lib/compliance/strike";
+import { notifyInsurersOfStrike } from "@/lib/notifications/insurer";
 
 const SCOPES: StrikeScope[] = ["global", "organisation", "production", "licence"];
 
@@ -52,14 +54,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "scopeId is required for non-global strikes" }, { status: 400 });
   }
 
-  const result = await declareStrike(getDb(), {
+  const db = getDb();
+  const resolvedScopeId = scope === "global" ? null : scopeId;
+  const result = await declareStrike(db, {
     scope,
-    scopeId: scope === "global" ? null : scopeId,
+    scopeId: resolvedScopeId,
     reason,
     declaredBy: session.sub,
     ip: clientIp(req),
     ua: req.headers.get("user-agent"),
   });
+
+  // Risk monitoring (§4.5): alert any insurer covering the affected production(s).
+  try {
+    const { ctx } = getRequestContext();
+    ctx.waitUntil(notifyInsurersOfStrike(db, { scope, scopeId: resolvedScopeId, reason }));
+  } catch {
+    // outside the edge request context (e.g. tests) — skip the side-effect
+  }
 
   return NextResponse.json({ ok: true, ...result }, { status: 201 });
 }
