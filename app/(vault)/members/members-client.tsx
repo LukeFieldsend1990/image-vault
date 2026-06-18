@@ -60,6 +60,8 @@ export default function MembersClient() {
         setPaste("");
         await load();
       }
+    } catch {
+      setNotice("Upload failed — please try again.");
     } finally {
       setUploading(false);
     }

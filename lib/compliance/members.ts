@@ -104,9 +104,9 @@ export async function addMembers(db: Db, names: string[], addedBy: string): Prom
     .filter((n) => !existingKeys.has(normaliseName(n)))
     .map((name) => ({ id: crypto.randomUUID(), name, addedBy, addedAt: now, archivedAt: null }));
 
-  // Batch insert (D1 has a bound-parameter ceiling, so chunk generously).
-  for (let i = 0; i < toInsert.length; i += 100) {
-    await db.insert(unionMembers).values(toInsert.slice(i, i + 100));
+  // D1 caps bound parameters at ~100 per statement; 5 columns × 20 rows = 100 params.
+  for (let i = 0; i < toInsert.length; i += 20) {
+    await db.insert(unionMembers).values(toInsert.slice(i, i + 20));
   }
 
   return { added: toInsert.length, skipped: names.length - toInsert.length };
