@@ -1092,3 +1092,394 @@ export async function buildTalentDashboard(
     recentCertificates: certRows,
   };
 }
+
+// ── Platform-wide dashboard ─────────────────────────────────────────────────────
+//
+// Same structure and evaluation as the org dashboard but spanning EVERY licence,
+// production and organisation on the platform. Powers the read-only view that a
+// platform-wide compliance watcher (Union / Regulator / Insurer with a blanket
+// grant) sees in /evidence — they get the full interactive control centre rather
+// than a per-scope drill-down. Includes cast onboarding, every active strike,
+// every pending transfer, and the most recent certificates across all scopes.
+
+export async function buildPlatformDashboard(
+  db: Db,
+  regime: RegimeId,
+): Promise<DashboardData> {
+  // Every production on the platform — needed for cast-onboarding coverage even
+  // before any licence exists.
+  const allProductions = await db
+    .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
+    .from(productions)
+    .all();
+
+  const licenceRows = await db
+    .select({
+      id: licences.id,
+      projectName: licences.projectName,
+      productionId: licences.productionId,
+      licenceType: licences.licenceType,
+      permitAiTraining: licences.permitAiTraining,
+      status: licences.status,
+      createdAt: licences.createdAt,
+      lastDownloadAt: licences.lastDownloadAt,
+      scrubAttestedAt: licences.scrubAttestedAt,
+      scrubDeadline: licences.scrubDeadline,
+    })
+    .from(licences)
+    .all();
+
+  // Platform-wide counts that apply regardless of the licence set.
+  const activeStrikeRows = await db
+    .select({ id: strikeLocks.id })
+    .from(strikeLocks)
+    .where(eq(strikeLocks.status, "active"))
+    .all();
+  const pendingTransferRows = await db
+    .select({ id: replicaTransfers.id })
+    .from(replicaTransfers)
+    .where(eq(replicaTransfers.status, "requested"))
+    .all();
+  const certRows = await db
+    .select({ id: complianceCertificates.id, scope: complianceCertificates.scope, generatedAt: complianceCertificates.generatedAt })
+    .from(complianceCertificates)
+    .orderBy(desc(complianceCertificates.generatedAt))
+    .limit(8)
+    .all();
+
+  const PLATFORM_NAME = "Platform-wide";
+
+  if (licenceRows.length === 0) {
+    // No licences yet — still surface productions that have cast in onboarding.
+    const castOnlyProductions: ProductionCompliance[] = [];
+    const castActionItems: ActionItem[] = [];
+    const allProdIds = allProductions.map((p) => p.id);
+    const castByProd = new Map<string, CastOnboarding>();
+    if (allProdIds.length > 0) {
+      const castRows = await db
+        .select({ productionId: productionCast.productionId, status: productionCast.status })
+        .from(productionCast)
+        .where(inArray(productionCast.productionId, allProdIds))
+        .all();
+      for (const c of castRows) {
+        const cur = castByProd.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, pct: 0 };
+        cur.total++;
+        if (c.status === "consented") cur.consented++;
+        else if (c.status === "linked" || c.status === "scan_uploaded") cur.linked++;
+        else if (c.status === "invited") cur.invited++;
+        castByProd.set(c.productionId, cur);
+      }
+      for (const [pid, stats] of castByProd) {
+        stats.pct = stats.total > 0 ? Math.round((stats.consented / stats.total) * 100) : 100;
+        castByProd.set(pid, stats);
+      }
+    }
+    for (const prod of allProductions) {
+      const co = castByProd.get(prod.id);
+      if (!co) continue;
+      castOnlyProductions.push({
+        id: prod.id,
+        name: prod.name,
+        type: prod.type,
+        sagProjectNumber: prod.sagProjectNumber,
+        licenceCount: 0,
+        healthScore: 0,
+        complianceStatus: co.consented === co.total && co.total > 0 ? "partial" : "critical",
+        requiredGaps: 0,
+        obligations: [],
+        licences: [],
+        castOnboarding: co,
+      });
+      if (co.invited > 0) {
+        castActionItems.push({
+          productionName: prod.name,
+          licenceId: "",
+          licenceProjectName: prod.name,
+          obligationId: "platform-cast-invite-pending",
+          clauseRef: "Onboarding",
+          title: "Cast members awaiting vault account",
+          severity: "required",
+          action: `${co.invited} cast member${co.invited > 1 ? "s have" : " has"} not yet created a vault account.`,
+          actionOwner: "talent",
+          urgency: "soon",
+          deadlineLabel: null,
+        });
+      }
+    }
+    return {
+      orgId: "platform",
+      orgName: PLATFORM_NAME,
+      regime,
+      healthScore: castOnlyProductions.length > 0 ? 0 : 100,
+      complianceStatus: castOnlyProductions.length > 0 ? "critical" : "compliant",
+      summary: {
+        totalProductions: castOnlyProductions.length,
+        compliantProductions: 0,
+        totalLicences: 0,
+        requiredGapsTotal: 0,
+        activeStrikes: activeStrikeRows.length,
+        pendingTransfers: pendingTransferRows.length,
+      },
+      productions: castOnlyProductions,
+      obligationSummary: [],
+      actionItems: castActionItems,
+      recentCertificates: certRows,
+    };
+  }
+
+  const licenceIds = licenceRows.map((l) => l.id);
+
+  const eventRows = await db
+    .select({
+      licenceId: complianceEvents.licenceId,
+      eventType: complianceEvents.eventType,
+      scopeJson: complianceEvents.scopeJson,
+      seq: complianceEvents.seq,
+      createdAt: complianceEvents.createdAt,
+      hash: complianceEvents.hash,
+    })
+    .from(complianceEvents)
+    .where(inArray(complianceEvents.licenceId, licenceIds))
+    .orderBy(complianceEvents.seq)
+    .all();
+
+  const eventsByLicence = new Map<string, LicenceEventRow[]>();
+  for (const e of eventRows) {
+    if (!e.licenceId) continue;
+    const list = eventsByLicence.get(e.licenceId) ?? [];
+    list.push({ eventType: e.eventType, scopeJson: e.scopeJson, seq: e.seq, createdAt: e.createdAt, hash: e.hash });
+    eventsByLicence.set(e.licenceId, list);
+  }
+
+  const productionMap = new Map(allProductions.map((p) => [p.id, p]));
+  const allProductionIds = allProductions.map((p) => p.id);
+
+  // Cast onboarding stats for every production (batch, no N+1)
+  const castStatsByProduction = new Map<string, CastOnboarding>();
+  if (allProductionIds.length > 0) {
+    const castRows = await db
+      .select({ productionId: productionCast.productionId, status: productionCast.status })
+      .from(productionCast)
+      .where(inArray(productionCast.productionId, allProductionIds))
+      .all();
+    for (const c of castRows) {
+      const cur = castStatsByProduction.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, pct: 0 };
+      cur.total++;
+      if (c.status === "consented") cur.consented++;
+      else if (c.status === "linked" || c.status === "scan_uploaded") cur.linked++;
+      else if (c.status === "invited") cur.invited++;
+      castStatsByProduction.set(c.productionId, cur);
+    }
+    for (const [pid, stats] of castStatsByProduction) {
+      stats.pct = stats.total > 0 ? Math.round((stats.consented / stats.total) * 100) : 100;
+      castStatsByProduction.set(pid, stats);
+    }
+  }
+
+  type PlatformLicenceGroup = {
+    productionId: string | null;
+    productionName: string;
+    productionType: string | null;
+    productionSagNumber: string | null;
+    licences: typeof licenceRows;
+  };
+
+  const groups = new Map<string, PlatformLicenceGroup>();
+  for (const l of licenceRows) {
+    const key = l.productionId ?? `__proj__${l.projectName}`;
+    if (!groups.has(key)) {
+      const prod = l.productionId ? productionMap.get(l.productionId) : null;
+      groups.set(key, {
+        productionId: l.productionId,
+        productionName: prod?.name ?? l.projectName,
+        productionType: prod?.type ?? null,
+        productionSagNumber: prod?.sagProjectNumber ?? null,
+        licences: [],
+      });
+    }
+    groups.get(key)!.licences.push(l);
+  }
+
+  const productionResults: ProductionCompliance[] = [];
+  const seenProductionIds = new Set<string>();
+  for (const group of groups.values()) {
+    const obligations = evaluateGroup(group.licences, eventsByLicence, regime);
+    const healthScore = computeHealthScore(obligations);
+    const requiredGaps = obligations.filter((o) => o.severity === "required" && o.status === "gap").length;
+    const licenceSummaries: LicenceSummary[] = group.licences.map((l) => ({
+      id: l.id,
+      projectName: l.projectName,
+      licenceType: l.licenceType,
+      status: l.status,
+      obligations: evaluateLicence(l, eventsByLicence.get(l.id) ?? [], regime),
+    }));
+    const castOnboarding = group.productionId ? (castStatsByProduction.get(group.productionId) ?? null) : null;
+    productionResults.push({
+      id: group.productionId,
+      name: group.productionName,
+      type: group.productionType,
+      sagProjectNumber: group.productionSagNumber,
+      licenceCount: group.licences.length,
+      healthScore,
+      complianceStatus: scoreToStatus(healthScore),
+      requiredGaps,
+      obligations,
+      licences: licenceSummaries,
+      castOnboarding,
+    });
+    if (group.productionId) seenProductionIds.add(group.productionId);
+  }
+
+  // Productions with cast but no licence yet — still visible for onboarding tracking.
+  for (const prod of allProductions) {
+    if (seenProductionIds.has(prod.id)) continue;
+    const castOnboarding = castStatsByProduction.get(prod.id) ?? null;
+    if (!castOnboarding) continue;
+    productionResults.push({
+      id: prod.id,
+      name: prod.name,
+      type: prod.type,
+      sagProjectNumber: prod.sagProjectNumber,
+      licenceCount: 0,
+      healthScore: 0,
+      complianceStatus: castOnboarding.consented === castOnboarding.total && castOnboarding.total > 0 ? "partial" : "critical",
+      requiredGaps: 0,
+      obligations: [],
+      licences: [],
+      castOnboarding,
+    });
+  }
+
+  productionResults.sort((a, b) => a.healthScore - b.healthScore);
+
+  const totalLicences = licenceRows.length;
+  const weightedScore = productionResults.reduce((sum, p) => sum + p.healthScore * p.licenceCount, 0);
+  const orgHealthScore = totalLicences > 0 ? Math.round(weightedScore / totalLicences) : 100;
+
+  const obligationMap = new Map<string, ObligationSummaryItem>();
+  for (const prod of productionResults) {
+    for (const o of prod.obligations) {
+      if (!obligationMap.has(o.id)) {
+        obligationMap.set(o.id, { id: o.id, clauseRef: o.clauseRef, title: o.title, severity: o.severity, metCount: 0, gapCount: 0, naCount: 0, pendingCount: 0, progressPct: 0 });
+      }
+      const item = obligationMap.get(o.id)!;
+      if (o.status === "met") item.metCount++;
+      else if (o.status === "gap") item.gapCount++;
+      else if (o.status === "pending") item.pendingCount++;
+      else item.naCount++;
+    }
+  }
+  for (const item of obligationMap.values()) {
+    const assessed = item.metCount + item.gapCount;
+    item.progressPct = assessed > 0 ? Math.round((item.metCount / assessed) * 100) : 100;
+  }
+  const obligationSummary = [...obligationMap.values()].sort((a, b) => a.clauseRef.localeCompare(b.clauseRef));
+
+  const actionItems: ActionItem[] = [];
+  for (const group of groups.values()) {
+    for (const licence of group.licences) {
+      const obligations = evaluateLicence(licence, eventsByLicence.get(licence.id) ?? [], regime);
+      for (const o of obligations) {
+        if (o.status !== "gap" && o.status !== "pending") continue;
+        const rem = REMEDIATION[o.id];
+        if (!rem) continue;
+        if (o.status === "pending") {
+          actionItems.push({
+            productionName: group.productionName,
+            licenceId: licence.id,
+            licenceProjectName: licence.projectName,
+            obligationId: o.id,
+            clauseRef: o.clauseRef,
+            title: o.title,
+            severity: o.severity,
+            action: rem.action,
+            actionOwner: rem.owner,
+            urgency: "pending",
+            deadlineLabel: "Required on expiry",
+          });
+        } else {
+          const { urgency, deadlineLabel } = computeUrgency(o.id, o.severity, licence.createdAt, licence.lastDownloadAt);
+          actionItems.push({
+            productionName: group.productionName,
+            licenceId: licence.id,
+            licenceProjectName: licence.projectName,
+            obligationId: o.id,
+            clauseRef: o.clauseRef,
+            title: o.title,
+            severity: o.severity,
+            action: rem.action,
+            actionOwner: rem.owner,
+            urgency,
+            deadlineLabel,
+          });
+        }
+      }
+    }
+  }
+
+  // Cast onboarding action items across every production
+  for (const prod of productionResults) {
+    if (!prod.castOnboarding || prod.castOnboarding.total === 0) continue;
+    const co = prod.castOnboarding;
+    if (co.invited > 0) {
+      actionItems.push({
+        productionName: prod.name,
+        licenceId: "",
+        licenceProjectName: prod.name,
+        obligationId: "platform-cast-invite-pending",
+        clauseRef: "Onboarding",
+        title: "Cast members awaiting vault account",
+        severity: "required",
+        action: `${co.invited} cast member${co.invited > 1 ? "s have" : " has"} not yet created a vault account.`,
+        actionOwner: "talent",
+        urgency: "soon",
+        deadlineLabel: null,
+      });
+    }
+    if (co.linked > 0) {
+      actionItems.push({
+        productionName: prod.name,
+        licenceId: "",
+        licenceProjectName: prod.name,
+        obligationId: "platform-cast-scan-pending",
+        clauseRef: "Onboarding",
+        title: "Cast members awaiting scan upload or approval",
+        severity: "required",
+        action: `${co.linked} cast member${co.linked > 1 ? "s have" : " has"} signed up but not yet uploaded a scan or approved their licence.`,
+        actionOwner: "talent",
+        urgency: "upcoming",
+        deadlineLabel: null,
+      });
+    }
+  }
+
+  const urgencyOrder: Record<string, number> = { critical: 0, soon: 1, upcoming: 2, info: 3, pending: 4 };
+  actionItems.sort((a, b) => {
+    const u = urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
+    if (u !== 0) return u;
+    return a.severity === "required" && b.severity !== "required" ? -1 : 1;
+  });
+
+  const requiredGapsTotal = productionResults.reduce((sum, p) => sum + p.requiredGaps, 0);
+  const compliantProductions = productionResults.filter((p) => p.complianceStatus === "compliant").length;
+
+  return {
+    orgId: "platform",
+    orgName: PLATFORM_NAME,
+    regime,
+    healthScore: orgHealthScore,
+    complianceStatus: scoreToStatus(orgHealthScore),
+    summary: {
+      totalProductions: productionResults.length,
+      compliantProductions,
+      totalLicences,
+      requiredGapsTotal,
+      activeStrikes: activeStrikeRows.length,
+      pendingTransfers: pendingTransferRows.length,
+    },
+    productions: productionResults,
+    obligationSummary,
+    actionItems,
+    recentCertificates: certRows,
+  };
+}

@@ -150,7 +150,7 @@ function ObligationBar({ item }: { item: ObligationSummaryItem }) {
 
 // ── Production card ───────────────────────────────────────────────────────────
 
-function ProductionCard({ prod, onClick }: { prod: ProductionCompliance; onClick: () => void }) {
+function ProductionCard({ prod, onClick, readOnly }: { prod: ProductionCompliance; onClick: () => void; readOnly?: boolean }) {
   const color = STATUS_COLORS[prod.complianceStatus];
   const bg = STATUS_BG[prod.complianceStatus];
   const circ = 2 * Math.PI * 22;
@@ -224,7 +224,7 @@ function ProductionCard({ prod, onClick }: { prod: ProductionCompliance; onClick
       </div>
 
       <p className="text-[10px] uppercase tracking-widest" style={{ color: "var(--color-muted)", opacity: 0.7 }}>
-        Click to manage consents →
+        {readOnly ? "Click to view obligations →" : "Click to manage consents →"}
       </p>
     </button>
   );
@@ -364,7 +364,7 @@ interface ConsentRecord {
   status: "granted" | "revoked" | "expired";
 }
 
-function LicenceConsentSection({ licenceId, licenceType }: { licenceId: string; licenceType: string | null }) {
+function LicenceConsentSection({ licenceId, licenceType, readOnly }: { licenceId: string; licenceType: string | null; readOnly?: boolean }) {
   const [records, setRecords] = useState<ConsentRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -454,7 +454,7 @@ function LicenceConsentSection({ licenceId, licenceType }: { licenceId: string; 
                 >
                   {c.status}
                 </span>
-                {c.status === "granted" && (
+                {!readOnly && c.status === "granted" && (
                   <button
                     onClick={() => void revoke(c.id)}
                     disabled={busy === c.id}
@@ -470,6 +470,7 @@ function LicenceConsentSection({ licenceId, licenceType }: { licenceId: string; 
         </ul>
       )}
 
+      {!readOnly && (
       <div className="pt-2" style={{ borderTop: "1px solid var(--color-border)" }}>
         <p className="text-[10px] uppercase tracking-widest font-medium mb-2" style={{ color: "var(--color-muted)" }}>
           Grant additional consent
@@ -517,6 +518,7 @@ function LicenceConsentSection({ licenceId, licenceType }: { licenceId: string; 
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -528,11 +530,13 @@ function ProductionModal({
   talentId,
   regime,
   onClose,
+  readOnly,
 }: {
   prod: ProductionCompliance;
   talentId: string;
   regime: string;
   onClose: () => void;
+  readOnly?: boolean;
 }) {
   const color = STATUS_COLORS[prod.complianceStatus];
   const [certBusy, setCertBusy] = useState(false);
@@ -616,14 +620,16 @@ function ProductionModal({
             {certError && <p className="text-xs mt-1" style={{ color: "var(--color-accent)" }}>{certError}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => void generateCert()}
-              disabled={certBusy}
-              className="text-xs px-3 py-1.5 rounded disabled:opacity-50"
-              style={{ background: "var(--color-accent)", color: "#fff" }}
-            >
-              {certBusy ? "Generating…" : "Certificate"}
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => void generateCert()}
+                disabled={certBusy}
+                className="text-xs px-3 py-1.5 rounded disabled:opacity-50"
+                style={{ background: "var(--color-accent)", color: "#fff" }}
+              >
+                {certBusy ? "Generating…" : "Certificate"}
+              </button>
+            )}
             <button
               onClick={onClose}
               style={{ background: "none", border: "none", color: "var(--color-muted)", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "0 4px" }}
@@ -654,7 +660,9 @@ function ProductionModal({
         {activeTab === "consents" && (
           <div className="space-y-4">
             <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-              Each consent is a signed, time-stamped entry in your compliance ledger (SAG-AFTRA Article 39.B / 39.D).
+              {readOnly
+                ? "Each consent is a signed, time-stamped entry in the compliance ledger (SAG-AFTRA Article 39.B / 39.D)."
+                : "Each consent is a signed, time-stamped entry in your compliance ledger (SAG-AFTRA Article 39.B / 39.D)."}
             </p>
             {prod.licences.map((lic) => (
               <div key={lic.id} style={{ border: "1px solid var(--color-border)", borderRadius: "6px", overflow: "hidden" }}>
@@ -668,7 +676,7 @@ function ProductionModal({
                     · {lic.licenceType?.replace(/_/g, " ") ?? "—"} · {lic.status}
                   </span>
                 </div>
-                <LicenceConsentSection licenceId={lic.id} licenceType={lic.licenceType} />
+                <LicenceConsentSection licenceId={lic.id} licenceType={lic.licenceType} readOnly={readOnly} />
               </div>
             ))}
           </div>
@@ -743,7 +751,23 @@ const REGIME_LABELS: Record<string, string> = {
   bipa: "BIPA — Illinois Biometric",
 };
 
-export default function ComplianceClient({ talentId }: { talentId?: string }) {
+export default function ComplianceClient({
+  talentId,
+  dashboardUrl: dashboardUrlProp,
+  title = "My Compliance Dashboard",
+  subtitle,
+  readOnly = false,
+}: {
+  talentId?: string;
+  /** Override the data source. Defaults to the talent dashboard endpoint. */
+  dashboardUrl?: string;
+  /** Heading shown at the top of the dashboard. */
+  title?: string;
+  /** Optional line under the regime label (e.g. a read-only access note). */
+  subtitle?: string;
+  /** Hide every write control (consent grant/revoke, certificate generation). */
+  readOnly?: boolean;
+}) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -752,9 +776,9 @@ export default function ComplianceClient({ talentId }: { talentId?: string }) {
   const [showAllActions, setShowAllActions] = useState(false);
   const [modalProd, setModalProd] = useState<ProductionCompliance | null>(null);
 
-  const dashboardUrl = talentId
+  const dashboardUrl = dashboardUrlProp ?? (talentId
     ? `/api/compliance/talent-dashboard?talentId=${encodeURIComponent(talentId)}`
-    : "/api/compliance/talent-dashboard";
+    : "/api/compliance/talent-dashboard");
 
   useEffect(() => {
     fetch(dashboardUrl)
@@ -829,23 +853,28 @@ export default function ComplianceClient({ talentId }: { talentId?: string }) {
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--color-text)" }}>
-            My Compliance Dashboard
+            {title}
           </h1>
           <p className="text-xs mt-1 tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
             {REGIME_LABELS[data.regime] ?? data.regime}
           </p>
+          {subtitle && (
+            <p className="text-xs mt-1" style={{ color: "var(--color-muted)" }}>{subtitle}</p>
+          )}
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <button
-            onClick={() => void generateCertificate()}
-            disabled={generatingCert}
-            className="text-xs px-4 py-2 rounded disabled:opacity-50"
-            style={{ background: "var(--color-accent)", color: "#fff" }}
-          >
-            {generatingCert ? "Generating…" : "Generate Certificate"}
-          </button>
-          {certError && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{certError}</p>}
-        </div>
+        {!readOnly && (
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={() => void generateCertificate()}
+              disabled={generatingCert}
+              className="text-xs px-4 py-2 rounded disabled:opacity-50"
+              style={{ background: "var(--color-accent)", color: "#fff" }}
+            >
+              {generatingCert ? "Generating…" : "Generate Certificate"}
+            </button>
+            {certError && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{certError}</p>}
+          </div>
+        )}
       </header>
 
       {/* Health score + stat cards */}
@@ -858,7 +887,11 @@ export default function ComplianceClient({ talentId }: { talentId?: string }) {
             label="Productions"
           />
           <StatCard value={data.summary.requiredGapsTotal} label="Required Gaps" warn />
-          <StatCard value={myActionCount} label="My Actions" warn />
+          {readOnly ? (
+            <StatCard value={data.actionItems.length} label="Open Actions" warn />
+          ) : (
+            <StatCard value={myActionCount} label="My Actions" warn />
+          )}
           <StatCard value={data.summary.pendingTransfers} label="Pending Transfers" warn />
         </div>
         {criticalCount > 0 && (
@@ -893,7 +926,7 @@ export default function ComplianceClient({ talentId }: { talentId?: string }) {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {data.productions.map((prod, i) => (
-              <ProductionCard key={prod.id ?? i} prod={prod} onClick={() => setModalProd(prod)} />
+              <ProductionCard key={prod.id ?? i} prod={prod} onClick={() => setModalProd(prod)} readOnly={readOnly} />
             ))}
           </div>
         </section>
@@ -906,6 +939,7 @@ export default function ComplianceClient({ talentId }: { talentId?: string }) {
           talentId={data.orgId}
           regime={data.regime}
           onClose={() => setModalProd(null)}
+          readOnly={readOnly}
         />
       )}
 
