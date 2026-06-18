@@ -144,12 +144,19 @@ Then fast-follow with **§4.4 portfolio**, **§4.5 monitoring**, **§4.6 cyber c
 
 ## 8. Build checklist
 
-- [ ] `0066_insurer_policies.sql` migration (§3.2)
-- [ ] Hard guard: reject non-production/talent scope for `insurer` grants (§2)
-- [ ] `POST` / `DELETE /api/productions/:id/insurers` + production-detail "Insurers" UI (§4.1)
-- [ ] Insurer underwriting dashboard (per-production) (§4.2)
-- [ ] Claims evidence pack export endpoint + UI (§4.3)
-- [ ] Portfolio roll-up view (§4.4)
+- [x] `0066_insurer_policies.sql` migration (§3.2) — `insurerPolicies` table + Drizzle schema
+- [x] Hard guard: reject non-production/talent scope for `insurer` grants (§2)
+- [x] `POST` / `DELETE /api/productions/:id/insurers` + production-detail "Insurers" UI (§4.1)
+- [x] Insurer underwriting dashboard (per-production) (§4.2) — `/underwriting`, A–D grade, cast onboarding, coverage gaps, use-violations, strikes, policy panel + lapsed/uninsured-use flags
+- [ ] Claims evidence pack export endpoint + UI (§4.3) — *next*
+- [x] Portfolio roll-up view (§4.4) — landing list scoped to the insurer's grants (worst-risk-first); deepen with trend later
 - [ ] Risk monitoring notifications (§4.5)
 - [ ] Cyber controls view (§4.6)
-- [ ] Exclude insurer subtype from platform/org oversight helpers (§5)
+- [x] Exclude insurer subtype from platform/org oversight helpers (§5) — insurer grants can't be platform-scoped (hard guard), so `canViewPlatformOversight()` / `hasPlatformGrant()` already exclude them
+
+### Phase 8 MVP #2 (this PR) — §4.2 underwriting dashboard + §3.2 policies + §4.4 portfolio
+
+- `lib/compliance/underwriting.ts` — `gradeFor` (A–D, hard breaches/strikes cap the grade), `buildUnderwritingView` (per-production), `buildPortfolio` (insurer's book), policy `lapsed` + production-level `uninsuredUse` (usage outside every live policy window). Composes the existing `buildProductionsOverview` / `detectUseViolationsForLicences` so figures tie out with the union surface.
+- `lib/compliance/insurer-access.ts` — `resolveInsurerAccess`: a watcher is authorised only by an active insurer grant on that exact production (admins may view).
+- `GET /api/insurer/productions` (portfolio), `GET /api/insurer/productions/:id` (dashboard), `GET`/`POST /api/insurer/productions/:id/policies`, `DELETE …/policies/:policyId` (soft-archive). Policy writes require the grant holder.
+- `/underwriting` page + client: portfolio sidebar with grade badges, per-production dashboard (grade hero, alerts, metrics, cast bar, policy panel with add/archive). Insurer watchers land here; nav item injected for the insurer subtype.

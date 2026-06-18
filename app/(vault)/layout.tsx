@@ -11,7 +11,7 @@ import { licences, talentProfiles, talentReps, talentSettings, users } from "@/l
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { hasPlatformGrant } from "@/lib/compliance/grants";
+import { hasPlatformGrant, hasInsurerGrant } from "@/lib/compliance/grants";
 
 type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
 
@@ -174,6 +174,17 @@ async function getPlatformOversight(userId: string, email: string, role: Role): 
   }
 }
 
+// Insurer watchers (compliance role holding an insurer grant) get the Underwriting
+// surface and land there by default.
+async function getInsurerWatcher(userId: string, role: Role): Promise<boolean> {
+  if (!isComplianceRole(role) || !userId) return false;
+  try {
+    return await hasInsurerGrant(getDb(), userId);
+  } catch {
+    return false;
+  }
+}
+
 async function getComplianceEnabled(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
@@ -196,7 +207,7 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight] = await Promise.all([
+  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
@@ -204,9 +215,12 @@ export default async function VaultLayout({
     getComplianceEnabled(sub),
     getShowCodes(sub),
     getPlatformOversight(sub, email, role),
+    getInsurerWatcher(sub, role),
   ]);
 
-  const homeHref = isComplianceRole(role) ? "/evidence" : isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
+  const homeHref = isComplianceRole(role)
+    ? (insurerWatcher && !platformOversight ? "/underwriting" : "/evidence")
+    : isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -223,7 +237,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} />
+            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} />
           </div>
 
           <div>
