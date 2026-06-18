@@ -304,6 +304,19 @@ const REP_NAV = [
   },
 ];
 
+// Underwriting surface for insurer watchers — injected into COMPLIANCE_NAV in
+// NavLinks only when the watcher holds an insurer grant.
+const UNDERWRITING_NAV_ITEM = {
+  href: "/underwriting",
+  label: "Underwriting",
+  icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" />
+      <path d="M9 11l2 2 4-4" />
+    </svg>
+  ),
+};
+
 const COMPLIANCE_NAV = [
   {
     href: "/evidence",
@@ -424,7 +437,7 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean }) {
+export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   if (!inboundEnabled) {
@@ -437,6 +450,11 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
   // compliance watchers holding a platform-wide grant; hide them for scoped watchers.
   if (isComplianceRole(role) && !platformOversight) {
     base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight" && item.href !== "/watchlist" && item.href !== "/members");
+  }
+  // Insurer watchers (compliance role with an insurer grant) get the Underwriting
+  // surface, placed first as their primary landing.
+  if (isComplianceRole(role) && insurerWatcher && !base.some((item) => item.href === "/underwriting")) {
+    base = [UNDERWRITING_NAV_ITEM, ...base];
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]

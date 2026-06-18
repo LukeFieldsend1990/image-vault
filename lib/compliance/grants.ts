@@ -85,6 +85,33 @@ export async function hasGrantForScope(
   );
 }
 
+/** Whether a compliance user holds any active insurer grant (i.e. is an insurer watcher). */
+export async function hasInsurerGrant(db: Db, userId: string): Promise<boolean> {
+  const grants = await getActiveGrants(db, userId);
+  return grants.some((g) => g.subtype === "insurer");
+}
+
+/**
+ * The production ids an insurer covers — distinct scopeIds of their active
+ * production-scoped insurer grants, each with the grant id that authorises it.
+ * This is the strict boundary for the insurer's portfolio: never platform-wide.
+ */
+export async function getInsurerProductionGrants(
+  db: Db,
+  userId: string,
+): Promise<{ productionId: string; grantId: string }[]> {
+  const grants = await getActiveGrants(db, userId);
+  const seen = new Set<string>();
+  const out: { productionId: string; grantId: string }[] = [];
+  for (const g of grants) {
+    if (g.subtype !== "insurer" || g.scope !== "production" || !g.scopeId) continue;
+    if (seen.has(g.scopeId)) continue;
+    seen.add(g.scopeId);
+    out.push({ productionId: g.scopeId, grantId: g.id });
+  }
+  return out;
+}
+
 export interface ScopeGrant {
   id: string;
   complianceUserId: string;
