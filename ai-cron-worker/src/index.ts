@@ -735,6 +735,45 @@ async function runSuggestionBatch(
   };
 }
 
+// ── TMDB Discovery Gate ────────────────────────────────────────────────────
+
+async function getSettingStr(db: Db, key: string): Promise<string | null> {
+  const row = await db.select({ value: aiSettings.value }).from(aiSettings).where(eq(aiSettings.key, key)).get();
+  return row?.value ?? null;
+}
+
+async function upsertSetting(db: Db, key: string, value: string): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const existing = await db.select({ key: aiSettings.key }).from(aiSettings).where(eq(aiSettings.key, key)).get();
+  if (existing) {
+    await db.update(aiSettings).set({ value, updatedAt: now }).where(eq(aiSettings.key, key));
+  } else {
+    await db.insert(aiSettings).values({ key, value, updatedBy: null, updatedAt: now });
+  }
+}
+
+async function maybeRunTmdbDiscovery(tmdbKey: string, db: Db, now: number): Promise<void> {
+  const enabled = await getSettingStr(db, "watchlist_discovery_enabled");
+  if (enabled === "false") {
+    console.log("Watchlist discovery disabled — skipping");
+    return;
+  }
+
+  const intervalDays = parseInt(await getSettingStr(db, "watchlist_discovery_interval_days") ?? "5", 10);
+  const lastRunStr = await getSettingStr(db, "watchlist_discovery_last_run");
+  const lastRun = lastRunStr ? parseInt(lastRunStr, 10) : 0;
+  const daysSinceLast = (now - lastRun) / 86400;
+
+  if (daysSinceLast < intervalDays) {
+    console.log(`Watchlist discovery: ${daysSinceLast.toFixed(1)}d since last run (interval ${intervalDays}d) — skipping`);
+    return;
+  }
+
+  const result = await runTmdbDiscovery(tmdbKey, db);
+  await upsertSetting(db, "watchlist_discovery_last_run", String(now));
+  console.log(`Watchlist discovery complete: ${JSON.stringify(result)}`);
+}
+
 async function handleManualRun(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const actor = requireActor(request);
   if (actor instanceof Response) return actor;
@@ -779,14 +818,14 @@ const handler = {
     return Response.json({ error: "Not found" }, { status: 404 });
   },
 
-  async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
+  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     const db = drizzle(env.DB);
     const startedAt = Math.floor(Date.now() / 1000);
 
-    // TMDB watchlist discovery — once per day on the morning run only.
-    if (event.cron === "0 7 * * *" && env.TMDB_API_KEY) {
+    // TMDB watchlist discovery — runs at most every N days (controlled by aiSettings).
+    if (env.TMDB_API_KEY) {
       try {
-        await runTmdbDiscovery(env.TMDB_API_KEY, db);
+        await maybeRunTmdbDiscovery(env.TMDB_API_KEY, db, startedAt);
       } catch (err) {
         console.error("TMDB discovery error:", err instanceof Error ? err.message : String(err));
       }
