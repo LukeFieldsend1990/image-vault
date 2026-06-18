@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { like, eq, and } from "drizzle-orm";
+import { like, eq, and, or, type SQL } from "drizzle-orm";
 
 // GET /api/admin/users/search?email=xxx&role=licensee
 export async function GET(req: NextRequest) {
@@ -24,15 +24,30 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
-  const conditions = [like(users.email, `%${email}%`)];
-  if (role) conditions.push(eq(users.role, role as "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin"));
+  // Fuzzy match: every whitespace-separated token must appear somewhere in the
+  // email (case-insensitive substring). Lets "luke equity" match
+  // "lukefieldsend+equity@googlemail.com" without the exact address. Single-token
+  // queries behave like a plain substring search.
+  const tokens = email.split(/\s+/).filter(Boolean);
+  const conditions: SQL[] = tokens.map((t) => like(users.email, `%${t}%`));
+
+  // Match on the *effective* role. Industry/compliance accounts are stored with a
+  // legacy users.role ("licensee") and their real role in users.true_role
+  // (effective role = true_role ?? role), so filter on either column — otherwise
+  // a role=compliance search never finds any compliance account.
+  if (role) {
+    const r = role as "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
+    conditions.push(or(eq(users.role, r), eq(users.trueRole, r))!);
+  }
 
   const rows = await db
-    .select({ id: users.id, email: users.email, role: users.role })
+    .select({ id: users.id, email: users.email, role: users.role, trueRole: users.trueRole })
     .from(users)
     .where(and(...conditions))
     .limit(10)
     .all();
 
-  return NextResponse.json({ users: rows });
+  return NextResponse.json({
+    users: rows.map((u) => ({ id: u.id, email: u.email, role: u.trueRole ?? u.role })),
+  });
 }
