@@ -254,7 +254,7 @@ function scrubObligationResult(licence: {
 // shows the WORST status per obligation across all licences, so one licence's
 // gap is never masked by another licence's met event.
 
-type LicenceRow = {
+export type LicenceRow = {
   id: string;
   licenceType: string | null;
   permitAiTraining: boolean;
@@ -265,7 +265,7 @@ type LicenceRow = {
   lastDownloadAt: number | null;
 };
 
-type LicenceEventRow = {
+export type LicenceEventRow = {
   eventType: string;
   scopeJson: string;
   seq: number;
@@ -285,7 +285,7 @@ const STATUS_RANK: Record<string, number> = { gap: 3, pending: 2, met: 1, "n/a":
 //   their compliance record. All obligations show n/a; history remains visible in modal.
 const VOID_STATUSES = new Set(["AWAITING_PACKAGE", "PENDING", "REVOKED", "DENIED", "SCRUB_PERIOD", "EXPIRED", "CLOSED"]);
 
-function evaluateLicence(
+export function evaluateLicence(
   licence: LicenceRow,
   events: LicenceEventRow[],
   regime: RegimeId,

@@ -1,6 +1,8 @@
 import { getDb } from "@/lib/db";
 import { complianceGrants } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
+import { isAdmin } from "@/lib/auth/adminEmails";
+import { isComplianceRole } from "@/lib/auth/roles";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -25,6 +27,26 @@ export async function getActiveGrants(db: Db, userId: string): Promise<ActiveGra
     .from(complianceGrants)
     .where(and(eq(complianceGrants.complianceUserId, userId), isNull(complianceGrants.revokedAt)))
     .all();
+}
+
+/** Whether a compliance user holds an active platform-wide grant. */
+export async function hasPlatformGrant(db: Db, userId: string): Promise<boolean> {
+  const grants = await getActiveGrants(db, userId);
+  return grants.some((g) => g.scope === "platform");
+}
+
+/**
+ * Whether a session may use the platform-wide oversight surfaces (platform
+ * compliance dashboard, productions tracker, cast visibility): admins always, and
+ * compliance watchers only while holding an active platform-wide grant.
+ */
+export async function canViewPlatformOversight(
+  db: Db,
+  session: { sub: string; email: string; role: string },
+): Promise<boolean> {
+  if (isAdmin(session.email)) return true;
+  if (isComplianceRole(session.role)) return hasPlatformGrant(db, session.sub);
+  return false;
 }
 
 /**
