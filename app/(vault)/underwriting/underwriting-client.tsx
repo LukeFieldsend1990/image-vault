@@ -57,6 +57,15 @@ interface UnderwritingView {
   lastUseAt: number | null;
 }
 
+type ControlStatus = "met" | "partial" | "gap" | "n/a";
+interface CyberControl { key: string; title: string; clauseRef: string | null; status: ControlStatus; detail: string }
+interface BridgeSummary { total: number; critical: number; tamper: number; lastEventAt: number | null }
+interface CyberControlsView { productionId: string; controls: CyberControl[]; bridge: BridgeSummary }
+interface Certificate { id: string; regime: string; ledgerTipHash: string; eventCount: number; generatedAt: number }
+
+const CONTROL_COLOR: Record<ControlStatus, string> = { met: "#166534", partial: "#92400e", gap: "#c0392b", "n/a": "#a8a29e" };
+const CONTROL_LABEL: Record<ControlStatus, string> = { met: "Pass", partial: "Partial", gap: "Fail", "n/a": "N/A" };
+
 const GRADE_COLOR: Record<Grade, string> = { A: "#166534", B: "#3f6212", C: "#92400e", D: "#c0392b" };
 const GRADE_LABEL: Record<Grade, string> = { A: "Low risk", B: "Acceptable", C: "Elevated risk", D: "High risk" };
 const LINE_LABEL: Record<PolicyLine, string> = {
@@ -110,6 +119,8 @@ export default function UnderwritingClient() {
   const [portfolio, setPortfolio] = useState<PortfolioRow[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<UnderwritingView | null>(null);
+  const [cyber, setCyber] = useState<CyberControlsView | null>(null);
+  const [certs, setCerts] = useState<Certificate[]>([]);
   const [loadingView, setLoadingView] = useState(false);
 
   const loadPortfolio = useCallback(async () => {
@@ -118,24 +129,41 @@ export default function UnderwritingClient() {
       const d = (await res.json()) as { productions?: PortfolioRow[] };
       const rows = d.productions ?? [];
       setPortfolio(rows);
-      setSelectedId((prev) => prev ?? rows[0]?.productionId ?? null);
+      // Deep-link from a risk notification: ?production=<id> selects that production.
+      const deepLink = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("production") : null;
+      const valid = deepLink && rows.some((r) => r.productionId === deepLink) ? deepLink : null;
+      setSelectedId((prev) => prev ?? valid ?? rows[0]?.productionId ?? null);
     } catch {
       setPortfolio([]);
     }
   }, []);
 
+  const loadCerts = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/insurer/productions/${id}/certificates`);
+      if (res.ok) setCerts(((await res.json()) as { certificates?: Certificate[] }).certificates ?? []);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const loadView = useCallback(async (id: string) => {
     setLoadingView(true);
-    setView(null);
+    setView(null); setCyber(null); setCerts([]);
     try {
-      const res = await fetch(`/api/insurer/productions/${id}`);
-      if (res.ok) setView((await res.json()) as UnderwritingView);
+      const [vRes, cRes] = await Promise.all([
+        fetch(`/api/insurer/productions/${id}`),
+        fetch(`/api/insurer/productions/${id}/cyber-controls`),
+      ]);
+      if (vRes.ok) setView((await vRes.json()) as UnderwritingView);
+      if (cRes.ok) setCyber((await cRes.json()) as CyberControlsView);
+      void loadCerts(id);
     } catch {
       // ignore
     } finally {
       setLoadingView(false);
     }
-  }, []);
+  }, [loadCerts]);
 
   useEffect(() => { void loadPortfolio(); }, [loadPortfolio]);
   useEffect(() => { if (selectedId) void loadView(selectedId); }, [selectedId, loadView]);
@@ -195,7 +223,13 @@ export default function UnderwritingClient() {
             ) : !view ? (
               <p className="text-sm" style={{ color: "var(--color-muted)" }}>Select a production.</p>
             ) : (
-              <Detail view={view} onPolicyChange={() => { void loadView(view.production.id); void loadPortfolio(); }} />
+              <Detail
+                view={view}
+                cyber={cyber}
+                certs={certs}
+                onPolicyChange={() => { void loadView(view.production.id); void loadPortfolio(); }}
+                onCertGenerated={() => { void loadCerts(view.production.id); }}
+              />
             )}
           </div>
         </div>
@@ -204,7 +238,15 @@ export default function UnderwritingClient() {
   );
 }
 
-function Detail({ view, onPolicyChange }: { view: UnderwritingView; onPolicyChange: () => void }) {
+function Detail({
+  view, cyber, certs, onPolicyChange, onCertGenerated,
+}: {
+  view: UnderwritingView;
+  cyber: CyberControlsView | null;
+  certs: Certificate[];
+  onPolicyChange: () => void;
+  onCertGenerated: () => void;
+}) {
   const p = view.production;
   return (
     <div className="space-y-6">
@@ -253,15 +295,107 @@ function Detail({ view, onPolicyChange }: { view: UnderwritingView; onPolicyChan
       {/* Policy panel */}
       <PolicyPanel view={view} onChange={onPolicyChange} />
 
-      {/* Evidence link */}
-      <a
-        href={`/evidence`}
-        className="inline-block text-xs font-medium px-3 py-2 rounded border"
-        style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}
-      >
-        View full consent &amp; custody evidence →
-      </a>
+      {/* Cyber controls */}
+      {cyber && <CyberControls cyber={cyber} />}
+
+      {/* Claims evidence pack */}
+      <EvidencePack productionId={p.id} certs={certs} onCertGenerated={onCertGenerated} />
     </div>
+  );
+}
+
+function CyberControls({ cyber }: { cyber: CyberControlsView }) {
+  return (
+    <section>
+      <h2 className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--color-muted)" }}>
+        Cyber controls <span className="font-normal normal-case tracking-normal">· SOC2-lite</span>
+      </h2>
+      <div className="rounded border divide-y" style={{ borderColor: "var(--color-border)" }}>
+        {cyber.controls.map((c) => (
+          <div key={c.key} className="flex items-start justify-between gap-4 px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-sm flex items-center gap-2" style={{ color: "var(--color-ink)" }}>
+                {c.title}
+                {c.clauseRef && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}>{c.clauseRef}</span>}
+              </div>
+              <div className="text-[11px] mt-0.5" style={{ color: "var(--color-muted)" }}>{c.detail}</div>
+            </div>
+            <span className="text-[11px] font-semibold uppercase tracking-wide shrink-0" style={{ color: CONTROL_COLOR[c.status] }}>{CONTROL_LABEL[c.status]}</span>
+          </div>
+        ))}
+      </div>
+      <div className="text-[11px] mt-2" style={{ color: "var(--color-muted)" }}>
+        Bridge device log: {cyber.bridge.total} event(s) · {cyber.bridge.tamper} tamper · {cyber.bridge.critical} critical
+        {cyber.bridge.lastEventAt ? ` · last ${fmtDate(cyber.bridge.lastEventAt)}` : ""}
+      </div>
+    </section>
+  );
+}
+
+function EvidencePack({ productionId, certs, onCertGenerated }: { productionId: string; certs: Certificate[]; onCertGenerated: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function generate() {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/insurer/productions/${productionId}/evidence-pack`, { method: "POST" });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        setErr(d.error ?? "Failed to generate certificate."); return;
+      }
+      const d = (await res.json()) as { url?: string };
+      onCertGenerated();
+      if (d.url) window.open(d.url, "_blank", "noopener");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--color-muted)" }}>Claims evidence pack</h2>
+      <p className="text-[11px] mb-3" style={{ color: "var(--color-muted)" }}>
+        Court-grade bundle for defense counsel — consent ledger, custody chain, downloads and Bridge tamper log, sealed with the ledger tip hash.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => void generate()}
+          disabled={busy}
+          className="text-xs font-medium px-3 py-2 rounded"
+          style={{ background: "var(--color-accent)", color: "#fff" }}
+        >
+          {busy ? "Generating…" : "Generate signed certificate (HTML)"}
+        </button>
+        <a
+          href={`/api/insurer/productions/${productionId}/evidence-pack`}
+          className="text-xs font-medium px-3 py-2 rounded border"
+          style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}
+        >
+          Download JSON pack
+        </a>
+      </div>
+      {err && <p className="text-xs mt-2" style={{ color: "#c0392b" }}>{err}</p>}
+
+      {certs.length > 0 && (
+        <div className="rounded border divide-y mt-3" style={{ borderColor: "var(--color-border)" }}>
+          {certs.map((c) => (
+            <div key={c.id} className="flex items-center justify-between px-4 py-2.5 gap-4">
+              <div className="min-w-0">
+                <a href={`/api/compliance/certificates/${c.id}`} target="_blank" rel="noopener" className="text-sm hover:underline" style={{ color: "var(--color-ink)" }}>
+                  Certificate · {c.regime} · {c.eventCount} events
+                </a>
+                <div className="text-[10px] font-mono truncate" style={{ color: "var(--color-muted)" }}>seal {c.ledgerTipHash.slice(0, 16) || "(empty)"}…</div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <a href={`/api/compliance/verify?certificateId=${c.id}`} target="_blank" rel="noopener" className="text-[11px]" style={{ color: "var(--color-muted)" }}>Verify</a>
+                <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{fmtDate(c.generatedAt)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

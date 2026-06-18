@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/requireBridgeToken";
 import { triggerAiService } from "@/lib/ai/service";
 import { getRequestContext } from "@cloudflare/next-on-pages";
+import { isInsurerAlertBridgeEvent, notifyInsurersOfBridgeEvent } from "@/lib/notifications/insurer";
 
 const ALLOWED_EVENT_TYPES = new Set([
   "tamper_detected",
@@ -126,6 +127,12 @@ export async function POST(req: NextRequest) {
       // non-fatal
     })
   );
+
+  // Risk monitoring (§4.5): alert insurers covering this package's production on a
+  // tamper / critical integrity signal. Best-effort, never blocks the report.
+  if (isInsurerAlertBridgeEvent(eventType, severity)) {
+    ctx.waitUntil(notifyInsurersOfBridgeEvent(db, { packageId, eventType, severity }));
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

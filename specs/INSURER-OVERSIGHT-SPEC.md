@@ -148,10 +148,10 @@ Then fast-follow with **§4.4 portfolio**, **§4.5 monitoring**, **§4.6 cyber c
 - [x] Hard guard: reject non-production/talent scope for `insurer` grants (§2)
 - [x] `POST` / `DELETE /api/productions/:id/insurers` + production-detail "Insurers" UI (§4.1)
 - [x] Insurer underwriting dashboard (per-production) (§4.2) — `/underwriting`, A–D grade, cast onboarding, coverage gaps, use-violations, strikes, policy panel + lapsed/uninsured-use flags
-- [ ] Claims evidence pack export endpoint + UI (§4.3) — *next*
+- [x] Claims evidence pack export endpoint + UI (§4.3) — JSON pack (`GET`) + signed HTML certificate (`POST`, reuses `generateCertificate`); folds in the Bridge tamper log + per-licence chain verification
 - [x] Portfolio roll-up view (§4.4) — landing list scoped to the insurer's grants (worst-risk-first); deepen with trend later
-- [ ] Risk monitoring notifications (§4.5)
-- [ ] Cyber controls view (§4.6)
+- [x] Risk monitoring notifications (§4.5) — strike-declared + Bridge tamper/critical fan out to covered insurers (use-without-consent at meter time deferred to a sweep)
+- [x] Cyber controls view (§4.6) — SOC2-lite controls (39.E isolation, 39.H custody, device integrity, access logging) + Bridge posture, on the underwriting dashboard
 - [x] Exclude insurer subtype from platform/org oversight helpers (§5) — insurer grants can't be platform-scoped (hard guard), so `canViewPlatformOversight()` / `hasPlatformGrant()` already exclude them
 
 ### Phase 8 MVP #2 (this PR) — §4.2 underwriting dashboard + §3.2 policies + §4.4 portfolio
@@ -160,3 +160,11 @@ Then fast-follow with **§4.4 portfolio**, **§4.5 monitoring**, **§4.6 cyber c
 - `lib/compliance/insurer-access.ts` — `resolveInsurerAccess`: a watcher is authorised only by an active insurer grant on that exact production (admins may view).
 - `GET /api/insurer/productions` (portfolio), `GET /api/insurer/productions/:id` (dashboard), `GET`/`POST /api/insurer/productions/:id/policies`, `DELETE …/policies/:policyId` (soft-archive). Policy writes require the grant holder.
 - `/underwriting` page + client: portfolio sidebar with grade badges, per-production dashboard (grade hero, alerts, metrics, cast bar, policy panel with add/archive). Insurer watchers land here; nav item injected for the insurer subtype.
+
+### Phase 8 MVP #3 (this PR) — §4.3 evidence pack + §4.5 monitoring + §4.6 cyber controls
+
+- `lib/compliance/evidence-pack.ts` — `buildEvidencePack`: machine-readable claims pack for a production (consent ledger + custody chain grouped per licence, download log, Bridge tamper log, per-licence chain verification + recomputed scope tip). Composes `evaluateScope` so it always agrees with the signed certificate.
+- `lib/compliance/cyber-controls.ts` — `buildCyberControls`: SOC2-lite controls (39.E biometric isolation, 39.H security custody — per-licence coverage; device integrity from the Bridge log; standing access-logging control) + a Bridge summary.
+- `lib/notifications/insurer.ts` — `notifyInsurersForProduction` + `notifyInsurersOfStrike` / `notifyInsurersOfBridgeEvent`; `isInsurerAlertBridgeEvent` gates the fan-out. Hooked (fire-and-forget via `ctx.waitUntil`) into `POST /api/compliance/strikes` and `POST /api/bridge/events`. Notifications deep-link to `/underwriting?production=<id>`.
+- Endpoints: `GET`/`POST /api/insurer/productions/:id/evidence-pack` (JSON download / generate signed cert), `GET …/cyber-controls`, `GET …/certificates`. The existing `/api/compliance/certificates/:id` + `/verify` already admit insurers for production scope via `authorizeScope`.
+- UI: underwriting detail gains a Cyber-controls section and a Claims-evidence-pack section (generate signed certificate, download JSON, list + verify prior certificates); deep-link param selects the production.
