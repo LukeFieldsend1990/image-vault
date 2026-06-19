@@ -1,12 +1,10 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { pitchVignettes, talentReps } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // GET /api/pitch/:id/stream  — stream the vignette MP4 from R2
 // Accepts: session cookie (reps/talent) OR ?token=<shareToken> (public share links)
@@ -16,7 +14,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const db = getDb();
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const kv = env.SESSIONS_KV;
   const bucket = (env as unknown as { SCANS_BUCKET: R2Bucket }).SCANS_BUCKET;
 

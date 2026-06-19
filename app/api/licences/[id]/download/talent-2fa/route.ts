@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
 import { licences, scanFiles, totpCredentials, downloadEvents, users, scanPackages } from "@/lib/db/schema";
@@ -9,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { downloadCompleteEmail } from "@/lib/email/templates";
 import { triggerAiService } from "@/lib/ai/service";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { DualCustodySession } from "../initiate/route";
 import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
 
@@ -160,7 +158,7 @@ export async function POST(
     });
   }
 
-  const { ctx } = getRequestContext();
+  const { ctx } = getCloudflareContext();
   ctx.waitUntil(
     triggerAiService(req, "/security/download-event", {
       method: "POST",

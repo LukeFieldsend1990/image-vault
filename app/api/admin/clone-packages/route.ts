@@ -1,12 +1,10 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { users, scanPackages, scanFiles, packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { and, eq, isNull } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { todayKey } from "./shared";
 import type { CloneRunRecord, ClonePackageItem, FileToCopy } from "./shared";
 export type { CloneRunRecord, ClonePackageItem, FileToCopy } from "./shared";
@@ -18,7 +16,7 @@ export async function DELETE(req: NextRequest) {
   if (!isAdmin(session.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
   await kv.delete(todayKey());
   return NextResponse.json({ ok: true });
 }
@@ -33,7 +31,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
   const raw = await kv.get(todayKey());
   const record: CloneRunRecord | null = raw ? (JSON.parse(raw) as CloneRunRecord) : null;
 

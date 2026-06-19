@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import VendorsClient from "./vendors-client";
 
 export default async function LicenceVendorsPage({

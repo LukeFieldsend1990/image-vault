@@ -5,7 +5,7 @@ import { computeScopeTip } from "@/lib/compliance/certificate";
 
 const t = createTestEnv();
 
-vi.mock("@cloudflare/next-on-pages", () => ({ getRequestContext: t.getRequestContext }));
+vi.mock("@opennextjs/cloudflare", () => ({ getCloudflareContext: t.getCloudflareContext }));
 vi.mock("@/lib/db", () => ({ getDb: t.getDb, getKv: t.getKv }));
 vi.mock("@/lib/auth/requireSession", () => ({
   requireSession: t.requireSession,

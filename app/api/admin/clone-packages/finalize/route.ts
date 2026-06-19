@@ -1,11 +1,9 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin, ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 import { sendEmail } from "@/lib/email/send";
 import { clonePackagesEmail } from "@/lib/email/templates";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { CloneRunRecord } from "../shared";
 import { todayKey } from "../shared";
 
@@ -20,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
 
   // Already finalized today — return existing record (idempotent)
   const existing = await kv.get(todayKey());

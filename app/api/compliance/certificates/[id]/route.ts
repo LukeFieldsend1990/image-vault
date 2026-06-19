@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { authorizeScope } from "@/lib/compliance/access";
@@ -40,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
   }
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const obj = await (env.SCANS_BUCKET as unknown as { get(k: string): Promise<{ text(): Promise<string> } | null> }).get(cert.r2Key);
   if (!obj) return NextResponse.json({ error: "Certificate document not found" }, { status: 404 });
   const html = await obj.text();

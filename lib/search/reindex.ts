@@ -5,7 +5,7 @@
  * a package's tags, metadata, or soft-delete status.
  */
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { indexPackage, removePackage } from "./index";
 
@@ -16,7 +16,7 @@ import { indexPackage, removePackage } from "./index";
 export function triggerReindex(packageId: string): void {
   void (async () => {
     try {
-      const { env } = getRequestContext();
+      const { env } = getCloudflareContext();
       if (!env.VECTORIZE || !env.AI) return; // bindings not available (local dev)
       const db = getDb();
       await indexPackage(env, db, packageId);
@@ -32,7 +32,7 @@ export function triggerReindex(packageId: string): void {
 export function triggerRemoveIndex(packageId: string): void {
   void (async () => {
     try {
-      const { env } = getRequestContext();
+      const { env } = getCloudflareContext();
       if (!env.VECTORIZE) return;
       await removePackage(env, packageId);
     } catch (err) {

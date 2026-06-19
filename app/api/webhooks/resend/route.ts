@@ -1,10 +1,8 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
 import { inboundAliases, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { INBOUND_DOMAIN } from "@/lib/inbound/alias";
 
 /**
@@ -69,7 +67,7 @@ export async function POST(req: NextRequest) {
   let webhookSecret: string | undefined;
   let queue: { send(body: unknown): Promise<void> } | undefined;
   try {
-    const { env } = getRequestContext();
+    const { env } = getCloudflareContext();
     const e = env as unknown as Record<string, unknown>;
     webhookSecret = e.RESEND_WEBHOOK_SECRET as string | undefined;
     queue = e.INBOUND_QUEUE as typeof queue;

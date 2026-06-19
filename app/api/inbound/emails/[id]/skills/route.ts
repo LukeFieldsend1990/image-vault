@@ -1,11 +1,9 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { receivedEmails, aiTriageResults, skillExecutions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and, desc } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { resolveSkills } from "@/lib/skills/resolver";
 import { getSkill } from "@/lib/skills/registry";
 import type { SkillContext } from "@/lib/skills/types";
@@ -124,7 +122,7 @@ export async function POST(
   // Build context
   let env: Record<string, unknown>;
   try {
-    const rc = getRequestContext();
+    const rc = getCloudflareContext();
     env = rc.env as unknown as Record<string, unknown>;
   } catch {
     env = process.env as unknown as Record<string, unknown>;

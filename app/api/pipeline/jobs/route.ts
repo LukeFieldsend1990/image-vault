@@ -1,12 +1,10 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { pipelineJobs, pipelineStages, scanPackages, talentSettings } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, desc, sql, and, isNull } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 const STAGE_NAMES = ["validate", "classify", "assemble", "bundle", "notify"] as const;
 
@@ -99,7 +97,7 @@ export async function POST(req: NextRequest) {
 
   // Enqueue to Cloudflare Queue
   try {
-    const { env } = getRequestContext();
+    const { env } = getCloudflareContext();
     const queue = (env as unknown as Record<string, Queue>)["PIPELINE_QUEUE"];
     if (queue) {
       await queue.send({ jobId });

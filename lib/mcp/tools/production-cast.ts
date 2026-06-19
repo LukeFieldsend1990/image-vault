@@ -16,7 +16,7 @@
  * them behind admin scope + a fresh per-call TOTP code and audits every call.
  */
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { registerMcpTool } from "../registry";
 import {
   users,
@@ -45,7 +45,7 @@ const MAX_CAST_PER_CALL = 100;
 
 function getBaseUrl(): string {
   try {
-    const { env } = getRequestContext();
+    const { env } = getCloudflareContext();
     const e = env as unknown as Record<string, string | undefined>;
     return e.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
   } catch {

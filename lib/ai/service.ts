@@ -1,4 +1,4 @@
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 interface SessionLike {
   sub: string;
@@ -14,7 +14,7 @@ interface ServiceBindingEnv {
 type ServiceBindingName = keyof ServiceBindingEnv;
 
 function getService(binding: ServiceBindingName) {
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   return (env as ServiceBindingEnv)[binding];
 }
 

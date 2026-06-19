@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { licences, talentReps } from "@/lib/db/schema";
@@ -14,7 +12,7 @@ const PRESIGN_TTL_SECONDS = 3600; // 1h
 
 function cfEnv(key: string): string | undefined {
   try {
-    return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
+    return (getCloudflareContext().env as unknown as Record<string, string | undefined>)[key];
   } catch {
     return process.env[key];
   }
@@ -89,7 +87,7 @@ export async function POST(
   const filename = sanitizeFilename(file.name);
   const key = `contracts/${id}/${filename}`;
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   await env.SCANS_BUCKET.put(key, await file.arrayBuffer(), {
     httpMetadata: { contentType: "application/pdf" },
   });

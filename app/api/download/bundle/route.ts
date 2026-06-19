@@ -1,10 +1,8 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
 import { licences, scanFiles, downloadEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq, inArray } from "drizzle-orm";
 
 const MAX_TOKENS = 100;
@@ -276,7 +274,7 @@ export async function GET(req: NextRequest) {
     .set({ completedAt: now })
     .where(inArray(downloadEvents.fileId, fileIds));
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const enc = new TextEncoder();
 
   // Build streaming ZIP

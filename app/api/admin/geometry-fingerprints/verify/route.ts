@@ -1,11 +1,9 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { geometryFingerprints, scanFiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq } from "drizzle-orm";
 import { slotDirection } from "@/lib/geo-fingerprint/payload";
 import { licences, scanPackages, users } from "@/lib/db/schema";
@@ -60,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   if (!file) return NextResponse.json({ error: "Source file not found" }, { status: 404 });
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const bucket = (env as unknown as { SCANS_BUCKET: R2Bucket }).SCANS_BUCKET;
 
   // Get watermarked file size

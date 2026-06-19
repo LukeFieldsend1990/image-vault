@@ -5,7 +5,7 @@
  * in-app flow (send-signup-invite skill, /api/productions, /api/licences).
  */
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { registerMcpTool } from "../registry";
 import {
   users,
@@ -30,7 +30,7 @@ const SEVEN_DAYS = 7 * 24 * 60 * 60;
 
 function getBaseUrl(): string {
   try {
-    const { env } = getRequestContext();
+    const { env } = getCloudflareContext();
     const e = env as unknown as Record<string, string | undefined>;
     return e.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
   } catch {

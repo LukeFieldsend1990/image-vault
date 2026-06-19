@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import ScrubAttestationClient from "./scrub-client";
 
 export default async function LicenceScrubPage({ params }: { params: Promise<{ id: string }> }) {

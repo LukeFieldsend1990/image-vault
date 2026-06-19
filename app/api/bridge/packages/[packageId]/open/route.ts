@@ -1,8 +1,6 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { licences, scanFiles, users, bridgeGrants, bridgeDevices, bridgeEvents } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
@@ -38,7 +36,7 @@ const OFFLINE_GRACE_SECS = 48 * 3600;
 
 function cfEnv(key: string): string | undefined {
   try {
-    return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
+    return (getCloudflareContext().env as unknown as Record<string, string | undefined>)[key];
   } catch {
     return process.env[key];
   }

@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 // POST /api/pitch/webhook — Higgsfield job completion webhook
 // Higgsfield signs requests with X-Higgsfield-Signature (HMAC-SHA256).
 // TODO: Confirm exact signature header name and HMAC format from Higgsfield docs.
@@ -8,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { pitchVignettes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 interface HiggsWebhookPayload {
   jobId?: string;
@@ -55,7 +53,7 @@ function normaliseStatus(raw: string): string {
 export async function POST(req: NextRequest) {
   const bodyText = await req.text();
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const webhookSecret = (env as unknown as { HIGGSFIELD_WEBHOOK_SECRET?: string }).HIGGSFIELD_WEBHOOK_SECRET;
 
   if (webhookSecret) {

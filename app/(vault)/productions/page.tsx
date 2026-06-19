@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { cookies } from "next/headers";
 import { isComplianceRole } from "@/lib/auth/roles";
 import ProductionsClient from "./productions-client";

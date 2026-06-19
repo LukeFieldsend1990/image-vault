@@ -1,11 +1,9 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { geometryFingerprints, scanFiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq } from "drizzle-orm";
 
 // GET /api/admin/geometry-fingerprints/download?fingerprintId=xxx&type=original|watermarked
@@ -53,7 +51,7 @@ export async function GET(req: NextRequest) {
   const suffix = type === "watermarked" ? "_watermarked" : "_original";
   const downloadName = file.filename.replace(/\.obj$/i, `${suffix}.obj`);
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const bucket = (env as unknown as { SCANS_BUCKET: R2Bucket }).SCANS_BUCKET;
   const object = await bucket.get(r2Key);
 

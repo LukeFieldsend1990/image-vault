@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { users, invites, talentReps, productionCast, licences, productions, organisations } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
@@ -258,7 +256,7 @@ export async function POST(req: NextRequest) {
 
   // Store setup token in KV (30 minute TTL)
   const setupToken = crypto.randomUUID();
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
   const setupPayload: Record<string, unknown> = { userId, email: normalEmail, role };
   if (role === "industry" && inviteRow?.orgSubtype) {
     setupPayload.orgSubtype = inviteRow.orgSubtype;

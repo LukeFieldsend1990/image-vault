@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import { downloadEvents, users, scanFiles, licences } from "@/lib/db/schema";

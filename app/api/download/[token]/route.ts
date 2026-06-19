@@ -1,10 +1,8 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
 import { licences, scanFiles, downloadEvents, geometryFingerprints } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq, and } from "drizzle-orm";
 
 interface DownloadToken {
@@ -63,7 +61,7 @@ export async function GET(
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
 
   // For OBJ files, serve the watermarked copy if one exists for this licence
   let r2Key = file.r2Key;

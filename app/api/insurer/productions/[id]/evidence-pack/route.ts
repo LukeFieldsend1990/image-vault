@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { resolveInsurerAccess } from "@/lib/compliance/insurer-access";
@@ -56,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // empty body is fine — default regime
   }
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const bucket = env.SCANS_BUCKET as unknown as CertBucket;
 
   const result = await generateCertificate(db, bucket, {

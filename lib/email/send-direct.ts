@@ -1,7 +1,7 @@
 /**
  * Env-explicit Resend sender for plain Cloudflare Workers.
  *
- * lib/email/send.ts depends on getRequestContext() (next-on-pages) with a
+ * lib/email/send.ts depends on getCloudflareContext() (@opennextjs/cloudflare) with a
  * process.env fallback — both unavailable in satellite workers like ai-worker.
  * This variant takes the worker's env bindings directly. Same Resend call,
  * same skip-and-warn behaviour when the key is missing.

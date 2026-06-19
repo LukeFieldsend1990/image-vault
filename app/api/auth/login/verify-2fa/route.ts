@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { totpCredentials, refreshTokens } from "@/lib/db/schema";
 import { verifyTotpCode } from "@/lib/auth/totp";
@@ -34,7 +32,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
   const kvKey = `pending:${pendingToken}`;
   const raw = await kv.get(kvKey);
 

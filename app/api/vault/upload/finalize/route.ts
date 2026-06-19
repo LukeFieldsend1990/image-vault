@@ -1,12 +1,10 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq, sql, and } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { sendEmail } from "@/lib/email/send";
 import { uploadCompleteEmail } from "@/lib/email/templates";
 import { triggerAiService } from "@/lib/ai/service";
@@ -76,7 +74,7 @@ export async function POST(req: NextRequest) {
     void sendEmail({ to: talentUser.email, subject, html });
   }
 
-  const { ctx } = getRequestContext();
+  const { ctx } = getCloudflareContext();
   ctx.waitUntil(
     triggerAiService(req, `/package-tags/auto/${packageId}`, {
       method: "POST",

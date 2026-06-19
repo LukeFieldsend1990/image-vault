@@ -1,12 +1,10 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { pitchVignettes, scanPackages, talentReps, talentProfiles } from "@/lib/db/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // GET /api/pitch?packageId=<uuid>  — list vignettes for a package
 export async function GET(req: NextRequest) {
@@ -121,7 +119,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Enqueue to higgs-worker
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const queue = (env as unknown as { PITCH_QUEUE?: Queue }).PITCH_QUEUE;
   if (queue) {
     await queue.send({ pitchId: id });

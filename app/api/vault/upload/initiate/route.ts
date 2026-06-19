@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
@@ -7,11 +5,11 @@ import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 function cfEnv(key: string): string | undefined {
   try {
-    return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
+    return (getCloudflareContext().env as unknown as Record<string, string | undefined>)[key];
   } catch {
     return process.env[key];
   }

@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
@@ -35,7 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Upload session not found" }, { status: 404 });
   }
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const multipartUpload = env.SCANS_BUCKET.resumeMultipartUpload(
     uploadSession.r2Key,
     uploadSession.r2UploadId

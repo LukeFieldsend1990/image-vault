@@ -29,7 +29,7 @@ import { sendEmailDirect } from "@/lib/email/send-direct";
 
 // Register ONLY the read-only tool modules. Deliberately not
 // "@/lib/mcp/tools" (index) — onboarding.ts would drag
-// @cloudflare/next-on-pages and lib/email/send into the ai-worker bundle.
+// @opennextjs/cloudflare and lib/email/send into the ai-worker bundle.
 import "@/lib/mcp/tools/visibility";
 import "@/lib/mcp/tools/semantic";
 

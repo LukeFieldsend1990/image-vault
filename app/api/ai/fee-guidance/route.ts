@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { callAiService } from "@/lib/ai/service";
