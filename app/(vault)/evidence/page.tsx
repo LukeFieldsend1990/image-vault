@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import EvidenceClient from "./evidence-client";
 
 export default function EvidencePage() {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifySessionJwt, type SessionPayload } from "./jwt";
 
 /** KV key prefix for the session-revocation denylist (see revoke_user_sessions MCP tool). */
@@ -26,7 +26,7 @@ export async function requireSession(
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const payload = await verifySessionJwt(token, env.JWT_SECRET);
   if (!payload) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });

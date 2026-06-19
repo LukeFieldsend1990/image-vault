@@ -5,8 +5,8 @@ import { createTestEnv, buildRequest, parseJson } from "../helpers/mocks";
 const t = createTestEnv();
 const mockRequireRenderBridgeToken = vi.fn();
 
-vi.mock("@cloudflare/next-on-pages", () => ({
-  getRequestContext: t.getRequestContext,
+vi.mock("@opennextjs/cloudflare", () => ({
+  getCloudflareContext: t.getCloudflareContext,
 }));
 vi.mock("@/lib/db", () => ({
   getDb: t.getDb,

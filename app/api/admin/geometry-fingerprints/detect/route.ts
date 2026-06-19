@@ -1,11 +1,9 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { geometryFingerprints, scanFiles, users, licences, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq, and, inArray } from "drizzle-orm";
 import { slotDirection } from "@/lib/geo-fingerprint/payload";
 
@@ -65,7 +63,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, packageId, matches: [], message: "No issued fingerprints found" });
   }
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const bucket = (env as unknown as { SCANS_BUCKET: R2Bucket }).SCANS_BUCKET;
 
   // Group by fileId — we compare the suspect against each distinct original

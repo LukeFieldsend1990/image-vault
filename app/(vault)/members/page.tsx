@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import MembersClient from "./members-client";
 
 // Union member roster. Access is enforced by the API (platform-wide oversight grant

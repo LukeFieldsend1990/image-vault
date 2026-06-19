@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import {
@@ -10,7 +8,7 @@ import {
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { triageEmail } from "@/lib/inbound/triage";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // POST /api/inbound/emails/:id/retriage — re-run AI triage
 export async function POST(
@@ -42,7 +40,7 @@ export async function POST(
 
   let aiEnv: { AI?: Ai; ANTHROPIC_API_KEY?: string } = {};
   try {
-    const { env } = getRequestContext();
+    const { env } = getCloudflareContext();
     const e = env as unknown as Record<string, unknown>;
     aiEnv = { AI: e.AI as Ai | undefined, ANTHROPIC_API_KEY: e.ANTHROPIC_API_KEY as string | undefined };
   } catch {

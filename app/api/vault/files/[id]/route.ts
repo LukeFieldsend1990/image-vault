@@ -1,16 +1,14 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { scanFiles, scanPackages, uploadSessions, downloadEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and, sql } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 function cfEnv(key: string): string | undefined {
   try {
-    return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
+    return (getCloudflareContext().env as unknown as Record<string, string | undefined>)[key];
   } catch {
     return process.env[key];
   }
@@ -87,7 +85,7 @@ export async function GET(
     completedAt: now,
   });
   try {
-    const { ctx } = getRequestContext();
+    const { ctx } = getCloudflareContext();
     ctx.waitUntil(logPromise);
   } catch {
     await logPromise;

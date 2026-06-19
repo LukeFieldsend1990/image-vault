@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { licences, users, scanPackages, talentReps, geometryFingerprintJobs, royaltySources } from "@/lib/db/schema";
@@ -7,7 +5,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { sha256Hex, generateRoyaltyKey } from "@/lib/auth/requireRoyaltySource";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 import { createNotification } from "@/lib/notifications/create";
@@ -142,7 +140,7 @@ export async function POST(
     } catch { /* non-fatal */ }
   })();
   try {
-    getRequestContext().ctx.waitUntil(recordApprovalEvents);
+    getCloudflareContext().ctx.waitUntil(recordApprovalEvents);
   } catch {
     void recordApprovalEvents; // local dev — no request context
   }
@@ -183,7 +181,7 @@ export async function POST(
         status: "queued",
         createdAt: now,
       });
-      const { env } = getRequestContext();
+      const { env } = getCloudflareContext();
       const queue = (env as unknown as Record<string, Queue>)["GEO_FINGERPRINT_QUEUE"];
       if (queue) await queue.send({ jobId });
     } catch {

@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { cookies } from "next/headers";
 import TalentLicencesClient from "./talent-licences-client";
 

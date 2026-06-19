@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { cookies } from "next/headers";
 import { NavLinks } from "./nav";
 import UserWidget from "./user-widget";

@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { siteSettings } from "@/lib/db/schema";

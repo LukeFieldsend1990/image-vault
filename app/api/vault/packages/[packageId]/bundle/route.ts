@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
@@ -7,7 +5,7 @@ import { scanPackages, scanFiles, downloadEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq, and } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // ── CRC-32 ────────────────────────────────────────────────────────────────────
 
@@ -225,7 +223,7 @@ export async function GET(
       )
     );
     try {
-      const { ctx } = getRequestContext();
+      const { ctx } = getCloudflareContext();
       ctx.waitUntil(logPromise);
     } catch {
       await logPromise;

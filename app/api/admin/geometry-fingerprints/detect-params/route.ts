@@ -1,11 +1,9 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { geometryFingerprints, scanFiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq, and } from "drizzle-orm";
 
 // GET /api/admin/geometry-fingerprints/detect-params?packageId=xxx&fileId=xxx
@@ -57,7 +55,7 @@ export async function GET(req: NextRequest) {
   }
 
   // For each distinct file, count vertices from the original via R2 range reads
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const bucket = (env as unknown as { SCANS_BUCKET: R2Bucket }).SCANS_BUCKET;
 
   const byFile = new Map<string, typeof fps[number]>();

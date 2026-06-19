@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { bridgeEvents, renderBridgeAgents } from "@/lib/db/schema";
@@ -9,7 +7,7 @@ import {
   isRenderBridgeTokenError,
 } from "@/lib/auth/requireRenderBridgeToken";
 import { triggerAiService } from "@/lib/ai/service";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 const ALLOWED_EVENT_TYPES = new Set([
   "tamper_detected",
@@ -107,7 +105,7 @@ export async function POST(
     createdAt: now,
   });
 
-  const { ctx } = getRequestContext();
+  const { ctx } = getCloudflareContext();
   ctx.waitUntil(
     triggerAiService(req, "/security/bridge-event", {
       method: "POST",

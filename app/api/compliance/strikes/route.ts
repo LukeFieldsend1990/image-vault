@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
@@ -67,7 +65,7 @@ export async function POST(req: NextRequest) {
 
   // Risk monitoring (§4.5): alert any insurer covering the affected production(s).
   try {
-    const { ctx } = getRequestContext();
+    const { ctx } = getCloudflareContext();
     ctx.waitUntil(notifyInsurersOfStrike(db, { scope, scopeId: resolvedScopeId, reason }));
   } catch {
     // outside the edge request context (e.g. tests) — skip the side-effect

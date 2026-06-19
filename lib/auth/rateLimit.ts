@@ -4,7 +4,7 @@
  * Sliding-window counter keyed by IP + action.
  * Returns { ok, remaining, retryAfterSeconds }.
  */
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 interface RateLimitResult {
   ok: boolean;
@@ -31,7 +31,7 @@ export async function checkRateLimit(
   ip: string,
   opts: RateLimitOptions,
 ): Promise<RateLimitResult> {
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
   const key = `rl:${opts.action}:${ip}`;
   const now = Math.floor(Date.now() / 1000);
 

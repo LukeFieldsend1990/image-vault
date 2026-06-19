@@ -41,6 +41,7 @@ yarn-error.log*
 
 # vercel / cloudflare
 .vercel
+.open-next
 .wrangler
 .dev.vars
 worker-configuration.d.ts

@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { users, totpCredentials } from "@/lib/db/schema";
 import { verifyPassword, dummyPasswordCheck } from "@/lib/auth/password";
@@ -65,7 +63,7 @@ export async function POST(req: NextRequest) {
   if (!totp || !totp.verified) {
     // User hasn't completed 2FA setup — issue a setup token and redirect
     const setupToken = crypto.randomUUID();
-    const kv = getRequestContext().env.SESSIONS_KV;
+    const kv = getCloudflareContext().env.SESSIONS_KV;
     await kv.put(
       `setup:${setupToken}`,
       JSON.stringify({ userId: user.id, email: user.email, role: user.trueRole ?? user.role }),
@@ -76,7 +74,7 @@ export async function POST(req: NextRequest) {
 
   // Issue pending token for TOTP verification
   const pendingToken = crypto.randomUUID();
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
   await kv.put(
     `pending:${pendingToken}`,
     JSON.stringify({ userId: user.id, email: user.email, role: user.trueRole ?? user.role }),

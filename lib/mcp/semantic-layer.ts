@@ -159,10 +159,10 @@ export const CONCEPTS: ConceptEntry[] = [
   },
   {
     id: "api-conventions",
-    name: "Edge Runtime & API Conventions",
-    summary: "~171 edge API routes across ~22 domain groups; every route declares runtime=\"edge\" and guards with requireSession or a token guard.",
+    name: "Runtime & API Conventions",
+    summary: "~171 API routes across ~22 domain groups; routes run on the Cloudflare Workers (Node.js-compatible) runtime via OpenNext and guard with requireSession or a token guard.",
     details:
-      "Next.js 16 App Router on Cloudflare Pages (@cloudflare/next-on-pages) — no Node.js APIs. Standard shape: requireSession → isErrorResponse check → " +
+      "Next.js App Router on Cloudflare Workers (@opennextjs/cloudflare) — Node.js-compatible runtime (nodejs_compat). Standard shape: requireSession → isErrorResponse check → " +
       "await params (Promise in Next 15+) → getDb() → role checks → query. Admin checks via isAdmin(session.email). Fire-and-forget async via void IIFE or ctx.waitUntil(). " +
       "Bindings: D1 (DB), KV (SESSIONS_KV), R2 (SCANS_BUCKET, PIPELINE_BUCKET), Queues, Workers AI, Vectorize.",
     codePaths: ["app/api/", "lib/auth/requireSession.ts", "lib/db/index.ts"],

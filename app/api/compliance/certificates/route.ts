@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { authorizeScope } from "@/lib/compliance/access";
@@ -32,7 +30,7 @@ export async function POST(req: NextRequest) {
   const auth = await authorizeScope(db, session, scope, scopeId);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const bucket = env.SCANS_BUCKET as unknown as CertBucket;
 
   const result = await generateCertificate(db, bucket, {

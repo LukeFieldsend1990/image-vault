@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@cloudflare/next-on-pages", () => ({
-  getRequestContext: () => {
+vi.mock("@opennextjs/cloudflare", () => ({
+  getCloudflareContext: () => {
     throw new Error("no request context in tests");
   },
 }));

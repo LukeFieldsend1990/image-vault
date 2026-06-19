@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 /**
  * Admin MCP server — Streamable HTTP transport (stateless, JSON responses).
  *

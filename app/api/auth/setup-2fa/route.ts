@@ -1,7 +1,5 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { totpCredentials, refreshTokens } from "@/lib/db/schema";
 import { generateTotpSecret, buildOtpauthUrl, verifyTotpCode } from "@/lib/auth/totp";
@@ -21,7 +19,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "token is required" }, { status: 400 });
   }
 
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
   const raw = await kv.get(`setup:${token}`);
   if (!raw) {
     return NextResponse.json({ error: "Invalid or expired setup token" }, { status: 401 });
@@ -85,7 +83,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const kv = getRequestContext().env.SESSIONS_KV;
+  const kv = getCloudflareContext().env.SESSIONS_KV;
   const kvKey = `setup:${token}`;
   const raw = await kv.get(kvKey);
   if (!raw) {

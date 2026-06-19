@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { bridgeEvents, bridgeGrants } from "@/lib/db/schema";
@@ -9,7 +7,7 @@ import {
   isBridgeTokenError,
 } from "@/lib/auth/requireBridgeToken";
 import { triggerAiService } from "@/lib/ai/service";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { isInsurerAlertBridgeEvent, notifyInsurersOfBridgeEvent } from "@/lib/notifications/insurer";
 
 const ALLOWED_EVENT_TYPES = new Set([
@@ -107,7 +105,7 @@ export async function POST(req: NextRequest) {
     createdAt: now,
   });
 
-  const { ctx } = getRequestContext();
+  const { ctx } = getCloudflareContext();
   ctx.waitUntil(
     triggerAiService(req, "/security/bridge-event", {
       method: "POST",

@@ -164,7 +164,7 @@ export function createTestEnv() {
   };
 
   // Module mock implementations
-  const getRequestContext = () => ({ env, ctx: { waitUntil: vi.fn() } });
+  const getCloudflareContext = () => ({ env, ctx: { waitUntil: vi.fn() } });
   const getDb = () => db;
   const getKv = () => kv;
 
@@ -186,7 +186,7 @@ export function createTestEnv() {
     insertedRows,
     updatedRows,
     env,
-    getRequestContext,
+    getCloudflareContext,
     getDb,
     getKv,
     requireSession,

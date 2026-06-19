@@ -1,12 +1,10 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { pipelineOutputs, pipelineJobs } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // GET /api/pipeline/outputs/:id/download — stream ZIP bundle from PIPELINE_BUCKET
 // Uses the Worker binding directly (no R2 API keys required — binding is already authed)
@@ -40,7 +38,7 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
   const bucket = (env as unknown as { PIPELINE_BUCKET: R2Bucket }).PIPELINE_BUCKET;
 
   const obj = await bucket.get(output.r2Key);

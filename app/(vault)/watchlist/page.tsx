@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import WatchlistClient from "./watchlist-client";
 
 // Production watchlist. Access is enforced by the API (platform-wide oversight grant

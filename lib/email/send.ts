@@ -6,7 +6,7 @@
  * Set RESEND_FROM_EMAIL to your verified sender (e.g. "Changling <noreply@changling.io>").
  */
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
@@ -24,7 +24,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
   let waitUntil: ((p: Promise<unknown>) => void) | undefined;
 
   try {
-    const { env, ctx } = getRequestContext();
+    const { env, ctx } = getCloudflareContext();
     const e = env as unknown as Record<string, string | undefined>;
     apiKey = e.RESEND_API_KEY;
     from = e.RESEND_FROM_EMAIL ?? "Changling <noreply@changling.io>";

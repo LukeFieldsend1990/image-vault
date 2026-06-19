@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, licences, downloadEvents, users, talentProfiles } from "@/lib/db/schema";

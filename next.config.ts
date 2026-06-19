@@ -1,17 +1,13 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-const nextConfig: NextConfig = {
-  // Required for Cloudflare Pages / next-on-pages
-  // All route handlers must use edge runtime
-};
-
-// Wire up Cloudflare bindings (D1, KV, R2) when running `next dev`.
-// Dynamic import avoids top-level await which breaks require()-based config loading.
-// The platform initialises before any request arrives so no race condition in practice.
-if (process.env.NODE_ENV === "development") {
-  void import("@cloudflare/next-on-pages/next-dev").then(({ setupDevPlatform }) =>
-    setupDevPlatform()
-  );
-}
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
+
+// Wire up Cloudflare bindings (D1, KV, R2, Queues, etc.) when running `next dev`.
+// Guarded to the dev server only: during `next build` there is no local
+// platform to proxy, and invoking it would attempt a remote binding session.
+if (process.env.NODE_ENV === "development") {
+  initOpenNextCloudflareForDev();
+}

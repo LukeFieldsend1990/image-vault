@@ -1,11 +1,9 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { licences, geometryFingerprintJobs, geometryFingerprints } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq, and, ne, sql } from "drizzle-orm";
 
 // POST /api/admin/geometry-fingerprints/trigger
@@ -97,7 +95,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { env } = getRequestContext();
+    const { env } = getCloudflareContext();
     const queue = (env as unknown as Record<string, Queue>)["GEO_FINGERPRINT_QUEUE"];
     if (queue) {
       await queue.send({ jobId });

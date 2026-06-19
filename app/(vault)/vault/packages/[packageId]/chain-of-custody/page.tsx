@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import CustodyClient from "./custody-client";
 
 export default async function ChainOfCustodyPage({

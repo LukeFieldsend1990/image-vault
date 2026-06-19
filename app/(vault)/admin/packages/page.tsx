@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import AdminPackagePreviewToggle from "./preview-panel";

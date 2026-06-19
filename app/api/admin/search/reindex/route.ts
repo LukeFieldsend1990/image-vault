@@ -1,11 +1,9 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { indexPackageBatch } from "@/lib/search/index";
 import { and, isNull, eq, sql } from "drizzle-orm";
 
@@ -49,7 +47,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
 
   if (!env.VECTORIZE || !env.AI) {
     return NextResponse.json(

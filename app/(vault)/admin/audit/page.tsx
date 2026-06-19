@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import AuditShell from "./audit-shell";
 

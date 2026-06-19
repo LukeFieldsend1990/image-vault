@@ -1,13 +1,11 @@
-export const runtime = "edge";
-
 import { requireAdmin } from "@/lib/auth/requireAdmin";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { CloneRunRecord } from "@/app/api/admin/clone-packages/route";
 import CloneClient from "./clone-client";
 
 async function getTodayRecord(): Promise<CloneRunRecord | null> {
   try {
-    const kv = getRequestContext().env.SESSIONS_KV;
+    const kv = getCloudflareContext().env.SESSIONS_KV;
     const today = new Date().toISOString().slice(0, 10);
     const raw = await kv.get(`clone_packages:daily:${today}`);
     return raw ? (JSON.parse(raw) as CloneRunRecord) : null;

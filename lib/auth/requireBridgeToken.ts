@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { bridgeTokens, users } from "@/lib/db/schema";
 import { eq, isNull } from "drizzle-orm";

@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import ProductionDetailClient from "./production-detail-client";
 
 export default function ProductionDetailPage() {

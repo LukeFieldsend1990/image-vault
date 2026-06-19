@@ -1,10 +1,8 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { scanPackages, packageTags, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { semanticSearch } from "@/lib/search/query";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { and, isNull, inArray } from "drizzle-orm";
@@ -44,7 +42,7 @@ export async function GET(req: NextRequest) {
   const excludeParam = req.nextUrl.searchParams.get("exclude") ?? "";
   const excludeIds = excludeParam ? excludeParam.split(",").filter(Boolean) : [];
 
-  const { env } = getRequestContext();
+  const { env } = getCloudflareContext();
 
   if (!env.VECTORIZE || !env.AI) {
     return NextResponse.json(

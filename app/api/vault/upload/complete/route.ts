@@ -1,18 +1,16 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { scanPackages, scanFiles, uploadSessions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, sql, and } from "drizzle-orm";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { sha256HexFromStream } from "@/lib/crypto/hash";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
 
 function cfEnv(key: string): string | undefined {
   try {
-    return (getRequestContext().env as unknown as Record<string, string | undefined>)[key];
+    return (getCloudflareContext().env as unknown as Record<string, string | undefined>)[key];
   } catch {
     return process.env[key];
   }
@@ -102,7 +100,7 @@ export async function POST(req: NextRequest) {
   // the render bridge compares this against the file it downloads, so a stale
   // value produces false tamper_detected events. A HEAD is a cheap metadata
   // call, so we do it inline before recomputing the package total below.
-  const { ctx, env } = getRequestContext();
+  const { ctx, env } = getCloudflareContext();
   let confirmedSize: number | null = null;
   try {
     const head = await env.SCANS_BUCKET.head(uploadSession.r2Key);

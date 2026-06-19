@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import OversightScorecardClient from "./oversight-scorecard-client";
 
 // Repeat-offender scorecard. Access is enforced by the API (platform-wide oversight

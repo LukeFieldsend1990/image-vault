@@ -1,9 +1,7 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { licences, scanPackages, users, talentReps, productionCast, geometryFingerprintJobs } from "@/lib/db/schema";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -147,7 +145,7 @@ export async function PATCH(
       await db.insert(geometryFingerprintJobs).values({
         id: jobId, licenceId: id, packageId, status: "queued", createdAt: now,
       });
-      const { env } = getRequestContext();
+      const { env } = getCloudflareContext();
       const queue = (env as unknown as Record<string, Queue>)["GEO_FINGERPRINT_QUEUE"];
       if (queue) await queue.send({ jobId });
     } catch { /* non-fatal */ }

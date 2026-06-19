@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 
 // Tool modules transitively import edge-only modules; registry tests never execute them
-vi.mock("@cloudflare/next-on-pages", () => ({
-  getRequestContext: () => {
+vi.mock("@opennextjs/cloudflare", () => ({
+  getCloudflareContext: () => {
     throw new Error("no request context in tests");
   },
 }));

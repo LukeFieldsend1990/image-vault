@@ -8,9 +8,9 @@ Secure biometric likeness archive for actors. Talent stores scan packages, licen
 
 ```bash
 npm run dev              # local Next.js dev server
-npm run pages:build      # Cloudflare Pages build
-npm run preview          # build + wrangler pages dev (local Cloudflare preview)
-npm run deploy           # build + wrangler pages deploy (production)
+npm run cf:build         # OpenNext build for Cloudflare Workers (.open-next/)
+npm run preview          # build + opennextjs-cloudflare preview (local workerd runtime)
+npm run deploy           # build + opennextjs-cloudflare deploy (production Worker)
 npm test                 # vitest run
 npm run test:watch       # vitest watch mode
 npm run lint             # eslint
@@ -26,8 +26,8 @@ Type-check: `npx tsc --noEmit` — ignore errors in `.next/types/` (pre-existing
 ## Architecture
 
 - **Next.js 16** (App Router, TypeScript, Tailwind v4)
-- **Cloudflare Pages** deployment via `@cloudflare/next-on-pages`
-- **Edge runtime everywhere** — every API route and worker runs on Cloudflare edge. No Node.js APIs.
+- **Cloudflare Workers** deployment via the OpenNext adapter (`@opennextjs/cloudflare`); build output in `.open-next/`, entry `.open-next/worker.js`
+- **Workers runtime everywhere** — the app runs as a single edge-distributed Worker on the Node.js-compatible runtime (`nodejs_compat`). Routes do **not** declare `runtime = "edge"`; the dedicated workers (pipeline, comms, ai, etc.) remain separate. Node.js APIs are available but used sparingly.
 - **Cloudflare D1** (SQLite) — relational data via Drizzle ORM
 - **Cloudflare R2** — scan file storage
 - **Cloudflare KV** — sessions, download tokens, upload state
@@ -65,8 +65,6 @@ themes/            # Per-agency UI themes (CSS variables per subdomain)
 ### Every API route starts like this
 
 ```typescript
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
@@ -91,7 +89,7 @@ export async function GET(
 
 ### Database
 
-- Access: `const db = getDb()` (calls `getRequestContext()` internally for D1 binding)
+- Access: `const db = getDb()` (calls `getCloudflareContext()` internally for D1 binding)
 - ORM: Drizzle with D1 SQLite adapter
 - Schema: `lib/db/schema.ts` — all tables in one file
 - Timestamps: **UNIX epoch seconds** (`Math.floor(Date.now() / 1000)`), not ISO strings
@@ -135,7 +133,7 @@ void (async () => {
 })();
 ```
 
-Or use `ctx.waitUntil()` from `getRequestContext()` to keep the worker alive.
+Or use `ctx.waitUntil()` from `getCloudflareContext()` to keep the worker alive.
 
 ## Roles & Permissions
 
@@ -243,7 +241,7 @@ MCP server at `/api/mcp` (Streamable HTTP, stateless JSON-RPC) gives whitelisted
 - **Local dev**: `.dev.vars` file (gitignored) for secrets
 - **Production**: `wrangler secret put SECRET_NAME`
 - **Non-secret config**: `[vars]` section in `wrangler.toml`
-- **Edge access**: `getRequestContext().env` — with fallback to `process.env` for local dev
+- **Binding access**: `getCloudflareContext().env` (from `@opennextjs/cloudflare`) — with fallback to `process.env` for local dev
 
 Key secrets: `JWT_SECRET`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `TMDB_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `BRIDGE_SIGNING_KEY_JWK`, `ENCRYPTION_MASTER_KEY`, `RESEND_WEBHOOK_SECRET`
 

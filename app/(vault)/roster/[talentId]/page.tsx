@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import RepVaultClient from "./rep-vault-client";
 
 export default async function RepVaultPage({
