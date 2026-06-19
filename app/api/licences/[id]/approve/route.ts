@@ -140,7 +140,7 @@ export async function POST(
     } catch { /* non-fatal */ }
   })();
   try {
-    getRequestContext().ctx.waitUntil(recordApprovalEvents);
+    getCloudflareContext().ctx.waitUntil(recordApprovalEvents);
   } catch {
     void recordApprovalEvents; // local dev — no request context
   }

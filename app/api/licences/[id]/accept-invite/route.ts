@@ -6,7 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // POST /api/licences/[id]/accept-invite
 // Talent accepts a production cast invitation without a scan package.
@@ -107,7 +107,7 @@ export async function POST(
     } catch { /* non-fatal */ }
   })();
   try {
-    getRequestContext().ctx.waitUntil(recordConsentEvents);
+    getCloudflareContext().ctx.waitUntil(recordConsentEvents);
   } catch {
     void recordConsentEvents; // local dev — no request context
   }
