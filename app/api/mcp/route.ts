@@ -23,7 +23,10 @@ import { logMcpCall } from "@/lib/mcp/audit";
 import type { McpTokenPayload, McpToolResult } from "@/lib/mcp/types";
 import "@/lib/mcp/tools";
 
-const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+// 2025-06-18 requires SSE GET support (server-initiated messages); our stateless
+// server doesn't implement SSE, so we cap at 2025-03-26 to avoid the client
+// attempting SSE-mode reconnects that return an empty 404.
+const SUPPORTED_PROTOCOL_VERSIONS = ["2025-03-26", "2024-11-05"];
 const SERVER_INFO = { name: "image-vault-admin", version: "1.0.0" };
 
 const SERVER_INSTRUCTIONS =
@@ -218,11 +221,15 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(Array.isArray(body) ? responses : responses[0]);
 }
 
-// Stateless server: no SSE stream, no session to delete
+// Stateless server: no SSE stream, no sessions. Explicit Allow header prevents
+// Cloudflare edge from converting 405 into a 404 on some CDN paths.
 export function GET() {
-  return NextResponse.json({ error: "Method not allowed. POST JSON-RPC messages." }, { status: 405 });
+  return NextResponse.json(
+    { error: "This MCP server does not support SSE. POST JSON-RPC messages instead." },
+    { status: 405, headers: { Allow: "POST" } }
+  );
 }
 
 export function DELETE() {
-  return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
+  return NextResponse.json({ error: "Method not allowed" }, { status: 405, headers: { Allow: "POST" } });
 }
