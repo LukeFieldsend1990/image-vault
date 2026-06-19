@@ -73,6 +73,11 @@ export interface ProductionCompliance {
   obligations: ObligationResult[];
   licences: LicenceSummary[];
   castOnboarding: CastOnboarding | null;  // null if no production_cast rows
+  // True when the production has licences but every one is still awaiting
+  // talent/rep acceptance (PENDING / AWAITING_PACKAGE). Such productions report
+  // as compliant only because obligations cannot be assessed before agreement —
+  // the UI flags this so a "100% compliant" card isn't read as fully cleared.
+  pendingAcceptance: boolean;
 }
 
 export interface ObligationSummaryItem {
@@ -332,6 +337,18 @@ const STATUS_RANK: Record<string, number> = { gap: 3, pending: 2, met: 1, "n/a":
 //   their compliance record. All obligations show n/a; history remains visible in modal.
 const VOID_STATUSES = new Set(["AWAITING_PACKAGE", "PENDING", "REVOKED", "DENIED", "SCRUB_PERIOD", "EXPIRED", "CLOSED"]);
 
+// Subset of void statuses meaning "talent/rep has not yet accepted the licence".
+// A production whose only licences sit in these states has no assessable
+// obligations yet, so it scores 100% — we surface it separately as
+// "pending acceptance" rather than letting it read as fully compliant.
+const ACCEPTANCE_PENDING_STATUSES = new Set(["PENDING", "AWAITING_PACKAGE"]);
+
+function isPendingAcceptance(lics: { status: string }[]): boolean {
+  if (lics.length === 0) return false;
+  if (lics.some((l) => !VOID_STATUSES.has(l.status))) return false; // has an active licence
+  return lics.some((l) => ACCEPTANCE_PENDING_STATUSES.has(l.status));
+}
+
 export function evaluateLicence(
   licence: LicenceRow,
   events: LicenceEventRow[],
@@ -538,6 +555,7 @@ export async function buildOrgDashboard(
         obligations: [],
         licences: [],
         castOnboarding: co,
+        pendingAcceptance: false,
       });
     }
     const castActionItems: ActionItem[] = [];
@@ -705,6 +723,7 @@ export async function buildOrgDashboard(
       obligations,
       licences: licenceSummaries,
       castOnboarding,
+      pendingAcceptance: isPendingAcceptance(group.licences),
     });
     if (group.productionId) seenProductionIds.add(group.productionId);
   }
@@ -727,6 +746,7 @@ export async function buildOrgDashboard(
       obligations: [],
       licences: [],
       castOnboarding,
+      pendingAcceptance: false,
     });
   }
 
@@ -1089,6 +1109,7 @@ export async function buildTalentDashboard(
       obligations,
       licences: licenceSummaries,
       castOnboarding: null,
+      pendingAcceptance: isPendingAcceptance(group.licences),
     });
   }
 
@@ -1308,6 +1329,7 @@ export async function buildPlatformDashboard(
         obligations: [],
         licences: [],
         castOnboarding: co,
+        pendingAcceptance: false,
       });
       if (co.invited > 0) {
         castActionItems.push({
@@ -1445,6 +1467,7 @@ export async function buildPlatformDashboard(
       obligations,
       licences: licenceSummaries,
       castOnboarding,
+      pendingAcceptance: isPendingAcceptance(group.licences),
     });
     if (group.productionId) seenProductionIds.add(group.productionId);
   }
@@ -1466,6 +1489,7 @@ export async function buildPlatformDashboard(
       obligations: [],
       licences: [],
       castOnboarding,
+      pendingAcceptance: false,
     });
   }
 
