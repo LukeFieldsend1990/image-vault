@@ -24,11 +24,12 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
   useEffect(() => {
     fetch(`/api/licences/${licenceId}/download/initiate`, { method: "POST" })
       .then(async (r) => {
-        const d = await r.json() as { step?: Step; error?: string };
+        const d = await r.json() as { step?: Step; error?: string; downloadTokens?: DownloadToken[] };
         if (!r.ok) {
           setError(d.error ?? "Could not initiate download session.");
           setStep("error");
         } else {
+          if (d.step === "complete") setTokens(d.downloadTokens ?? []);
           setStep(d.step ?? "error");
         }
       })
@@ -66,8 +67,9 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: code.replace(/\s/g, "") }),
       });
-      const d = await res.json() as { error?: string; step?: Step };
+      const d = await res.json() as { error?: string; step?: Step; downloadTokens?: DownloadToken[] };
       if (!res.ok) throw new Error(d.error ?? "Invalid code");
+      if (d.step === "complete") setTokens(d.downloadTokens ?? []);
       setStep(d.step ?? "error");
       setCode("");
     } catch (err: unknown) {
@@ -188,21 +190,23 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
             Both verifications complete — download links are valid for 48 hours.
           </div>
 
-          {/* Bundle download */}
+          {/* Bundle download — POST with licenceId so URL length never overflows for large packages */}
           {tokens.length > 1 && (
-            <a
-              href={`/api/download/bundle?tokens=${tokens.map((t) => t.token).join(",")}&name=bundle.zip`}
-              download="bundle.zip"
-              className="mb-4 flex w-full items-center justify-center gap-2 rounded py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-              style={{ background: "var(--color-accent)" }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Download all {tokens.length} files as .zip
-            </a>
+            <form method="POST" action="/api/download/bundle" className="mb-4">
+              <input type="hidden" name="licenceId" value={licenceId} />
+              <button
+                type="submit"
+                className="flex w-full items-center justify-center gap-2 rounded py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+                style={{ background: "var(--color-accent)" }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download all {tokens.length} files as .zip
+              </button>
+            </form>
           )}
 
           <div className="space-y-2">
