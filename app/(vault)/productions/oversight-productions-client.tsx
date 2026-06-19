@@ -90,7 +90,7 @@ const CAST_STATUS_COLOURS: Record<string, string> = {
 
 const USE_VIOLATION_LABELS: Record<Exclude<UseViolationKind, "none">, string> = {
   used_without_consent: "⛔ Used, no consent",
-  used_before_consent: "⛔ Used pre-consent",
+  used_before_consent: "⛔ Used before consent",
 };
 
 function isUseViolation(k: UseViolationKind): k is Exclude<UseViolationKind, "none"> {
@@ -166,7 +166,7 @@ function CastModal({ production, onClose }: { production: ProductionRow; onClose
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
               {production.orgName ?? "Independent"} · Cast roster
               {violationCount > 0 && (
-                <span style={{ color: "#7f1d1d", fontWeight: 600 }}> · {violationCount} consent-before-use breach{violationCount !== 1 ? "es" : ""}</span>
+                <span style={{ color: "#7f1d1d", fontWeight: 600 }}> · {violationCount} use-before-consent breach{violationCount !== 1 ? "es" : ""}</span>
               )}
               {gapCount > 0 && (
                 <span style={{ color: "#c0392b", fontWeight: 600 }}> · {gapCount} coverage gap{gapCount !== 1 ? "s" : ""}</span>
@@ -224,7 +224,7 @@ function CastModal({ production, onClose }: { production: ProductionRow; onClose
 
         <p className="text-[11px] mt-4" style={{ color: "var(--color-muted)" }}>
           A <strong>coverage gap</strong> means the member&apos;s likeness is licensed with no current Article&nbsp;39.B
-          consent on record. A <strong style={{ color: "#7f1d1d" }}>consent-before-use breach</strong> is stronger: the
+          consent on record. A <strong style={{ color: "#7f1d1d" }}>use-before-consent breach</strong> is stronger: the
           ledger shows the likeness was downloaded or metered <em>before</em> any consent existed (or with none recorded
           at all) — a permanent Article&nbsp;39.B violation that stands even if consent is later back-filled.
         </p>
@@ -301,7 +301,7 @@ export default function OversightProductionsClient() {
         {totalUseViolations > 0 && (
           <span className="text-[11px] font-semibold px-2 py-1 rounded"
             style={{ color: "#7f1d1d", background: "rgba(127,29,29,0.08)", border: "1px solid rgba(127,29,29,0.3)" }}>
-            {totalUseViolations} consent-before-use breach{totalUseViolations !== 1 ? "es" : ""} platform-wide
+            {totalUseViolations} use-before-consent breach{totalUseViolations !== 1 ? "es" : ""} platform-wide
           </span>
         )}
         {totalCoverageGaps > 0 && (
@@ -361,7 +361,7 @@ export default function OversightProductionsClient() {
                     {p.useViolations > 0 && (
                       <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
                         style={{ color: "#7f1d1d", border: "1px solid #7f1d1d44", background: "rgba(127,29,29,0.1)" }}>
-                        ⛔ {p.useViolations} pre-consent use{p.useViolations !== 1 ? "s" : ""}
+                        ⛔ {p.useViolations} use-before-consent breach{p.useViolations !== 1 ? "es" : ""}
                       </span>
                     )}
                     {p.coverageGaps > 0 && (
