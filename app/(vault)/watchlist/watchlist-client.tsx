@@ -251,9 +251,11 @@ function EntryRow({ entry, onChanged }: { entry: WatchlistEntry; onChanged: () =
         <div className="shrink-0">
           {entry.ratified ? (
             entry.matchedProductionId ? (
-              <Link href={`/productions`} className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded inline-block"
+              <Link href={`/productions/${entry.matchedProductionId}`}
+                title={entry.matchedProductionName ? `View “${entry.matchedProductionName}”` : "View production"}
+                className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded inline-block"
                 style={{ color: "#1a7f37", border: "1px solid #1a7f3744", background: "rgba(26,127,55,0.08)" }}>
-                ✓ On Image Vault
+                ✓ On Image Vault →
               </Link>
             ) : (
               <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
@@ -315,8 +317,13 @@ export default function WatchlistClient() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const shown = entries.filter((e) => (pendingOnly ? !e.ratified : true));
+  const shown = entries
+    .filter((e) => (pendingOnly ? !e.ratified : true))
+    // Surface freshly-ratified items at the top — they're the ones awaiting a
+    // review-and-dismiss now that the production has been registered.
+    .sort((a, b) => Number(b.ratified) - Number(a.ratified));
   const pendingCount = entries.filter((e) => !e.ratified).length;
+  const ratifiedCount = entries.filter((e) => e.ratified).length;
   const outreachCount = entries.filter((e) => e.flaggedForOutreach && !e.ratified).length;
 
   return (
@@ -345,6 +352,13 @@ export default function WatchlistClient() {
             style={{ color: "#b45309", background: "rgba(180,83,9,0.08)", border: "1px solid rgba(180,83,9,0.3)" }}>
             {outreachCount} flagged for outreach
           </span>
+        )}
+        {ratifiedCount > 0 && pendingOnly && (
+          <button onClick={() => setPendingOnly(false)}
+            className="text-[11px] font-semibold px-2 py-1 rounded"
+            style={{ color: "#1a7f37", background: "rgba(26,127,55,0.08)", border: "1px solid #1a7f3744" }}>
+            {ratifiedCount} now on Image Vault — review
+          </button>
         )}
       </div>
 
