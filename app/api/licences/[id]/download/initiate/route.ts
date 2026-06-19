@@ -112,7 +112,10 @@ export async function POST(
 
   // Check if there's already an active session
   const existing = await kv.get(`dual_custody:${id}`, "json") as DualCustodySession | null;
-  if (existing && existing.step !== "complete" && existing.expiresAt > now) {
+  if (existing && existing.expiresAt > now) {
+    if (existing.step === "complete") {
+      return NextResponse.json({ step: "complete", downloadTokens: existing.downloadTokens });
+    }
     return NextResponse.json({ step: existing.step });
   }
 

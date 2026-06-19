@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, scanFiles, downloadEvents } from "@/lib/db/schema";
+import { licences, scanFiles, downloadEvents, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
+import type { DualCustodySession } from "@/app/api/licences/[id]/download/initiate/route";
 
 const MAX_TOKENS = 100;
 
@@ -339,6 +340,156 @@ export async function GET(req: NextRequest) {
   const headers = new Headers();
   headers.set("Content-Type", "application/zip");
   headers.set("Content-Disposition", `attachment; filename="${bundleName}"`);
+  headers.set("Cache-Control", "no-store");
+
+  return new NextResponse(readable as unknown as BodyInit, { headers });
+}
+
+// POST /api/download/bundle — server-derived bundle; accepts { licenceId } or form POST.
+// Reads downloadTokens from the completed dual-custody KV session so the URL stays
+// short regardless of how many files are in the package.
+export async function POST(req: NextRequest) {
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+
+  let licenceId: string | null = null;
+  const ct = req.headers.get("content-type") ?? "";
+  if (ct.includes("application/x-www-form-urlencoded") || ct.includes("multipart/form-data")) {
+    const fd = await req.formData();
+    licenceId = (fd.get("licenceId") as string | null) ?? null;
+  } else {
+    try {
+      const body = await req.json() as { licenceId?: string };
+      licenceId = body.licenceId ?? null;
+    } catch { /* ok */ }
+  }
+
+  if (!licenceId) {
+    return NextResponse.json({ error: "licenceId is required" }, { status: 400 });
+  }
+
+  const kv = getKv();
+  const now = Math.floor(Date.now() / 1000);
+
+  const dcSession = await kv.get(`dual_custody:${licenceId}`, "json") as DualCustodySession | null;
+  if (!dcSession || dcSession.step !== "complete" || dcSession.expiresAt < now) {
+    return NextResponse.json({ error: "No completed download session" }, { status: 409 });
+  }
+
+  // Auth: must be the initiating licensee OR any member of the org on the licence
+  if (dcSession.licenseeId !== session.sub) {
+    let authorised = false;
+    if (dcSession.organisationId) {
+      const db = getDb();
+      const [membership] = await db
+        .select({ userId: organisationMembers.userId })
+        .from(organisationMembers)
+        .where(and(
+          eq(organisationMembers.organisationId, dcSession.organisationId),
+          eq(organisationMembers.userId, session.sub)
+        ))
+        .limit(1)
+        .all();
+      authorised = !!membership;
+    }
+    if (!authorised) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  const db = getDb();
+
+  const [licence] = await db
+    .select({ status: licences.status })
+    .from(licences)
+    .where(eq(licences.id, licenceId))
+    .limit(1)
+    .all();
+
+  if (!licence || licence.status === "REVOKED") {
+    return NextResponse.json({ error: "Licence has been revoked" }, { status: 410 });
+  }
+
+  const sessionTokens = dcSession.downloadTokens; // narrow out of closure to satisfy TS
+  const fileIds = sessionTokens.map((t) => t.fileId);
+  if (fileIds.length === 0) {
+    return NextResponse.json({ error: "No files in session" }, { status: 404 });
+  }
+
+  const fileRows = await db
+    .select({ id: scanFiles.id, filename: scanFiles.filename, r2Key: scanFiles.r2Key, sizeBytes: scanFiles.sizeBytes })
+    .from(scanFiles)
+    .where(inArray(scanFiles.id, fileIds))
+    .all();
+
+  const fileMap = new Map(fileRows.map((f) => [f.id, f]));
+
+  void db
+    .update(downloadEvents)
+    .set({ completedAt: now })
+    .where(inArray(downloadEvents.fileId, fileIds));
+
+  const { env } = getCloudflareContext();
+  const enc = new TextEncoder();
+
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+
+  async function buildZip() {
+    let offset = 0n;
+    const cdEntries: CdEntry[] = [];
+
+    for (const tokenEntry of sessionTokens) {
+      const fileMeta = fileMap.get(tokenEntry.fileId);
+      if (!fileMeta) continue;
+
+      const object = await env.SCANS_BUCKET.get(fileMeta.r2Key);
+      if (!object || !object.body) continue;
+
+      const nameBytes = enc.encode(fileMeta.filename);
+      const fileSize = BigInt(fileMeta.sizeBytes);
+      const localOffset = offset;
+
+      const lfh = localFileHeader(nameBytes, fileSize);
+      await writer.write(lfh);
+      offset += BigInt(lfh.length);
+
+      let crc = 0;
+      const reader = object.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        crc = updateCrc(crc, value);
+        await writer.write(value);
+        offset += BigInt(value.length);
+      }
+
+      const dd = dataDescriptor(crc, fileSize);
+      await writer.write(dd);
+      offset += BigInt(dd.length);
+
+      cdEntries.push({ nameBytes, crc32: crc, fileSize, localOffset });
+    }
+
+    const cdOffset = offset;
+    let cdSize = 0n;
+    for (const entry of cdEntries) {
+      const rec = centralDirRecord(entry);
+      await writer.write(rec);
+      cdSize += BigInt(rec.length);
+    }
+
+    const eocd = endOfCentralDir(cdEntries, cdOffset, cdSize);
+    await writer.write(eocd);
+
+    await writer.close();
+  }
+
+  void buildZip();
+
+  const headers = new Headers();
+  headers.set("Content-Type", "application/zip");
+  headers.set("Content-Disposition", `attachment; filename="bundle.zip"`);
   headers.set("Cache-Control", "no-store");
 
   return new NextResponse(readable as unknown as BodyInit, { headers });
