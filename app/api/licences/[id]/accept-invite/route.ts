@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
+import { getRequestContext } from "@cloudflare/next-on-pages";
 
 // POST /api/licences/[id]/accept-invite
 // Talent accepts a production cast invitation without a scan package.
@@ -86,8 +87,10 @@ export async function POST(
     } catch { /* non-fatal */ }
   })();
 
-  // Record consent in compliance ledger (fire-and-forget, non-fatal)
-  void (async () => {
+  // Record consent in compliance ledger. Run under ctx.waitUntil so the ledger
+  // writes survive past the response — a bare fire-and-forget can be dropped on
+  // the edge, leaving an accepted licence with no consent events (false gaps).
+  const recordConsentEvents = (async () => {
     try {
       const chain = licenceChain(id);
       const useType = licence.licenceType ?? "commercial";
@@ -103,6 +106,11 @@ export async function POST(
       });
     } catch { /* non-fatal */ }
   })();
+  try {
+    getRequestContext().ctx.waitUntil(recordConsentEvents);
+  } catch {
+    void recordConsentEvents; // local dev — no request context
+  }
 
   // Notify licensee (fire-and-forget)
   void (async () => {

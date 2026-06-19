@@ -109,7 +109,11 @@ export async function POST(
   //         never hold the data independently; it stays in platform R2.
   // 39.H — all delivery is via dual-custody download or bridge; platform IS custody.
   // 39.J — the licence itself (projectName + licenceType) is the recorded business reason.
-  void (async () => {
+  // Run under ctx.waitUntil so these ledger writes complete even after the
+  // response is sent. A bare fire-and-forget IIFE can be dropped by the edge
+  // runtime once the response returns, which previously left rep/talent-approved
+  // licences with no consent events — surfacing 39.B/E/H/J as false gaps.
+  const recordApprovalEvents = (async () => {
     try {
       const chain = licenceChain(id);
       const useType = licence.licenceType ?? "commercial";
@@ -135,6 +139,11 @@ export async function POST(
       });
     } catch { /* non-fatal */ }
   })();
+  try {
+    getRequestContext().ctx.waitUntil(recordApprovalEvents);
+  } catch {
+    void recordApprovalEvents; // local dev — no request context
+  }
 
   // Auto-create royalty source if a unit rate was agreed.
   let royaltyKey: string | null = null;

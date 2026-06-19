@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DashboardData, ActionItem, ProductionCompliance, ObligationSummaryItem, LicenceSummary, ObligationResultWithEvidence, CastOnboarding } from "@/lib/compliance/dashboard";
 import { RegimeSelector, useRegime, withRegime } from "../regime-selector";
 import OrgTypeBadge from "@/app/components/org-type-badge";
@@ -209,52 +209,111 @@ function StatCard({ value, label, warn }: { value: number | string; label: strin
   );
 }
 
-function ObligationBar({ item }: { item: ObligationSummaryItem }) {
+// Obligation Progress row. When the obligation has gap instances, the row is
+// tappable: it expands a scrollable list of every gap occurrence (production +
+// licence), and tapping an instance jumps to its row in the action queue.
+// Required gaps count toward the "Required Gaps" stat and read as "⚠ N gaps";
+// recommended-only gaps are advisory and read as "N advisory" so the two
+// numbers reconcile.
+function ObligationBar({
+  item,
+  instances,
+  expanded,
+  onToggle,
+  onJump,
+}: {
+  item: ObligationSummaryItem;
+  instances: { item: ActionItem; index: number }[];
+  expanded: boolean;
+  onToggle: () => void;
+  onJump: (index: number) => void;
+}) {
   const assessed = item.metCount + item.gapCount;
   const pct = item.progressPct;
   const hasGap = item.gapCount > 0;
+  const isRequired = item.severity === "required";
   const hasPending = (item.pendingCount ?? 0) > 0;
-  const color = item.severity === "required"
-    ? (hasGap ? STATUS_COLORS.gap : STATUS_COLORS.compliant)
-    : (hasGap ? "#b45309" : STATUS_COLORS.compliant);
+  const gapColor = isRequired ? STATUS_COLORS.gap : "#b45309";
+  const barColor = hasGap ? gapColor : STATUS_COLORS.compliant;
+  const clickable = hasGap && instances.length > 0;
 
   return (
-    <div className="flex items-center gap-4 py-2" style={{ borderBottom: "1px solid var(--color-border)" }}>
-      <span
-        className="text-xs font-mono w-12 shrink-0"
-        style={{ color: "var(--color-muted)" }}
+    <div style={{ borderBottom: "1px solid var(--color-border)" }}>
+      <div
+        className="flex items-center gap-4 py-2"
+        onClick={clickable ? onToggle : undefined}
+        role={clickable ? "button" : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } } : undefined}
+        style={{ cursor: clickable ? "pointer" : "default" }}
       >
-        {item.clauseRef}
-      </span>
-      <span className="text-sm flex-1 min-w-0 truncate" style={{ color: "var(--color-text)" }}>
-        {item.title}
-      </span>
-      <div className="w-32 shrink-0">
-        <div
-          className="h-1.5 rounded-full overflow-hidden"
-          style={{ background: "var(--color-border)" }}
-        >
-          <div
-            className="h-full rounded-full"
-            style={{ width: `${pct}%`, background: color, transition: "width 0.5s ease" }}
-          />
+        <span className="text-xs font-mono w-12 shrink-0" style={{ color: "var(--color-muted)" }}>
+          {item.clauseRef}
+        </span>
+        <span className="text-sm flex-1 min-w-0 truncate flex items-center gap-1.5" style={{ color: "var(--color-text)" }}>
+          <span className="truncate">{item.title}</span>
+          {clickable && (
+            <span
+              className="shrink-0 text-[10px]"
+              style={{ color: "var(--color-muted)", transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}
+            >
+              ▸
+            </span>
+          )}
+        </span>
+        <div className="w-32 shrink-0">
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${pct}%`, background: barColor, transition: "width 0.5s ease" }}
+            />
+          </div>
         </div>
+        <span className="text-xs tabular-nums w-16 text-right shrink-0" style={{ color: "var(--color-muted)" }}>
+          {assessed > 0 ? `${item.metCount}/${assessed}` : "—"}
+        </span>
+        <span
+          className="text-[10px] uppercase tracking-widest w-24 text-right shrink-0 font-medium"
+          style={{ color: hasGap ? gapColor : hasPending ? URGENCY_COLORS.pending : STATUS_COLORS.compliant }}
+        >
+          {hasGap
+            ? isRequired
+              ? `⚠ ${item.gapCount} gap${item.gapCount > 1 ? "s" : ""}`
+              : `${item.gapCount} advisory`
+            : hasPending
+            ? `⏳ ${item.pendingCount} pending`
+            : pct === 100
+            ? "✓ Met"
+            : "—"}
+        </span>
       </div>
-      <span className="text-xs tabular-nums w-16 text-right shrink-0" style={{ color: "var(--color-muted)" }}>
-        {assessed > 0 ? `${item.metCount}/${assessed}` : hasPending ? "—" : "—"}
-      </span>
-      <span
-        className="text-[10px] uppercase tracking-widest w-24 text-right shrink-0 font-medium"
-        style={{ color: hasGap ? color : hasPending ? URGENCY_COLORS.pending : color }}
-      >
-        {hasGap
-          ? `⚠ ${item.gapCount} gap${item.gapCount > 1 ? "s" : ""}`
-          : hasPending
-          ? `⏳ ${item.pendingCount} pending`
-          : pct === 100
-          ? "✓ Met"
-          : "—"}
-      </span>
+
+      {expanded && clickable && (
+        <div
+          className="mb-2 rounded"
+          style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", maxHeight: "180px", overflowY: "auto" }}
+        >
+          {instances.map(({ item: a, index }) => (
+            <button
+              key={`${a.licenceId}-${index}`}
+              onClick={(e) => { e.stopPropagation(); onJump(index); }}
+              className="w-full text-left flex items-center justify-between gap-3 px-3 py-1.5 text-xs"
+              style={{ borderBottom: "1px solid var(--color-border)", color: "var(--color-text)" }}
+            >
+              <span className="truncate">
+                {a.productionName}
+                <span style={{ color: "var(--color-muted)" }}> · {a.licenceProjectName}</span>
+              </span>
+              <span className="shrink-0 flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest" style={{ color: URGENCY_COLORS[a.urgency] ?? "var(--color-muted)" }}>
+                  {URGENCY_LABELS[a.urgency] ?? a.urgency}
+                </span>
+                <span style={{ color: "var(--color-accent)" }}>Jump →</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -604,12 +663,21 @@ function ProductionCard({
             {prod.type ?? "Production"} · {prod.licenceCount} licence{prod.licenceCount !== 1 ? "s" : ""}
           </p>
         </div>
-        <span
-          className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded shrink-0"
-          style={{ background: bg, color, border: `1px solid ${color}44` }}
-        >
-          {STATUS_LABELS[prod.complianceStatus]}
-        </span>
+        {prod.pendingAcceptance ? (
+          <span
+            className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded shrink-0"
+            style={{ background: "rgba(37,99,235,0.08)", color: URGENCY_COLORS.pending, border: `1px solid ${URGENCY_COLORS.pending}44` }}
+          >
+            Pending acceptance
+          </span>
+        ) : (
+          <span
+            className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded shrink-0"
+            style={{ background: bg, color, border: `1px solid ${color}44` }}
+          >
+            {STATUS_LABELS[prod.complianceStatus]}
+          </span>
+        )}
       </div>
 
       {/* Health score — prominent % with ring */}
@@ -657,6 +725,11 @@ function ProductionCard({
                 </div>
               );
             })}
+          {prod.pendingAcceptance && (
+            <p className="text-xs" style={{ color: URGENCY_COLORS.pending }}>
+              Awaiting licence acceptance — obligations begin once accepted.
+            </p>
+          )}
           {prod.requiredGaps > 0 && (
             <p className="text-xs font-medium" style={{ color: STATUS_COLORS.gap }}>
               {prod.requiredGaps} required gap{prod.requiredGaps !== 1 ? "s" : ""}
@@ -682,15 +755,20 @@ const ACTION_LINKS: Record<string, (licenceId: string) => string> = {
   "platform-scrub-attestation": (id) => `/licences/${id}/scrub`,
 };
 
-function ActionRow({ item }: { item: ActionItem }) {
+function ActionRow({ item, domId, highlight }: { item: ActionItem; domId?: string; highlight?: boolean }) {
   const urgColor = URGENCY_COLORS[item.urgency];
   const linkFn = ACTION_LINKS[item.obligationId];
   const href = linkFn ? linkFn(item.licenceId) : null;
 
   return (
     <div
-      className="flex items-start gap-4 py-3"
-      style={{ borderBottom: "1px solid var(--color-border)" }}
+      id={domId}
+      className="flex items-start gap-4 py-3 px-2 -mx-2 rounded"
+      style={{
+        borderBottom: "1px solid var(--color-border)",
+        background: highlight ? "rgba(37,99,235,0.12)" : undefined,
+        transition: "background 0.4s ease",
+      }}
     >
       <div className="flex flex-col items-center gap-0.5 shrink-0 w-20">
         <span
@@ -755,10 +833,14 @@ export default function ComplianceDashboardClient() {
   const [generatingCert, setGeneratingCert] = useState(false);
   const [certError, setCertError] = useState<string | null>(null);
   const [showAllActions, setShowAllActions] = useState(false);
+  const [showAllProductions, setShowAllProductions] = useState(false);
+  const [expandedObligation, setExpandedObligation] = useState<string | null>(null);
+  const [highlightedAction, setHighlightedAction] = useState<string | null>(null);
   const [modalProd, setModalProd] = useState<ProductionCompliance | null>(null);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [regime, setRegime] = useRegime();
+  const actionQueueRef = useRef<HTMLElement>(null);
 
   // Load user's org list on mount — populates the switcher
   useEffect(() => {
@@ -857,6 +939,33 @@ export default function ComplianceDashboardClient() {
   const visibleActions = showAllActions ? data.actionItems : data.actionItems.slice(0, 8);
   const criticalCount = data.actionItems.filter((a) => a.urgency === "critical").length;
 
+  const PRODUCTIONS_PAGE = 10;
+  const visibleProductions = showAllProductions ? data.productions : data.productions.slice(0, PRODUCTIONS_PAGE);
+
+  // Map each obligation to its gap instances (one action-queue row per occurrence)
+  // so an Obligation Progress row can expand them and jump to the queue.
+  const gapInstancesByObligation = new Map<string, { item: ActionItem; index: number }[]>();
+  data.actionItems.forEach((a, index) => {
+    if (a.urgency === "pending") return; // pending obligations aren't gaps
+    const list = gapInstancesByObligation.get(a.obligationId) ?? [];
+    list.push({ item: a, index });
+    gapInstancesByObligation.set(a.obligationId, list);
+  });
+
+  function scrollToActionQueue() {
+    actionQueueRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function jumpToAction(globalIndex: number) {
+    if (globalIndex >= 8) setShowAllActions(true); // ensure the row is rendered
+    const id = `cq-action-${globalIndex}`;
+    setHighlightedAction(id);
+    setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+    setTimeout(() => setHighlightedAction((cur) => (cur === id ? null : cur)), 2200);
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
@@ -912,16 +1021,18 @@ export default function ComplianceDashboardClient() {
           <StatCard value={data.summary.pendingTransfers} label="Pending Transfers" warn />
         </div>
         {criticalCount > 0 && (
-          <div
-            className="rounded px-3 py-2 text-xs"
+          <button
+            onClick={scrollToActionQueue}
+            className="rounded px-3 py-2 text-xs text-left"
             style={{
               background: "rgba(192,57,43,0.08)",
               border: "1px solid rgba(192,57,43,0.3)",
               color: STATUS_COLORS.gap,
+              cursor: "pointer",
             }}
           >
-            {criticalCount} critical action{criticalCount !== 1 ? "s" : ""} require immediate attention
-          </div>
+            {criticalCount} critical action{criticalCount !== 1 ? "s" : ""} require immediate attention →
+          </button>
         )}
       </div>
 
@@ -933,7 +1044,14 @@ export default function ComplianceDashboardClient() {
           </p>
           <div>
             {data.obligationSummary.map((item) => (
-              <ObligationBar key={item.id} item={item} />
+              <ObligationBar
+                key={item.id}
+                item={item}
+                instances={gapInstancesByObligation.get(item.id) ?? []}
+                expanded={expandedObligation === item.id}
+                onToggle={() => setExpandedObligation((cur) => (cur === item.id ? null : item.id))}
+                onJump={jumpToAction}
+              />
             ))}
           </div>
         </section>
@@ -942,14 +1060,34 @@ export default function ComplianceDashboardClient() {
       {/* Productions grid */}
       {data.productions.length > 0 && (
         <section>
-          <p className={`${sectionHeader} mb-3`} style={{ color: "var(--color-muted)" }}>
-            Productions ({data.productions.length})
-          </p>
+          <div className="flex items-center justify-between mb-3">
+            <p className={sectionHeader} style={{ color: "var(--color-muted)" }}>
+              Productions ({data.productions.length})
+            </p>
+            {data.productions.length > PRODUCTIONS_PAGE && (
+              <button
+                onClick={() => setShowAllProductions((v) => !v)}
+                className="text-xs"
+                style={{ color: "var(--color-accent)" }}
+              >
+                {showAllProductions ? "Show fewer" : `Show all ${data.productions.length}`}
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.productions.map((prod, i) => (
+            {visibleProductions.map((prod, i) => (
               <ProductionCard key={prod.id ?? i} prod={prod} onClick={() => setModalProd(prod)} />
             ))}
           </div>
+          {!showAllProductions && data.productions.length > PRODUCTIONS_PAGE && (
+            <button
+              onClick={() => setShowAllProductions(true)}
+              className="text-xs mt-3"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Show {data.productions.length - PRODUCTIONS_PAGE} more →
+            </button>
+          )}
         </section>
       )}
 
@@ -960,7 +1098,7 @@ export default function ComplianceDashboardClient() {
 
       {/* Action queue */}
       {data.actionItems.length > 0 ? (
-        <section className={card} style={cardStyle}>
+        <section ref={actionQueueRef} className={card} style={cardStyle}>
           <div className="flex items-center justify-between mb-2">
             <p className={sectionHeader} style={{ color: "var(--color-muted)" }}>
               Action Queue ({data.actionItems.length})
@@ -977,7 +1115,12 @@ export default function ComplianceDashboardClient() {
           </div>
           <div>
             {visibleActions.map((item, i) => (
-              <ActionRow key={`${item.licenceId}-${item.obligationId}-${i}`} item={item} />
+              <ActionRow
+                key={`${item.licenceId}-${item.obligationId}-${i}`}
+                item={item}
+                domId={`cq-action-${i}`}
+                highlight={highlightedAction === `cq-action-${i}`}
+              />
             ))}
           </div>
         </section>
