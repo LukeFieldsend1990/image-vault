@@ -1,5 +1,7 @@
-import OrganisationClient from "./organisation-client";
+import { redirect } from "next/navigation";
 
-export default function OrganisationPage() {
-  return <OrganisationClient />;
+// Organisations moved from Settings to the main navigation (/organisations).
+// Keep this route as a permanent redirect for any bookmarked links.
+export default function OrganisationSettingsRedirect() {
+  redirect("/organisations");
 }
