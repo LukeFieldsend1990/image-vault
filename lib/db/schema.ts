@@ -367,6 +367,8 @@ export const productions = sqliteTable("productions", {
   organisationId: text("organisation_id").references(() => organisations.id),
   coordinatorId: text("coordinator_id").references(() => users.id),
   sagProjectNumber: text("sag_project_number"),
+  isSag: integer("is_sag", { mode: "boolean" }).notNull().default(false),
+  isEquity: integer("is_equity", { mode: "boolean" }).notNull().default(false),
   shortCode: text("short_code"), // PR-#### production code. System-generated; see lib/codes.
 });
 
