@@ -20,6 +20,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, isNull, gt, sql } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
+import { mintLicenceCode } from "@/lib/codes/codes";
 import {
   productionCastInviteEmail,
   productionCastLinkedEmail,
@@ -169,6 +170,7 @@ export async function promoteCastMember(
       productionId: opts.productionId,
       createdAt: now,
     });
+    await mintLicenceCode(db, licenceId);
 
     await db.update(productionCast).set({
       talentId: existingUser.id,

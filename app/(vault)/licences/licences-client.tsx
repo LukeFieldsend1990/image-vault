@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import LicenceRef from "@/app/components/licence-ref";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -16,6 +17,7 @@ type LicenceStatus =
 
 interface Licence {
   id: string;
+  shortCode: string | null;
   packageName: string | null;
   packageScanType: string | null;
   packageTags: string | null;
@@ -259,6 +261,7 @@ export default function LicencesClient() {
                       <p className="font-medium text-sm" style={{ color: "var(--color-ink)" }}>
                         {l.projectName}
                       </p>
+                      <LicenceRef code={l.shortCode} />
                       <span
                         className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
                         style={{

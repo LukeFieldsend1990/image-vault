@@ -24,6 +24,7 @@ import {
 } from "@/lib/email/templates";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { mintLicenceCode } from "@/lib/codes/codes";
 import type { McpToolContext } from "../types";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
@@ -304,6 +305,7 @@ registerMcpTool({
       downloadCount: 0,
       createdAt: now,
     });
+    await mintLicenceCode(db, licenceId);
 
     // Article 39.J business reason on the licence's compliance chain (non-fatal)
     void appendEvent(db, {

@@ -13,6 +13,7 @@ import {
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { mintLicenceCode } from "@/lib/codes/codes";
 import { eq, and, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import {
@@ -370,6 +371,7 @@ export async function POST(
           productionId: id,
           createdAt: now,
         });
+        await mintLicenceCode(db, licenceId);
 
         await db.insert(productionCast).values({
           id: castId,
