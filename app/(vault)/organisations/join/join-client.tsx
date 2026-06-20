@@ -58,7 +58,7 @@ export default function JoinClient() {
         setError(d.error ?? "Failed to join organisation");
       } else {
         setJoined(true);
-        setTimeout(() => router.push("/settings/organisation"), 2000);
+        setTimeout(() => router.push("/organisations"), 2000);
       }
     } catch {
       setError("Network error — please try again");
@@ -88,7 +88,7 @@ export default function JoinClient() {
         ) : joined ? (
           <div style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "2rem", textAlign: "center" }}>
             <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--color-text)", marginBottom: "0.5rem" }}>You&apos;ve joined {preview?.organisationName}</p>
-            <p style={{ fontSize: "0.8rem", color: "var(--color-muted)" }}>Redirecting to organisation settings…</p>
+            <p style={{ fontSize: "0.8rem", color: "var(--color-muted)" }}>Redirecting to your organisations…</p>
           </div>
         ) : preview ? (
           <div style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "2rem" }}>

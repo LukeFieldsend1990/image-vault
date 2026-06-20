@@ -187,6 +187,18 @@ const LICENSEE_NAV = [
       </svg>
     ),
   },
+  {
+    href: "/organisations",
+    label: "Organisations",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h18" />
+        <path d="M5 21V7l8-4v18" />
+        <path d="M19 21V11l-6-4" />
+        <path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
+      </svg>
+    ),
+  },
   BRIDGE_NAV_ITEM,
   TRANSFERS_NAV_ITEM,
   {
@@ -268,6 +280,18 @@ const REP_NAV = [
         <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
         <line x1="12" y1="12" x2="12" y2="16" />
         <line x1="10" y1="14" x2="14" y2="14" />
+      </svg>
+    ),
+  },
+  {
+    href: "/organisations",
+    label: "Organisations",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h18" />
+        <path d="M5 21V7l8-4v18" />
+        <path d="M19 21V11l-6-4" />
+        <path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
       </svg>
     ),
   },
