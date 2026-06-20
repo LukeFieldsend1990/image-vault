@@ -74,6 +74,8 @@ export default function NewProductionClient() {
     director: "",
     vfxSupervisor: "",
     sagProjectNumber: "",
+    isSag: false,
+    isEquity: false,
     notes: "",
     tmdbId: null as number | null,
     imdbId: "",
@@ -149,6 +151,8 @@ export default function NewProductionClient() {
           director: form.director.trim() || undefined,
           vfxSupervisor: form.vfxSupervisor.trim() || undefined,
           sagProjectNumber: form.sagProjectNumber.trim() || undefined,
+          isSag: form.isSag || undefined,
+          isEquity: form.isEquity || undefined,
           notes: form.notes.trim() || undefined,
           tmdbId: form.tmdbId ?? undefined,
           imdbId: form.imdbId.trim() || undefined,
@@ -276,7 +280,7 @@ export default function NewProductionClient() {
               style={inputStyle}
             />
           </Field>
-          <Field label="SAG-AFTRA Project Number" hint="Optional — required for compliance certificates">
+          <Field label="Union Project Number" hint="Optional — required for compliance certificates">
             <input
               type="text"
               value={form.sagProjectNumber}
@@ -285,6 +289,34 @@ export default function NewProductionClient() {
               style={inputStyle}
             />
           </Field>
+        </div>
+
+        <div className="rounded p-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
+            Union Affiliation
+          </p>
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.isSag}
+                onChange={(e) => setForm((f) => ({ ...f, isSag: e.target.checked }))}
+                className="w-4 h-4"
+                style={{ accentColor: "var(--color-accent)" }}
+              />
+              <span className="text-sm" style={{ color: "var(--color-text)" }}>SAG-AFTRA</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.isEquity}
+                onChange={(e) => setForm((f) => ({ ...f, isEquity: e.target.checked }))}
+                className="w-4 h-4"
+                style={{ accentColor: "var(--color-accent)" }}
+              />
+              <span className="text-sm" style={{ color: "var(--color-text)" }}>Equity</span>
+            </label>
+          </div>
         </div>
 
         <Field label="Production Company">

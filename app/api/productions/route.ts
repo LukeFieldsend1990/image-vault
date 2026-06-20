@@ -72,6 +72,8 @@ export async function POST(req: NextRequest) {
     notes?: string;
     organisationId?: string;
     sagProjectNumber?: string;
+    isSag?: boolean;
+    isEquity?: boolean;
   };
   try {
     body = JSON.parse(await req.text());
@@ -165,6 +167,8 @@ export async function POST(req: NextRequest) {
     organisationId: orgId,
     coordinatorId: session.sub,
     sagProjectNumber: body.sagProjectNumber ?? null,
+    isSag: body.isSag ?? false,
+    isEquity: body.isEquity ?? false,
     createdAt: now,
     updatedAt: now,
   });
