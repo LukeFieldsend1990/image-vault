@@ -15,6 +15,12 @@ interface AiTag {
   status: string;
 }
 
+interface AwaitingPackageLicence {
+  id: string;
+  projectName: string | null;
+  productionCompany: string | null;
+}
+
 interface ScanPackage {
   id: string;
   name: string;
@@ -828,6 +834,7 @@ export default function DashboardClient() {
   const [activeLicences, setActiveLicences] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [royaltyLifetimePence, setRoyaltyLifetimePence] = useState<number | null>(null);
+  const [awaitingPackage, setAwaitingPackage] = useState<AwaitingPackageLicence[]>([]);
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -853,6 +860,15 @@ export default function DashboardClient() {
           setPendingRequests(data.licences.filter((l) => l.status === "PENDING").length);
         }
       } catch { /* stats are non-critical */ }
+    })();
+    void (async () => {
+      try {
+        const res = await fetch("/api/licences?status=AWAITING_PACKAGE");
+        if (res.ok) {
+          const data = await res.json() as { licences: AwaitingPackageLicence[] };
+          setAwaitingPackage(data.licences);
+        }
+      } catch { /* non-critical */ }
     })();
     void (async () => {
       try {
@@ -930,6 +946,55 @@ export default function DashboardClient() {
         </button>
       </header>
 
+      {/* ── Cast invitation nudge ── */}
+      {!loading && awaitingPackage.length > 0 && (
+        <div
+          className="mx-8 lg:mx-12 mt-5 rounded border flex items-start gap-4 px-5 py-4"
+          style={{ borderColor: "#c0392b", background: "color-mix(in srgb, #c0392b 6%, var(--color-bg))" }}
+        >
+          <div className="flex-shrink-0 mt-0.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold" style={{ color: "#c0392b" }}>
+              {awaitingPackage.length === 1
+                ? "A production is waiting for your scan"
+                : `${awaitingPackage.length} productions are waiting for your scan`}
+            </p>
+            <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--color-muted)" }}>
+              {awaitingPackage
+                .slice(0, 2)
+                .map((l) => l.projectName ?? l.productionCompany ?? "Untitled project")
+                .join(", ")}
+              {awaitingPackage.length > 2 ? ` and ${awaitingPackage.length - 2} more` : ""}
+              {" "}
+              {awaitingPackage.length === 1 ? "has" : "have"} added you to their cast. Upload or attach a scan package to proceed.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setModalOpen(true)}
+              className="text-xs font-medium px-3 py-1.5 text-white rounded"
+              style={{ background: "#c0392b" }}
+            >
+              Upload scan
+            </button>
+            <Link
+              href="/vault/requests"
+              className="text-xs font-medium px-3 py-1.5 rounded border"
+              style={{ borderColor: "#c0392b", color: "#c0392b" }}
+            >
+              Review invitations
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
@@ -943,17 +1008,27 @@ export default function DashboardClient() {
                 className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full"
                 style={{ background: "var(--color-surface)" }}
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
-                  <rect x="3" y="11" width="18" height="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
+                {awaitingPackage.length > 0 ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
+                    <rect x="3" y="11" width="18" height="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                )}
               </div>
               <h2 className="text-sm font-semibold text-[--color-ink] mb-2">
-                No scans yet
+                {awaitingPackage.length > 0 ? "Upload needed to proceed" : "No scans yet"}
               </h2>
               <p className="text-xs leading-relaxed" style={{ color: "var(--color-muted)" }}>
-                Upload your first likeness scan package. Files are encrypted in
-                your browser before they leave your device.
+                {awaitingPackage.length > 0
+                  ? `${awaitingPackage.length === 1 ? "A production" : `${awaitingPackage.length} productions`} added you to their cast but your vault is empty. Upload a scan package to unblock the licence.`
+                  : "Upload your first likeness scan package. Files are encrypted in your browser before they leave your device."}
               </p>
               <button
                 onClick={() => setModalOpen(true)}
@@ -967,6 +1042,15 @@ export default function DashboardClient() {
                 </svg>
                 Upload Scan Package
               </button>
+              {awaitingPackage.length > 0 && (
+                <Link
+                  href="/vault/requests"
+                  className="mt-3 inline-flex items-center gap-1 text-xs"
+                  style={{ color: "var(--color-muted)" }}
+                >
+                  View cast invitations →
+                </Link>
+              )}
             </div>
           </div>
         ) : (
