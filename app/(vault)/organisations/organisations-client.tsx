@@ -45,7 +45,7 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-export default function OrganisationsClient() {
+export default function OrganisationsClient({ canCreate = true }: { canCreate?: boolean }) {
   const [orgs, setOrgs] = useState<Organisation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<OrgDetail | null>(null);
@@ -237,7 +237,7 @@ export default function OrganisationsClient() {
             Manage your production companies, teams, members, and billing.
           </p>
         </div>
-        {!showCreate && (
+        {canCreate && !showCreate && (
           <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 rounded px-4 py-2 text-sm font-medium text-white shrink-0"
@@ -344,15 +344,19 @@ export default function OrganisationsClient() {
           </svg>
           <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>No organisations yet</p>
           <p className="text-xs mb-6 max-w-xs mx-auto" style={{ color: "var(--color-muted)" }}>
-            Create a production company to invite your team, manage members, and centralise billing.
+            {canCreate
+              ? "Create a production company to invite your team, manage members, and centralise billing."
+              : "You're not a member of any organisation yet. Ask an organisation owner to send you an invite."}
           </p>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 rounded px-5 py-2 text-sm font-medium text-white"
-            style={{ background: "var(--color-accent)" }}
-          >
-            Create your first organisation
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center gap-2 rounded px-5 py-2 text-sm font-medium text-white"
+              style={{ background: "var(--color-accent)" }}
+            >
+              Create your first organisation
+            </button>
+          )}
         </div>
       )}
 

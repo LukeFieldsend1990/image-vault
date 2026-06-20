@@ -18,8 +18,12 @@ export default async function OrganisationsPage() {
     } catch { /* malformed JWT — fall through to redirect */ }
   }
 
-  // Organisations are an industry-role surface (admins always allowed).
-  if (!isIndustryRole(role) && !isAdmin(email)) redirect("/dashboard");
+  // Organisations are an industry- and rep-facing surface (admins always allowed).
+  const admin = isAdmin(email);
+  if (!isIndustryRole(role) && role !== "rep" && !admin) redirect("/dashboard");
 
-  return <OrganisationsClient />;
+  // Only industry orgs/admins can create organisations; reps join via invite.
+  const canCreate = isIndustryRole(role) || admin;
+
+  return <OrganisationsClient canCreate={canCreate} />;
 }
