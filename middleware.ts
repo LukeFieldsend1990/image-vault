@@ -45,8 +45,8 @@ function getTokenPayload(req: NextRequest): { email: string | null; role: string
 const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
   talent: ["/dashboard", "/vault", "/licences", "/settings", "/onboarding", "/inbox", "/bookings"],
   rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences", "/talent"],
-  licensee: ["/directory", "/talent", "/licences", "/settings", "/inbox"],
-  industry: ["/directory", "/talent", "/licences", "/settings", "/inbox"],
+  licensee: ["/directory", "/talent", "/licences", "/settings", "/inbox", "/productions"],
+  industry: ["/directory", "/talent", "/licences", "/settings", "/inbox", "/productions"],
   // Read-only watcher: evidence + account settings only. Everything else redirects to /evidence.
   compliance: ["/evidence", "/settings"],
 };
@@ -55,8 +55,8 @@ const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
 const ROLE_HOME: Record<string, string> = {
   talent: "/dashboard",
   rep: "/roster",
-  licensee: "/directory",
-  industry: "/directory",
+  licensee: "/productions",
+  industry: "/productions",
   compliance: "/evidence",
 };
 

@@ -218,7 +218,7 @@ export default async function VaultLayout({
 
   const homeHref = isComplianceRole(role)
     ? (insurerWatcher && !platformOversight ? "/underwriting" : "/evidence")
-    : isIndustryRole(role) ? "/directory" : role === "rep" ? "/roster" : "/dashboard";
+    : isIndustryRole(role) ? "/productions" : role === "rep" ? "/roster" : "/dashboard";
 
   return (
     <div className="flex h-screen overflow-hidden">
