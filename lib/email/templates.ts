@@ -677,6 +677,42 @@ export function productionRoleClaimedEmail(p: ProductionRoleClaimedEmailParams):
   };
 }
 
+export interface CastRepInviteEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  actorName?: string;
+  characterName?: string;
+  signupUrl: string;
+  existing: boolean; // true → existing rep (link to roster); false → new rep (signup)
+  rosterUrl: string;
+}
+
+// Sent to a representing agent when a production reserves a role for their client
+// (Path C). Existing reps get a link to their roster; new reps get a signup link.
+export function castRepInviteEmail(p: CastRepInviteEmailParams): { subject: string; html: string } {
+  const who = p.actorName ?? "your client";
+  const characterRow = p.characterName
+    ? `<div class="kv-row"><span class="kv-key">Role</span><span class="kv-val">${p.characterName}</span></div>`
+    : "";
+  return {
+    subject: `${p.productionName} reserved a role for ${who}`,
+    html: layout(`
+      <p><strong>${p.companyName}</strong> has reserved a role on <strong>${p.productionName}</strong> for ${who} and asked you, as their representation, to help connect them.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Performer</span><span class="kv-val">${who}</span></div>
+        ${characterRow}
+      </div>
+      <p>${p.existing
+        ? "Open your roster to confirm your client's email or link them directly."
+        : "Join Image Vault to confirm your client's email and connect them to this role."}</p>
+      <a class="btn" href="${p.existing ? p.rosterUrl : p.signupUrl}">${p.existing ? "Open my roster" : "Join Image Vault"}</a>
+    `),
+  };
+}
+
 export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: string; html: string } {
   const dt = new Date(p.ranAt * 1000).toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",

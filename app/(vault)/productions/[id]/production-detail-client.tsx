@@ -6,6 +6,7 @@ import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 import InsurersPanel from "./insurers-panel";
+import InviteRepModal from "./invite-rep-modal";
 import { formatScan } from "@/lib/codes/codes";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -33,12 +34,15 @@ interface CastRow {
   talentId: string | null;
   inviteId: string | null;
   licenceId: string | null;
+  actorName: string | null;
   characterName: string | null;
   department: string | null;
   sagMember: boolean;
-  status: "invited" | "linked" | "scan_uploaded" | "consented" | "declined";
+  status: "placeholder" | "invited" | "linked" | "scan_uploaded" | "consented" | "declined";
   addedAt: number;
   linkedAt: number | null;
+  repId: string | null;
+  repInviteId: string | null;
   talentProfile: { userId: string; fullName: string; profileImageUrl: string | null } | null;
   invite: { id: string; email: string; usedAt: number | null; expiresAt: number } | null;
   licence: { id: string; status: string; projectName: string } | null;
@@ -85,6 +89,7 @@ interface LicenceTerms {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const CAST_STATUS_COLOUR: Record<string, string> = {
+  placeholder: "#6b7280",
   invited: "#b45309",
   linked: "#1d4ed8",
   scan_uploaded: "#7c3aed",
@@ -93,6 +98,7 @@ const CAST_STATUS_COLOUR: Record<string, string> = {
 };
 
 const CAST_STATUS_LABEL: Record<string, string> = {
+  placeholder: "Reserved",
   invited: "Invited",
   linked: "Linked",
   scan_uploaded: "Reviewing",
@@ -197,6 +203,7 @@ export default function ProductionDetailClient() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [inviteRepFor, setInviteRepFor] = useState<{ castId: string; label: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -770,7 +777,7 @@ export default function ProductionDetailClient() {
                         <span className="font-medium" style={{ color: "var(--color-text)" }}>{row.talentProfile.fullName}</span>
                       </div>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.invite?.email ?? "—"}</span>
+                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.invite?.email ?? row.actorName ?? "—"}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -814,6 +821,20 @@ export default function ProductionDetailClient() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
+                      {row.status === "placeholder" && (
+                        row.repId || row.repInviteId ? (
+                          <span className="text-xs" style={{ color: "var(--color-muted)" }} title="Representation invited">Rep invited</span>
+                        ) : (
+                          <button
+                            onClick={() => setInviteRepFor({ castId: row.id, label: row.actorName ?? "this performer" })}
+                            className="text-xs font-medium"
+                            style={{ color: "var(--color-accent)" }}
+                            title="Invite their representation to connect them"
+                          >
+                            Invite representation
+                          </button>
+                        )
+                      )}
                       {row.status === "invited" && (
                         <button
                           onClick={() => handleResend(row.id)}
@@ -923,6 +944,17 @@ export default function ProductionDetailClient() {
 
       {/* Insurers */}
       <InsurersPanel productionId={id} />
+
+      {/* Path C — invite representation to a reserved slot */}
+      {inviteRepFor && (
+        <InviteRepModal
+          productionId={id}
+          castId={inviteRepFor.castId}
+          actorLabel={inviteRepFor.label}
+          onClose={() => setInviteRepFor(null)}
+          onDone={() => { setInviteRepFor(null); void fetchData(); }}
+        />
+      )}
     </div>
   );
 }

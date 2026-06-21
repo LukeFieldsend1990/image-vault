@@ -145,6 +145,15 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Path C: a rep invited to represent a specific cast slot becomes that
+    // slot's assigned rep on signup, so it surfaces in their roster to resolve.
+    if (role === "rep" && inviteRow.castId) {
+      await db
+        .update(productionCast)
+        .set({ repId: userId, repInviteId: null })
+        .where(eq(productionCast.id, inviteRow.castId));
+    }
+
     // Auto-grant a production-scoped compliance grant when an invited watcher
     // (e.g. an insurer added per production) completes signup. The invite's
     // orgSubtype carries the compliance subtype; default to insurer.
