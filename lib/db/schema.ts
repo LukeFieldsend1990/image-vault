@@ -224,6 +224,9 @@ export const invites = sqliteTable("invites", {
   productionId: text("production_id").references(() => productions.id),
   orgSubtype: text("org_subtype"), // industry-only: intended org type (OrgType)
   castId: text("cast_id"), // Path C: rep invite scoped to a specific cast slot
+  // Admin concierge invite: the org the invitee should be made owner of on signup
+  // (the production was pre-built by an admin under this org).
+  organisationId: text("organisation_id"),
 });
 
 export const scanLocations = sqliteTable("scan_locations", {
