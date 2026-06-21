@@ -1,8 +1,10 @@
-import { getDb } from "@/lib/db";
-import { users, organisations, productions, scanPackages } from "@/lib/db/schema";
+import { users, organisations, productions, scanPackages, licences } from "@/lib/db/schema";
 import { and, eq, sql, isNotNull } from "drizzle-orm";
+import type { drizzle } from "drizzle-orm/d1";
 
-type Db = ReturnType<typeof getDb>;
+// Accepts both the schema-typed db from getDb() and the generically-typed db
+// carried by skill/MCP contexts — these helpers only use plain select/update.
+type Db = ReturnType<typeof drizzle>;
 
 /**
  * System-generated pretty-print codes. Decorators only — never licensing keys.
@@ -55,6 +57,27 @@ export async function mintProductionCode(db: Db, productionId: string): Promise<
   try {
     const row = await db.select({ n: sql<number>`count(*)` }).from(productions).get();
     await db.update(productions).set({ shortCode: formatCode("PR", (row?.n ?? 0)) }).where(eq(productions.id, productionId));
+  } catch { /* best effort */ }
+}
+
+/**
+ * Mint the next LC code for a licence — the public, shareable reference shown to
+ * users and accepted by the Scan Transfers form (deliver against a production
+ * licence). Unlike the decorative codes, this is a functional identifier, so the
+ * next number is derived from the highest existing LC suffix rather than a row
+ * count: that way a number is never reused if a licence is ever deleted.
+ */
+export async function mintLicenceCode(db: Db, licenceId: string): Promise<void> {
+  try {
+    const row = await db
+      .select({ max: sql<number>`COALESCE(MAX(CAST(SUBSTR(${licences.shortCode}, 4) AS INTEGER)), 0)` })
+      .from(licences)
+      .where(sql`${licences.shortCode} LIKE 'LC-%'`)
+      .get();
+    await db
+      .update(licences)
+      .set({ shortCode: formatCode("LC", (row?.max ?? 0) + 1) })
+      .where(eq(licences.id, licenceId));
   } catch { /* best effort */ }
 }
 

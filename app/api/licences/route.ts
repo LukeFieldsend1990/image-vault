@@ -8,6 +8,7 @@ import { licenceRequestedEmail, placeholderLicenceCreatedEmail } from "@/lib/ema
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
+import { mintLicenceCode } from "@/lib/codes/codes";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
   const base = db
     .select({
       id: licences.id,
+      shortCode: licences.shortCode,
       packageId: licences.packageId,
       packageName: scanPackages.name,
       packageScanNumber: scanPackages.scanNumber,
@@ -325,6 +327,9 @@ export async function POST(req: NextRequest) {
     downloadCount: 0,
     createdAt: now,
   });
+
+  // Mint the public LC-#### reference used to share/look up this licence.
+  await mintLicenceCode(db, licenceId);
 
   // 39.J — the licence form itself is the articulable business reason (fire-and-forget).
   void appendEvent(db, {

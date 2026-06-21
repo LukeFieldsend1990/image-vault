@@ -111,6 +111,7 @@ export const uploadSessions = sqliteTable("upload_sessions", {
 
 export const licences = sqliteTable("licences", {
   id: text("id").primaryKey(), // UUID
+  shortCode: text("short_code"), // LC-#### public reference. System-generated; see lib/codes.
   talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   packageId: text("package_id").references(() => scanPackages.id, { onDelete: "cascade" }),
   licenseeId: text("licensee_id").notNull().references(() => users.id, { onDelete: "cascade" }),

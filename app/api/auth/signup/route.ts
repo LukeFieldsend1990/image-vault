@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { users, invites, talentReps, productionCast, licences, productions, organisations } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { createGrant } from "@/lib/compliance/grants";
+import { mintLicenceCode } from "@/lib/codes/codes";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
 const VALID_ROLES = ["talent", "rep", "industry", "licensee", "compliance"] as const;
@@ -224,6 +225,7 @@ export async function POST(req: NextRequest) {
             productionId: inviteRow.productionId,
             createdAt: now,
           });
+          await mintLicenceCode(db, licenceId);
 
           // Update cast row: link talent, clear terms, set status = linked
           await db

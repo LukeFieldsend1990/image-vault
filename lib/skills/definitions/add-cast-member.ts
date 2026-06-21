@@ -14,6 +14,7 @@ import { sendEmail } from "@/lib/email/send";
 import { productionCastInviteEmail, productionCastLinkedEmail } from "@/lib/email/templates";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { mintLicenceCode } from "@/lib/codes/codes";
 
 const ONE_YEAR = 365 * 24 * 60 * 60;
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
@@ -233,6 +234,7 @@ const skill: SkillDefinition = {
         productionId: production.id,
         createdAt: now,
       });
+      await mintLicenceCode(db, licenceId);
 
       await db.insert(productionCast).values({
         id: crypto.randomUUID(),
