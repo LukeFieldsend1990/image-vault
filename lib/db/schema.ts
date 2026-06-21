@@ -1054,6 +1054,25 @@ export const productionInclusionRecords = sqliteTable("production_inclusion_reco
   reviewNote: text("review_note"),
 });
 
+// Vendor organisations attached to a production (VFX, dubbing, scan service, …).
+// This is the production-level "who's working on this" link; actual scan-data
+// access remains per-licence via vendorAuthorisations + vendorAuditPassed.
+// `pending` rows carry an email invite until the vendor signs up and their org
+// is created + linked.
+export const productionVendors = sqliteTable("production_vendors", {
+  id: text("id").primaryKey(),
+  productionId: text("production_id").notNull().references(() => productions.id, { onDelete: "cascade" }),
+  vendorOrgId: text("vendor_org_id").references(() => organisations.id), // null until a pending invite is accepted
+  vendorType: text("vendor_type").notNull(), // OrgType snapshot (vfx_vendor | dubbing | scan_service | …)
+  invitedEmail: text("invited_email"),
+  invitedOrgName: text("invited_org_name"),
+  inviteId: text("invite_id"), // the industry signup invite for a pending vendor
+  status: text("status").notNull().default("active"), // active | pending | revoked
+  addedBy: text("added_by").notNull().references(() => users.id),
+  addedAt: integer("added_at").notNull(),
+  revokedAt: integer("revoked_at"),
+});
+
 // ── Admin MCP integration ─────────────────────────────────────────────────────
 
 export const mcpTokens = sqliteTable("mcp_tokens", {
