@@ -1032,7 +1032,7 @@ export default function DashboardClient() {
               <p className="text-xs leading-relaxed" style={{ color: "var(--color-muted)" }}>
                 {awaitingPackage.length > 0
                   ? `${awaitingPackage.length === 1 ? "A production" : `${awaitingPackage.length} productions`} added you to their cast but your vault is empty. Upload a scan package to unblock the licence.`
-                  : "Upload your first likeness scan package. Files are encrypted in your browser before they leave your device."}
+                  : "Upload your first likeness scan package. Stored encrypted at rest, with every download gated by dual-custody 2FA."}
               </p>
               <button
                 onClick={() => setModalOpen(true)}
