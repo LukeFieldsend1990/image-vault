@@ -6,7 +6,8 @@
  * two paths fetch and match identically.
  */
 
-import { talentProfiles, users } from "@/lib/db/schema";
+import { talentProfiles, users, productionCast } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 
 type Db = ReturnType<typeof getDb>;
@@ -110,4 +111,71 @@ export async function fetchTmdbCastWithMatches(
   });
 
   return { ok: true, cast };
+}
+
+export interface ImportPlaceholdersResult {
+  imported: number;
+  skipped: number;
+  matched: number;
+  total: number;
+}
+
+/**
+ * Fetch a production's TMDB cast and insert any not-yet-present members as
+ * placeholder rows (deduped on tmdbId — merge, don't clobber). Shared by the
+ * bulk-import endpoint and the admin concierge setup. `subset` limits to those
+ * tmdbIds; omit to import everyone.
+ */
+export async function importTmdbPlaceholders(
+  db: Db,
+  opts: {
+    productionId: string;
+    production: { type: string | null; tmdbId: number | null };
+    addedBy: string;
+    subset?: Set<number> | null;
+    overrideTmdbId?: number | null;
+  },
+): Promise<ImportPlaceholdersResult | { error: string; status: number }> {
+  const result = await fetchTmdbCastWithMatches(db, opts.production, opts.overrideTmdbId);
+  if (!result.ok) return { error: result.error, status: result.status };
+
+  let members = result.cast;
+  if (opts.subset) members = members.filter((m) => opts.subset!.has(m.tmdbId));
+
+  const existing = await db
+    .select({ tmdbId: productionCast.tmdbId })
+    .from(productionCast)
+    .where(eq(productionCast.productionId, opts.productionId))
+    .all();
+  const existingTmdbIds = new Set(existing.map((r) => r.tmdbId).filter((t): t is number => t !== null));
+
+  const now = Math.floor(Date.now() / 1000);
+  let imported = 0, skipped = 0, matched = 0;
+
+  for (const m of members) {
+    if (existingTmdbIds.has(m.tmdbId)) { skipped++; continue; }
+    await db.insert(productionCast).values({
+      id: crypto.randomUUID(),
+      productionId: opts.productionId,
+      talentId: null,
+      inviteId: null,
+      licenceId: null,
+      actorName: m.name,
+      tmdbId: m.tmdbId,
+      sourceNote: "TMDB credits",
+      characterName: m.character || null,
+      department: m.department,
+      sagMember: false,
+      status: "placeholder",
+      licenceTermsJson: null,
+      addedBy: opts.addedBy,
+      addedAt: now,
+      linkedAt: null,
+    });
+    existingTmdbIds.add(m.tmdbId);
+    imported++;
+    if (m.matched) matched++;
+  }
+
+  return { imported, skipped, matched, total: members.length };
 }

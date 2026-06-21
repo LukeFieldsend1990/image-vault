@@ -155,6 +155,35 @@ export async function POST(req: NextRequest) {
         .where(eq(productionCast.id, inviteRow.castId));
     }
 
+    // Admin concierge: an industry user invited to a pre-built production becomes
+    // the owner of its org and the production's coordinator on signup.
+    if (role === "industry" && inviteRow.organisationId) {
+      try {
+        const alreadyMember = await db
+          .select({ userId: organisationMembers.userId })
+          .from(organisationMembers)
+          .where(and(
+            eq(organisationMembers.organisationId, inviteRow.organisationId),
+            eq(organisationMembers.userId, userId),
+          ))
+          .get();
+        if (!alreadyMember) {
+          await db.insert(organisationMembers).values({
+            organisationId: inviteRow.organisationId,
+            userId,
+            memberRole: "owner",
+            invitedBy: inviteRow.invitedBy,
+            joinedAt: now,
+          });
+        }
+        if (inviteRow.productionId) {
+          await db.update(productions).set({ coordinatorId: userId }).where(eq(productions.id, inviteRow.productionId));
+        }
+      } catch {
+        // Don't block signup; an admin can re-attach ownership if this fails.
+      }
+    }
+
     // Vendor onboarding: an industry user invited as a production vendor (the
     // invite's orgSubtype carries the vendor org type) gets their org created and
     // the pending production_vendors row linked + activated on signup.

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCast, organisationMembers } from "@/lib/db/schema";
+import { productions, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
-import { fetchTmdbCastWithMatches } from "@/lib/productions/tmdb-cast";
+import { importTmdbPlaceholders } from "@/lib/productions/tmdb-cast";
 import { eq, and } from "drizzle-orm";
 
 // POST /api/productions/[id]/cast/tmdb/import
@@ -74,54 +74,15 @@ export async function POST(
     ? new Set(body.tmdbIds.filter((n): n is number => typeof n === "number").map((n) => Math.floor(n)))
     : null;
 
-  const result = await fetchTmdbCastWithMatches(db, production, overrideTmdbId);
-  if (!result.ok) {
+  const result = await importTmdbPlaceholders(db, {
+    productionId: id,
+    production,
+    addedBy: session.sub,
+    subset,
+    overrideTmdbId,
+  });
+  if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
-
-  let members = result.cast;
-  if (subset) members = members.filter((m) => subset.has(m.tmdbId));
-
-  // Dedupe against rows already on this production (by tmdbId).
-  const existing = await db
-    .select({ tmdbId: productionCast.tmdbId })
-    .from(productionCast)
-    .where(eq(productionCast.productionId, id))
-    .all();
-  const existingTmdbIds = new Set(existing.map((r) => r.tmdbId).filter((t): t is number => t !== null));
-
-  const now = Math.floor(Date.now() / 1000);
-  let imported = 0;
-  let skipped = 0;
-  let matched = 0;
-
-  for (const m of members) {
-    if (existingTmdbIds.has(m.tmdbId)) {
-      skipped++;
-      continue;
-    }
-    await db.insert(productionCast).values({
-      id: crypto.randomUUID(),
-      productionId: id,
-      talentId: null,
-      inviteId: null,
-      licenceId: null,
-      actorName: m.name,
-      tmdbId: m.tmdbId,
-      sourceNote: "TMDB credits",
-      characterName: m.character || null,
-      department: m.department,
-      sagMember: false,
-      status: "placeholder",
-      licenceTermsJson: null, // terms resolved from production default terms at promotion time
-      addedBy: session.sub,
-      addedAt: now,
-      linkedAt: null,
-    });
-    existingTmdbIds.add(m.tmdbId);
-    imported++;
-    if (m.matched) matched++;
-  }
-
-  return NextResponse.json({ imported, skipped, matched, total: members.length }, { status: 201 });
+  return NextResponse.json(result, { status: 201 });
 }

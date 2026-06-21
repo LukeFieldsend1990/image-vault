@@ -772,6 +772,35 @@ export function vendorProductionInviteEmail(p: VendorProductionInviteEmailParams
   };
 }
 
+export interface ConciergeProductionInviteEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  castCount: number;
+  signupUrl: string;
+}
+
+// Sent when an Image Vault admin has pre-built a production and invites the
+// industry user to take it over — they arrive to a mostly-set-up project.
+export function conciergeProductionInviteEmail(p: ConciergeProductionInviteEmailParams): { subject: string; html: string } {
+  const castRow = p.castCount > 0
+    ? `<div class="kv-row"><span class="kv-key">Cast reserved</span><span class="kv-val">${p.castCount}</span></div>`
+    : "";
+  return {
+    subject: `Your production ${p.productionName} is ready on Image Vault`,
+    html: layout(`
+      <p>We've set up <strong>${p.productionName}</strong> for <strong>${p.companyName}</strong> on Image Vault so you can hit the ground running.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        ${castRow}
+      </div>
+      <p>Create your account to take ownership — your production, cast roster and default terms are already in place. Just review, add any emails you have, and send your licence requests.</p>
+      <a class="btn" href="${p.signupUrl}">Set up your account</a>
+    `),
+  };
+}
+
 export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: string; html: string } {
   const dt = new Date(p.ranAt * 1000).toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",
