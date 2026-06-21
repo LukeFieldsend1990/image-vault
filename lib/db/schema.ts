@@ -169,6 +169,12 @@ export const licences = sqliteTable("licences", {
   proposedUnitRatePence: integer("proposed_unit_rate_pence"),
   agreedUnitType: text("agreed_unit_type"),
   agreedUnitRatePence: integer("agreed_unit_rate_pence"),
+  // Production-included: the scan was commissioned and paid for as part of the
+  // production, so the licence fee is £0 and it does NOT count as a re-licence.
+  productionIncluded: integer("production_included", { mode: "boolean" }).notNull().default(false),
+  inclusionReason: text("inclusion_reason"),
+  inclusionMarkedBy: text("inclusion_marked_by").references(() => users.id),
+  inclusionMarkedAt: integer("inclusion_marked_at"),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -1024,6 +1030,28 @@ export const productionDefaultTerms = sqliteTable("production_default_terms", {
   proposedFee: integer("proposed_fee"),    // pence
   updatedBy: text("updated_by").notNull().references(() => users.id),
   updatedAt: integer("updated_at").notNull(),
+});
+
+// High-detail audit trail for production-included licences. One row per marking.
+// `flagged` = the package/talent had prior usage through the platform when the
+// inclusion was claimed (a potential abuse signal). We never block — we record
+// the full prior-usage detail and surface flagged rows for admin review.
+export const productionInclusionRecords = sqliteTable("production_inclusion_records", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  productionId: text("production_id").references(() => productions.id),
+  packageId: text("package_id"),
+  talentId: text("talent_id").notNull().references(() => users.id),
+  markedBy: text("marked_by").notNull().references(() => users.id),
+  markedAt: integer("marked_at").notNull(),
+  reason: text("reason"),
+  priorLicenceCount: integer("prior_licence_count").notNull().default(0),
+  priorDownloadCount: integer("prior_download_count").notNull().default(0),
+  priorUsageJson: text("prior_usage_json"), // detailed snapshot of the prior usage found
+  flagged: integer("flagged", { mode: "boolean" }).notNull().default(false),
+  reviewedAt: integer("reviewed_at"),
+  reviewedBy: text("reviewed_by").references(() => users.id),
+  reviewNote: text("review_note"),
 });
 
 // ── Admin MCP integration ─────────────────────────────────────────────────────

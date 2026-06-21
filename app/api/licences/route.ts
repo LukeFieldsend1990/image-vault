@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
       orgType: organisations.orgType,
       orgShortCode: organisations.shortCode,
       productionId: licences.productionId,
+      productionIncluded: licences.productionIncluded,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))

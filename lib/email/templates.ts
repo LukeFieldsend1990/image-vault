@@ -713,6 +713,34 @@ export function castRepInviteEmail(p: CastRepInviteEmailParams): { subject: stri
   };
 }
 
+export interface InclusionFlaggedEmailParams {
+  recipientEmail: string;
+  licenceCode: string;
+  projectName: string;
+  priorLicenceCount: number;
+  priorDownloadCount: number;
+  reviewUrl: string;
+}
+
+// Sent to admins when a licence is marked "production-included" despite the
+// package/talent already having prior usage on the platform. We never block —
+// this surfaces the claim for a human decision.
+export function inclusionFlaggedEmail(p: InclusionFlaggedEmailParams): { subject: string; html: string } {
+  return {
+    subject: `[Review] Production-included claim flagged — ${p.projectName}`,
+    html: layout(`
+      <p>A licence was marked as <strong>production-included</strong> (£0 fee, not a re-licence), but the package/talent already has prior usage through Image Vault. No action was blocked — review and decide whether to act.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Licence</span><span class="kv-val">${p.licenceCode}</span></div>
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.projectName}</span></div>
+        <div class="kv-row"><span class="kv-key">Prior licences</span><span class="kv-val">${p.priorLicenceCount}</span></div>
+        <div class="kv-row"><span class="kv-key">Prior downloads</span><span class="kv-val">${p.priorDownloadCount}</span></div>
+      </div>
+      <a class="btn" href="${p.reviewUrl}">Review inclusion claims</a>
+    `),
+  };
+}
+
 export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: string; html: string } {
   const dt = new Date(p.ranAt * 1000).toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",

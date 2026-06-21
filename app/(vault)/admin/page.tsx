@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails } from "@/lib/db/schema";
+import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails, productionInclusionRecords } from "@/lib/db/schema";
 import { sql, inArray } from "drizzle-orm";
 import { getAllSkills } from "@/lib/skills/registry";
 import "@/lib/skills/definitions";
@@ -52,6 +52,7 @@ export default async function AdminOverviewPage() {
     recentLicences,
     fpCount,
     inboundFailedCount,
+    inclusionFlaggedCount,
   ] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(users).get(),
     db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'talent'`).get(),
@@ -77,6 +78,7 @@ export default async function AdminOverviewPage() {
     }).from(licences).orderBy(sql`created_at desc`).limit(6).all(),
     db.select({ n: sql<number>`count(*)` }).from(geometryFingerprints).where(sql`status = 'ready'`).get(),
     db.select({ n: sql<number>`count(*)` }).from(receivedEmails).where(sql`processing_status IN ('failed', 'processing')`).get(),
+    db.select({ n: sql<number>`count(*)` }).from(productionInclusionRecords).where(sql`flagged = 1 AND reviewed_at IS NULL`).get(),
   ]);
 
   // Resolve emails and filenames for recent downloads
@@ -148,6 +150,12 @@ export default async function AdminOverviewPage() {
       value: String(inboundFailedCount?.n ?? 0),
       sub: "stuck or failed emails",
       href: "/admin/inbound",
+    },
+    {
+      label: "Inclusion Claims",
+      value: String(inclusionFlaggedCount?.n ?? 0),
+      sub: "flagged for review",
+      href: "/admin/inclusions",
     },
   ];
 

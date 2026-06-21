@@ -73,6 +73,7 @@ interface LicenceSummary {
   packageName: string | null;
   packageScanNumber?: number | null;
   productionId: string | null;
+  productionIncluded?: boolean;
 }
 
 interface LicenceTerms {
@@ -203,6 +204,7 @@ export default function ProductionDetailClient() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [markingIncludedId, setMarkingIncludedId] = useState<string | null>(null);
   const [inviteRepFor, setInviteRepFor] = useState<{ castId: string; label: string } | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -377,6 +379,28 @@ export default function ProductionDetailClient() {
       await fetch(`/api/productions/${id}/cast/${castId}/resend-invite`, { method: "POST" });
     } finally {
       setResendingId(null);
+    }
+  }
+
+  async function handleMarkIncluded(licenceId: string) {
+    const reason = window.prompt("Mark this licence as production-included (£0 fee — the scan was produced and paid for as part of this production). Add a reference/justification:", "");
+    if (reason === null) return;
+    setMarkingIncludedId(licenceId);
+    try {
+      const r = await fetch(`/api/licences/${licenceId}/mark-included`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; flagged?: boolean; error?: string };
+      if (r.ok && d.ok) {
+        if (d.flagged) alert("Marked as included. Note: prior usage was found, so this has been flagged for review by the Image Vault team.");
+        await fetchData();
+      } else {
+        alert(d.error ?? "Couldn't mark as included.");
+      }
+    } finally {
+      setMarkingIncludedId(null);
     }
   }
 
@@ -929,9 +953,26 @@ export default function ProductionDetailClient() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                          {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
-                        </span>
+                        {lic.productionIncluded ? (
+                          <span className="text-xs px-2 py-0.5 rounded font-medium" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }} title="Scan produced & paid for as part of this production — no licence fee">
+                            Included · £0
+                          </span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                              {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
+                            </span>
+                            <button
+                              onClick={() => handleMarkIncluded(lic.id)}
+                              disabled={markingIncludedId === lic.id}
+                              className="text-[11px] text-left"
+                              style={{ color: "var(--color-accent)" }}
+                              title="Mark this scan as included in the production (no licence fee)"
+                            >
+                              {markingIncludedId === lic.id ? "Marking…" : "Mark included"}
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
