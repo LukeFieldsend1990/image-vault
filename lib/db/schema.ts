@@ -217,6 +217,7 @@ export const invites = sqliteTable("invites", {
   createdAt: integer("created_at").notNull(), // unix timestamp
   productionId: text("production_id").references(() => productions.id),
   orgSubtype: text("org_subtype"), // industry-only: intended org type (OrgType)
+  castId: text("cast_id"), // Path C: rep invite scoped to a specific cast slot
 });
 
 export const scanLocations = sqliteTable("scan_locations", {
@@ -999,6 +1000,12 @@ export const productionCast = sqliteTable("production_cast", {
   addedBy: text("added_by").notNull().references(() => users.id),
   addedAt: integer("added_at").notNull(),
   linkedAt: integer("linked_at"),
+  // Path C (agent-mediated): a reserved slot can be assigned to a representing
+  // agent. repId = an existing rep on Image Vault; repInviteId = a pending rep
+  // signup invite scoped to this slot. The rep then resolves the slot by
+  // supplying their client's email.
+  repId: text("rep_id").references(() => users.id),
+  repInviteId: text("rep_invite_id"),
 });
 
 // Production-level default licence terms. Set once during guided onboarding (Step 4)
