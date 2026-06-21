@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { talentProfiles } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { isIndustryRole } from "@/lib/auth/roles";
 import OnboardingClient from "./onboarding-client";
 
 async function getSessionInfo(): Promise<{ userId: string; role: string } | null> {
@@ -30,7 +31,11 @@ export default async function OnboardingPage({
 
   if (!session?.userId) redirect("/login");
 
-  // Only talent sees onboarding — reps and licensees go straight to dashboard
+  // Industry/production-company users get the guided production setup wizard,
+  // which lives under /productions (their home), not the talent onboarding flow.
+  if (isIndustryRole(session.role)) redirect("/productions/setup");
+
+  // Only talent sees this onboarding — reps go straight to dashboard.
   if (session.role !== "talent") redirect("/dashboard");
 
   // Already onboarded — skip unless ?update=1 is set (e.g. from settings page)
