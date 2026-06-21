@@ -646,6 +646,37 @@ export function productionCastLinkedEmail(p: ProductionCastLinkedEmailParams): {
   };
 }
 
+export interface ProductionRoleClaimedEmailParams {
+  recipientEmail: string;
+  talentName: string;
+  productionName: string;
+  characterName?: string;
+  reviewUrl: string;
+}
+
+// Sent to the production company when a talent organically joins Image Vault and
+// claims a role that was reserved for them (Path D self-heal). We never expose
+// the talent's contact details here — only that the role was claimed.
+export function productionRoleClaimedEmail(p: ProductionRoleClaimedEmailParams): { subject: string; html: string } {
+  const characterRow = p.characterName
+    ? `<div class="kv-row"><span class="kv-key">Role</span><span class="kv-val">${p.characterName}</span></div>`
+    : "";
+  return {
+    subject: `${p.talentName} claimed their role in ${p.productionName}`,
+    html: layout(`
+      <p><strong>${p.talentName}</strong> just joined Image Vault and claimed the role you reserved for them in <strong>${p.productionName}</strong>.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Performer</span><span class="kv-val">${p.talentName}</span></div>
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        ${characterRow}
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Ready to license</span></span></div>
+      </div>
+      <p>You can now send them a licence request from the production page.</p>
+      <a class="btn" href="${p.reviewUrl}">Open production</a>
+    `),
+  };
+}
+
 export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: string; html: string } {
   const dt = new Date(p.ranAt * 1000).toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",

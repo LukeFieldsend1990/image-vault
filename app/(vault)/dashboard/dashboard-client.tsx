@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import UploadModal from "../upload-modal";
+import ReservedRolesCard from "./reserved-roles-card";
 import { FadeImage } from "@/app/(vault)/fade-image";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 import CodeTag from "@/app/components/code-tag";
@@ -945,6 +946,9 @@ export default function DashboardClient() {
           New Scan Package
         </button>
       </header>
+
+      {/* ── Reserved-role self-claim (Path D) ── */}
+      <ReservedRolesCard />
 
       {/* ── Cast invitation nudge ── */}
       {!loading && awaitingPackage.length > 0 && (

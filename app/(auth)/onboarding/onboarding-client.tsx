@@ -4,7 +4,16 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { TmdbCandidate } from "@/app/api/onboarding/search/route";
 
-type Step = "search" | "confirm" | "done";
+type Step = "search" | "confirm" | "claim" | "done";
+
+interface ClaimableRole {
+  castId: string;
+  productionId: string;
+  productionName: string;
+  companyName: string;
+  characterName: string | null;
+  matchType: "tmdb" | "name";
+}
 
 // ── Placeholder avatar ─────────────────────────────────────────────────────────
 function AvatarPlaceholder({ name, size }: { name: string; size: number }) {
@@ -92,6 +101,9 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<TmdbCandidate | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [claimable, setClaimable] = useState<ClaimableRole[]>([]);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [claimedIds, setClaimedIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -145,9 +157,28 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Confirm failed");
+      // Path D: if a production already reserved a role for this profile, offer
+      // to claim it inline before entering the vault.
+      const data = await res.json().catch(() => ({})) as { claimable?: ClaimableRole[] };
+      if (!isUpdate && data.claimable && data.claimable.length > 0) {
+        setClaimable(data.claimable);
+        setStep("claim");
+        setConfirming(false);
+        return;
+      }
       router.push(isUpdate ? "/settings" : "/dashboard");
     } catch {
       setConfirming(false);
+    }
+  }
+
+  async function claimReservedRole(role: ClaimableRole) {
+    setClaimingId(role.castId);
+    try {
+      const r = await fetch(`/api/productions/${role.productionId}/cast/${role.castId}/claim`, { method: "POST" });
+      if (r.ok) setClaimedIds((prev) => new Set(prev).add(role.castId));
+    } finally {
+      setClaimingId(null);
     }
   }
 
@@ -330,6 +361,57 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
               style={{ color: "var(--color-muted)" }}
             >
               That&apos;s not me — search again
+            </button>
+          </div>
+        )}
+
+        {/* ── Step: Claim reserved roles (Path D) ── */}
+        {step === "claim" && (
+          <div className="w-full max-w-sm">
+            <h1 className="mb-1 text-3xl font-semibold tracking-tight text-[--color-ink]">
+              {claimable.length === 1 ? "A production reserved a role for you" : "Productions reserved roles for you"}
+            </h1>
+            <p className="mb-8 text-sm" style={{ color: "var(--color-muted)" }}>
+              We found {claimable.length === 1 ? "a role" : "roles"} waiting for you. Claim {claimable.length === 1 ? "it" : "them"} to let the production know you&apos;re here.
+            </p>
+
+            <div className="space-y-2 mb-8">
+              {claimable.map((role) => {
+                const isClaimed = claimedIds.has(role.castId);
+                return (
+                  <div
+                    key={role.castId}
+                    className="flex items-center gap-3 rounded-sm border p-4"
+                    style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[--color-ink]">
+                        {role.characterName ?? "A role"} in {role.productionName}
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--color-muted)" }}>Reserved by {role.companyName}</p>
+                    </div>
+                    {isClaimed ? (
+                      <span className="text-xs font-medium shrink-0" style={{ color: "#166534" }}>Claimed ✓</span>
+                    ) : (
+                      <button
+                        onClick={() => claimReservedRole(role)}
+                        disabled={claimingId === role.castId}
+                        className="shrink-0 rounded-sm px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-50"
+                        style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
+                      >
+                        {claimingId === role.castId ? "Claiming…" : "This is me"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="btn-accent w-full px-4 py-3.5 text-sm font-medium tracking-wide text-white transition"
+            >
+              Continue to my vault
             </button>
           </div>
         )}
