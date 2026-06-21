@@ -1001,6 +1001,24 @@ export const productionCast = sqliteTable("production_cast", {
   linkedAt: integer("linked_at"),
 });
 
+// Production-level default licence terms. Set once during guided onboarding (Step 4)
+// and applied as the lowest-precedence fallback whenever a cast placeholder is
+// resolved into a licence/invite (explicit overrides > per-row stored terms >
+// these defaults). One row per production; absence means "no defaults set".
+export const productionDefaultTerms = sqliteTable("production_default_terms", {
+  productionId: text("production_id").primaryKey().references(() => productions.id, { onDelete: "cascade" }),
+  intendedUse: text("intended_use"),
+  licenceType: text("licence_type"),       // CastLicenceType | null
+  territory: text("territory"),
+  exclusivity: text("exclusivity"),        // non_exclusive | sole | exclusive
+  permitAiTraining: integer("permit_ai_training", { mode: "boolean" }).notNull().default(false),
+  validFrom: integer("valid_from"),        // unix seconds
+  validTo: integer("valid_to"),            // unix seconds
+  proposedFee: integer("proposed_fee"),    // pence
+  updatedBy: text("updated_by").notNull().references(() => users.id),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 // ── Admin MCP integration ─────────────────────────────────────────────────────
 
 export const mcpTokens = sqliteTable("mcp_tokens", {
