@@ -451,7 +451,7 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
               "Dual-custody 2FA on every download",
               "Complete chain of custody record",
               "Revoke access at any time",
-              "Encrypted at rest — zero platform access",
+              "Encrypted at rest, with full audit logging",
             ].map((f) => (
               <div key={f} className="flex items-start gap-3">
                 <div
