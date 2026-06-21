@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Wordmark from "@/app/components/wordmark";
 
 export default function MarketingLayout({
   children,
@@ -16,12 +17,8 @@ export default function MarketingLayout({
         }}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link
-            href="/product"
-            className="text-xs font-semibold tracking-[0.2em] uppercase"
-            style={{ color: "var(--color-ink)" }}
-          >
-            Image Vault
+          <Link href="/product" aria-label="ImageVault">
+            <Wordmark variant="display" tone="ink" style={{ fontSize: "1.15rem" }} />
           </Link>
 
           <nav className="hidden items-center gap-8 md:flex">
@@ -66,14 +63,9 @@ export default function MarketingLayout({
       <footer className="border-t" style={{ borderColor: "var(--color-border)" }}>
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-12 md:flex-row md:items-center md:justify-between">
           <div>
-            <span
-              className="text-xs font-semibold tracking-[0.2em] uppercase"
-              style={{ color: "var(--color-ink)" }}
-            >
-              Image Vault
-            </span>
+            <Wordmark variant="display" tone="ink" style={{ fontSize: "1.05rem" }} />
             <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-              Your likeness. Your terms.
+              The gate, not the safe.
             </p>
           </div>
           <div className="flex items-center gap-8">

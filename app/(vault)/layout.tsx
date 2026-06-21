@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NavLinks } from "./nav";
+import Wordmark from "@/app/components/wordmark";
 import UserWidget from "./user-widget";
 import SidebarShell from "./sidebar-shell";
 import NotificationBell from "./notification-bell";
@@ -227,11 +228,7 @@ export default async function VaultLayout({
         <div className="flex flex-col justify-between h-full py-8">
           <div>
             <a href={homeHref} className="block px-6 mb-10">
-              <div className="flex items-center gap-1.5">
-                <div className="text-sm font-medium tracking-wide">
-                  Image Vault
-                </div>
-              </div>
+              <Wordmark variant="display" tone="ink" style={{ fontSize: "1.35rem" }} />
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 

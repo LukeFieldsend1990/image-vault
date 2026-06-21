@@ -1,8 +1,25 @@
 # Brand Refresh Spec — "The Gate, Not the Safe"
 
-**Status:** Proposal for review
+**Status:** First pass implemented on this branch (`claude/brand-guidelines-spec-5yx2kv`) for side-by-side review.
 **Source:** `ImageVault — Brand Guidelines v1.0` (June 2026) + `Brand in Practice` (partner deck)
 **Goal:** Migrate the live site from the current "United Agents" black/white/red theme to the new ImageVault editorial brand system, on a dev branch we can run and compare side-by-side before merging.
+
+### Implementation status (this branch)
+
+Done and building (`npm run build` ✓, `tsc` ✓, `lint` ✓ on changed files):
+- ✅ **Tokens** — `app/globals.css` `:root` rewritten to the brand palette (warm paper/ink, brick `#BC3D2C`, slate, lifecycle states), `14px`/`8px` radius, serif-heading + `::selection` base styles.
+- ✅ **Fonts** — Newsreader + Hanken Grotesk + JetBrains Mono wired in `app/layout.tsx`; `h1–h4` now serif globally.
+- ✅ **Wordmark + gate** — new `app/components/wordmark.tsx` (`display` / `lock` variants, brick gate posts, misuse-proof). Swapped into the vault sidebar, mobile bar, and marketing header/footer.
+- ✅ **Status badges** — new `app/components/status-badge.tsx` (active / expiring / revoked / purged / neutral), ready to replace inline state pills.
+- ✅ **Sidebar — option B (light "paper" rail)** chosen and built: paper background, hairline border-right, ink/slate text, brick-tint active item with brick left-rule. `nav.tsx`, `sidebar-shell.tsx`, `user-widget.tsx` converted from the old dark theme.
+- ✅ **Marketing hero** — eyebrows moved from red → slate; hero reframed to "Governance, not storage." with brand-safe, mechanism-accurate copy.
+
+Deliberately deferred (fast-follow, noted for the morning):
+- ⏳ **Hardcoded-red sweep** — ~51 UI files still use literal `#c0392b` / `rgba(192,57,43,…)`. These render near-identically to the new brick `#BC3D2C` (192,57,43 vs 188,61,44), so nothing looks broken; a mechanical pass to `var(--color-accent)` / tints is a clean follow-up, not blocking.
+- ⏳ **Broader copy pass** — only the marketing hero was reworded; deeper voice alignment (pillars, auth pages) left for review.
+- ⏳ **Status-badge adoption** — component exists; wiring it into the ~18 licence/vault/bridge state pills is the next step.
+
+---
 
 ---
 
