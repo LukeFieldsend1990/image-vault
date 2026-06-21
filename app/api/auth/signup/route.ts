@@ -144,23 +144,34 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Auto-grant a production-scoped compliance grant when an invited watcher
-    // (e.g. an insurer added per production) completes signup. The invite's
-    // orgSubtype carries the compliance subtype; default to insurer.
-    if (inviteRow.productionId && role === "compliance") {
-      try {
-        await createGrant(db, {
-          complianceUserId: userId,
-          subtype: (inviteRow.orgSubtype === "union" || inviteRow.orgSubtype === "regulator"
-            ? inviteRow.orgSubtype
-            : "insurer"),
-          scope: "production",
-          scopeId: inviteRow.productionId,
-          grantedBy: inviteRow.invitedBy,
-        });
-      } catch {
-        // Don't block signup if the grant can't be created; the producer can
-        // re-add the insurer, which is idempotent.
+    // Auto-grant a compliance grant when an invited watcher completes signup. The
+    // invite's org_subtype carries the compliance subtype (a legacy production
+    // invite with none defaults to insurer); union_id attributes a union grant.
+    // Insurers are bound per production, so they only auto-grant when the invite
+    // names one; a union/regulator invited platform-wide gets a platform grant.
+    if (role === "compliance") {
+      const sub = inviteRow.orgSubtype;
+      const subtype =
+        sub === "union" || sub === "regulator" || sub === "insurer"
+          ? sub
+          : inviteRow.productionId
+            ? "insurer"
+            : null;
+      const canGrant = subtype === "insurer" ? !!inviteRow.productionId : !!subtype;
+      if (subtype && canGrant) {
+        try {
+          await createGrant(db, {
+            complianceUserId: userId,
+            subtype,
+            unionId: subtype === "union" ? inviteRow.unionId : null,
+            scope: inviteRow.productionId ? "production" : "platform",
+            scopeId: inviteRow.productionId ?? null,
+            grantedBy: inviteRow.invitedBy,
+          });
+        } catch {
+          // Don't block signup if the grant can't be created; an admin can grant
+          // access manually afterwards, which is idempotent.
+        }
       }
     }
 

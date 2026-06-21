@@ -215,7 +215,8 @@ export const invites = sqliteTable("invites", {
   expiresAt: integer("expires_at").notNull(), // unix timestamp
   createdAt: integer("created_at").notNull(), // unix timestamp
   productionId: text("production_id").references(() => productions.id),
-  orgSubtype: text("org_subtype"), // industry-only: intended org type (OrgType)
+  orgSubtype: text("org_subtype"), // industry: intended OrgType; compliance: subtype (union|regulator|insurer)
+  unionId: text("union_id"), // compliance union invites: which union (sag_aftra|equity) the auto-grant attributes to
 });
 
 export const scanLocations = sqliteTable("scan_locations", {

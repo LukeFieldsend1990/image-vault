@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ORG_TYPES, ORG_TYPE_LABELS } from "@/lib/organisations/orgTypes";
+import { UNION_PRESETS } from "@/lib/compliance/unions";
 
 interface Invite {
   id: string;
@@ -38,6 +39,8 @@ export default function InviteManager() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"talent" | "rep" | "industry" | "compliance">("talent");
   const [orgSubtype, setOrgSubtype] = useState("");
+  const [complianceSubtype, setComplianceSubtype] = useState("");
+  const [unionId, setUnionId] = useState("");
   const [message, setMessage] = useState("");
   const [skipEmail, setSkipEmail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -74,7 +77,13 @@ export default function InviteManager() {
         body: JSON.stringify({
           email: email.trim(),
           role,
-          orgSubtype: role === "industry" && orgSubtype ? orgSubtype : undefined,
+          orgSubtype:
+            role === "industry" && orgSubtype
+              ? orgSubtype
+              : role === "compliance" && complianceSubtype
+                ? complianceSubtype
+                : undefined,
+          unionId: role === "compliance" && complianceSubtype === "union" && unionId ? unionId : undefined,
           message: message.trim() || undefined,
           skipEmail,
         }),
@@ -144,7 +153,7 @@ export default function InviteManager() {
               </label>
               <select
                 value={role}
-                onChange={(e) => { setRole(e.target.value as typeof role); setOrgSubtype(""); }}
+                onChange={(e) => { setRole(e.target.value as typeof role); setOrgSubtype(""); setComplianceSubtype(""); setUnionId(""); }}
                 className="w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1"
                 style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
               >
@@ -169,6 +178,44 @@ export default function InviteManager() {
                   <option value="">— select —</option>
                   {ORG_TYPES.map((t) => (
                     <option key={t} value={t}>{ORG_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {role === "compliance" && (
+              <div className="w-44">
+                <label className="block text-xs font-medium uppercase tracking-wide mb-1.5" style={{ color: "var(--color-muted)" }}>
+                  Watcher type
+                </label>
+                <select
+                  value={complianceSubtype}
+                  onChange={(e) => { setComplianceSubtype(e.target.value); setUnionId(""); }}
+                  className="w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1"
+                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+                >
+                  <option value="">— select —</option>
+                  <option value="union">Union</option>
+                  <option value="regulator">Regulator</option>
+                  <option value="insurer">Insurer</option>
+                </select>
+              </div>
+            )}
+
+            {role === "compliance" && complianceSubtype === "union" && (
+              <div className="w-44">
+                <label className="block text-xs font-medium uppercase tracking-wide mb-1.5" style={{ color: "var(--color-muted)" }}>
+                  Union
+                </label>
+                <select
+                  value={unionId}
+                  onChange={(e) => setUnionId(e.target.value)}
+                  className="w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1"
+                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+                >
+                  <option value="">— select —</option>
+                  {UNION_PRESETS.map((u) => (
+                    <option key={u.id} value={u.id}>{u.shortName}</option>
                   ))}
                 </select>
               </div>
@@ -206,7 +253,7 @@ export default function InviteManager() {
 
           <button
             type="submit"
-            disabled={submitting || !email.trim()}
+            disabled={submitting || !email.trim() || (role === "compliance" && complianceSubtype === "union" && !unionId)}
             className="rounded px-5 py-2 text-xs font-medium text-white transition disabled:opacity-50"
             style={{ background: "var(--color-accent)" }}
           >
