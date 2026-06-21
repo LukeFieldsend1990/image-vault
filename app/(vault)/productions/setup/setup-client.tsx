@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import VendorsPanel from "@/app/(vault)/productions/[id]/vendors-panel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-const STEPS = ["Welcome", "Company", "Production", "Cast", "Terms", "Done"];
+const STEPS = ["Welcome", "Company", "Production", "Cast", "Vendors", "Terms", "Done"];
 
 // ── Small UI helpers ───────────────────────────────────────────────────────────
 
@@ -342,7 +343,7 @@ export default function SetupClient() {
       });
       const d = await r.json() as { ok?: boolean; error?: string };
       if (!r.ok) { setError(d.error ?? "Failed to save terms."); return; }
-      setStep(5);
+      setStep(6);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -613,8 +614,27 @@ export default function SetupClient() {
         </div>
       )}
 
-      {/* Step 4 — Default terms */}
+      {/* Step 4 — Vendors */}
       {step === 4 && (
+        <div className="space-y-5">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Vendors on this production</h1>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
+              Add the VFX, dubbing or scan vendors working on this production — optional, and you can do it later. Attaching a vendor lists them here; scan access is granted per licence and needs their environment audit to pass.
+            </p>
+          </div>
+
+          {productionId && <VendorsPanel productionId={productionId} embedded />}
+
+          <div className="flex items-center gap-3 pt-2">
+            <PrimaryButton onClick={() => setStep(5)}>Continue</PrimaryButton>
+            <GhostButton onClick={() => setStep(3)}>Back</GhostButton>
+          </div>
+        </div>
+      )}
+
+      {/* Step 5 — Default terms */}
+      {step === 5 && (
         <div className="space-y-5">
           <div>
             <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Set your default terms</h1>
@@ -649,13 +669,13 @@ export default function SetupClient() {
 
           <div className="flex items-center gap-3 pt-2">
             <PrimaryButton onClick={submitTerms} disabled={busy}>{busy ? "Saving…" : "Continue"}</PrimaryButton>
-            <GhostButton onClick={() => setStep(5)}>Skip</GhostButton>
+            <GhostButton onClick={() => setStep(6)}>Skip</GhostButton>
           </div>
         </div>
       )}
 
-      {/* Step 5 — Done */}
-      {step === 5 && (
+      {/* Step 6 — Done */}
+      {step === 6 && (
         <div className="space-y-6">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>{prodForm.name || "Your production"} is set up 🎬</h1>

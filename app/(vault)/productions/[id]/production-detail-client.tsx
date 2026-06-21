@@ -6,6 +6,7 @@ import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 import InsurersPanel from "./insurers-panel";
+import VendorsPanel from "./vendors-panel";
 import InviteRepModal from "./invite-rep-modal";
 import { formatScan } from "@/lib/codes/codes";
 
@@ -982,6 +983,9 @@ export default function ProductionDetailClient() {
           </div>
         </div>
       )}
+
+      {/* Vendors */}
+      <VendorsPanel productionId={id} />
 
       {/* Insurers */}
       <InsurersPanel productionId={id} />

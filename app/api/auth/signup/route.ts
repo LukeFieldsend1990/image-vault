@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
-import { users, invites, talentReps, productionCast, licences, productions, organisations } from "@/lib/db/schema";
+import { users, invites, talentReps, productionCast, licences, productions, organisations, organisationMembers, productionVendors } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { createGrant } from "@/lib/compliance/grants";
-import { mintLicenceCode } from "@/lib/codes/codes";
+import { mintLicenceCode, mintOrgCode } from "@/lib/codes/codes";
+import { isVendorOrgType } from "@/lib/organisations/orgTypes";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
 const VALID_ROLES = ["talent", "rep", "industry", "licensee", "compliance"] as const;
@@ -152,6 +153,45 @@ export async function POST(req: NextRequest) {
         .update(productionCast)
         .set({ repId: userId, repInviteId: null })
         .where(eq(productionCast.id, inviteRow.castId));
+    }
+
+    // Vendor onboarding: an industry user invited as a production vendor (the
+    // invite's orgSubtype carries the vendor org type) gets their org created and
+    // the pending production_vendors row linked + activated on signup.
+    if (role === "industry" && inviteRow.orgSubtype && isVendorOrgType(inviteRow.orgSubtype)) {
+      const pendingVendor = await db
+        .select({ id: productionVendors.id, invitedOrgName: productionVendors.invitedOrgName })
+        .from(productionVendors)
+        .where(and(eq(productionVendors.inviteId, inviteRow.id), eq(productionVendors.status, "pending")))
+        .get();
+      if (pendingVendor) {
+        try {
+          const orgId = crypto.randomUUID();
+          await db.insert(organisations).values({
+            id: orgId,
+            name: pendingVendor.invitedOrgName ?? normalEmail.split("@")[0],
+            createdBy: userId,
+            createdAt: now,
+            updatedAt: now,
+            orgType: inviteRow.orgSubtype as typeof organisations.$inferInsert["orgType"],
+          });
+          await db.insert(organisationMembers).values({
+            organisationId: orgId,
+            userId,
+            memberRole: "owner",
+            invitedBy: inviteRow.invitedBy,
+            joinedAt: now,
+          });
+          await mintOrgCode(db, orgId, inviteRow.orgSubtype);
+          await db
+            .update(productionVendors)
+            .set({ vendorOrgId: orgId, status: "active" })
+            .where(eq(productionVendors.id, pendingVendor.id));
+        } catch {
+          // Don't block signup if org auto-creation fails; the producer can
+          // re-attach once the vendor has created their org.
+        }
+      }
     }
 
     // Auto-grant a production-scoped compliance grant when an invited watcher

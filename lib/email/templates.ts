@@ -741,6 +741,37 @@ export function inclusionFlaggedEmail(p: InclusionFlaggedEmailParams): { subject
   };
 }
 
+export interface VendorProductionInviteEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  vendorTypeLabel: string;
+  existing: boolean;     // true → existing org notified; false → new vendor signup
+  signupUrl: string;
+  productionUrl: string;
+}
+
+// Sent when a production company attaches a vendor org to a production. Existing
+// vendors are notified; new vendors get a signup link. Attachment alone never
+// grants scan access — that stays a per-licence, audit-gated step.
+export function vendorProductionInviteEmail(p: VendorProductionInviteEmailParams): { subject: string; html: string } {
+  return {
+    subject: `${p.companyName} added you to ${p.productionName}`,
+    html: layout(`
+      <p><strong>${p.companyName}</strong> has added your organisation to <strong>${p.productionName}</strong> as a ${p.vendorTypeLabel}.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Engaged by</span><span class="kv-val">${p.companyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Your role</span><span class="kv-val">${p.vendorTypeLabel}</span></div>
+      </div>
+      <p>${p.existing
+        ? "You're now listed on the production. Access to scan data is granted per licence and requires a passed environment audit."
+        : "Join Image Vault to be set up on the production. Access to scan data is granted per licence and requires a passed environment audit."}</p>
+      <a class="btn" href="${p.existing ? p.productionUrl : p.signupUrl}">${p.existing ? "View production" : "Join Image Vault"}</a>
+    `),
+  };
+}
+
 export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: string; html: string } {
   const dt = new Date(p.ranAt * 1000).toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",
