@@ -4,6 +4,7 @@ import { and, eq, isNull, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isComplianceRole } from "@/lib/auth/roles";
+import { getUnionPreset } from "./unions";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -28,6 +29,7 @@ export function isAllowedScopeForSubtype(subtype: string, scope: string): boolea
 export interface ActiveGrant {
   id: string;
   subtype: string;
+  unionId: string | null;
   scope: string;
   scopeId: string | null;
   createdAt: number;
@@ -39,6 +41,7 @@ export async function getActiveGrants(db: Db, userId: string): Promise<ActiveGra
     .select({
       id: complianceGrants.id,
       subtype: complianceGrants.subtype,
+      unionId: complianceGrants.unionId,
       scope: complianceGrants.scope,
       scopeId: complianceGrants.scopeId,
       createdAt: complianceGrants.createdAt,
@@ -46,6 +49,26 @@ export async function getActiveGrants(db: Db, userId: string): Promise<ActiveGra
     .from(complianceGrants)
     .where(and(eq(complianceGrants.complianceUserId, userId), isNull(complianceGrants.revokedAt)))
     .all();
+}
+
+/**
+ * The union ids a user watches — distinct unionIds of their active union-subtype
+ * grants. With `platformOnly`, restricts to platform-scoped union grants, the gate
+ * for managing a union's whole member roster.
+ */
+export async function getUnionIdsForUser(
+  db: Db,
+  userId: string,
+  opts: { platformOnly?: boolean } = {},
+): Promise<string[]> {
+  const grants = await getActiveGrants(db, userId);
+  const ids = new Set<string>();
+  for (const g of grants) {
+    if (g.subtype !== "union" || !g.unionId) continue;
+    if (opts.platformOnly && g.scope !== "platform") continue;
+    ids.add(g.unionId);
+  }
+  return [...ids];
 }
 
 /** Whether a compliance user holds an active platform-wide grant. */
@@ -169,6 +192,7 @@ export async function createGrant(
     scope: ComplianceScope;
     scopeId: string | null;
     grantedBy: string | null;
+    unionId?: string | null;
   },
 ): Promise<string> {
   if (!isAllowedScopeForSubtype(params.subtype, params.scope)) {
@@ -177,6 +201,16 @@ export async function createGrant(
         params.subtype === "insurer" ? INSURER_ALLOWED_SCOPES.join(" | ") : COMPLIANCE_SCOPES.join(" | ")
       }`,
     );
+  }
+
+  // union_id only applies to union grants; reject a stray id on other subtypes and
+  // validate it against the known union presets when present.
+  const unionId = params.subtype === "union" ? params.unionId ?? null : null;
+  if (params.subtype !== "union" && params.unionId) {
+    throw new GrantScopeError("union_id is only valid on union grants");
+  }
+  if (unionId && !getUnionPreset(unionId)) {
+    throw new GrantScopeError(`Unknown union: ${unionId}`);
   }
 
   const scopeId = params.scope === "platform" ? null : params.scopeId;
@@ -188,6 +222,7 @@ export async function createGrant(
       and(
         eq(complianceGrants.complianceUserId, params.complianceUserId),
         eq(complianceGrants.subtype, params.subtype),
+        unionId === null ? isNull(complianceGrants.unionId) : eq(complianceGrants.unionId, unionId),
         eq(complianceGrants.scope, params.scope),
         scopeId === null ? isNull(complianceGrants.scopeId) : eq(complianceGrants.scopeId, scopeId),
         isNull(complianceGrants.revokedAt),
@@ -201,6 +236,7 @@ export async function createGrant(
     id,
     complianceUserId: params.complianceUserId,
     subtype: params.subtype,
+    unionId,
     scope: params.scope,
     scopeId,
     grantedBy: params.grantedBy,

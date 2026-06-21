@@ -171,6 +171,11 @@ function UnionsTab({ unions }: { unions: UnionSummary[] }) {
               <Stat label="Regime" value={u.regimeName ?? u.regimeId} />
               <Stat label="Obligations" value={`${u.obligationCount} (${u.requiredCount} required)`} />
               <Stat label="Productions" value={`${u.productionCount} (${u.activeProductionCount} active)`} />
+              <Stat label="Watchers" value={`${u.watcherCount}`} />
+              <Stat
+                label="Roster"
+                value={u.rosterTotal === 0 ? "—" : `${u.rosterCoveragePct}% (${u.rosterOnPlatform}/${u.rosterTotal})`}
+              />
             </dl>
           </div>
         ))}
@@ -274,7 +279,8 @@ function WatchersTab({
                   {w.email ?? w.complianceUserId}
                 </p>
                 <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-                  {SUBTYPE_LABEL[w.subtype] ?? w.subtype} · {w.scope}
+                  {SUBTYPE_LABEL[w.subtype] ?? w.subtype}
+                  {w.unionShortName ? ` · ${w.unionShortName}` : ""} · {w.scope}
                   {w.scopeLabel ? ` · ${w.scopeLabel}` : w.scopeId ? ` · ${w.scopeId}` : ""} · {fmtDate(w.createdAt)}
                 </p>
               </div>

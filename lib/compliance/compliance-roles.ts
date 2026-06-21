@@ -21,7 +21,8 @@ import {
 } from "@/lib/db/schema";
 import { getRegime, listObligations } from "./registry";
 import { isActiveStatus } from "./productions";
-import { UNION_PRESETS } from "./unions";
+import { rosterCoverageByUnion } from "./members";
+import { UNION_PRESETS, getUnionPreset } from "./unions";
 import "./regimes"; // side-effect: populate the regime registry before we read it
 import type { getDb } from "@/lib/db";
 
@@ -39,6 +40,10 @@ export interface UnionSummary {
   requiredCount: number;
   productionCount: number;
   activeProductionCount: number;
+  watcherCount: number; // active union grants attributed to this union
+  rosterTotal: number;
+  rosterOnPlatform: number;
+  rosterCoveragePct: number;
 }
 
 export interface WatcherGrant {
@@ -46,6 +51,8 @@ export interface WatcherGrant {
   complianceUserId: string;
   email: string | null;
   subtype: string;
+  unionId: string | null;
+  unionShortName: string | null;
   scope: string;
   scopeId: string | null;
   scopeLabel: string | null;
@@ -81,6 +88,7 @@ export async function buildComplianceRolesOverview(db: Db): Promise<ComplianceRo
       complianceUserId: complianceGrants.complianceUserId,
       email: watcher.email,
       subtype: complianceGrants.subtype,
+      unionId: complianceGrants.unionId,
       scope: complianceGrants.scope,
       scopeId: complianceGrants.scopeId,
       createdAt: complianceGrants.createdAt,
@@ -128,14 +136,23 @@ export async function buildComplianceRolesOverview(db: Db): Promise<ComplianceRo
 
   const watchers: WatcherGrant[] = grants.map((g) => ({
     ...g,
+    unionShortName: g.unionId ? getUnionPreset(g.unionId)?.shortName ?? g.unionId : null,
     scopeLabel: labelFor(g.scope, g.scopeId),
   }));
 
-  // 3. Union summaries from the regime + production flags (union-specific signals).
+  // 3. Union summaries from the regime + production flags (union-specific signals),
+  // plus per-union watcher counts and roster coverage.
   const prodFlags = await db
     .select({ isSag: productions.isSag, isEquity: productions.isEquity, status: productions.status })
     .from(productions)
     .all();
+  const coverage = await rosterCoverageByUnion(db);
+  const watcherCountByUnion = new Map<string, number>();
+  for (const g of grants) {
+    if (g.subtype === "union" && g.unionId) {
+      watcherCountByUnion.set(g.unionId, (watcherCountByUnion.get(g.unionId) ?? 0) + 1);
+    }
+  }
 
   const unions: UnionSummary[] = UNION_PRESETS.map((u) => {
     const obligations = listObligations(u.regimeId);
@@ -148,6 +165,7 @@ export async function buildComplianceRolesOverview(db: Db): Promise<ComplianceRo
       productionCount++;
       if (isActiveStatus(p.status)) activeProductionCount++;
     }
+    const cov = coverage[u.id];
     return {
       id: u.id,
       shortName: u.shortName,
@@ -160,6 +178,10 @@ export async function buildComplianceRolesOverview(db: Db): Promise<ComplianceRo
       requiredCount: obligations.filter((o) => o.severity === "required").length,
       productionCount,
       activeProductionCount,
+      watcherCount: watcherCountByUnion.get(u.id) ?? 0,
+      rosterTotal: cov?.total ?? 0,
+      rosterOnPlatform: cov?.onPlatform ?? 0,
+      rosterCoveragePct: cov?.coveragePct ?? 0,
     };
   });
 

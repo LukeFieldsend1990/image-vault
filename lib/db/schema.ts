@@ -400,6 +400,9 @@ export const productionWatchlist = sqliteTable("production_watchlist", {
 export const unionMembers = sqliteTable("union_members", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  // Which union this roster entry belongs to (e.g. "sag_aftra" | "equity"). Null
+  // for legacy rows added before per-union attribution.
+  unionId: text("union_id"),
   addedBy: text("added_by").notNull().references(() => users.id),
   addedAt: integer("added_at").notNull(),
   archivedAt: integer("archived_at"),
@@ -1043,6 +1046,10 @@ export const complianceGrants = sqliteTable("compliance_grants", {
   id: text("id").primaryKey(),
   complianceUserId: text("compliance_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   subtype: text("subtype", { enum: ["union", "regulator", "insurer"] }).notNull(),
+  // Which union a union-subtype grant is for (e.g. "sag_aftra" | "equity"), so a
+  // SAG watcher only sees SAG and an Equity watcher only sees Equity. Null for
+  // regulator/insurer grants and for legacy union grants predating attribution.
+  unionId: text("union_id"),
   scope: text("scope", { enum: ["platform", "organisation", "production", "talent"] }).notNull(),
   scopeId: text("scope_id"), // null = platform-wide
   grantedBy: text("granted_by").references(() => users.id),
