@@ -3,7 +3,16 @@ import { getDb } from "@/lib/db";
 import { talentProfiles, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { mintUserCode } from "@/lib/codes/codes";
+import { findClaimableRoles } from "@/lib/productions/claim";
 import { eq } from "drizzle-orm";
+
+// Strong (tmdbId) matches are safe to surface proactively at the end of
+// onboarding; name-only matches are left for the dashboard card where the talent
+// confirms explicitly.
+async function tmdbClaimable(db: ReturnType<typeof getDb>, userId: string) {
+  const roles = await findClaimableRoles(db, userId);
+  return roles.filter((r) => r.matchType === "tmdb");
+}
 
 interface ConfirmBody {
   skip?: boolean;
@@ -49,7 +58,7 @@ export async function POST(req: NextRequest) {
         knownFor: JSON.stringify(body.knownFor ?? []),
         popularity: body.popularity ?? null,
       }).where(eq(talentProfiles.userId, session.sub));
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, claimable: await tmdbClaimable(db, session.sub) });
     }
     return NextResponse.json({ ok: true, alreadyOnboarded: true });
   }
@@ -93,5 +102,5 @@ export async function POST(req: NextRequest) {
   });
 
   await mintUserCode(db, session.sub, "talent");
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, claimable: await tmdbClaimable(db, session.sub) });
 }

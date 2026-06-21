@@ -196,6 +196,7 @@ export default function ProductionDetailClient() {
   const [submitError, setSubmitError] = useState("");
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -369,6 +370,21 @@ export default function ProductionDetailClient() {
       await fetch(`/api/productions/${id}/cast/${castId}/resend-invite`, { method: "POST" });
     } finally {
       setResendingId(null);
+    }
+  }
+
+  async function handleRequestLicence(castId: string) {
+    setRequestingId(castId);
+    try {
+      const r = await fetch(`/api/productions/${id}/cast/${castId}/request-licence`, { method: "POST" });
+      if (r.ok) {
+        await fetchData();
+      } else {
+        const d = await r.json().catch(() => ({})) as { error?: string };
+        alert(d.error ?? "Couldn't send the licence request.");
+      }
+    } finally {
+      setRequestingId(null);
     }
   }
 
@@ -807,6 +823,17 @@ export default function ProductionDetailClient() {
                           title="Resend invite"
                         >
                           {resendingId === row.id ? "…" : "Resend"}
+                        </button>
+                      )}
+                      {row.status === "linked" && row.talentId && !row.licence && (
+                        <button
+                          onClick={() => handleRequestLicence(row.id)}
+                          disabled={requestingId === row.id}
+                          className="text-xs font-medium"
+                          style={{ color: "var(--color-accent)" }}
+                          title="Send a licence request using the production's default terms"
+                        >
+                          {requestingId === row.id ? "Sending…" : "Send licence request"}
                         </button>
                       )}
                       {(row.status === "invited" || row.status === "linked") && (
