@@ -5,10 +5,12 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and, isNull, gt, inArray } from "drizzle-orm";
 import { isOrgType } from "@/lib/organisations/orgTypes";
+import { getUnionPreset } from "@/lib/compliance/unions";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
+const COMPLIANCE_SUBTYPES = ["union", "regulator", "insurer"];
 
 // GET /api/invites — admin: list all invites; talent: list own invites
 export async function GET(req: NextRequest) {
@@ -70,14 +72,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { email?: string; role?: string; message?: string; skipEmail?: boolean; orgSubtype?: string };
+  let body: { email?: string; role?: string; message?: string; skipEmail?: boolean; orgSubtype?: string; unionId?: string };
   try {
     body = JSON.parse(await req.text());
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { email, role, message, skipEmail, orgSubtype } = body;
+  const { email, role, message, skipEmail, orgSubtype, unionId } = body;
 
   if (!email || !role) {
     return NextResponse.json({ error: "email and role are required" }, { status: 400 });
@@ -92,8 +94,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Talent accounts can only invite reps or industry users" }, { status: 403 });
   }
 
-  if (orgSubtype !== undefined && !isOrgType(orgSubtype)) {
-    return NextResponse.json({ error: "Invalid org subtype" }, { status: 400 });
+  // org_subtype is overloaded by role: an OrgType for industry, a compliance
+  // subtype for compliance. union_id only rides along on a union invite.
+  let storedOrgSubtype: string | null = null;
+  let storedUnionId: string | null = null;
+  if (role === "industry") {
+    if (orgSubtype !== undefined && !isOrgType(orgSubtype)) {
+      return NextResponse.json({ error: "Invalid org subtype" }, { status: 400 });
+    }
+    storedOrgSubtype = orgSubtype ?? null;
+  } else if (role === "compliance") {
+    if (orgSubtype !== undefined && !COMPLIANCE_SUBTYPES.includes(orgSubtype)) {
+      return NextResponse.json({ error: "Invalid compliance subtype" }, { status: 400 });
+    }
+    storedOrgSubtype = orgSubtype ?? null;
+    if (orgSubtype === "union") {
+      if (!unionId || !getUnionPreset(unionId)) {
+        return NextResponse.json({ error: "union invites require a valid unionId" }, { status: 400 });
+      }
+      storedUnionId = unionId;
+    }
   }
 
   const db = getDb();
@@ -141,7 +161,8 @@ export async function POST(req: NextRequest) {
     usedAt: null,
     expiresAt,
     createdAt: now,
-    orgSubtype: role === "industry" && orgSubtype ? orgSubtype : null,
+    orgSubtype: storedOrgSubtype,
+    unionId: storedUnionId,
   });
 
   if (!skipEmail) {

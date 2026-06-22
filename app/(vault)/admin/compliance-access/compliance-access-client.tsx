@@ -1,18 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { UNION_PRESETS } from "@/lib/compliance/unions";
 
 interface Grant {
   id: string;
   complianceUserId: string;
   email: string | null;
   subtype: string;
+  unionId: string | null;
   scope: string;
   scopeId: string | null;
   createdAt: number;
 }
 
 interface UserResult { id: string; email: string }
+
+const UNION_LABEL: Record<string, string> = Object.fromEntries(UNION_PRESETS.map((u) => [u.id, u.shortName]));
 
 function fmtDate(epoch: number) {
   return new Date(epoch * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -29,6 +33,7 @@ export default function ComplianceAccessClient() {
   const [searching, setSearching] = useState(false);
   const [watcher, setWatcher] = useState<UserResult | null>(null);
   const [subtype, setSubtype] = useState("union");
+  const [unionId, setUnionId] = useState<string>(UNION_PRESETS[0]?.id ?? "");
   const [scope, setScope] = useState("production");
   const [scopeId, setScopeId] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -65,7 +70,7 @@ export default function ComplianceAccessClient() {
     try {
       const res = await fetch("/api/admin/compliance-grants", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ complianceUserId: watcher?.id, subtype, scope, scopeId: scope === "platform" ? undefined : scopeId.trim() }),
+        body: JSON.stringify({ complianceUserId: watcher?.id, subtype, unionId: subtype === "union" ? unionId : undefined, scope, scopeId: scope === "platform" ? undefined : scopeId.trim() }),
       });
       if (!res.ok) { const d = (await res.json()) as { error?: string }; setErr(d.error ?? "Could not grant."); }
       else { setWatcher(null); setQuery(""); setResults([]); setScopeId(""); await load(); }
@@ -109,6 +114,11 @@ export default function ComplianceAccessClient() {
           <select value={subtype} onChange={(e) => setSubtype(e.target.value)} className="text-sm px-2 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}>
             <option value="union">Union</option><option value="regulator">Regulator</option><option value="insurer">Insurer</option>
           </select>
+          {subtype === "union" && (
+            <select value={unionId} onChange={(e) => setUnionId(e.target.value)} className="text-sm px-2 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}>
+              {UNION_PRESETS.map((u) => <option key={u.id} value={u.id}>{u.shortName}</option>)}
+            </select>
+          )}
           <select value={scope} onChange={(e) => setScope(e.target.value)} className="text-sm px-2 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}>
             <option value="production">Production</option><option value="organisation">Organisation</option><option value="talent">Talent</option><option value="platform">Platform-wide</option>
           </select>
@@ -129,7 +139,7 @@ export default function ComplianceAccessClient() {
                 <div key={g.id} className="flex items-center justify-between px-4 py-3 gap-4">
                   <div className="min-w-0">
                     <p className="text-sm truncate" style={{ color: "var(--color-ink)" }}>{g.email ?? g.complianceUserId}</p>
-                    <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>{g.subtype} · {g.scope}{g.scopeId ? ` · ${g.scopeId}` : ""} · {fmtDate(g.createdAt)}</p>
+                    <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>{g.subtype}{g.unionId ? ` · ${UNION_LABEL[g.unionId] ?? g.unionId}` : ""} · {g.scope}{g.scopeId ? ` · ${g.scopeId}` : ""} · {fmtDate(g.createdAt)}</p>
                   </div>
                   <button onClick={() => void revoke(g.id)} disabled={busy} className="text-xs px-2.5 py-1 rounded border disabled:opacity-40" style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}>Revoke</button>
                 </div>

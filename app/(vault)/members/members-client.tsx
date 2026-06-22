@@ -13,15 +13,21 @@ interface MemberRow {
   matchedEmail: string | null;
 }
 
+interface UnionOption { id: string; shortName: string }
+
 interface Roster {
   members: MemberRow[];
   total: number;
   onPlatform: number;
   coveragePct: number;
+  unions?: UnionOption[];
+  unionId?: string;
 }
 
 export default function MembersClient() {
   const [roster, setRoster] = useState<Roster | null>(null);
+  const [unions, setUnions] = useState<UnionOption[]>([]);
+  const [unionId, setUnionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paste, setPaste] = useState("");
@@ -30,12 +36,18 @@ export default function MembersClient() {
   const [missingOnly, setMissingOnly] = useState(false);
   const [query, setQuery] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forUnion?: string | null) => {
     try {
-      const res = await fetch("/api/compliance/members");
+      const qs = forUnion ? `?unionId=${encodeURIComponent(forUnion)}` : "";
+      const res = await fetch(`/api/compliance/members${qs}`);
       const d = (await res.json()) as Roster & { error?: string };
       if (!res.ok || d.error) setError(d.error ?? `Failed (${res.status})`);
-      else setRoster(d);
+      else {
+        setRoster(d);
+        if (d.unions) setUnions(d.unions);
+        if (d.unionId) setUnionId(d.unionId);
+        setError(null);
+      }
     } catch {
       setError("Failed to load roster.");
     } finally {
@@ -45,38 +57,46 @@ export default function MembersClient() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const selectUnion = useCallback((id: string) => {
+    setUnionId(id);
+    setLoading(true);
+    void load(id);
+  }, [load]);
+
   const upload = useCallback(async () => {
     if (!paste.trim()) return;
     setUploading(true);
     setNotice(null);
     try {
       const res = await fetch("/api/compliance/members", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv: paste }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv: paste, unionId }),
       });
       const d = (await res.json()) as { added?: number; skipped?: number; error?: string };
       if (!res.ok || d.error) setNotice(d.error ?? "Upload failed.");
       else {
         setNotice(`Added ${d.added ?? 0}${d.skipped ? `, skipped ${d.skipped} already on the roster` : ""}.`);
         setPaste("");
-        await load();
+        await load(unionId);
       }
     } catch {
       setNotice("Upload failed — please try again.");
     } finally {
       setUploading(false);
     }
-  }, [paste, load]);
+  }, [paste, load, unionId]);
 
   const removeOne = useCallback(async (id: string) => {
-    await fetch(`/api/compliance/members/${id}`, { method: "DELETE" });
-    await load();
-  }, [load]);
+    const qs = unionId ? `?unionId=${encodeURIComponent(unionId)}` : "";
+    await fetch(`/api/compliance/members/${id}${qs}`, { method: "DELETE" });
+    await load(unionId);
+  }, [load, unionId]);
 
   const clearAll = useCallback(async () => {
-    if (!confirm("Clear the entire member roster? This can't be undone.")) return;
-    await fetch("/api/compliance/members", { method: "DELETE" });
-    await load();
-  }, [load]);
+    if (!confirm("Clear this union's member roster? This can't be undone.")) return;
+    const qs = unionId ? `?unionId=${encodeURIComponent(unionId)}` : "";
+    await fetch(`/api/compliance/members${qs}`, { method: "DELETE" });
+    await load(unionId);
+  }, [load, unionId]);
 
   const q = query.trim().toLowerCase();
   const shown = useMemo(() => (roster?.members ?? []).filter((m) => {
@@ -96,6 +116,24 @@ export default function MembersClient() {
           Paste your membership list to see who&apos;s already on Image Vault. Visibility only — getting members
           onboarded isn&apos;t mandated; this just shows the gap.
         </p>
+        {unions.length > 1 && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {unions.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => selectUnion(u.id)}
+                className="text-xs font-medium px-3 py-1.5 rounded-full"
+                style={{
+                  border: `1px solid ${unionId === u.id ? "var(--color-accent)" : "var(--color-border)"}`,
+                  background: unionId === u.id ? "var(--color-accent)" : "var(--color-surface)",
+                  color: unionId === u.id ? "#fff" : "var(--color-muted)",
+                }}
+              >
+                {u.shortName}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Upload */}

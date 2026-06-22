@@ -5,6 +5,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isComplianceRole } from "@/lib/auth/roles";
 import { isAllowedScopeForSubtype, INSURER_ALLOWED_SCOPES } from "@/lib/compliance/grants";
+import { getUnionPreset } from "@/lib/compliance/unions";
 import { eq, isNull, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
       complianceUserId: complianceGrants.complianceUserId,
       email: watcher.email,
       subtype: complianceGrants.subtype,
+      unionId: complianceGrants.unionId,
       scope: complianceGrants.scope,
       scopeId: complianceGrants.scopeId,
       createdAt: complianceGrants.createdAt,
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
   if (isErrorResponse(session)) return session;
   if (!isAdmin(session.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  let body: { complianceUserId?: string; subtype?: string; scope?: string; scopeId?: string };
+  let body: { complianceUserId?: string; subtype?: string; unionId?: string; scope?: string; scopeId?: string };
   try {
     body = JSON.parse(await req.text());
   } catch {
@@ -54,6 +56,15 @@ export async function POST(req: NextRequest) {
   if (!body.complianceUserId) return NextResponse.json({ error: "complianceUserId is required" }, { status: 400 });
   if (!body.subtype || !(SUBTYPES as readonly string[]).includes(body.subtype)) {
     return NextResponse.json({ error: "subtype must be union | regulator | insurer" }, { status: 400 });
+  }
+  // Union grants must name the union they attribute to (SAG vs Equity); other
+  // subtypes never carry one.
+  let unionId: string | null = null;
+  if (body.subtype === "union") {
+    if (!body.unionId || !getUnionPreset(body.unionId)) {
+      return NextResponse.json({ error: "union grants require a valid unionId" }, { status: 400 });
+    }
+    unionId = body.unionId;
   }
   if (!body.scope || !(SCOPES as readonly string[]).includes(body.scope)) {
     return NextResponse.json({ error: "invalid scope" }, { status: 400 });
@@ -84,6 +95,7 @@ export async function POST(req: NextRequest) {
     id,
     complianceUserId: body.complianceUserId,
     subtype: body.subtype as (typeof SUBTYPES)[number],
+    unionId,
     scope: body.scope as (typeof SCOPES)[number],
     scopeId: body.scope === "platform" ? null : (body.scopeId ?? null),
     grantedBy: session.sub,
