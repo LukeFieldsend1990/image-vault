@@ -492,6 +492,10 @@ export default function ProductionDetailClient() {
 
   // Vendors get a read-only, scoped view — they don't manage cast or licences.
   if (production.viewerRole === "vendor") {
+    // Scan services deliver captured scans via Transfers; access vendors (VFX,
+    // dubbing) instead pull approved scans through the Render Bridge once the
+    // production authorises their facility on a licence.
+    const isScanService = production.viewerVendorType === "scan_service";
     return (
       <div className="p-8 max-w-3xl">
         <div className="mb-2">
@@ -525,12 +529,24 @@ export default function ProductionDetailClient() {
             <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>Your role</p>
             <OrgTypeBadge type={production.viewerVendorType} />
           </div>
-          <p className="text-sm" style={{ color: "var(--color-text)" }}>
-            Your organisation is attached to this production as a vendor. The production company manages the cast and licences — you&apos;ll receive scan transfers and can connect render workloads for the talent you&apos;re authorised to work with.
-          </p>
+          {isScanService ? (
+            <p className="text-sm" style={{ color: "var(--color-text)" }}>
+              Your organisation is attached to this production as a scan service. The production company manages the cast and licences — you deliver captured scans to talent or against the production&apos;s licences through Transfers.
+            </p>
+          ) : (
+            <p className="text-sm" style={{ color: "var(--color-text)" }}>
+              Your organisation is attached to this production as a vendor. The production company manages the cast and licences. You get access through the production&apos;s licences — once they authorise your facility on a scan&apos;s licence, your render-bridge agents can pull the approved scan for your work.
+            </p>
+          )}
           <div className="flex items-center gap-3 mt-4">
-            <Link href="/transfers" className="rounded px-3 py-1.5 text-xs font-medium text-white" style={{ background: "var(--color-accent)" }}>View Transfers</Link>
-            <Link href="/bridge" className="rounded px-3 py-1.5 text-xs font-medium" style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}>Render Bridge</Link>
+            {isScanService ? (
+              <>
+                <Link href="/transfers" className="rounded px-3 py-1.5 text-xs font-medium text-white" style={{ background: "var(--color-accent)" }}>View Transfers</Link>
+                <Link href="/bridge" className="rounded px-3 py-1.5 text-xs font-medium" style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}>Render Bridge</Link>
+              </>
+            ) : (
+              <Link href="/bridge" className="rounded px-3 py-1.5 text-xs font-medium text-white" style={{ background: "var(--color-accent)" }}>Render Bridge</Link>
+            )}
           </div>
         </div>
       </div>
