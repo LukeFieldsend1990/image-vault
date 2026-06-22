@@ -20,7 +20,28 @@ interface Production {
   orgShortCode?: string | null;
   createdAt: number;
   licenceCount: number;
-  cast: { total: number; consented: number; invited: number; linked: number } | null;
+  cast: { total: number; consented: number; invited: number; linked: number; placeholder: number; resolved: number } | null;
+}
+
+interface ActivityItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  href: string | null;
+  createdAt: number;
+}
+
+function timeAgo(unix: number): string {
+  const secs = Math.max(0, Math.floor(Date.now() / 1000) - unix);
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(unix * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -76,6 +97,7 @@ function PhaseIndicator({ status }: { status: string | null }) {
 
 export default function ProductionsClient() {
   const [productions, setProductions] = useState<Production[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -85,7 +107,14 @@ export default function ProductionsClient() {
       .then((d) => setProductions(d.productions ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetch("/api/productions/activity")
+      .then((r) => r.json() as Promise<{ activity?: ActivityItem[] }>)
+      .then((d) => setActivity(d.activity ?? []))
+      .catch(() => {});
   }, []);
+
+  // Productions still needing attention — no cast yet, or reserved placeholders remaining.
+  const needsSetup = productions.filter((p) => !p.cast || p.cast.placeholder > 0);
 
   return (
     <div className="p-8 max-w-4xl">
@@ -158,6 +187,79 @@ export default function ProductionsClient() {
               or create one manually
             </Link>
           </p>
+        </div>
+      )}
+
+      {/* Finish setup checklist — pulls the user back to resolve reserved roles */}
+      {!loading && needsSetup.length > 0 && (
+        <div
+          className="mb-6 rounded-lg px-6 py-5"
+          style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-4" style={{ color: "var(--color-accent)" }}>
+            Finish setting up
+          </p>
+          <div className="space-y-4">
+            {needsSetup.map((p) => {
+              const total = p.cast?.total ?? 0;
+              const resolved = p.cast?.resolved ?? 0;
+              const reserved = p.cast?.placeholder ?? 0;
+              const pct = total > 0 ? Math.round((resolved / total) * 100) : 0;
+              return (
+                <Link key={p.id} href={`/productions/${p.id}`} className="block group">
+                  <div className="flex items-center justify-between gap-3 mb-1.5">
+                    <span className="text-sm font-medium truncate" style={{ color: "var(--color-ink)" }}>{p.name}</span>
+                    <span className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>
+                      {total === 0 ? "No cast yet" : `${resolved} of ${total} cast resolved`}
+                    </span>
+                  </div>
+                  {total > 0 && (
+                    <span className="flex w-full h-1 rounded-full overflow-hidden mb-1.5" style={{ background: "var(--color-border)" }}>
+                      <span className="h-full rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? "#166534" : "var(--color-accent)" }} />
+                    </span>
+                  )}
+                  <span className="text-xs flex items-center gap-1" style={{ color: "var(--color-accent)" }}>
+                    {total === 0 ? "Import your cast from TMDB" : `${reserved} reserved — add emails or invite agencies`}
+                    <span className="transition-transform group-hover:translate-x-0.5">→</span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Activity feed — the self-healing roster made visible */}
+      {!loading && activity.length > 0 && (
+        <div
+          className="mb-6 rounded-lg px-6 py-5"
+          style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-4" style={{ color: "var(--color-muted)" }}>
+            Recent activity
+          </p>
+          <ul className="space-y-3">
+            {activity.map((a) => {
+              const content = (
+                <>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm" style={{ color: "var(--color-ink)" }}>{a.title}</span>
+                    <span className="text-[10px] shrink-0 tabular-nums" style={{ color: "var(--color-muted)" }}>{timeAgo(a.createdAt)}</span>
+                  </div>
+                  {a.body && <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{a.body}</p>}
+                </>
+              );
+              return (
+                <li key={a.id}>
+                  {a.href ? (
+                    <Link href={a.href} className="block transition-opacity hover:opacity-80">{content}</Link>
+                  ) : (
+                    content
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

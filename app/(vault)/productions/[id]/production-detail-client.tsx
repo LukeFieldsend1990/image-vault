@@ -187,11 +187,12 @@ export default function ProductionDetailClient() {
   const [tmdbSearching, setTmdbSearching] = useState(false);
 
   // Manual entry
+  const [manualActorName, setManualActorName] = useState("");
   const [manualEmail, setManualEmail] = useState("");
   const [manualCharacter, setManualCharacter] = useState("");
   const [manualDept, setManualDept] = useState("");
   const [manualSag, setManualSag] = useState(false);
-  const [manualQueue, setManualQueue] = useState<{ email: string; characterName?: string; department?: string; sagMember: boolean }[]>([]);
+  const [manualQueue, setManualQueue] = useState<{ email?: string; actorName?: string; characterName?: string; department?: string; sagMember: boolean }[]>([]);
 
   // CSV
   const csvRef = useRef<HTMLInputElement>(null);
@@ -205,6 +206,7 @@ export default function ProductionDetailClient() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [markingIncludedId, setMarkingIncludedId] = useState<string | null>(null);
   const [inviteRepFor, setInviteRepFor] = useState<{ castId: string; label: string } | null>(null);
 
@@ -309,11 +311,15 @@ export default function ProductionDetailClient() {
     reader.readAsText(file);
   }
 
-  // Add manual to queue
+  // Add manual to queue. An entry needs either an email (invited now) or a name
+  // (reserved as a placeholder). If an email is supplied it must be valid.
   function addToQueue() {
-    if (!manualEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(manualEmail)) return;
-    setManualQueue((q) => [...q, { email: manualEmail.toLowerCase(), characterName: manualCharacter || undefined, department: manualDept || undefined, sagMember: manualSag }]);
-    setManualEmail(""); setManualCharacter(""); setManualDept(""); setManualSag(false);
+    const email = manualEmail.trim().toLowerCase();
+    const actorName = manualActorName.trim();
+    if (!email && !actorName) return;
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    setManualQueue((q) => [...q, { email: email || undefined, actorName: actorName || undefined, characterName: manualCharacter || undefined, department: manualDept || undefined, sagMember: manualSag }]);
+    setManualActorName(""); setManualEmail(""); setManualCharacter(""); setManualDept(""); setManualSag(false);
     // Copy terms forward (already in state, no action needed)
   }
 
@@ -333,9 +339,13 @@ export default function ProductionDetailClient() {
     if (addTab === "tmdb") {
       return [...tmdbSelected].map((tmdbId) => {
         const m = tmdbCast.find((x) => x.tmdbId === tmdbId)!;
-        const email = m.talentEmail ?? tmdbEmails[tmdbId] ?? "";
-        return { email, characterName: m.character, department: m.department, sagMember: false, ...termsPayload };
-      }).filter((m) => m.email);
+        const email = m.talentEmail ?? tmdbEmails[tmdbId]?.trim() ?? "";
+        // With an email the performer is invited now; without one they are
+        // reserved as a placeholder carrying their name + TMDB id.
+        return email
+          ? { email, characterName: m.character, department: m.department, sagMember: false, ...termsPayload }
+          : { actorName: m.name, tmdbId: m.tmdbId, sourceNote: "TMDB credits", characterName: m.character, department: m.department, sagMember: false, ...termsPayload };
+      });
     }
     if (addTab === "csv") {
       return csvRows.map((m) => ({ ...m, ...termsPayload }));
@@ -347,8 +357,13 @@ export default function ProductionDetailClient() {
   async function handleSubmit() {
     const members = buildMembers();
     if (members.length === 0) { setSubmitError("No cast members to add."); return; }
-    if (!terms.intendedUse.trim()) { setSubmitError("Intended use is required."); return; }
-    if (!terms.validFrom || !terms.validTo) { setSubmitError("Licence dates are required."); return; }
+    // Licence terms are only required when at least one member is being invited
+    // by email. Name-only rows are reserved as placeholders with no licence yet.
+    const hasContactable = members.some((m) => Boolean((m as { email?: string }).email));
+    if (hasContactable) {
+      if (!terms.intendedUse.trim()) { setSubmitError("Intended use is required when inviting cast by email."); return; }
+      if (!terms.validFrom || !terms.validTo) { setSubmitError("Licence dates are required when inviting cast by email."); return; }
+    }
 
     setSubmitting(true);
     setSubmitError("");
@@ -417,6 +432,31 @@ export default function ProductionDetailClient() {
       }
     } finally {
       setRequestingId(null);
+    }
+  }
+
+  // Path B — attach an email to a reserved placeholder. Terms come from the
+  // production's default terms (set in the wizard) or whatever was stored on the
+  // row, so the producer only needs to supply the email here.
+  async function handleAddEmail(castId: string, label: string) {
+    const email = window.prompt(`Email to invite ${label}:`)?.trim();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert("Please enter a valid email address."); return; }
+    setResolvingId(castId);
+    try {
+      const r = await fetch(`/api/productions/${id}/cast/${castId}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const d = await r.json().catch(() => ({})) as { error?: string };
+      if (r.ok) {
+        await fetchData();
+      } else {
+        alert(d.error ?? "Couldn't add the email. Set default licence terms for this production first.");
+      }
+    } finally {
+      setResolvingId(null);
     }
   }
 
@@ -653,10 +693,17 @@ export default function ProductionDetailClient() {
           {/* Manual tab */}
           {addTab === "manual" && (
             <div className="space-y-3">
+              <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                Enter an email to invite a performer now, or add a name only to reserve them as a placeholder — you can add their email later, or they’ll be matched automatically when they join.
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Email *</label>
-                  <input type="email" value={manualEmail} onChange={(e) => setManualEmail(e.target.value)} style={inputStyle} placeholder="actor@example.com" />
+                  <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Actor Name</label>
+                  <input type="text" value={manualActorName} onChange={(e) => setManualActorName(e.target.value)} style={inputStyle} placeholder="e.g. Cate Blanchett" />
+                </div>
+                <div>
+                  <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Email</label>
+                  <input type="email" value={manualEmail} onChange={(e) => setManualEmail(e.target.value)} style={inputStyle} placeholder="actor@example.com (optional)" />
                 </div>
                 <div>
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Character Name</label>
@@ -685,7 +732,7 @@ export default function ProductionDetailClient() {
                 <div className="rounded p-3 space-y-1.5" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
                   {manualQueue.map((m, i) => (
                     <div key={i} className="flex items-center justify-between text-xs" style={{ color: "var(--color-text)" }}>
-                      <span>{m.email}{m.characterName && ` — ${m.characterName}`}</span>
+                      <span>{m.email ?? m.actorName}{m.characterName ? ` — ${m.characterName}` : ""}{!m.email ? " · reserved" : ""}</span>
                       <button onClick={() => setManualQueue((q) => q.filter((_, j) => j !== i))} style={{ color: "var(--color-muted)" }}>×</button>
                     </div>
                   ))}
@@ -847,18 +894,29 @@ export default function ProductionDetailClient() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {row.status === "placeholder" && (
-                        row.repId || row.repInviteId ? (
-                          <span className="text-xs" style={{ color: "var(--color-muted)" }} title="Representation invited">Rep invited</span>
-                        ) : (
+                        <>
                           <button
-                            onClick={() => setInviteRepFor({ castId: row.id, label: row.actorName ?? "this performer" })}
+                            onClick={() => handleAddEmail(row.id, row.actorName ?? "this performer")}
+                            disabled={resolvingId === row.id}
                             className="text-xs font-medium"
                             style={{ color: "var(--color-accent)" }}
-                            title="Invite their representation to connect them"
+                            title="Add the performer's email to invite them now"
                           >
-                            Invite representation
+                            {resolvingId === row.id ? "Adding…" : "Add email"}
                           </button>
-                        )
+                          {row.repId || row.repInviteId ? (
+                            <span className="text-xs" style={{ color: "var(--color-muted)" }} title="Representation invited">Rep invited</span>
+                          ) : (
+                            <button
+                              onClick={() => setInviteRepFor({ castId: row.id, label: row.actorName ?? "this performer" })}
+                              className="text-xs font-medium"
+                              style={{ color: "var(--color-accent)" }}
+                              title="Invite their representation to connect them"
+                            >
+                              Invite representation
+                            </button>
+                          )}
+                        </>
                       )}
                       {row.status === "invited" && (
                         <button
@@ -882,7 +940,7 @@ export default function ProductionDetailClient() {
                           {requestingId === row.id ? "Sending…" : "Send licence request"}
                         </button>
                       )}
-                      {(row.status === "invited" || row.status === "linked") && (
+                      {(row.status === "placeholder" || row.status === "invited" || row.status === "linked") && (
                         <button
                           onClick={() => handleRemove(row.id)}
                           disabled={removingId === row.id}

@@ -4,6 +4,7 @@ import { productions, productionCompanies, licences, productionCast, organisatio
 import { eq, sql, desc, inArray } from "drizzle-orm";
 import Link from "next/link";
 import NewCompanyButton from "./new-company-button";
+import DeleteProductionButton from "./delete-production-button";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 
@@ -180,13 +181,16 @@ export default async function AdminProductionsPage() {
           const orgShortCode = p.organisationId ? orgShortCodeMap.get(p.organisationId) : null;
 
           return (
-            <Link
+            <div
               key={p.id}
+              className="group relative border-b last:border-0 min-w-[900px]"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+            <Link
               href={`/admin/productions/${p.id}`}
-              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[900px] transition hover:bg-[var(--color-surface)]"
+              className="grid items-center px-5 py-3.5 pr-12 text-sm transition hover:bg-[var(--color-surface)]"
               style={{
                 gridTemplateColumns: "2fr 1.2fr 0.8fr 0.6fr 0.9fr 0.7fr 1.2fr",
-                borderColor: "var(--color-border)",
               }}
             >
               <div className="min-w-0">
@@ -242,6 +246,10 @@ export default async function AdminProductionsPage() {
                 )}
               </div>
             </Link>
+            <div className="absolute right-3 top-0 bottom-0 flex items-center">
+              <DeleteProductionButton id={p.id} name={p.name} />
+            </div>
+            </div>
           );
         })}
       </div>

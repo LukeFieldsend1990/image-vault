@@ -92,13 +92,16 @@ export async function GET(req: NextRequest) {
 
   const countMap = new Map(licenceCounts.map((r) => [r.productionId, r.count]));
 
-  const castMap = new Map<string, { total: number; consented: number; invited: number; linked: number }>();
+  const castMap = new Map<string, { total: number; consented: number; invited: number; linked: number; placeholder: number; resolved: number }>();
   for (const c of castRows) {
-    const cur = castMap.get(c.productionId) ?? { total: 0, consented: 0, invited: 0, linked: 0 };
+    const cur = castMap.get(c.productionId) ?? { total: 0, consented: 0, invited: 0, linked: 0, placeholder: 0, resolved: 0 };
     cur.total++;
     if (c.status === "consented") cur.consented++;
     else if (c.status === "invited") cur.invited++;
+    else if (c.status === "placeholder") cur.placeholder++;
     else cur.linked++;
+    // "Resolved" = anything that has progressed past a reserved placeholder.
+    if (c.status !== "placeholder") cur.resolved++;
     castMap.set(c.productionId, cur);
   }
 
