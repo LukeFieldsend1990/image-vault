@@ -801,6 +801,20 @@ export const renderBridgeAgents = sqliteTable("render_bridge_agents", {
   createdAt: integer("created_at").notNull(),
 });
 
+// Bridge setup attestations — audit-logged human sign-offs during guided Bridge
+// setup. "local_access" records that the vendor confirmed their proxy folder is
+// secured per the network rules; "bridge_live" is the final go-live sign-off.
+// Multiple rows are allowed (re-attestation history); the latest per (org, kind)
+// is authoritative. These are the liability anchor if a vendor leaks data later.
+export const bridgeAttestations = sqliteTable("bridge_attestations", {
+  id: text("id").primaryKey(),
+  organisationId: text("organisation_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  attestedByUserId: text("attested_by_user_id").notNull().references(() => users.id),
+  kind: text("kind", { enum: ["local_access", "bridge_live"] }).notNull(),
+  statementVersion: text("statement_version").notNull(),
+  attestedAt: integer("attested_at").notNull(),
+});
+
 // ── Geometric fingerprinting ──────────────────────────────────────────────────
 
 export const geometryFingerprintJobs = sqliteTable("geometry_fingerprint_jobs", {
