@@ -1,10 +1,11 @@
 import { registerSkill } from "../registry";
 import type { SkillDefinition } from "../types";
-import { invites, users, productionCompanies, productions } from "@/lib/db/schema";
+import { invites, users, productions } from "@/lib/db/schema";
 import { eq, and, isNull, gt, like } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { inviteEmail } from "@/lib/email/templates";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { resolveCompanyOrg } from "@/lib/organisations/resolveCompany";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
 
@@ -102,26 +103,14 @@ const skill: SkillDefinition = {
       return { success: false, message: "A pending invite already exists for that email." };
     }
 
-    // Upsert production company (optional — skip if no name provided)
+    // Resolve the production company → unified organisation (member-less until
+    // the coordinator accepts the invite below). Skip if no name provided.
     let company: { id: string; name: string } | null = null;
+    let orgId: string | null = null;
     if (companyName) {
-      company =
-        (await db
-          .select({ id: productionCompanies.id, name: productionCompanies.name })
-          .from(productionCompanies)
-          .where(like(productionCompanies.name, companyName))
-          .get()) ?? null;
-
-      if (!company) {
-        const companyId = crypto.randomUUID();
-        await db.insert(productionCompanies).values({
-          id: companyId,
-          name: companyName,
-          createdAt: now,
-          updatedAt: now,
-        });
-        company = { id: companyId, name: companyName };
-      }
+      const refs = await resolveCompanyOrg(db, { name: companyName, createdBy: session.sub });
+      company = { id: refs.productionCompanyId, name: companyName };
+      orgId = refs.organisationId;
     }
 
     // Upsert production — match by name (scoped to company if known), then create
@@ -141,6 +130,7 @@ const skill: SkillDefinition = {
         id: productionId,
         name: productionName,
         companyId: company?.id ?? null,
+        organisationId: orgId,
         type: productionType ?? null,
         year,
         status: "pre_production",
@@ -170,6 +160,7 @@ const skill: SkillDefinition = {
       expiresAt,
       createdAt: now,
       orgSubtype: "production_company",
+      organisationId: orgId,
       productionId: production.id,
     });
 

@@ -25,6 +25,7 @@ import {
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { mintLicenceCode } from "@/lib/codes/codes";
+import { resolveCompanyOrg } from "@/lib/organisations/resolveCompany";
 import type { McpToolContext } from "../types";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
@@ -158,8 +159,10 @@ registerMcpTool({
 
     const now = Math.floor(Date.now() / 1000);
 
-    // Resolve or create the production company by name
+    // Resolve the production company → unified organisation (member-less until
+    // someone joins). companyCreated reflects whether the catalogue entry was new.
     let companyId: string | null = null;
+    let orgId: string | null = null;
     let companyCreated = false;
     const companyName = typeof params.companyName === "string" ? params.companyName.trim() : "";
     if (companyName) {
@@ -168,18 +171,10 @@ registerMcpTool({
         .from(productionCompanies)
         .where(sql`lower(${productionCompanies.name}) = ${companyName.toLowerCase()}`)
         .get();
-      if (existing) {
-        companyId = existing.id;
-      } else {
-        companyId = crypto.randomUUID();
-        companyCreated = true;
-        await db.insert(productionCompanies).values({
-          id: companyId,
-          name: companyName,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
+      companyCreated = !existing;
+      const refs = await resolveCompanyOrg(db, { name: companyName, createdBy: token.userId });
+      companyId = refs.productionCompanyId;
+      orgId = refs.organisationId;
     }
 
     const productionId = crypto.randomUUID();
@@ -187,6 +182,7 @@ registerMcpTool({
       id: productionId,
       name,
       companyId,
+      organisationId: orgId,
       type,
       year,
       status,
