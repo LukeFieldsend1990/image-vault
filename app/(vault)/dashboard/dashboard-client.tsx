@@ -953,32 +953,34 @@ export default function DashboardClient() {
       {/* ── Cast invitation nudge ── */}
       {!loading && awaitingPackage.length > 0 && (
         <div
-          className="mx-8 lg:mx-12 mt-5 rounded border flex items-start gap-4 px-5 py-4"
+          className="mx-8 lg:mx-12 mt-5 rounded border flex flex-col sm:flex-row sm:items-start gap-4 px-5 py-4"
           style={{ borderColor: "#c0392b", background: "color-mix(in srgb, #c0392b 6%, var(--color-bg))" }}
         >
-          <div className="flex-shrink-0 mt-0.5">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold" style={{ color: "#c0392b" }}>
-              {awaitingPackage.length === 1
-                ? "A production is waiting for your scan"
-                : `${awaitingPackage.length} productions are waiting for your scan`}
-            </p>
-            <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--color-muted)" }}>
-              {awaitingPackage
-                .slice(0, 2)
-                .map((l) => l.projectName ?? l.productionCompany ?? "Untitled project")
-                .join(", ")}
-              {awaitingPackage.length > 2 ? ` and ${awaitingPackage.length - 2} more` : ""}
-              {" "}
-              {awaitingPackage.length === 1 ? "has" : "have"} added you to their cast. Upload or attach a scan package to proceed.
-            </p>
+          <div className="flex items-start gap-4 flex-1 min-w-0">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold" style={{ color: "#c0392b" }}>
+                {awaitingPackage.length === 1
+                  ? "A production is waiting for your scan"
+                  : `${awaitingPackage.length} productions are waiting for your scan`}
+              </p>
+              <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--color-muted)" }}>
+                {awaitingPackage
+                  .slice(0, 2)
+                  .map((l) => l.projectName ?? l.productionCompany ?? "Untitled project")
+                  .join(", ")}
+                {awaitingPackage.length > 2 ? ` and ${awaitingPackage.length - 2} more` : ""}
+                {" "}
+                {awaitingPackage.length === 1 ? "has" : "have"} added you to their cast. Upload or attach a scan package to proceed.
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
