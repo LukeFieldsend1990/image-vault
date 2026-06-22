@@ -24,6 +24,7 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite");
+  const guidedOnboarding = searchParams.get("guided") === "1";
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -93,7 +94,8 @@ function SignupForm() {
         return;
       }
 
-      router.push(data.redirect ?? "/dashboard");
+      const defaultRedirect = guidedOnboarding ? "/productions/setup" : "/dashboard";
+      router.push(data.redirect ?? defaultRedirect);
     } catch {
       setError("Network error. Please try again.");
     } finally {

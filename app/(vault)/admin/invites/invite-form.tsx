@@ -42,6 +42,7 @@ export default function InviteManager() {
   const [complianceSubtype, setComplianceSubtype] = useState("");
   const [unionId, setUnionId] = useState("");
   const [message, setMessage] = useState("");
+  const [guidedOnboarding, setGuidedOnboarding] = useState(false);
   const [skipEmail, setSkipEmail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -94,7 +95,8 @@ export default function InviteManager() {
         return;
       }
       setFormSuccess(skipEmail ? `Invite created for ${email.trim()} (no email sent)` : `Invite sent to ${email.trim()}`);
-      setInviteLink(`${window.location.origin}/signup?invite=${d.inviteId}`);
+      const guidedSuffix = guidedOnboarding ? "&guided=1" : "";
+      setInviteLink(`${window.location.origin}/signup?invite=${d.inviteId}${guidedSuffix}`);
       setEmail("");
       setMessage("");
       await loadInvites();
@@ -153,7 +155,7 @@ export default function InviteManager() {
               </label>
               <select
                 value={role}
-                onChange={(e) => { setRole(e.target.value as typeof role); setOrgSubtype(""); setComplianceSubtype(""); setUnionId(""); }}
+                onChange={(e) => { setRole(e.target.value as typeof role); setOrgSubtype(""); setComplianceSubtype(""); setUnionId(""); setGuidedOnboarding(false); }}
                 className="w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1"
                 style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
               >
@@ -171,7 +173,7 @@ export default function InviteManager() {
                 </label>
                 <select
                   value={orgSubtype}
-                  onChange={(e) => setOrgSubtype(e.target.value)}
+                  onChange={(e) => { setOrgSubtype(e.target.value); setGuidedOnboarding(false); }}
                   className="w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1"
                   style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
                 >
@@ -235,6 +237,20 @@ export default function InviteManager() {
               style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
             />
           </div>
+
+          {role === "industry" && orgSubtype === "production_company" && (
+            <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
+              <input
+                type="checkbox"
+                checked={guidedOnboarding}
+                onChange={(e) => setGuidedOnboarding(e.target.checked)}
+                className="rounded"
+              />
+              <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                Send into guided onboarding <span style={{ color: "var(--color-border)" }}>(production setup wizard)</span>
+              </span>
+            </label>
+          )}
 
           <label className="flex items-center gap-2 cursor-pointer select-none w-fit">
             <input
