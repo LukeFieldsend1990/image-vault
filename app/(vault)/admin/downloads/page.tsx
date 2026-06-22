@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
 import { downloadEvents, users, scanFiles, licences } from "@/lib/db/schema";
-import { sql, inArray } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import AuditExportButton from "../audit/export-button";
 
 type DownloadStatus = "streamed" | "pending" | "failed";
@@ -46,6 +46,7 @@ export default async function AdminDownloadsPage() {
   // eslint-disable-next-line react-hooks/purity -- server component, Date.now() is intentional
   const now = Math.floor(Date.now() / 1000);
 
+  // Single JOIN query — avoids large IN-lists that hit D1's 100-parameter limit.
   const events = await db
     .select({
       id: downloadEvents.id,
@@ -56,33 +57,19 @@ export default async function AdminDownloadsPage() {
       bytesTransferred: downloadEvents.bytesTransferred,
       startedAt: downloadEvents.startedAt,
       completedAt: downloadEvents.completedAt,
+      userEmail: users.email,
+      filename: scanFiles.filename,
+      fileSize: scanFiles.sizeBytes,
+      licenceProjectName: licences.projectName,
+      licenceProductionCompany: licences.productionCompany,
     })
     .from(downloadEvents)
-    .orderBy(sql`started_at desc`)
+    .leftJoin(users, eq(downloadEvents.licenseeId, users.id))
+    .leftJoin(scanFiles, eq(downloadEvents.fileId, scanFiles.id))
+    .leftJoin(licences, eq(downloadEvents.licenceId, licences.id))
+    .orderBy(sql`${downloadEvents.startedAt} desc`)
     .limit(500)
     .all();
-
-  // Resolve IDs in bulk
-  const userIds = [...new Set(events.map((e) => e.licenseeId))];
-  const fileIds = [...new Set(events.map((e) => e.fileId))];
-  const licenceIds = [...new Set(events.map((e) => e.licenceId).filter(Boolean) as string[])];
-
-  const [userRows, fileRows, licenceRows] = await Promise.all([
-    userIds.length > 0
-      ? db.select({ id: users.id, email: users.email }).from(users).where(inArray(users.id, userIds)).all()
-      : Promise.resolve([] as { id: string; email: string }[]),
-    fileIds.length > 0
-      ? db.select({ id: scanFiles.id, filename: scanFiles.filename, sizeBytes: scanFiles.sizeBytes }).from(scanFiles).where(inArray(scanFiles.id, fileIds)).all()
-      : Promise.resolve([] as { id: string; filename: string; sizeBytes: number | null }[]),
-    licenceIds.length > 0
-      ? db.select({ id: licences.id, projectName: licences.projectName, productionCompany: licences.productionCompany })
-          .from(licences).where(inArray(licences.id, licenceIds)).all()
-      : Promise.resolve([] as { id: string; projectName: string; productionCompany: string }[]),
-  ]);
-
-  const emailMap = new Map(userRows.map((u) => [u.id, u.email]));
-  const fileMap = new Map(fileRows.map((f) => [f.id, f]));
-  const licenceMap = new Map(licenceRows.map((l) => [l.id, l]));
 
   const streamed = events.filter((e) => e.completedAt != null).length;
   const pending  = events.filter((e) => e.completedAt == null && now - e.startedAt <= STALE_SECS).length;
@@ -129,11 +116,9 @@ export default async function AdminDownloadsPage() {
         )}
 
         {events.map((e) => {
-          const licence = e.licenceId ? licenceMap.get(e.licenceId) : null;
           const isTalentDownload = !e.licenceId;
-          const fileInfo = fileMap.get(e.fileId);
           const status = eventStatus(e.startedAt, e.completedAt, now);
-          const sizeBytes = fileInfo?.sizeBytes ?? e.bytesTransferred;
+          const sizeBytes = e.fileSize ?? e.bytesTransferred;
           const durationSecs = e.completedAt ? e.completedAt - e.startedAt : null;
 
           return (
@@ -147,12 +132,12 @@ export default async function AdminDownloadsPage() {
             >
               {/* Actor */}
               <span className="text-xs truncate" style={{ color: "var(--color-text)" }}>
-                {emailMap.get(e.licenseeId) ?? e.licenseeId.slice(0, 10)}
+                {e.userEmail ?? e.licenseeId.slice(0, 10)}
               </span>
 
               {/* File */}
               <span className="text-xs truncate" style={{ color: "var(--color-text)" }}>
-                {fileInfo?.filename ?? e.fileId.slice(0, 8) + "…"}
+                {e.filename ?? e.fileId.slice(0, 8) + "…"}
               </span>
 
               {/* Licence / Type */}
@@ -167,11 +152,11 @@ export default async function AdminDownloadsPage() {
                 ) : (
                   <div>
                     <p className="text-xs truncate font-medium" style={{ color: "var(--color-ink)" }}>
-                      {licence?.projectName ?? e.licenceId?.slice(0, 8)}
+                      {e.licenceProjectName ?? e.licenceId?.slice(0, 8)}
                     </p>
-                    {licence?.productionCompany && (
+                    {e.licenceProductionCompany && (
                       <p className="text-[10px] truncate" style={{ color: "var(--color-muted)" }}>
-                        {licence.productionCompany}
+                        {e.licenceProductionCompany}
                       </p>
                     )}
                   </div>

@@ -39,6 +39,7 @@ import {
   type CastExclusivity,
 } from "@/lib/productions/cast";
 import type { McpToolContext } from "../types";
+import { mintLicenceCode } from "@/lib/codes/codes";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60;
 const MAX_CAST_PER_CALL = 100;
@@ -471,6 +472,7 @@ registerMcpTool({
             productionId,
             createdAt: now,
           });
+          await mintLicenceCode(db, licenceId);
 
           await db.insert(productionCast).values({
             id: crypto.randomUUID(),

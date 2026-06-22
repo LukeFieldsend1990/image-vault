@@ -5,6 +5,7 @@ import Link from "next/link";
 import OrgMembersPanel from "./org-members-panel";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
+import LicenceRef from "@/app/components/licence-ref";
 import { formatScan } from "@/lib/codes/codes";
 
 type LicenceStatus =
@@ -21,6 +22,7 @@ type LicenceTab = "active" | "requests" | "expired" | "history";
 
 interface Licence {
   id: string;
+  shortCode: string | null;
   packageName: string | null;
   packageScanNumber?: number | null;
   projectName: string;
@@ -530,6 +532,7 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-sm flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
                             <span>{l.projectName}</span>
+                            <LicenceRef code={l.shortCode} />
                             <CodeTag code={l.talentShortCode} />
                           </p>
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"

@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { mintScanNumber } from "@/lib/codes/codes";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, or } from "drizzle-orm";
 
 // GET /api/transfers — incoming (as talent/rep) + outgoing (as org member) transfers
 export async function GET(req: NextRequest) {
@@ -130,13 +130,16 @@ export async function POST(req: NextRequest) {
   let targetLicenceId: string | null = null;
 
   if (transferType === "to_licence") {
-    if (!body.targetLicenceId) {
+    if (!body.targetLicenceId?.trim()) {
       return NextResponse.json({ error: "targetLicenceId is required for to_licence" }, { status: 400 });
     }
+    // Resolve by the public LC-#### reference (what users actually have). Fall back
+    // to the internal UUID for backwards compatibility / programmatic callers.
+    const ref = body.targetLicenceId.trim();
     const licence = await db
       .select({ id: licences.id, talentId: licences.talentId, status: licences.status })
       .from(licences)
-      .where(eq(licences.id, body.targetLicenceId))
+      .where(or(eq(licences.shortCode, ref.toUpperCase()), eq(licences.id, ref)))
       .get();
     if (!licence) return NextResponse.json({ error: "Licence not found" }, { status: 404 });
     if (licence.status !== "AWAITING_PACKAGE") {

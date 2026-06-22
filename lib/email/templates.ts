@@ -646,6 +646,161 @@ export function productionCastLinkedEmail(p: ProductionCastLinkedEmailParams): {
   };
 }
 
+export interface ProductionRoleClaimedEmailParams {
+  recipientEmail: string;
+  talentName: string;
+  productionName: string;
+  characterName?: string;
+  reviewUrl: string;
+}
+
+// Sent to the production company when a talent organically joins Image Vault and
+// claims a role that was reserved for them (Path D self-heal). We never expose
+// the talent's contact details here — only that the role was claimed.
+export function productionRoleClaimedEmail(p: ProductionRoleClaimedEmailParams): { subject: string; html: string } {
+  const characterRow = p.characterName
+    ? `<div class="kv-row"><span class="kv-key">Role</span><span class="kv-val">${p.characterName}</span></div>`
+    : "";
+  return {
+    subject: `${p.talentName} claimed their role in ${p.productionName}`,
+    html: layout(`
+      <p><strong>${p.talentName}</strong> just joined Image Vault and claimed the role you reserved for them in <strong>${p.productionName}</strong>.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Performer</span><span class="kv-val">${p.talentName}</span></div>
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        ${characterRow}
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Ready to license</span></span></div>
+      </div>
+      <p>You can now send them a licence request from the production page.</p>
+      <a class="btn" href="${p.reviewUrl}">Open production</a>
+    `),
+  };
+}
+
+export interface CastRepInviteEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  actorName?: string;
+  characterName?: string;
+  signupUrl: string;
+  existing: boolean; // true → existing rep (link to roster); false → new rep (signup)
+  rosterUrl: string;
+}
+
+// Sent to a representing agent when a production reserves a role for their client
+// (Path C). Existing reps get a link to their roster; new reps get a signup link.
+export function castRepInviteEmail(p: CastRepInviteEmailParams): { subject: string; html: string } {
+  const who = p.actorName ?? "your client";
+  const characterRow = p.characterName
+    ? `<div class="kv-row"><span class="kv-key">Role</span><span class="kv-val">${p.characterName}</span></div>`
+    : "";
+  return {
+    subject: `${p.productionName} reserved a role for ${who}`,
+    html: layout(`
+      <p><strong>${p.companyName}</strong> has reserved a role on <strong>${p.productionName}</strong> for ${who} and asked you, as their representation, to help connect them.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Performer</span><span class="kv-val">${who}</span></div>
+        ${characterRow}
+      </div>
+      <p>${p.existing
+        ? "Open your roster to confirm your client's email or link them directly."
+        : "Join Image Vault to confirm your client's email and connect them to this role."}</p>
+      <a class="btn" href="${p.existing ? p.rosterUrl : p.signupUrl}">${p.existing ? "Open my roster" : "Join Image Vault"}</a>
+    `),
+  };
+}
+
+export interface InclusionFlaggedEmailParams {
+  recipientEmail: string;
+  licenceCode: string;
+  projectName: string;
+  priorLicenceCount: number;
+  priorDownloadCount: number;
+  reviewUrl: string;
+}
+
+// Sent to admins when a licence is marked "production-included" despite the
+// package/talent already having prior usage on the platform. We never block —
+// this surfaces the claim for a human decision.
+export function inclusionFlaggedEmail(p: InclusionFlaggedEmailParams): { subject: string; html: string } {
+  return {
+    subject: `[Review] Production-included claim flagged — ${p.projectName}`,
+    html: layout(`
+      <p>A licence was marked as <strong>production-included</strong> (£0 fee, not a re-licence), but the package/talent already has prior usage through Image Vault. No action was blocked — review and decide whether to act.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Licence</span><span class="kv-val">${p.licenceCode}</span></div>
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.projectName}</span></div>
+        <div class="kv-row"><span class="kv-key">Prior licences</span><span class="kv-val">${p.priorLicenceCount}</span></div>
+        <div class="kv-row"><span class="kv-key">Prior downloads</span><span class="kv-val">${p.priorDownloadCount}</span></div>
+      </div>
+      <a class="btn" href="${p.reviewUrl}">Review inclusion claims</a>
+    `),
+  };
+}
+
+export interface VendorProductionInviteEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  vendorTypeLabel: string;
+  existing: boolean;     // true → existing org notified; false → new vendor signup
+  signupUrl: string;
+  productionUrl: string;
+}
+
+// Sent when a production company attaches a vendor org to a production. Existing
+// vendors are notified; new vendors get a signup link. Attachment alone never
+// grants scan access — that stays a per-licence, audit-gated step.
+export function vendorProductionInviteEmail(p: VendorProductionInviteEmailParams): { subject: string; html: string } {
+  return {
+    subject: `${p.companyName} added you to ${p.productionName}`,
+    html: layout(`
+      <p><strong>${p.companyName}</strong> has added your organisation to <strong>${p.productionName}</strong> as a ${p.vendorTypeLabel}.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Engaged by</span><span class="kv-val">${p.companyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Your role</span><span class="kv-val">${p.vendorTypeLabel}</span></div>
+      </div>
+      <p>${p.existing
+        ? "You're now listed on the production. Access to scan data is granted per licence and requires a passed environment audit."
+        : "Join Image Vault to be set up on the production. Access to scan data is granted per licence and requires a passed environment audit."}</p>
+      <a class="btn" href="${p.existing ? p.productionUrl : p.signupUrl}">${p.existing ? "View production" : "Join Image Vault"}</a>
+    `),
+  };
+}
+
+export interface ConciergeProductionInviteEmailParams {
+  recipientEmail: string;
+  productionName: string;
+  companyName: string;
+  castCount: number;
+  signupUrl: string;
+}
+
+// Sent when an Image Vault admin has pre-built a production and invites the
+// industry user to take it over — they arrive to a mostly-set-up project.
+export function conciergeProductionInviteEmail(p: ConciergeProductionInviteEmailParams): { subject: string; html: string } {
+  const castRow = p.castCount > 0
+    ? `<div class="kv-row"><span class="kv-key">Cast reserved</span><span class="kv-val">${p.castCount}</span></div>`
+    : "";
+  return {
+    subject: `Your production ${p.productionName} is ready on Image Vault`,
+    html: layout(`
+      <p>We've set up <strong>${p.productionName}</strong> for <strong>${p.companyName}</strong> on Image Vault so you can hit the ground running.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        ${castRow}
+      </div>
+      <p>Create your account to take ownership — your production, cast roster and default terms are already in place. Just review, add any emails you have, and send your licence requests.</p>
+      <a class="btn" href="${p.signupUrl}">Set up your account</a>
+    `),
+  };
+}
+
 export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: string; html: string } {
   const dt = new Date(p.ranAt * 1000).toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",

@@ -4,7 +4,8 @@ import { productions, organisationMembers, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and } from "drizzle-orm";
-import { promoteCastMember, type CastLicenceTerms } from "@/lib/productions/cast";
+import { isIndustryRole } from "@/lib/auth/roles";
+import { promoteCastMember, loadProductionDefaultTerms, type CastLicenceTerms } from "@/lib/productions/cast";
 
 // POST /api/productions/[id]/cast/[castId]/resolve
 // Attach an email to a placeholder cast member and onboard them (invite or
@@ -28,7 +29,7 @@ export async function POST(
 
   // Auth: admin, or licensee org owner/admin (mirrors POST /cast).
   if (!isAdmin(session.email)) {
-    if (session.role !== "licensee") {
+    if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (production.organisationId) {
@@ -86,6 +87,10 @@ export async function POST(
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
 
+  // Production-level default terms act as the lowest-precedence fallback so a
+  // placeholder with no stored terms can still resolve from the wizard's defaults.
+  const defaults = await loadProductionDefaultTerms(db, id);
+
   const result = await promoteCastMember(db, {
     productionId: id,
     castId,
@@ -94,6 +99,7 @@ export async function POST(
     actorEmail: actor?.email ?? session.email,
     baseUrl,
     overrides,
+    defaults,
   });
 
   if (!result.ok) {

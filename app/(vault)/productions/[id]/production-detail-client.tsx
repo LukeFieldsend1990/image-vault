@@ -6,6 +6,8 @@ import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 import InsurersPanel from "./insurers-panel";
+import VendorsPanel from "./vendors-panel";
+import InviteRepModal from "./invite-rep-modal";
 import { formatScan } from "@/lib/codes/codes";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -33,12 +35,15 @@ interface CastRow {
   talentId: string | null;
   inviteId: string | null;
   licenceId: string | null;
+  actorName: string | null;
   characterName: string | null;
   department: string | null;
   sagMember: boolean;
-  status: "invited" | "linked" | "scan_uploaded" | "consented" | "declined";
+  status: "placeholder" | "invited" | "linked" | "scan_uploaded" | "consented" | "declined";
   addedAt: number;
   linkedAt: number | null;
+  repId: string | null;
+  repInviteId: string | null;
   talentProfile: { userId: string; fullName: string; profileImageUrl: string | null } | null;
   invite: { id: string; email: string; usedAt: number | null; expiresAt: number } | null;
   licence: { id: string; status: string; projectName: string } | null;
@@ -69,6 +74,7 @@ interface LicenceSummary {
   packageName: string | null;
   packageScanNumber?: number | null;
   productionId: string | null;
+  productionIncluded?: boolean;
 }
 
 interface LicenceTerms {
@@ -85,6 +91,7 @@ interface LicenceTerms {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const CAST_STATUS_COLOUR: Record<string, string> = {
+  placeholder: "#6b7280",
   invited: "#b45309",
   linked: "#1d4ed8",
   scan_uploaded: "#7c3aed",
@@ -93,6 +100,7 @@ const CAST_STATUS_COLOUR: Record<string, string> = {
 };
 
 const CAST_STATUS_LABEL: Record<string, string> = {
+  placeholder: "Reserved",
   invited: "Invited",
   linked: "Linked",
   scan_uploaded: "Reviewing",
@@ -196,6 +204,9 @@ export default function ProductionDetailClient() {
   const [submitError, setSubmitError] = useState("");
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [markingIncludedId, setMarkingIncludedId] = useState<string | null>(null);
+  const [inviteRepFor, setInviteRepFor] = useState<{ castId: string; label: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -369,6 +380,43 @@ export default function ProductionDetailClient() {
       await fetch(`/api/productions/${id}/cast/${castId}/resend-invite`, { method: "POST" });
     } finally {
       setResendingId(null);
+    }
+  }
+
+  async function handleMarkIncluded(licenceId: string) {
+    const reason = window.prompt("Mark this licence as production-included (£0 fee — the scan was produced and paid for as part of this production). Add a reference/justification:", "");
+    if (reason === null) return;
+    setMarkingIncludedId(licenceId);
+    try {
+      const r = await fetch(`/api/licences/${licenceId}/mark-included`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; flagged?: boolean; error?: string };
+      if (r.ok && d.ok) {
+        if (d.flagged) alert("Marked as included. Note: prior usage was found, so this has been flagged for review by the Image Vault team.");
+        await fetchData();
+      } else {
+        alert(d.error ?? "Couldn't mark as included.");
+      }
+    } finally {
+      setMarkingIncludedId(null);
+    }
+  }
+
+  async function handleRequestLicence(castId: string) {
+    setRequestingId(castId);
+    try {
+      const r = await fetch(`/api/productions/${id}/cast/${castId}/request-licence`, { method: "POST" });
+      if (r.ok) {
+        await fetchData();
+      } else {
+        const d = await r.json().catch(() => ({})) as { error?: string };
+        alert(d.error ?? "Couldn't send the licence request.");
+      }
+    } finally {
+      setRequestingId(null);
     }
   }
 
@@ -754,7 +802,7 @@ export default function ProductionDetailClient() {
                         <span className="font-medium" style={{ color: "var(--color-text)" }}>{row.talentProfile.fullName}</span>
                       </div>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.invite?.email ?? "—"}</span>
+                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.invite?.email ?? row.actorName ?? "—"}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -798,6 +846,20 @@ export default function ProductionDetailClient() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
+                      {row.status === "placeholder" && (
+                        row.repId || row.repInviteId ? (
+                          <span className="text-xs" style={{ color: "var(--color-muted)" }} title="Representation invited">Rep invited</span>
+                        ) : (
+                          <button
+                            onClick={() => setInviteRepFor({ castId: row.id, label: row.actorName ?? "this performer" })}
+                            className="text-xs font-medium"
+                            style={{ color: "var(--color-accent)" }}
+                            title="Invite their representation to connect them"
+                          >
+                            Invite representation
+                          </button>
+                        )
+                      )}
                       {row.status === "invited" && (
                         <button
                           onClick={() => handleResend(row.id)}
@@ -807,6 +869,17 @@ export default function ProductionDetailClient() {
                           title="Resend invite"
                         >
                           {resendingId === row.id ? "…" : "Resend"}
+                        </button>
+                      )}
+                      {row.status === "linked" && row.talentId && !row.licence && (
+                        <button
+                          onClick={() => handleRequestLicence(row.id)}
+                          disabled={requestingId === row.id}
+                          className="text-xs font-medium"
+                          style={{ color: "var(--color-accent)" }}
+                          title="Send a licence request using the production's default terms"
+                        >
+                          {requestingId === row.id ? "Sending…" : "Send licence request"}
                         </button>
                       )}
                       {(row.status === "invited" || row.status === "linked") && (
@@ -881,9 +954,26 @@ export default function ProductionDetailClient() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                          {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
-                        </span>
+                        {lic.productionIncluded ? (
+                          <span className="text-xs px-2 py-0.5 rounded font-medium" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }} title="Scan produced & paid for as part of this production — no licence fee">
+                            Included · £0
+                          </span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                              {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
+                            </span>
+                            <button
+                              onClick={() => handleMarkIncluded(lic.id)}
+                              disabled={markingIncludedId === lic.id}
+                              className="text-[11px] text-left"
+                              style={{ color: "var(--color-accent)" }}
+                              title="Mark this scan as included in the production (no licence fee)"
+                            >
+                              {markingIncludedId === lic.id ? "Marking…" : "Mark included"}
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -894,8 +984,22 @@ export default function ProductionDetailClient() {
         </div>
       )}
 
+      {/* Vendors */}
+      <VendorsPanel productionId={id} />
+
       {/* Insurers */}
       <InsurersPanel productionId={id} />
+
+      {/* Path C — invite representation to a reserved slot */}
+      {inviteRepFor && (
+        <InviteRepModal
+          productionId={id}
+          castId={inviteRepFor.castId}
+          actorLabel={inviteRepFor.label}
+          onClose={() => setInviteRepFor(null)}
+          onDone={() => { setInviteRepFor(null); void fetchData(); }}
+        />
+      )}
     </div>
   );
 }

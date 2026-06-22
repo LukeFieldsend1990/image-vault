@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
-import { users, invites, talentReps, productionCast, licences, productions, organisations } from "@/lib/db/schema";
+import { users, invites, talentReps, productionCast, licences, productions, organisations, organisationMembers, productionVendors } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { createGrant } from "@/lib/compliance/grants";
+import { mintLicenceCode, mintOrgCode } from "@/lib/codes/codes";
+import { isVendorOrgType } from "@/lib/organisations/orgTypes";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
 const VALID_ROLES = ["talent", "rep", "industry", "licensee", "compliance"] as const;
@@ -144,6 +146,83 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Path C: a rep invited to represent a specific cast slot becomes that
+    // slot's assigned rep on signup, so it surfaces in their roster to resolve.
+    if (role === "rep" && inviteRow.castId) {
+      await db
+        .update(productionCast)
+        .set({ repId: userId, repInviteId: null })
+        .where(eq(productionCast.id, inviteRow.castId));
+    }
+
+    // Admin concierge: an industry user invited to a pre-built production becomes
+    // the owner of its org and the production's coordinator on signup.
+    if (role === "industry" && inviteRow.organisationId) {
+      try {
+        const alreadyMember = await db
+          .select({ userId: organisationMembers.userId })
+          .from(organisationMembers)
+          .where(and(
+            eq(organisationMembers.organisationId, inviteRow.organisationId),
+            eq(organisationMembers.userId, userId),
+          ))
+          .get();
+        if (!alreadyMember) {
+          await db.insert(organisationMembers).values({
+            organisationId: inviteRow.organisationId,
+            userId,
+            memberRole: "owner",
+            invitedBy: inviteRow.invitedBy,
+            joinedAt: now,
+          });
+        }
+        if (inviteRow.productionId) {
+          await db.update(productions).set({ coordinatorId: userId }).where(eq(productions.id, inviteRow.productionId));
+        }
+      } catch {
+        // Don't block signup; an admin can re-attach ownership if this fails.
+      }
+    }
+
+    // Vendor onboarding: an industry user invited as a production vendor (the
+    // invite's orgSubtype carries the vendor org type) gets their org created and
+    // the pending production_vendors row linked + activated on signup.
+    if (role === "industry" && inviteRow.orgSubtype && isVendorOrgType(inviteRow.orgSubtype)) {
+      const pendingVendor = await db
+        .select({ id: productionVendors.id, invitedOrgName: productionVendors.invitedOrgName })
+        .from(productionVendors)
+        .where(and(eq(productionVendors.inviteId, inviteRow.id), eq(productionVendors.status, "pending")))
+        .get();
+      if (pendingVendor) {
+        try {
+          const orgId = crypto.randomUUID();
+          await db.insert(organisations).values({
+            id: orgId,
+            name: pendingVendor.invitedOrgName ?? normalEmail.split("@")[0],
+            createdBy: userId,
+            createdAt: now,
+            updatedAt: now,
+            orgType: inviteRow.orgSubtype as typeof organisations.$inferInsert["orgType"],
+          });
+          await db.insert(organisationMembers).values({
+            organisationId: orgId,
+            userId,
+            memberRole: "owner",
+            invitedBy: inviteRow.invitedBy,
+            joinedAt: now,
+          });
+          await mintOrgCode(db, orgId, inviteRow.orgSubtype);
+          await db
+            .update(productionVendors)
+            .set({ vendorOrgId: orgId, status: "active" })
+            .where(eq(productionVendors.id, pendingVendor.id));
+        } catch {
+          // Don't block signup if org auto-creation fails; the producer can
+          // re-attach once the vendor has created their org.
+        }
+      }
+    }
+
     // Auto-grant a compliance grant when an invited watcher completes signup. The
     // invite's org_subtype carries the compliance subtype (a legacy production
     // invite with none defaults to insurer); union_id attributes a union grant.
@@ -235,6 +314,7 @@ export async function POST(req: NextRequest) {
             productionId: inviteRow.productionId,
             createdAt: now,
           });
+          await mintLicenceCode(db, licenceId);
 
           // Update cast row: link talent, clear terms, set status = linked
           await db

@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { talentProfiles } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { talentProfiles, organisationMembers, productions } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
+import { isIndustryRole } from "@/lib/auth/roles";
 import OnboardingClient from "./onboarding-client";
 
 async function getSessionInfo(): Promise<{ userId: string; role: string } | null> {
@@ -30,11 +31,33 @@ export default async function OnboardingPage({
 
   if (!session?.userId) redirect("/login");
 
-  // Only talent sees onboarding — reps and licensees go straight to dashboard
+  const db = getDb();
+
+  // Industry/production-company users: if they already have a production (e.g.
+  // an admin pre-built one and invited them, or they were added to an org with
+  // one), land them on it; otherwise start the guided setup wizard.
+  if (isIndustryRole(session.role)) {
+    const orgIds = (await db
+      .select({ organisationId: organisationMembers.organisationId })
+      .from(organisationMembers)
+      .where(eq(organisationMembers.userId, session.userId))
+      .all()).map((m) => m.organisationId);
+    let hasProduction = false;
+    if (orgIds.length > 0) {
+      const prod = await db
+        .select({ id: productions.id })
+        .from(productions)
+        .where(inArray(productions.organisationId, orgIds))
+        .get();
+      hasProduction = !!prod;
+    }
+    redirect(hasProduction ? "/productions" : "/productions/setup");
+  }
+
+  // Only talent sees this onboarding — reps go straight to dashboard.
   if (session.role !== "talent") redirect("/dashboard");
 
   // Already onboarded — skip unless ?update=1 is set (e.g. from settings page)
-  const db = getDb();
   const existing = await db
     .select({ userId: talentProfiles.userId })
     .from(talentProfiles)

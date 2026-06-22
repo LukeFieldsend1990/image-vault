@@ -17,9 +17,11 @@ import {
   licences,
   productions,
   productionCast,
+  productionDefaultTerms,
 } from "@/lib/db/schema";
 import { eq, and, isNull, gt, sql } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
+import { mintLicenceCode } from "@/lib/codes/codes";
 import {
   productionCastInviteEmail,
   productionCastLinkedEmail,
@@ -74,6 +76,35 @@ function normaliseExclusivity(v: unknown): CastExclusivity {
   return CAST_EXCLUSIVITIES.includes(v as CastExclusivity) ? (v as CastExclusivity) : "non_exclusive";
 }
 
+/** Load a production's default licence terms (Step 4 of guided onboarding), if set. */
+export async function loadProductionDefaultTerms(db: Db, productionId: string): Promise<CastLicenceTerms> {
+  const row = await db
+    .select({
+      intendedUse: productionDefaultTerms.intendedUse,
+      validFrom: productionDefaultTerms.validFrom,
+      validTo: productionDefaultTerms.validTo,
+      licenceType: productionDefaultTerms.licenceType,
+      territory: productionDefaultTerms.territory,
+      exclusivity: productionDefaultTerms.exclusivity,
+      permitAiTraining: productionDefaultTerms.permitAiTraining,
+      proposedFee: productionDefaultTerms.proposedFee,
+    })
+    .from(productionDefaultTerms)
+    .where(eq(productionDefaultTerms.productionId, productionId))
+    .get();
+  if (!row) return {};
+  return {
+    intendedUse: row.intendedUse ?? undefined,
+    validFrom: row.validFrom ?? undefined,
+    validTo: row.validTo ?? undefined,
+    licenceType: normaliseType(row.licenceType),
+    territory: row.territory ?? undefined,
+    exclusivity: row.exclusivity ? normaliseExclusivity(row.exclusivity) : undefined,
+    permitAiTraining: row.permitAiTraining ?? undefined,
+    proposedFee: row.proposedFee ?? undefined,
+  };
+}
+
 /**
  * Promote a placeholder cast row by attaching an email.
  * `overrides` (any provided fields) take precedence over the row's stored terms.
@@ -88,6 +119,7 @@ export async function promoteCastMember(
     actorEmail: string;   // shown to the actor as the coordinator
     baseUrl: string;
     overrides?: CastLicenceTerms;
+    defaults?: CastLicenceTerms;  // lowest precedence: production-level default terms
   }
 ): Promise<PromoteResult> {
   const email = opts.email.trim().toLowerCase();
@@ -115,20 +147,21 @@ export async function promoteCastMember(
     .get();
   if (!production) return { ok: false, message: "Production not found." };
 
-  // Merge stored terms with overrides (overrides win).
+  // Merge terms by precedence: explicit overrides > per-row stored > production defaults.
   let stored: CastLicenceTerms = {};
   if (cast.licenceTermsJson) {
     try { stored = JSON.parse(cast.licenceTermsJson) as CastLicenceTerms; } catch { stored = {}; }
   }
   const o = opts.overrides ?? {};
-  const intendedUse = (o.intendedUse ?? stored.intendedUse ?? "").trim();
-  const validFrom = o.validFrom ?? stored.validFrom;
-  const validTo = o.validTo ?? stored.validTo;
-  const licenceType = normaliseType(o.licenceType ?? stored.licenceType);
-  const territory = (o.territory ?? stored.territory) || null;
-  const exclusivity = normaliseExclusivity(o.exclusivity ?? stored.exclusivity);
-  const permitAiTraining = o.permitAiTraining ?? stored.permitAiTraining ?? false;
-  const proposedFee = o.proposedFee ?? stored.proposedFee ?? null;
+  const d = opts.defaults ?? {};
+  const intendedUse = (o.intendedUse ?? stored.intendedUse ?? d.intendedUse ?? "").trim();
+  const validFrom = o.validFrom ?? stored.validFrom ?? d.validFrom;
+  const validTo = o.validTo ?? stored.validTo ?? d.validTo;
+  const licenceType = normaliseType(o.licenceType ?? stored.licenceType ?? d.licenceType);
+  const territory = (o.territory ?? stored.territory ?? d.territory) || null;
+  const exclusivity = normaliseExclusivity(o.exclusivity ?? stored.exclusivity ?? d.exclusivity);
+  const permitAiTraining = o.permitAiTraining ?? stored.permitAiTraining ?? d.permitAiTraining ?? false;
+  const proposedFee = o.proposedFee ?? stored.proposedFee ?? d.proposedFee ?? null;
 
   if (!intendedUse) return { ok: false, message: "intendedUse is required to resolve a placeholder (supply it or store it on the row)." };
   if (typeof validFrom !== "number" || typeof validTo !== "number") {
@@ -169,6 +202,7 @@ export async function promoteCastMember(
       productionId: opts.productionId,
       createdAt: now,
     });
+    await mintLicenceCode(db, licenceId);
 
     await db.update(productionCast).set({
       talentId: existingUser.id,

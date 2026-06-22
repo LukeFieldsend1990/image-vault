@@ -111,6 +111,7 @@ export const uploadSessions = sqliteTable("upload_sessions", {
 
 export const licences = sqliteTable("licences", {
   id: text("id").primaryKey(), // UUID
+  shortCode: text("short_code"), // LC-#### public reference. System-generated; see lib/codes.
   talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   packageId: text("package_id").references(() => scanPackages.id, { onDelete: "cascade" }),
   licenseeId: text("licensee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -168,6 +169,12 @@ export const licences = sqliteTable("licences", {
   proposedUnitRatePence: integer("proposed_unit_rate_pence"),
   agreedUnitType: text("agreed_unit_type"),
   agreedUnitRatePence: integer("agreed_unit_rate_pence"),
+  // Production-included: the scan was commissioned and paid for as part of the
+  // production, so the licence fee is £0 and it does NOT count as a re-licence.
+  productionIncluded: integer("production_included", { mode: "boolean" }).notNull().default(false),
+  inclusionReason: text("inclusion_reason"),
+  inclusionMarkedBy: text("inclusion_marked_by").references(() => users.id),
+  inclusionMarkedAt: integer("inclusion_marked_at"),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -217,6 +224,10 @@ export const invites = sqliteTable("invites", {
   productionId: text("production_id").references(() => productions.id),
   orgSubtype: text("org_subtype"), // industry: intended OrgType; compliance: subtype (union|regulator|insurer)
   unionId: text("union_id"), // compliance union invites: which union (sag_aftra|equity) the auto-grant attributes to
+  castId: text("cast_id"), // Path C: rep invite scoped to a specific cast slot
+  // Admin concierge invite: the org the invitee should be made owner of on signup
+  // (the production was pre-built by an admin under this org).
+  organisationId: text("organisation_id"),
 });
 
 export const scanLocations = sqliteTable("scan_locations", {
@@ -1002,6 +1013,71 @@ export const productionCast = sqliteTable("production_cast", {
   addedBy: text("added_by").notNull().references(() => users.id),
   addedAt: integer("added_at").notNull(),
   linkedAt: integer("linked_at"),
+  // Path C (agent-mediated): a reserved slot can be assigned to a representing
+  // agent. repId = an existing rep on Image Vault; repInviteId = a pending rep
+  // signup invite scoped to this slot. The rep then resolves the slot by
+  // supplying their client's email.
+  repId: text("rep_id").references(() => users.id),
+  repInviteId: text("rep_invite_id"),
+});
+
+// Production-level default licence terms. Set once during guided onboarding (Step 4)
+// and applied as the lowest-precedence fallback whenever a cast placeholder is
+// resolved into a licence/invite (explicit overrides > per-row stored terms >
+// these defaults). One row per production; absence means "no defaults set".
+export const productionDefaultTerms = sqliteTable("production_default_terms", {
+  productionId: text("production_id").primaryKey().references(() => productions.id, { onDelete: "cascade" }),
+  intendedUse: text("intended_use"),
+  licenceType: text("licence_type"),       // CastLicenceType | null
+  territory: text("territory"),
+  exclusivity: text("exclusivity"),        // non_exclusive | sole | exclusive
+  permitAiTraining: integer("permit_ai_training", { mode: "boolean" }).notNull().default(false),
+  validFrom: integer("valid_from"),        // unix seconds
+  validTo: integer("valid_to"),            // unix seconds
+  proposedFee: integer("proposed_fee"),    // pence
+  updatedBy: text("updated_by").notNull().references(() => users.id),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+// High-detail audit trail for production-included licences. One row per marking.
+// `flagged` = the package/talent had prior usage through the platform when the
+// inclusion was claimed (a potential abuse signal). We never block — we record
+// the full prior-usage detail and surface flagged rows for admin review.
+export const productionInclusionRecords = sqliteTable("production_inclusion_records", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  productionId: text("production_id").references(() => productions.id),
+  packageId: text("package_id"),
+  talentId: text("talent_id").notNull().references(() => users.id),
+  markedBy: text("marked_by").notNull().references(() => users.id),
+  markedAt: integer("marked_at").notNull(),
+  reason: text("reason"),
+  priorLicenceCount: integer("prior_licence_count").notNull().default(0),
+  priorDownloadCount: integer("prior_download_count").notNull().default(0),
+  priorUsageJson: text("prior_usage_json"), // detailed snapshot of the prior usage found
+  flagged: integer("flagged", { mode: "boolean" }).notNull().default(false),
+  reviewedAt: integer("reviewed_at"),
+  reviewedBy: text("reviewed_by").references(() => users.id),
+  reviewNote: text("review_note"),
+});
+
+// Vendor organisations attached to a production (VFX, dubbing, scan service, …).
+// This is the production-level "who's working on this" link; actual scan-data
+// access remains per-licence via vendorAuthorisations + vendorAuditPassed.
+// `pending` rows carry an email invite until the vendor signs up and their org
+// is created + linked.
+export const productionVendors = sqliteTable("production_vendors", {
+  id: text("id").primaryKey(),
+  productionId: text("production_id").notNull().references(() => productions.id, { onDelete: "cascade" }),
+  vendorOrgId: text("vendor_org_id").references(() => organisations.id), // null until a pending invite is accepted
+  vendorType: text("vendor_type").notNull(), // OrgType snapshot (vfx_vendor | dubbing | scan_service | …)
+  invitedEmail: text("invited_email"),
+  invitedOrgName: text("invited_org_name"),
+  inviteId: text("invite_id"), // the industry signup invite for a pending vendor
+  status: text("status").notNull().default("active"), // active | pending | revoked
+  addedBy: text("added_by").notNull().references(() => users.id),
+  addedAt: integer("added_at").notNull(),
+  revokedAt: integer("revoked_at"),
 });
 
 // ── Admin MCP integration ─────────────────────────────────────────────────────

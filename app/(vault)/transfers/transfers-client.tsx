@@ -182,7 +182,10 @@ export default function TransfersClient() {
           {transferType === "to_talent" ? (
             <input value={toTalentEmail} onChange={(e) => setToTalentEmail(e.target.value)} type="email" required placeholder="Talent email" className="w-full text-sm px-3 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }} />
           ) : (
-            <input value={targetLicenceId} onChange={(e) => setTargetLicenceId(e.target.value)} required placeholder="Licence ID (awaiting package)" className="w-full text-sm px-3 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }} />
+            <div>
+              <input value={targetLicenceId} onChange={(e) => setTargetLicenceId(e.target.value)} required placeholder="Licence reference — e.g. LC-0042" className="w-full text-sm px-3 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }} />
+              <p className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>The production shares this reference from the licence (shown on the licence, awaiting a package).</p>
+            </div>
           )}
           <input value={lookLabel} onChange={(e) => setLookLabel(e.target.value)} required placeholder="Look label — e.g. Base Look" className="w-full text-sm px-3 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }} />
           <div className="flex gap-2">
