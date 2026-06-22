@@ -7,6 +7,7 @@ import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 import InsurersPanel from "./insurers-panel";
 import VendorsPanel from "./vendors-panel";
+import VendorAuthorisedScans from "./vendor-authorised-scans";
 import InviteRepModal from "./invite-rep-modal";
 import { formatScan } from "@/lib/codes/codes";
 
@@ -549,6 +550,8 @@ export default function ProductionDetailClient() {
             )}
           </div>
         </div>
+
+        {!isScanService && <VendorAuthorisedScans productionId={id} />}
       </div>
     );
   }
@@ -1070,6 +1073,16 @@ export default function ProductionDetailClient() {
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${colour}18`, color: colour }}>
                           {lic.status}
                         </span>
+                        {lic.status === "APPROVED" && (
+                          <Link
+                            href={`/licences/${lic.id}/vendors`}
+                            className="text-[11px] block mt-1"
+                            style={{ color: "var(--color-accent)" }}
+                            title="Authorise vendors to pull this scan via the Render Bridge"
+                          >
+                            Manage vendor access
+                          </Link>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs" style={{ color: "var(--color-muted)" }}>
