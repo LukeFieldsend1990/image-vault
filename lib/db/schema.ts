@@ -147,6 +147,9 @@ export const licences = sqliteTable("licences", {
   territory: text("territory"),
   exclusivity: text("exclusivity", { enum: ["non_exclusive", "sole", "exclusive"] }).default("non_exclusive"),
   permitAiTraining: integer("permit_ai_training", { mode: "boolean" }).notNull().default(false),
+  // Canonical use-category ids (lib/consent/use-categories.ts) as a JSON array.
+  // intendedUse above stays free-text for notes; this is the structured vocabulary.
+  useCategoriesJson: text("use_categories_json"),
   proposedFee: integer("proposed_fee"),  // cents
   agreedFee: integer("agreed_fee"),      // cents (set on approval)
   platformFee: integer("platform_fee"),  // cents (15% of agreed_fee)
@@ -1032,6 +1035,7 @@ export const productionDefaultTerms = sqliteTable("production_default_terms", {
   territory: text("territory"),
   exclusivity: text("exclusivity"),        // non_exclusive | sole | exclusive
   permitAiTraining: integer("permit_ai_training", { mode: "boolean" }).notNull().default(false),
+  useCategoriesJson: text("use_categories_json"), // JSON array of use-category ids (lib/consent/use-categories.ts)
   validFrom: integer("valid_from"),        // unix seconds
   validTo: integer("valid_to"),            // unix seconds
   proposedFee: integer("proposed_fee"),    // pence

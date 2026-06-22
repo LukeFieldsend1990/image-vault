@@ -8,6 +8,7 @@ import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { mintLicenceCode } from "@/lib/codes/codes";
 import { loadProductionDefaultTerms, type CastLicenceTerms } from "@/lib/productions/cast";
+import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/use-categories";
 import { createNotification } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import { productionCastLinkedEmail } from "@/lib/email/templates";
@@ -89,7 +90,13 @@ export async function POST(
   const licenceType = (body.licenceType ?? defaults.licenceType ?? null) as typeof licences.$inferInsert["licenceType"];
   const territory = body.territory ?? defaults.territory ?? null;
   const exclusivity = (body.exclusivity ?? defaults.exclusivity ?? "non_exclusive") as typeof licences.$inferInsert["exclusivity"];
-  const permitAiTraining = body.permitAiTraining ?? defaults.permitAiTraining ?? false;
+  // Reconcile the use-category taxonomy with the legacy permitAiTraining boolean.
+  const reconciled = reconcileTrainingFlag({
+    useCategoryIds: body.useCategoryIds ?? defaults.useCategoryIds,
+    permitAiTraining: body.permitAiTraining ?? defaults.permitAiTraining ?? false,
+  });
+  const permitAiTraining = reconciled.permitAiTraining;
+  const useCategoriesJson = serializeUseCategoryIds(reconciled.useCategoryIds);
   const proposedFee = body.proposedFee ?? defaults.proposedFee ?? null;
 
   const licenceId = crypto.randomUUID();
@@ -107,6 +114,7 @@ export async function POST(
     territory,
     exclusivity,
     permitAiTraining,
+    useCategoriesJson,
     proposedFee,
     productionId: id,
     createdAt: now,

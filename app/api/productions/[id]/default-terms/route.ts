@@ -5,6 +5,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { CAST_LICENCE_TYPES, CAST_EXCLUSIVITIES } from "@/lib/productions/cast";
+import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/use-categories";
 import { eq, and } from "drizzle-orm";
 
 // Auth helper: admin, or industry org owner/admin on the production's org.
@@ -89,6 +90,7 @@ export async function PUT(
     territory?: unknown;
     exclusivity?: unknown;
     permitAiTraining?: unknown;
+    useCategoryIds?: unknown;
     validFrom?: unknown;
     validTo?: unknown;
     proposedFee?: unknown;
@@ -103,7 +105,14 @@ export async function PUT(
   const licenceType = typeof body.licenceType === "string" && (CAST_LICENCE_TYPES as readonly string[]).includes(body.licenceType) ? body.licenceType : null;
   const territory = typeof body.territory === "string" && body.territory.trim() ? body.territory.trim() : null;
   const exclusivity = typeof body.exclusivity === "string" && (CAST_EXCLUSIVITIES as readonly string[]).includes(body.exclusivity) ? body.exclusivity : null;
-  const permitAiTraining = body.permitAiTraining === true;
+  // Reconcile the use-category taxonomy with the legacy permitAiTraining boolean
+  // so selecting `training` (§39G) and the flag can't drift apart.
+  const reconciled = reconcileTrainingFlag({
+    useCategoryIds: Array.isArray(body.useCategoryIds) ? (body.useCategoryIds as unknown[]).filter((v): v is string => typeof v === "string") : null,
+    permitAiTraining: body.permitAiTraining === true,
+  });
+  const permitAiTraining = reconciled.permitAiTraining;
+  const useCategoriesJson = serializeUseCategoryIds(reconciled.useCategoryIds);
   const validFrom = typeof body.validFrom === "number" ? Math.floor(body.validFrom) : null;
   const validTo = typeof body.validTo === "number" ? Math.floor(body.validTo) : null;
   const proposedFee = typeof body.proposedFee === "number" ? Math.floor(body.proposedFee) : null;
@@ -122,6 +131,7 @@ export async function PUT(
       territory,
       exclusivity,
       permitAiTraining,
+      useCategoriesJson,
       validFrom,
       validTo,
       proposedFee,
@@ -130,7 +140,7 @@ export async function PUT(
     })
     .onConflictDoUpdate({
       target: productionDefaultTerms.productionId,
-      set: { intendedUse, licenceType, territory, exclusivity, permitAiTraining, validFrom, validTo, proposedFee, updatedBy: session.sub, updatedAt: now },
+      set: { intendedUse, licenceType, territory, exclusivity, permitAiTraining, useCategoriesJson, validFrom, validTo, proposedFee, updatedBy: session.sub, updatedAt: now },
     });
 
   return NextResponse.json({ ok: true });
