@@ -21,6 +21,7 @@ interface Production {
   createdAt: number;
   licenceCount: number;
   cast: { total: number; consented: number; invited: number; linked: number; placeholder: number; resolved: number } | null;
+  relationship?: "owner" | "vendor";
 }
 
 interface ActivityItem {
@@ -113,8 +114,9 @@ export default function ProductionsClient() {
       .catch(() => {});
   }, []);
 
-  // Productions still needing attention — no cast yet, or reserved placeholders remaining.
-  const needsSetup = productions.filter((p) => !p.cast || p.cast.placeholder > 0);
+  // Productions still needing attention — no cast yet, or reserved placeholders
+  // remaining. Only the productions the caller owns; vendor-attached ones aren't theirs to set up.
+  const needsSetup = productions.filter((p) => p.relationship !== "vendor" && (!p.cast || p.cast.placeholder > 0));
 
   return (
     <div className="p-8 max-w-4xl">
@@ -292,6 +294,11 @@ export default function ProductionsClient() {
                   )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
+                  {p.relationship === "vendor" && (
+                    <span className="text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ background: "rgba(124,58,237,0.1)", color: "#7c3aed" }}>
+                      Vendor
+                    </span>
+                  )}
                   <PhaseIndicator status={p.status} />
                   <svg
                     width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
