@@ -43,6 +43,21 @@ export const ORG_TYPE_LABELS: Record<OrgType, string> = {
   other: "Other",
 };
 
+export const ORG_TYPE_SHORT_LABELS: Record<OrgType, string> = {
+  production_company: "Prod Co",
+  studio: "Studio",
+  vfx_vendor: "VFX",
+  dubbing: "Dubbing",
+  advertising_agency: "Ad Agency",
+  brand: "Brand",
+  publisher: "Publisher",
+  game_studio: "Games",
+  ai_company: "AI",
+  broadcaster: "Broadcast",
+  scan_service: "Scan",
+  other: "Other",
+};
+
 export function isOrgType(v: unknown): v is OrgType {
   return typeof v === "string" && (ORG_TYPES as readonly string[]).includes(v);
 }

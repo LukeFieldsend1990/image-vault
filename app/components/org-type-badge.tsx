@@ -1,4 +1,4 @@
-import { ORG_TYPE_LABELS, isOrgType, type OrgType } from "@/lib/organisations/orgTypes";
+import { ORG_TYPE_LABELS, ORG_TYPE_SHORT_LABELS, isOrgType, type OrgType } from "@/lib/organisations/orgTypes";
 
 /**
  * Compact, consistent badge for an organisation's subtype. Use anywhere an org
@@ -23,20 +23,23 @@ const ORG_TYPE_COLORS: Record<OrgType, { bg: string; color: string }> = {
 
 export default function OrgTypeBadge({
   type,
+  long = false,
   className = "",
 }: {
   type: string | null | undefined;
+  long?: boolean;
   className?: string;
 }) {
   if (!isOrgType(type)) return null;
   const c = ORG_TYPE_COLORS[type];
+  const label = long ? ORG_TYPE_LABELS[type] : ORG_TYPE_SHORT_LABELS[type];
   return (
     <span
-      className={`inline-block text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded align-middle ${className}`}
+      className={`inline-block shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded align-middle ${className}`}
       style={{ background: c.bg, color: c.color }}
       title={ORG_TYPE_LABELS[type]}
     >
-      {ORG_TYPE_LABELS[type]}
+      {label}
     </span>
   );
 }
