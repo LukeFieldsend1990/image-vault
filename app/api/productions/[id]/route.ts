@@ -13,10 +13,12 @@ import {
   productionDefaultTerms,
   productionVendors,
   insurerPolicies,
+  organisationMembers,
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { eq, count } from "drizzle-orm";
+import { isIndustryRole } from "@/lib/auth/roles";
+import { eq, and, count } from "drizzle-orm";
 
 // GET /api/productions/[id] — get production detail
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -58,6 +60,49 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Work out how this viewer relates to the production. Owners/admins get the
+  // full management UI; vendors get a scoped view; anyone else is denied.
+  let viewerRole: "admin" | "owner" | "vendor" | "none" = "none";
+  let viewerVendorType: string | null = null;
+
+  if (isAdmin(session.email)) {
+    viewerRole = "admin";
+  } else if (isIndustryRole(session.role)) {
+    if (!row.organisationId) {
+      // Legacy productions with no owning org — mirror the cast route's behaviour
+      // of letting industry users through.
+      viewerRole = "owner";
+    } else {
+      const membership = await db
+        .select({ r: organisationMembers.memberRole })
+        .from(organisationMembers)
+        .where(and(eq(organisationMembers.organisationId, row.organisationId), eq(organisationMembers.userId, session.sub)))
+        .get();
+      if (membership) viewerRole = "owner";
+    }
+    if (viewerRole === "none") {
+      // Not an owner — are they a member of an org attached as an active vendor?
+      const vendor = await db
+        .select({ vendorType: productionVendors.vendorType })
+        .from(productionVendors)
+        .innerJoin(organisationMembers, eq(organisationMembers.organisationId, productionVendors.vendorOrgId))
+        .where(and(
+          eq(productionVendors.productionId, id),
+          eq(productionVendors.status, "active"),
+          eq(organisationMembers.userId, session.sub),
+        ))
+        .get();
+      if (vendor) {
+        viewerRole = "vendor";
+        viewerVendorType = vendor.vendorType;
+      }
+    }
+  }
+
+  if (viewerRole === "none") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   // Count linked licences
   const [licenceCount] = await db
     .select({ count: count() })
@@ -65,7 +110,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .where(eq(licences.productionId, id))
     .all();
 
-  return NextResponse.json({ production: { ...row, licenceCount: licenceCount?.count ?? 0 } });
+  return NextResponse.json({ production: { ...row, licenceCount: licenceCount?.count ?? 0, viewerRole, viewerVendorType } });
 }
 
 // PATCH /api/productions/[id] — update production metadata

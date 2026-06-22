@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, organisations, organisationMembers, licences, productionCast } from "@/lib/db/schema";
+import { productions, productionCompanies, organisations, organisationMembers, licences, productionCast, productionVendors } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
-import { eq, inArray, count, desc } from "drizzle-orm";
+import { eq, and, or, inArray, count, desc } from "drizzle-orm";
 
 // GET /api/productions/list — productions scoped to the caller's organisations
 export async function GET(req: NextRequest) {
@@ -14,6 +14,9 @@ export async function GET(req: NextRequest) {
   const db = getDb();
 
   let productionRows;
+  // Orgs the caller belongs to — used to tell "owner" productions apart from
+  // ones where their org is only an attached vendor.
+  let viewerOrgIds: string[] = [];
 
   if (isAdmin(session.email)) {
     productionRows = await db
@@ -46,9 +49,23 @@ export async function GET(req: NextRequest) {
       .all();
 
     const orgIds = memberRows.map((r) => r.organisationId);
+    viewerOrgIds = orgIds;
     if (orgIds.length === 0) {
       return NextResponse.json({ productions: [] });
     }
+
+    // Productions where one of the caller's orgs is attached as an active vendor —
+    // surfaced read-only alongside the ones they own.
+    const vendorLinks = await db
+      .select({ productionId: productionVendors.productionId })
+      .from(productionVendors)
+      .where(and(inArray(productionVendors.vendorOrgId, orgIds), eq(productionVendors.status, "active")))
+      .all();
+    const vendorProdIds = [...new Set(vendorLinks.map((v) => v.productionId))];
+
+    const whereClause = vendorProdIds.length > 0
+      ? or(inArray(productions.organisationId, orgIds), inArray(productions.id, vendorProdIds))
+      : inArray(productions.organisationId, orgIds);
 
     productionRows = await db
       .select({
@@ -69,7 +86,7 @@ export async function GET(req: NextRequest) {
       .from(productions)
       .leftJoin(productionCompanies, eq(productionCompanies.id, productions.companyId))
       .leftJoin(organisations, eq(organisations.id, productions.organisationId))
-      .where(inArray(productions.organisationId, orgIds))
+      .where(whereClause)
       .orderBy(desc(productions.createdAt))
       .limit(100)
       .all();
@@ -109,6 +126,11 @@ export async function GET(req: NextRequest) {
     ...p,
     licenceCount: countMap.get(p.id) ?? 0,
     cast: castMap.get(p.id) ?? null,
+    // "owner" when the caller's org owns the production, else "vendor" (their org
+    // is only attached as a vendor). Admins see everything as owner.
+    relationship: isAdmin(session.email) || (p.organisationId !== null && viewerOrgIds.includes(p.organisationId))
+      ? "owner"
+      : "vendor",
   }));
 
   return NextResponse.json({ productions: result });

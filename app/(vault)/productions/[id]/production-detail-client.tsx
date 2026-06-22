@@ -28,6 +28,8 @@ interface Production {
   orgType?: string | null;
   orgShortCode?: string | null;
   licenceCount: number;
+  viewerRole?: "admin" | "owner" | "vendor" | "none";
+  viewerVendorType?: string | null;
 }
 
 interface CastRow {
@@ -484,6 +486,53 @@ export default function ProductionDetailClient() {
       <div className="p-8 max-w-5xl">
         <p style={{ color: "var(--color-muted)" }}>Production not found.</p>
         <Link href="/productions" className="text-sm mt-2 block" style={{ color: "var(--color-accent)" }}>← Back to Productions</Link>
+      </div>
+    );
+  }
+
+  // Vendors get a read-only, scoped view — they don't manage cast or licences.
+  if (production.viewerRole === "vendor") {
+    return (
+      <div className="p-8 max-w-3xl">
+        <div className="mb-2">
+          <Link href="/productions" className="text-xs" style={{ color: "var(--color-muted)" }}>← Productions</Link>
+        </div>
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h1 className="text-2xl font-semibold flex items-center gap-2" style={{ color: "var(--color-text)" }}>
+              <span>{production.name}</span>
+              <CodeTag code={production.shortCode} />
+            </h1>
+            {production.type && (
+              <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}>
+                {production.type.replace("_", " ")}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {(production.orgName ?? production.companyName) && (
+              <span className="text-sm flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                <span>{production.orgName ?? production.companyName}</span>
+                <OrgTypeBadge type={production.orgType} />
+              </span>
+            )}
+            {production.year && <span className="text-sm" style={{ color: "var(--color-muted)" }}>{production.year}</span>}
+          </div>
+        </div>
+
+        <div className="rounded p-5 mb-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>Your role</p>
+            <OrgTypeBadge type={production.viewerVendorType} />
+          </div>
+          <p className="text-sm" style={{ color: "var(--color-text)" }}>
+            Your organisation is attached to this production as a vendor. The production company manages the cast and licences — you&apos;ll receive scan transfers and can connect render workloads for the talent you&apos;re authorised to work with.
+          </p>
+          <div className="flex items-center gap-3 mt-4">
+            <Link href="/transfers" className="rounded px-3 py-1.5 text-xs font-medium text-white" style={{ background: "var(--color-accent)" }}>View Transfers</Link>
+            <Link href="/bridge" className="rounded px-3 py-1.5 text-xs font-medium" style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}>Render Bridge</Link>
+          </div>
+        </div>
       </div>
     );
   }
