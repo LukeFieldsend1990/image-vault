@@ -26,6 +26,12 @@ import {
   productionCastInviteEmail,
   productionCastLinkedEmail,
 } from "@/lib/email/templates";
+import {
+  reconcileTrainingFlag,
+  serializeUseCategoryIds,
+  parseUseCategoryIds,
+  type UseCategoryId,
+} from "@/lib/consent/use-categories";
 import type { getDb } from "@/lib/db";
 
 type Db = ReturnType<typeof getDb>;
@@ -49,6 +55,7 @@ export interface CastLicenceTerms {
   territory?: string | null;
   exclusivity?: CastExclusivity;
   permitAiTraining?: boolean;
+  useCategoryIds?: UseCategoryId[]; // canonical taxonomy ids (lib/consent/use-categories.ts)
   proposedFee?: number | null; // cents
 }
 
@@ -87,12 +94,14 @@ export async function loadProductionDefaultTerms(db: Db, productionId: string): 
       territory: productionDefaultTerms.territory,
       exclusivity: productionDefaultTerms.exclusivity,
       permitAiTraining: productionDefaultTerms.permitAiTraining,
+      useCategoriesJson: productionDefaultTerms.useCategoriesJson,
       proposedFee: productionDefaultTerms.proposedFee,
     })
     .from(productionDefaultTerms)
     .where(eq(productionDefaultTerms.productionId, productionId))
     .get();
   if (!row) return {};
+  const useCategoryIds = parseUseCategoryIds(row.useCategoriesJson);
   return {
     intendedUse: row.intendedUse ?? undefined,
     validFrom: row.validFrom ?? undefined,
@@ -101,6 +110,7 @@ export async function loadProductionDefaultTerms(db: Db, productionId: string): 
     territory: row.territory ?? undefined,
     exclusivity: row.exclusivity ? normaliseExclusivity(row.exclusivity) : undefined,
     permitAiTraining: row.permitAiTraining ?? undefined,
+    useCategoryIds: useCategoryIds.length ? useCategoryIds : undefined,
     proposedFee: row.proposedFee ?? undefined,
   };
 }
@@ -160,7 +170,15 @@ export async function promoteCastMember(
   const licenceType = normaliseType(o.licenceType ?? stored.licenceType ?? d.licenceType);
   const territory = (o.territory ?? stored.territory ?? d.territory) || null;
   const exclusivity = normaliseExclusivity(o.exclusivity ?? stored.exclusivity ?? d.exclusivity);
-  const permitAiTraining = o.permitAiTraining ?? stored.permitAiTraining ?? d.permitAiTraining ?? false;
+  // Reconcile the use-category taxonomy with the legacy permitAiTraining boolean
+  // so the two can't drift (selecting `training` implies AI-training permitted).
+  const reconciled = reconcileTrainingFlag({
+    useCategoryIds: o.useCategoryIds ?? stored.useCategoryIds ?? d.useCategoryIds,
+    permitAiTraining: o.permitAiTraining ?? stored.permitAiTraining ?? d.permitAiTraining ?? false,
+  });
+  const permitAiTraining = reconciled.permitAiTraining;
+  const useCategoryIds = reconciled.useCategoryIds;
+  const useCategoriesJson = serializeUseCategoryIds(useCategoryIds);
   const proposedFee = o.proposedFee ?? stored.proposedFee ?? d.proposedFee ?? null;
 
   if (!intendedUse) return { ok: false, message: "intendedUse is required to resolve a placeholder (supply it or store it on the row)." };
@@ -198,6 +216,7 @@ export async function promoteCastMember(
       territory,
       exclusivity,
       permitAiTraining,
+      useCategoriesJson,
       proposedFee,
       productionId: opts.productionId,
       createdAt: now,
@@ -245,7 +264,7 @@ export async function promoteCastMember(
   const inviteId = crypto.randomUUID();
   const expiresAt = now + SEVEN_DAYS;
   const licenceTerms = {
-    intendedUse, validFrom, validTo, licenceType, territory, exclusivity, permitAiTraining, proposedFee,
+    intendedUse, validFrom, validTo, licenceType, territory, exclusivity, permitAiTraining, useCategoryIds, proposedFee,
     projectName: production.name, productionCompany: production.company,
   };
 
