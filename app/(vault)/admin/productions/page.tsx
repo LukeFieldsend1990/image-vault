@@ -202,8 +202,8 @@ export default async function AdminProductionsPage() {
                   <span className="text-[10px] font-mono" style={{ color: "var(--color-muted)" }}>SAG {p.sagProjectNumber}</span>
                 )}
               </div>
-              <span className="text-xs truncate flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
-                <span className="truncate">{orgName}</span>
+              <span className="text-xs min-w-0 flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                <span className="truncate min-w-0">{orgName}</span>
                 <OrgTypeBadge type={orgType} />
                 <CodeTag code={orgShortCode} />
               </span>
