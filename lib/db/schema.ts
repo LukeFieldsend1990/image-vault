@@ -222,7 +222,8 @@ export const invites = sqliteTable("invites", {
   expiresAt: integer("expires_at").notNull(), // unix timestamp
   createdAt: integer("created_at").notNull(), // unix timestamp
   productionId: text("production_id").references(() => productions.id),
-  orgSubtype: text("org_subtype"), // industry-only: intended org type (OrgType)
+  orgSubtype: text("org_subtype"), // industry: intended OrgType; compliance: subtype (union|regulator|insurer)
+  unionId: text("union_id"), // compliance union invites: which union (sag_aftra|equity) the auto-grant attributes to
   castId: text("cast_id"), // Path C: rep invite scoped to a specific cast slot
   // Admin concierge invite: the org the invitee should be made owner of on signup
   // (the production was pre-built by an admin under this org).
@@ -411,6 +412,9 @@ export const productionWatchlist = sqliteTable("production_watchlist", {
 export const unionMembers = sqliteTable("union_members", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  // Which union this roster entry belongs to (e.g. "sag_aftra" | "equity"). Null
+  // for legacy rows added before per-union attribution.
+  unionId: text("union_id"),
   addedBy: text("added_by").notNull().references(() => users.id),
   addedAt: integer("added_at").notNull(),
   archivedAt: integer("archived_at"),
@@ -1119,6 +1123,10 @@ export const complianceGrants = sqliteTable("compliance_grants", {
   id: text("id").primaryKey(),
   complianceUserId: text("compliance_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   subtype: text("subtype", { enum: ["union", "regulator", "insurer"] }).notNull(),
+  // Which union a union-subtype grant is for (e.g. "sag_aftra" | "equity"), so a
+  // SAG watcher only sees SAG and an Equity watcher only sees Equity. Null for
+  // regulator/insurer grants and for legacy union grants predating attribution.
+  unionId: text("union_id"),
   scope: text("scope", { enum: ["platform", "organisation", "production", "talent"] }).notNull(),
   scopeId: text("scope_id"), // null = platform-wide
   grantedBy: text("granted_by").references(() => users.id),

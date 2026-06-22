@@ -1,42 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { canViewPlatformOversight } from "@/lib/compliance/grants";
-import { addMembers, buildMemberRoster, clearRoster, parseMemberNames } from "@/lib/compliance/members";
+import { addMembers, buildMemberRoster, clearRoster, parseMemberNames, resolveRosterUnion } from "@/lib/compliance/members";
 
-// GET    /api/compliance/members — roster with live on-platform matching + coverage.
-// POST   /api/compliance/members — append names ({ csv } blob or { names } array).
-// DELETE /api/compliance/members — clear the whole roster.
-// Maintainers: admins + compliance watchers with a platform-wide grant.
+// GET    /api/compliance/members?unionId= — one union's roster with live on-platform
+//        matching + coverage, plus the unions the caller may manage.
+// POST   /api/compliance/members — append names ({ csv } blob or { names } array) to
+//        a union's roster ({ unionId }).
+// DELETE /api/compliance/members?unionId= — clear that union's roster.
+// Access: admins (any union) + union watchers with a platform-wide grant (their union).
 
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
   const db = getDb();
-  if (!(await canViewPlatformOversight(db, session))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const ctx = await resolveRosterUnion(db, session, new URL(req.url).searchParams.get("unionId"));
+  if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
-  const roster = await buildMemberRoster(db);
-  return NextResponse.json(roster);
+  const roster = await buildMemberRoster(db, ctx.unionId);
+  return NextResponse.json({ ...roster, unions: ctx.available, unionId: ctx.unionId });
 }
 
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  const db = getDb();
-  if (!(await canViewPlatformOversight(db, session))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  let body: { csv?: unknown; names?: unknown };
+  let body: { csv?: unknown; names?: unknown; unionId?: unknown };
   try {
-    body = (await req.json()) as { csv?: unknown; names?: unknown };
+    body = (await req.json()) as { csv?: unknown; names?: unknown; unionId?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  const db = getDb();
+  const ctx = await resolveRosterUnion(db, session, typeof body.unionId === "string" ? body.unionId : null);
+  if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
   let names: string[] = [];
   if (typeof body.csv === "string") {
@@ -46,8 +45,8 @@ export async function POST(req: NextRequest) {
   }
   if (names.length === 0) return NextResponse.json({ error: "No member names found" }, { status: 400 });
 
-  const result = await addMembers(db, names, session.sub);
-  return NextResponse.json({ ok: true, ...result }, { status: 201 });
+  const result = await addMembers(db, names, session.sub, ctx.unionId);
+  return NextResponse.json({ ok: true, unionId: ctx.unionId, ...result }, { status: 201 });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -55,10 +54,9 @@ export async function DELETE(req: NextRequest) {
   if (isErrorResponse(session)) return session;
 
   const db = getDb();
-  if (!(await canViewPlatformOversight(db, session))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const ctx = await resolveRosterUnion(db, session, new URL(req.url).searchParams.get("unionId"));
+  if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
-  const cleared = await clearRoster(db);
-  return NextResponse.json({ ok: true, cleared });
+  const cleared = await clearRoster(db, ctx.unionId);
+  return NextResponse.json({ ok: true, unionId: ctx.unionId, cleared });
 }
