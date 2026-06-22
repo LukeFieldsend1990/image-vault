@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productionCompanies } from "@/lib/db/schema";
+import { organisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { resolveCompanyOrg } from "@/lib/organisations/resolveCompany";
+import { eq } from "drizzle-orm";
 
+// POST /api/admin/production-companies — "+ New Company" on the Productions
+// screen. Production companies are organisations now, so this creates (or
+// reuses) the unified organisation entity and a linked catalogue shim.
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
@@ -21,16 +26,18 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
-  const id = crypto.randomUUID();
 
-  await db.insert(productionCompanies).values({
-    id,
+  const { organisationId, productionCompanyId } = await resolveCompanyOrg(db, {
     name,
-    website: typeof body.website === "string" && body.website.trim() ? body.website.trim() : null,
-    notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null,
-    createdAt: now,
-    updatedAt: now,
+    createdBy: session.sub,
   });
 
-  return NextResponse.json({ id });
+  const website = typeof body.website === "string" && body.website.trim() ? body.website.trim() : null;
+  if (website) {
+    await db.update(organisations).set({ website, updatedAt: now }).where(eq(organisations.id, organisationId));
+  }
+
+  // `id` stays the catalogue id for backward-compatible callers; organisationId
+  // is the canonical entity the UI links to.
+  return NextResponse.json({ id: productionCompanyId, organisationId });
 }

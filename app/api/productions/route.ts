@@ -4,6 +4,7 @@ import { productions, productionCompanies, organisations, organisationMembers } 
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { mintProductionCode } from "@/lib/codes/codes";
+import { resolveCompanyOrg } from "@/lib/organisations/resolveCompany";
 import { eq, like, desc, and } from "drizzle-orm";
 
 // GET /api/productions?q=search — autocomplete search
@@ -96,29 +97,6 @@ export async function POST(req: NextRequest) {
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
 
-  // If companyName provided but no companyId, find or create the company
-  let companyId = body.companyId ?? null;
-  if (!companyId && body.companyName?.trim()) {
-    const existing = await db
-      .select({ id: productionCompanies.id })
-      .from(productionCompanies)
-      .where(like(productionCompanies.name, body.companyName.trim()))
-      .limit(1)
-      .all();
-
-    if (existing.length > 0) {
-      companyId = existing[0].id;
-    } else {
-      companyId = crypto.randomUUID();
-      await db.insert(productionCompanies).values({
-        id: companyId,
-        name: body.companyName.trim(),
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-  }
-
   // Validate organisationId if provided
   let orgId: string | null = null;
   if (body.organisationId) {
@@ -149,6 +127,16 @@ export async function POST(req: NextRequest) {
         );
       }
     }
+  }
+
+  // Resolve the production company. A company name maps to the unified
+  // organisation entity (creating + linking a catalogue shim as needed), so a
+  // production attributed to a company always gets an organisationId too.
+  let companyId = body.companyId ?? null;
+  if (!companyId && body.companyName?.trim()) {
+    const refs = await resolveCompanyOrg(db, { name: body.companyName.trim(), createdBy: session.sub });
+    companyId = refs.productionCompanyId;
+    if (!orgId) orgId = refs.organisationId;
   }
 
   const productionId = crypto.randomUUID();

@@ -6,6 +6,7 @@ import { eq, desc, count } from "drizzle-orm";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 import { isVendorOrgType } from "@/lib/organisations/orgTypes";
+import NewOrganisationButton from "./new-organisation-button";
 
 function fmtDate(epoch: number) {
   return new Date(epoch * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -42,12 +43,15 @@ export default async function AdminOrganisationsPage() {
 
   return (
     <div className="p-8 max-w-5xl">
-      <div className="mb-6">
-        <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>Admin</p>
-        <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>Organisations</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
-          {rows.length} organisation{rows.length !== 1 ? "s" : ""} registered on the platform.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>Admin</p>
+          <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>Organisations</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
+            {rows.length} organisation{rows.length !== 1 ? "s" : ""} registered on the platform.
+          </p>
+        </div>
+        <NewOrganisationButton />
       </div>
 
       {rows.length === 0 ? (

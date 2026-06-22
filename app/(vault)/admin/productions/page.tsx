@@ -92,25 +92,30 @@ export default async function AdminProductionsPage() {
     castStatMap.set(c.productionId, cur);
   }
 
-  // Also get all companies for the companies section
+  // Production companies are organisations now (production_company / studio
+  // subtypes) — the same entities shown on /admin/organisations. Sourcing this
+  // section from organisations keeps the two screens reconciled.
   const allCompanies = await db
     .select({
-      id: productionCompanies.id,
-      name: productionCompanies.name,
-      website: productionCompanies.website,
-      createdAt: productionCompanies.createdAt,
+      id: organisations.id,
+      name: organisations.name,
+      website: organisations.website,
+      orgType: organisations.orgType,
+      shortCode: organisations.shortCode,
+      createdAt: organisations.createdAt,
     })
-    .from(productionCompanies)
-    .orderBy(desc(productionCompanies.createdAt))
+    .from(organisations)
+    .where(inArray(organisations.orgType, ["production_company", "studio"]))
+    .orderBy(desc(organisations.createdAt))
     .all();
 
-  // Production counts per company
+  // Production counts per organisation.
   const prodCounts = await db
-    .select({ companyId: productions.companyId, n: sql<number>`count(*)` })
+    .select({ organisationId: productions.organisationId, n: sql<number>`count(*)` })
     .from(productions)
-    .groupBy(productions.companyId)
+    .groupBy(productions.organisationId)
     .all();
-  const prodCountMap = new Map(prodCounts.map((p) => [p.companyId, p.n]));
+  const prodCountMap = new Map(prodCounts.map((p) => [p.organisationId, p.n]));
 
   function ts(d: number): string {
     return new Date(d * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -271,14 +276,18 @@ export default async function AdminProductionsPage() {
           return (
             <Link
               key={c.id}
-              href={`/admin/productions/companies/${c.id}`}
+              href={`/admin/organisations/${c.id}`}
               className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[500px] transition hover:bg-[var(--color-surface)]"
               style={{
                 gridTemplateColumns: "2fr 1.5fr 1fr 1fr",
                 borderColor: "var(--color-border)",
               }}
             >
-              <span className="font-medium truncate" style={{ color: "var(--color-ink)" }}>{c.name}</span>
+              <span className="font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                <span className="truncate">{c.name}</span>
+                <OrgTypeBadge type={c.orgType} />
+                <CodeTag code={c.shortCode} />
+              </span>
               <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{c.website ?? "—"}</span>
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>{prodCount > 0 ? prodCount : "—"}</span>
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>{ts(c.createdAt)}</span>

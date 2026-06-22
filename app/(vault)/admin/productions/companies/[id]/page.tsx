@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { productionCompanies, productions } from "@/lib/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { productionCompanies, productions, organisations } from "@/lib/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import CompanyEditForm from "./company-edit-form";
@@ -26,6 +26,15 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
     .all();
 
   if (!company) redirect("/admin/productions");
+
+  // Production companies are unified with organisations — the org is the
+  // canonical detail surface. Redirect to it when one is linked.
+  const linkedOrg = await db
+    .select({ id: organisations.id })
+    .from(organisations)
+    .where(eq(organisations.productionCompanyId, id))
+    .get();
+  if (linkedOrg) redirect(`/admin/organisations/${linkedOrg.id}`);
 
   const linkedProductions = await db
     .select({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, scanPackages, users, talentReps, talentSettings, talentProfiles, productions, productionCompanies, organisations, organisationMembers } from "@/lib/db/schema";
+import { licences, scanPackages, users, talentReps, talentSettings, talentProfiles, productions, organisations, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, desc, and, inArray, like, or } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -9,6 +9,7 @@ import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { mintLicenceCode } from "@/lib/codes/codes";
+import { resolveCompanyOrg } from "@/lib/organisations/resolveCompany";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -258,35 +259,34 @@ export async function POST(req: NextRequest) {
   const now = Math.floor(Date.now() / 1000);
   const licenceId = crypto.randomUUID();
 
-  // Resolve or create production company and production entities.
-  // Run both lookups in parallel; inserts are sequential (production needs companyId).
+  // Resolve or create production company and production entities. The named
+  // production company maps to the unified organisation entity (creating +
+  // linking a catalogue shim as needed) so the licence and any created
+  // production are attributed to an organisation, not just a loose company.
   let resolvedCompanyId = body.productionCompanyId ?? null;
   let resolvedProductionId = body.productionId ?? null;
-
-  const [existingCompany, existingProduction] = await Promise.all([
-    resolvedCompanyId || !productionCompany
-      ? Promise.resolve(null)
-      : db.select({ id: productionCompanies.id }).from(productionCompanies).where(like(productionCompanies.name, productionCompany.trim())).limit(1).get(),
-    resolvedProductionId || !projectName
-      ? Promise.resolve(null)
-      : db.select({ id: productions.id }).from(productions).where(like(productions.name, projectName.trim())).limit(1).get(),
-  ]);
+  let resolvedOrgId = body.organisationId ?? null;
 
   if (!resolvedCompanyId && productionCompany) {
-    if (existingCompany) {
-      resolvedCompanyId = existingCompany.id;
-    } else {
-      resolvedCompanyId = crypto.randomUUID();
-      await db.insert(productionCompanies).values({
-        id: resolvedCompanyId,
-        name: productionCompany.trim(),
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    const refs = await resolveCompanyOrg(db, { name: productionCompany.trim(), createdBy: session.sub });
+    resolvedCompanyId = refs.productionCompanyId;
+    if (!resolvedOrgId) resolvedOrgId = refs.organisationId;
+  } else if (resolvedCompanyId && !resolvedOrgId) {
+    const linked = await db
+      .select({ id: organisations.id })
+      .from(organisations)
+      .where(eq(organisations.productionCompanyId, resolvedCompanyId))
+      .get();
+    if (linked) resolvedOrgId = linked.id;
   }
 
   if (!resolvedProductionId && projectName) {
+    const existingProduction = await db
+      .select({ id: productions.id })
+      .from(productions)
+      .where(like(productions.name, projectName.trim()))
+      .limit(1)
+      .get();
     if (existingProduction) {
       resolvedProductionId = existingProduction.id;
     } else {
@@ -295,6 +295,7 @@ export async function POST(req: NextRequest) {
         id: resolvedProductionId,
         name: projectName.trim(),
         companyId: resolvedCompanyId,
+        organisationId: resolvedOrgId,
         createdAt: now,
         updatedAt: now,
       });
@@ -324,7 +325,7 @@ export async function POST(req: NextRequest) {
     platformFee: isPlaceholder && body.agreedFee ? Math.round(body.agreedFee * 0.15) : null,
     productionId: resolvedProductionId,
     productionCompanyId: resolvedCompanyId,
-    organisationId: body.organisationId ?? null,
+    organisationId: resolvedOrgId,
     downloadCount: 0,
     createdAt: now,
   });
