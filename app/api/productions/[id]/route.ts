@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, organisations, licences } from "@/lib/db/schema";
+import {
+  productions,
+  productionCompanies,
+  organisations,
+  licences,
+  invites,
+  feeObligations,
+  renderBridgeAgents,
+  productionInclusionRecords,
+  productionCast,
+  productionDefaultTerms,
+  productionVendors,
+  insurerPolicies,
+} from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, count } from "drizzle-orm";
@@ -82,6 +95,43 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   await db.update(productions).set(updates).where(eq(productions.id, id));
+
+  return NextResponse.json({ ok: true });
+}
+
+// DELETE /api/productions/[id] — permanently delete a production (admin only)
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+
+  if (!isAdmin(session.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const db = getDb();
+
+  const existing = await db.select({ id: productions.id }).from(productions).where(eq(productions.id, id)).get();
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Clean up every table that references this production explicitly, so the
+  // result is identical whether or not D1 is enforcing foreign keys.
+  //
+  // Real agreements / audit trails outlive the production — detach them by
+  // nulling productionId rather than deleting.
+  await db.update(licences).set({ productionId: null }).where(eq(licences.productionId, id));
+  await db.update(invites).set({ productionId: null }).where(eq(invites.productionId, id));
+  await db.update(feeObligations).set({ productionId: null }).where(eq(feeObligations.productionId, id));
+  await db.update(renderBridgeAgents).set({ productionId: null }).where(eq(renderBridgeAgents.productionId, id));
+  await db.update(productionInclusionRecords).set({ productionId: null }).where(eq(productionInclusionRecords.productionId, id));
+
+  // Production-scoped records are removed with the production.
+  await db.delete(insurerPolicies).where(eq(insurerPolicies.productionId, id));
+  await db.delete(productionVendors).where(eq(productionVendors.productionId, id));
+  await db.delete(productionDefaultTerms).where(eq(productionDefaultTerms.productionId, id));
+  await db.delete(productionCast).where(eq(productionCast.productionId, id));
+
+  await db.delete(productions).where(eq(productions.id, id));
 
   return NextResponse.json({ ok: true });
 }

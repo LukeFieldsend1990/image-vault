@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCast, users } from "@/lib/db/schema";
+import { productions, productionCast, users, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { promoteCastMember, loadProductionDefaultTerms, type CastLicenceTerms } from "@/lib/productions/cast";
+import { createNotification } from "@/lib/notifications/create";
 import { eq, and } from "drizzle-orm";
 
 // POST /api/productions/[id]/cast/[castId]/rep-resolve
@@ -20,14 +21,14 @@ export async function POST(
 
   const db = getDb();
   const production = await db
-    .select({ id: productions.id })
+    .select({ id: productions.id, name: productions.name, organisationId: productions.organisationId })
     .from(productions)
     .where(eq(productions.id, id))
     .get();
   if (!production) return NextResponse.json({ error: "Production not found" }, { status: 404 });
 
   const cast = await db
-    .select({ id: productionCast.id, repId: productionCast.repId, status: productionCast.status, addedBy: productionCast.addedBy })
+    .select({ id: productionCast.id, repId: productionCast.repId, status: productionCast.status, addedBy: productionCast.addedBy, characterName: productionCast.characterName, actorName: productionCast.actorName })
     .from(productionCast)
     .where(and(eq(productionCast.id, castId), eq(productionCast.productionId, id)))
     .get();
@@ -73,5 +74,35 @@ export async function POST(
     defaults,
   });
   if (!result.ok) return NextResponse.json({ error: result.message }, { status: 409 });
+
+  // Tell the production company their reserved role just got filled by the
+  // performer's representation — the Path C self-heal made visible. Best-effort.
+  void (async () => {
+    try {
+      const who = cast.characterName ?? cast.actorName ?? "a reserved role";
+      const recipients = new Set<string>([cast.addedBy]);
+      if (production.organisationId) {
+        const members = await db
+          .select({ userId: organisationMembers.userId, memberRole: organisationMembers.memberRole })
+          .from(organisationMembers)
+          .where(eq(organisationMembers.organisationId, production.organisationId))
+          .all();
+        members
+          .filter((m) => m.memberRole === "owner" || m.memberRole === "admin")
+          .forEach((m) => recipients.add(m.userId));
+      }
+      const title = `${who} was filled by their representation`;
+      const body = `An agency connected their client to ${who} in ${production.name}. The licence request is on its way.`;
+      const href = `/productions/${id}`;
+      await Promise.all(
+        Array.from(recipients).map((userId) =>
+          createNotification(db, { userId, type: "cast_rep_filled", title, body, href }),
+        ),
+      );
+    } catch {
+      // best-effort
+    }
+  })();
+
   return NextResponse.json({ ok: true, status: result.status });
 }
