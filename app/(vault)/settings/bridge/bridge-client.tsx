@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
+import BridgeSetupChecklist from "./bridge-setup-checklist";
+import type { BridgeSetupStatus } from "@/lib/bridge/setup";
 
 interface BridgeToken {
   id: string;
@@ -43,6 +45,7 @@ interface Props {
   activeGrantsByLicence: { licenceId: string; count: number }[];
   connectionIds: ConnectionOrg[];
   unlinkedLicences: UnlinkedLicence[];
+  setupStatus: BridgeSetupStatus | null;
 }
 
 function ts(unix: number | null): string {
@@ -68,6 +71,7 @@ export default function BridgeSettingsClient({
   activeGrantsByLicence,
   connectionIds,
   unlinkedLicences,
+  setupStatus,
 }: Props) {
   const [tokens, setTokens] = useState<BridgeToken[]>(initialTokens);
   const [devices] = useState<BridgeDevice[]>(initialDevices);
@@ -242,6 +246,11 @@ export default function BridgeSettingsClient({
           ? "Generate API tokens to connect the CAS Bridge desktop app to your licences."
           : "Monitor active bridge sessions across your licences."}
       </p>
+
+      {/* Guided 5-step setup checklist (primary org) */}
+      {canManage && setupStatus && (
+        <BridgeSetupChecklist setup={setupStatus} vaultUrl={vaultUrl} />
+      )}
 
       {/* Vault URL — shown to licensees so they can paste it into the bridge app */}
       {canManage && (

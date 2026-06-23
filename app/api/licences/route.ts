@@ -10,6 +10,7 @@ import { isIndustryRole } from "@/lib/auth/roles";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { mintLicenceCode } from "@/lib/codes/codes";
 import { resolveCompanyOrg } from "@/lib/organisations/resolveCompany";
+import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/use-categories";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -158,6 +159,7 @@ export async function POST(req: NextRequest) {
     territory?: string;
     exclusivity?: string;
     permitAiTraining?: boolean;
+    useCategoryIds?: unknown;
     proposedFee?: number;
     proposedUnitType?: string;
     proposedUnitRatePence?: number;
@@ -173,6 +175,12 @@ export async function POST(req: NextRequest) {
   }
 
   const { packageId, projectName, productionCompany, intendedUse, validFrom, validTo } = body;
+  // Reconcile the use-category taxonomy with the legacy permitAiTraining boolean
+  // so selecting `training` (§39G) and the flag stay in lockstep.
+  const reconciledUse = reconcileTrainingFlag({
+    useCategoryIds: Array.isArray(body.useCategoryIds) ? (body.useCategoryIds as unknown[]).filter((v): v is string => typeof v === "string") : null,
+    permitAiTraining: body.permitAiTraining ?? false,
+  });
   if (!projectName || !productionCompany || !intendedUse || !validFrom || !validTo) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
@@ -317,7 +325,8 @@ export async function POST(req: NextRequest) {
     licenceType: (body.licenceType as "film_double" | "game_character" | "commercial" | "ai_avatar" | "training_data" | "monitoring_reference" | undefined) ?? null,
     territory: body.territory ?? null,
     exclusivity: (body.exclusivity as "non_exclusive" | "sole" | "exclusive" | undefined) ?? "non_exclusive",
-    permitAiTraining: body.permitAiTraining ?? false,
+    permitAiTraining: reconciledUse.permitAiTraining,
+    useCategoriesJson: serializeUseCategoryIds(reconciledUse.useCategoryIds),
     proposedFee: body.proposedFee ?? null,
     proposedUnitType: body.proposedUnitType ?? null,
     proposedUnitRatePence: body.proposedUnitRatePence ?? null,

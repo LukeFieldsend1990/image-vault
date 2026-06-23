@@ -6,6 +6,7 @@ import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and } from "drizzle-orm";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { promoteCastMember, loadProductionDefaultTerms, type CastLicenceTerms } from "@/lib/productions/cast";
+import { normaliseUseCategoryIds } from "@/lib/consent/use-categories";
 
 // POST /api/productions/[id]/cast/[castId]/resolve
 // Attach an email to a placeholder cast member and onboard them (invite or
@@ -56,6 +57,7 @@ export async function POST(
     territory?: string;
     exclusivity?: string;
     permitAiTraining?: boolean;
+    useCategoryIds?: unknown;
     proposedFee?: number;
   };
   try {
@@ -77,6 +79,7 @@ export async function POST(
   if (typeof body.territory === "string") overrides.territory = body.territory;
   if (typeof body.exclusivity === "string") overrides.exclusivity = body.exclusivity as CastLicenceTerms["exclusivity"];
   if (typeof body.permitAiTraining === "boolean") overrides.permitAiTraining = body.permitAiTraining;
+  if (Array.isArray(body.useCategoryIds)) overrides.useCategoryIds = normaliseUseCategoryIds(body.useCategoryIds);
   if (typeof body.proposedFee === "number") overrides.proposedFee = body.proposedFee;
 
   const actor = await db
