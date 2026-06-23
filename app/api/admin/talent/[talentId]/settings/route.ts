@@ -34,7 +34,7 @@ export async function GET(
     talentId,
     email: talent.email,
     fullName: profile?.fullName ?? null,
-    pipelineEnabled: settings?.pipelineEnabled ?? true,
+    pipelineEnabled: settings?.pipelineEnabled ?? false,
     talentSharePct: settings?.talentSharePct ?? 65,
     agencySharePct: settings?.agencySharePct ?? 20,
     platformSharePct: settings?.platformSharePct ?? 15,

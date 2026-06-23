@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
     role: storedRole as "talent" | "rep" | "licensee" | "admin",
     trueRole,
     createdAt: nowDate,
+    royaltyMeterEnabled: false,
   });
 
   // Mark invite as used

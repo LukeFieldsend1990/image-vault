@@ -475,7 +475,7 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean }) {
+export function NavLinks({ role, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember }: { role: Role; email?: string; pipelineEnabled?: boolean; royaltyMeterEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   // Agents (reps belonging to a talent agency) get an Agency surface, placed
@@ -504,6 +504,9 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
   // surface, placed first as their primary landing.
   if (isComplianceRole(role) && insurerWatcher && !base.some((item) => item.href === "/underwriting")) {
     base = [UNDERWRITING_NAV_ITEM, ...base];
+  }
+  if (role === "talent" && !royaltyMeterEnabled) {
+    base = base.filter((item) => item.href !== "/royalties" && item.href !== "/vault/monitor");
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]
