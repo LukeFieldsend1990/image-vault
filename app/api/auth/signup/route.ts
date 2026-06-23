@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { createGrant } from "@/lib/compliance/grants";
 import { mintLicenceCode, mintOrgCode } from "@/lib/codes/codes";
 import { isVendorOrgType } from "@/lib/organisations/orgTypes";
+import { createNotification } from "@/lib/notifications/create";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
 const VALID_ROLES = ["talent", "rep", "industry", "licensee", "compliance"] as const;
@@ -156,6 +157,31 @@ export async function POST(req: NextRequest) {
         .update(productionCast)
         .set({ repId: userId, repInviteId: null })
         .where(eq(productionCast.id, inviteRow.castId));
+
+      // Notify the newly signed-up rep so they see the pending engagement in
+      // their roster immediately after creating their account.
+      void (async () => {
+        try {
+          const castInfo = await db
+            .select({ actorName: productionCast.actorName, characterName: productionCast.characterName, productionName: productions.name })
+            .from(productionCast)
+            .innerJoin(productions, eq(productions.id, productionCast.productionId))
+            .where(eq(productionCast.id, inviteRow!.castId!))
+            .get();
+          if (castInfo) {
+            const role = castInfo.characterName ?? castInfo.actorName ?? "a reserved role";
+            await createNotification(db, {
+              userId,
+              type: "cast_rep_assigned",
+              title: `${castInfo.productionName} reserved a role for your client`,
+              body: `Connect your client to the role of ${role} on ${castInfo.productionName}. Go to your Roster to get started.`,
+              href: "/roster",
+            });
+          }
+        } catch {
+          // best-effort
+        }
+      })();
     }
 
     // Agency agent: a rep invited against an agency org (the invite carries the
