@@ -31,8 +31,8 @@ describe("resolveRosterUnion", () => {
     ...over,
   });
 
-  // getActiveGrants runs once per getUnionIdsForUser / hasPlatformGrant call, each
-  // ending in a single .all(); enqueue the same grant set for every expected call.
+  // For a non-admin, resolveRosterUnion makes a single getUnionIdsForUser lookup
+  // (getActiveGrants → one .all()); enqueue that watcher's grants once.
   const watcher = { sub: "u1", email: "watcher@example.com", role: "compliance" };
 
   it("admins manage every union preset (no grant lookup)", async () => {
@@ -43,15 +43,11 @@ describe("resolveRosterUnion", () => {
     expect(ctx.available.map((u) => u.id).sort()).toEqual(["equity", "sag_aftra"]);
   });
 
-  it("a platform-wide watcher not tied to a union sees every union (regression: was 403)", async () => {
+  it("forbids a platform-wide regulator — the roster is union-owned, not a cross-union surface", async () => {
     const { db, enqueue } = mockChainDb();
-    const grants = [grant({ subtype: "regulator", unionId: null, scope: "platform" })];
-    enqueue(grants); // getUnionIdsForUser → no union ids
-    enqueue(grants); // hasPlatformGrant → true
+    enqueue([grant({ subtype: "regulator", unionId: null, scope: "platform" })]);
     const ctx = await resolveRosterUnion(db as never, watcher);
-    expect("error" in ctx).toBe(false);
-    if ("error" in ctx) return;
-    expect(ctx.available.map((u) => u.id).sort()).toEqual(["equity", "sag_aftra"]);
+    expect(ctx).toEqual({ error: "Forbidden", status: 403 });
   });
 
   it("a union watcher with a platform-scoped union grant is scoped to that union", async () => {
@@ -64,16 +60,14 @@ describe("resolveRosterUnion", () => {
     expect(ctx.unionId).toBe("equity");
   });
 
-  it("forbids a watcher with no platform-scoped grant", async () => {
+  it("forbids a union watcher whose grant is scoped below platform (no whole-union list)", async () => {
     const { db, enqueue } = mockChainDb();
-    const grants = [grant({ subtype: "union", unionId: "equity", scope: "organisation", scopeId: "org1" })];
-    enqueue(grants); // getUnionIdsForUser (platformOnly) → none
-    enqueue(grants); // hasPlatformGrant → false
+    enqueue([grant({ subtype: "union", unionId: "equity", scope: "organisation", scopeId: "org1" })]);
     const ctx = await resolveRosterUnion(db as never, watcher);
     expect(ctx).toEqual({ error: "Forbidden", status: 403 });
   });
 
-  it("rejects a requested union the platform-wide watcher could otherwise reach only by id mismatch", async () => {
+  it("rejects a union the watcher doesn't hold", async () => {
     const { db, enqueue } = mockChainDb();
     enqueue([grant({ subtype: "union", unionId: "equity", scope: "platform" })]);
     const ctx = await resolveRosterUnion(db as never, watcher, "sag_aftra");
