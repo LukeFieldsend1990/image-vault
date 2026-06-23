@@ -54,11 +54,12 @@ export interface LicenceSummary {
 }
 
 export interface CastOnboarding {
-  total: number;       // all cast rows for this production
-  consented: number;   // licence APPROVED — fully onboarded
-  linked: number;      // account exists but licence pending/awaiting package
-  invited: number;     // invite sent, no account yet
-  pct: number;         // consented / total * 100 (0 if total=0 treated as n/a)
+  total: number;         // all cast rows for this production
+  consented: number;     // licence APPROVED — fully onboarded
+  linked: number;        // account exists but licence pending/awaiting package
+  invited: number;       // invite sent, no account yet
+  placeholder: number;   // recorded by name only — no email, no invite sent yet
+  pct: number;           // consented / total * 100 (0 if total=0 treated as n/a)
 }
 
 export interface ProductionCompliance {
@@ -536,13 +537,15 @@ export async function buildOrgDashboard(
         .where(eq(productionCast.productionId, prod.id))
         .all();
       if (castRows2.length === 0) continue;
-      const co: CastOnboarding = { total: castRows2.length, consented: 0, linked: 0, invited: 0, pct: 0 };
+      const co: CastOnboarding = { total: castRows2.length, consented: 0, linked: 0, invited: 0, placeholder: 0, pct: 0 };
       for (const c of castRows2) {
         if (c.status === "consented") co.consented++;
         else if (c.status === "linked" || c.status === "scan_uploaded") co.linked++;
         else if (c.status === "invited") co.invited++;
+        else if (c.status === "placeholder") co.placeholder++;
       }
       co.pct = co.total > 0 ? Math.round((co.consented / co.total) * 100) : 100;
+      const coAllDone = co.total > 0 && co.consented === co.total;
       castOnlyProductions.push({
         id: prod.id,
         name: prod.name,
@@ -550,7 +553,7 @@ export async function buildOrgDashboard(
         sagProjectNumber: prod.sagProjectNumber,
         licenceCount: 0,
         healthScore: 0,
-        complianceStatus: "critical",
+        complianceStatus: coAllDone ? "partial" : "critical",
         requiredGaps: 0,
         obligations: [],
         licences: [],
@@ -560,7 +563,24 @@ export async function buildOrgDashboard(
     }
     const castActionItems: ActionItem[] = [];
     for (const p of castOnlyProductions) {
-      if (p.castOnboarding && p.castOnboarding.invited > 0) {
+      const co = p.castOnboarding;
+      if (!co) continue;
+      if (co.placeholder > 0) {
+        castActionItems.push({
+          productionName: p.name,
+          licenceId: "",
+          licenceProjectName: p.name,
+          obligationId: "platform-cast-no-email",
+          clauseRef: "Onboarding",
+          title: "Cast members with no email address",
+          severity: "required",
+          action: `${co.placeholder} cast member${co.placeholder > 1 ? "s have" : " has"} no email address on record — add their email from the production page to send an invite.`,
+          actionOwner: "producer",
+          urgency: "soon",
+          deadlineLabel: null,
+        });
+      }
+      if (co.invited > 0) {
         castActionItems.push({
           productionName: p.name,
           licenceId: "",
@@ -569,7 +589,7 @@ export async function buildOrgDashboard(
           clauseRef: "Onboarding",
           title: "Cast members awaiting vault account",
           severity: "required",
-          action: `${p.castOnboarding.invited} cast member${p.castOnboarding.invited > 1 ? "s have" : " has"} not yet created a vault account.`,
+          action: `${co.invited} cast member${co.invited > 1 ? "s have" : " has"} not yet created a vault account.`,
           actionOwner: "talent",
           urgency: "soon",
           deadlineLabel: null,
@@ -654,11 +674,12 @@ export async function buildOrgDashboard(
       .where(inArray(productionCast.productionId, allProductionIds))
       .all();
     for (const c of castRows) {
-      const cur = castStatsByProduction.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, pct: 0 };
+      const cur = castStatsByProduction.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, placeholder: 0, pct: 0 };
       cur.total++;
       if (c.status === "consented") cur.consented++;
       else if (c.status === "linked" || c.status === "scan_uploaded") cur.linked++;
       else if (c.status === "invited") cur.invited++;
+      else if (c.status === "placeholder") cur.placeholder++;
       castStatsByProduction.set(c.productionId, cur);
     }
     // Compute pct
@@ -851,6 +872,21 @@ export async function buildOrgDashboard(
   for (const prod of productionResults) {
     if (!prod.castOnboarding || prod.castOnboarding.total === 0) continue;
     const co = prod.castOnboarding;
+    if (co.placeholder > 0) {
+      actionItems.push({
+        productionName: prod.name,
+        licenceId: "",
+        licenceProjectName: prod.name,
+        obligationId: "platform-cast-no-email",
+        clauseRef: "Onboarding",
+        title: "Cast members with no email address",
+        severity: "required",
+        action: `${co.placeholder} cast member${co.placeholder > 1 ? "s have" : " has"} no email address on record — add their email from the production page to send an invite.`,
+        actionOwner: "producer",
+        urgency: "soon",
+        deadlineLabel: null,
+      });
+    }
     if (co.invited > 0) {
       actionItems.push({
         productionName: prod.name,
@@ -862,7 +898,7 @@ export async function buildOrgDashboard(
         severity: "required",
         action: `${co.invited} cast member${co.invited > 1 ? "s have" : " has"} not yet created a vault account. Resend invites.`,
         actionOwner: "talent",
-        urgency: co.invited > 0 ? "soon" : "upcoming",
+        urgency: "soon",
         deadlineLabel: null,
       });
     }
@@ -1302,11 +1338,12 @@ export async function buildPlatformDashboard(
         .where(inArray(productionCast.productionId, allProdIds))
         .all();
       for (const c of castRows) {
-        const cur = castByProd.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, pct: 0 };
+        const cur = castByProd.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, placeholder: 0, pct: 0 };
         cur.total++;
         if (c.status === "consented") cur.consented++;
         else if (c.status === "linked" || c.status === "scan_uploaded") cur.linked++;
         else if (c.status === "invited") cur.invited++;
+        else if (c.status === "placeholder") cur.placeholder++;
         castByProd.set(c.productionId, cur);
       }
       for (const [pid, stats] of castByProd) {
@@ -1331,6 +1368,21 @@ export async function buildPlatformDashboard(
         castOnboarding: co,
         pendingAcceptance: false,
       });
+      if (co.placeholder > 0) {
+        castActionItems.push({
+          productionName: prod.name,
+          licenceId: "",
+          licenceProjectName: prod.name,
+          obligationId: "platform-cast-no-email",
+          clauseRef: "Onboarding",
+          title: "Cast members with no email address",
+          severity: "required",
+          action: `${co.placeholder} cast member${co.placeholder > 1 ? "s have" : " has"} no email address — add their email from the production page to send an invite.`,
+          actionOwner: "producer",
+          urgency: "soon",
+          deadlineLabel: null,
+        });
+      }
       if (co.invited > 0) {
         castActionItems.push({
           productionName: prod.name,
@@ -1404,11 +1456,12 @@ export async function buildPlatformDashboard(
       .where(inArray(productionCast.productionId, allProductionIds))
       .all();
     for (const c of castRows) {
-      const cur = castStatsByProduction.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, pct: 0 };
+      const cur = castStatsByProduction.get(c.productionId) ?? { total: 0, consented: 0, linked: 0, invited: 0, placeholder: 0, pct: 0 };
       cur.total++;
       if (c.status === "consented") cur.consented++;
       else if (c.status === "linked" || c.status === "scan_uploaded") cur.linked++;
       else if (c.status === "invited") cur.invited++;
+      else if (c.status === "placeholder") cur.placeholder++;
       castStatsByProduction.set(c.productionId, cur);
     }
     for (const [pid, stats] of castStatsByProduction) {
@@ -1564,6 +1617,21 @@ export async function buildPlatformDashboard(
   for (const prod of productionResults) {
     if (!prod.castOnboarding || prod.castOnboarding.total === 0) continue;
     const co = prod.castOnboarding;
+    if (co.placeholder > 0) {
+      actionItems.push({
+        productionName: prod.name,
+        licenceId: "",
+        licenceProjectName: prod.name,
+        obligationId: "platform-cast-no-email",
+        clauseRef: "Onboarding",
+        title: "Cast members with no email address",
+        severity: "required",
+        action: `${co.placeholder} cast member${co.placeholder > 1 ? "s have" : " has"} no email address — add their email from the production page to send an invite.`,
+        actionOwner: "producer",
+        urgency: "soon",
+        deadlineLabel: null,
+      });
+    }
     if (co.invited > 0) {
       actionItems.push({
         productionName: prod.name,
