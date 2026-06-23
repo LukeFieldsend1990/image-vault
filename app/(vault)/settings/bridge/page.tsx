@@ -1,10 +1,13 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { bridgeTokens, bridgeDevices, bridgeGrants, licences, organisationMembers, organisations, productions, scanPackages } from "@/lib/db/schema";
+import { bridgeTokens, bridgeDevices, bridgeGrants, bridgeAttestations, renderBridgeAgents, licences, organisationMembers, organisations, productions, scanPackages } from "@/lib/db/schema";
 import { eq, isNull, and, gt, inArray } from "drizzle-orm";
 import BridgeSettingsClient from "./bridge-client";
 import { isIndustryRole } from "@/lib/auth/roles";
+import type { BridgeSetupStatus } from "@/lib/bridge/setup";
+
+const AGENT_ONLINE_THRESHOLD_SECS = 60;
 
 async function getSessionData() {
   try {
@@ -101,6 +104,41 @@ export default async function BridgeSettingsPage() {
       .all();
   }
 
+  // Guided-setup status for the primary org (first connection). Drives the
+  // 5-step checklist: token → install → local → test → attest.
+  let setupStatus: BridgeSetupStatus | null = null;
+  if (canManage && connectionIds.length > 0) {
+    const primary = connectionIds[0];
+    // Server component — runs once per request, not per render.
+    // eslint-disable-next-line react-hooks/purity
+    const now = Math.floor(Date.now() / 1000);
+
+    const agents = await db
+      .select({ lastHeartbeatAt: renderBridgeAgents.lastHeartbeatAt })
+      .from(renderBridgeAgents)
+      .where(and(eq(renderBridgeAgents.organisationId, primary.orgId), isNull(renderBridgeAgents.revokedAt)))
+      .all();
+
+    const attestations = await db
+      .select({ kind: bridgeAttestations.kind, attestedAt: bridgeAttestations.attestedAt })
+      .from(bridgeAttestations)
+      .where(eq(bridgeAttestations.organisationId, primary.orgId))
+      .all();
+
+    const liveRows = attestations.filter((a) => a.kind === "bridge_live");
+    setupStatus = {
+      orgId: primary.orgId,
+      orgName: primary.orgName,
+      orgShortCode: primary.orgShortCode,
+      hasToken: tokens.some((t) => !t.revokedAt),
+      agentEnrolled: agents.length > 0,
+      agentOnline: agents.some((a) => a.lastHeartbeatAt !== null && a.lastHeartbeatAt > now - AGENT_ONLINE_THRESHOLD_SECS),
+      localAttested: attestations.some((a) => a.kind === "local_access"),
+      liveAttested: liveRows.length > 0,
+      liveAttestedAt: liveRows.length > 0 ? Math.max(...liveRows.map((a) => a.attestedAt)) : null,
+    };
+  }
+
   // One "session" = one live (licenceId, deviceId). Each DCC open inserts a new grant,
   // so without dedup a single bridge reopening a package N times counts as N sessions.
   let activeGrantsByLicence: { licenceId: string; count: number }[] = [];
@@ -151,6 +189,7 @@ export default async function BridgeSettingsPage() {
       activeGrantsByLicence={activeGrantsByLicence}
       connectionIds={connectionIds}
       unlinkedLicences={unlinkedLicences}
+      setupStatus={setupStatus}
     />
   );
 }
