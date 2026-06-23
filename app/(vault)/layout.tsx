@@ -9,7 +9,7 @@ import { licences, talentProfiles, talentReps, talentSettings, users } from "@/l
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { hasPlatformGrant, hasInsurerGrant } from "@/lib/compliance/grants";
+import { hasPlatformGrant, hasInsurerGrant, getUnionIdsForUser } from "@/lib/compliance/grants";
 
 type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
 
@@ -172,6 +172,20 @@ async function getPlatformOversight(userId: string, email: string, role: Role): 
   }
 }
 
+// The Member roster is union-owned (one list per union). Only a union watcher —
+// a compliance user holding a platform-scoped union grant — maintains it; a
+// platform-wide regulator has no union and does not get the link. Admins manage
+// every union but use the talent nav, so they never see this compliance link.
+async function getUnionWatcher(userId: string, email: string, role: Role): Promise<boolean> {
+  if (isAdmin(email)) return true;
+  if (!isComplianceRole(role) || !userId) return false;
+  try {
+    return (await getUnionIdsForUser(getDb(), userId, { platformOnly: true })).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // Insurer watchers (compliance role holding an insurer grant) get the Underwriting
 // surface and land there by default.
 async function getInsurerWatcher(userId: string, role: Role): Promise<boolean> {
@@ -216,7 +230,7 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, agencyMember] = await Promise.all([
+  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher, agencyMember] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
@@ -225,6 +239,7 @@ export default async function VaultLayout({
     getShowCodes(sub),
     getPlatformOversight(sub, email, role),
     getInsurerWatcher(sub, role),
+    getUnionWatcher(sub, email, role),
     getAgencyMember(sub, role),
   ]);
 
@@ -247,7 +262,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} agencyMember={agencyMember} />
+            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} />
           </div>
 
           <div>

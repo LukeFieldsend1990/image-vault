@@ -390,7 +390,8 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
-    // Union member roster (CSV upload) — who's on Image Vault. Same grant gate.
+    // Union member roster (CSV upload) — who's on Image Vault. Union watchers only
+    // (filtered in NavLinks via unionWatcher); one list per union.
     href: "/members",
     label: "Members",
     icon: (
@@ -474,7 +475,7 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, agencyMember }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; agencyMember?: boolean }) {
+export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   // Agents (reps belonging to a talent agency) get an Agency surface, placed
@@ -488,10 +489,16 @@ export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, 
   if (complianceEnabled === false) {
     base = base.filter((item) => !item.href.startsWith("/compliance"));
   }
-  // The oversight Productions tracker + repeat-offender Scorecard are only for
-  // compliance watchers holding a platform-wide grant; hide them for scoped watchers.
+  // The oversight Productions tracker + repeat-offender Scorecard + Watchlist are
+  // only for compliance watchers holding a platform-wide grant; hide them for
+  // scoped watchers.
   if (isComplianceRole(role) && !platformOversight) {
-    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight" && item.href !== "/watchlist" && item.href !== "/members");
+    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight" && item.href !== "/watchlist");
+  }
+  // The Member roster is union-owned (one list per union). Only a union watcher
+  // maintains it — a platform-wide regulator has no union, so hide it from them.
+  if (isComplianceRole(role) && !unionWatcher) {
+    base = base.filter((item) => item.href !== "/members");
   }
   // Insurer watchers (compliance role with an insurer grant) get the Underwriting
   // surface, placed first as their primary landing.

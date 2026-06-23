@@ -161,8 +161,12 @@ export interface RosterUnionContext {
 }
 
 /**
- * Resolve which union's roster a caller is acting on. Admins manage any preset;
- * a union watcher manages only the union(s) of their platform-scoped grants.
+ * Resolve which union's roster a caller is acting on. The roster is union-owned —
+ * one list per union, maintained by that union — so access is union-bound:
+ *  - Admins manage every union preset.
+ *  - A union watcher with a platform-scoped union grant manages only that union(s).
+ *  - Anyone else (e.g. a regulator with a platform-wide grant) has no union to
+ *    maintain and is refused — the roster is not a cross-union oversight surface.
  * Returns an error shape (mapped to a 4xx by the route) when the caller has no
  * union to manage, or requested one they don't hold.
  */
