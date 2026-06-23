@@ -18,6 +18,7 @@ const ORG_TYPE_COLORS: Record<OrgType, { bg: string; color: string }> = {
   game_studio: { bg: "rgba(110,108,98,0.12)", color: "#6E6C62" },
   ai_company: { bg: "rgba(192,57,43,0.10)", color: "#C0392B" },
   broadcaster: { bg: "rgba(110,108,98,0.12)", color: "#6E6C62" },
+  agency: { bg: "rgba(75,99,130,0.14)", color: "#3f5680" },
   other: { bg: "var(--color-border)", color: "var(--color-muted)" },
 };
 

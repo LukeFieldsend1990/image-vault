@@ -198,6 +198,10 @@ export const talentReps = sqliteTable("talent_reps", {
   repId: text("rep_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   invitedBy: text("invited_by").notNull().references(() => users.id),
   createdAt: integer("created_at").notNull(), // unix timestamp
+  // The agency org this rep acts under, if any. Routing key for the agent inbox
+  // (#1): requests for this performer route to this agency. Nullable — legacy /
+  // unaffiliated reps have no agency and can be attached later by an admin.
+  agencyOrgId: text("agency_org_id").references(() => organisations.id, { onDelete: "set null" }),
 });
 
 export const talentProfiles = sqliteTable("talent_profiles", {

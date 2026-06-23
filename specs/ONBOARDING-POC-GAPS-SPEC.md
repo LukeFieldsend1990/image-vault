@@ -156,7 +156,16 @@ consentWithdrawals
 
 ## 4. Agency-as-organisation + agent onboarding + agent identity
 
-**Leverage: high. Effort: medium–large.**
+**Leverage: high. Effort: medium–large.** — **Status: implemented (scaffolding) on `claude/onboarding-poc-gaps-axna4w`.**
+
+### Decisions (locked)
+- **Agent identity:** an agent is the existing `rep` role + membership in an `agency` org (no new role).
+- **Codes:** individual agents keep `AG-####` (`users.shortCode`); the agency org gets a new `AGY-####` prefix (`orgPrefix` in `lib/codes/codes.ts`).
+- **Creation:** a platform admin provisions the agency org + invites its first administrator (`POST /api/admin/agencies`); the first member to sign up becomes the agency `owner`, every later agent a `member`.
+- **Membership tiers:** reuse `organisationMembers` `owner`/`admin`/`member` (owner/admin = agency admin who can invite agents).
+- **Onboarding arc:** dedicated agent wizard (welcome → password → 2FA → terms → done) at `/agent-onboarding`, landing on `/roster` for now (swaps to `/agent/inbox` when #1 ships).
+- **Routing key:** `talent_reps.agency_org_id` (nullable, migration `0077`); populated when an agency agent is linked to a performer, and backfillable for existing reps via `POST /api/admin/agencies/[id]/link-rep`.
+- **Existing reps:** left unattached; an admin attaches them to an agency later (the link-rep route also backfills `agency_org_id`).
 
 ### Prototype
 An **agency** (e.g. Curtis Brown) registers as the first-class org; its admin invites **agents**; agents have their own identity (codes `AG-####`) and an inbox where they act on behalf of performers (ties directly into #1). Agent onboarding is a guided arc: welcome → password → 2FA → terms → done → inbox.
