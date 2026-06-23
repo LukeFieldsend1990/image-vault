@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import RepPendingEngagements from "./rep-pending-engagements";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE" | "PENDING" | "APPROVED" | "DENIED"
@@ -365,6 +366,8 @@ export default function TalentProductionsClient({ talentId }: { talentId?: strin
           Productions you&apos;ve been engaged on and the licences governing your likeness.
         </p>
       </div>
+
+      <RepPendingEngagements />
 
       {loading && (
         <div className="space-y-4">
