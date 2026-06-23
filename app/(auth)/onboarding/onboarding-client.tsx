@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { TmdbCandidate } from "@/app/api/onboarding/search/route";
 
-type Step = "search" | "confirm" | "claim" | "done";
+type Step = "search" | "confirm" | "claim" | "union" | "done";
 
 interface ClaimableRole {
   castId: string;
@@ -104,6 +104,8 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
   const [claimable, setClaimable] = useState<ClaimableRole[]>([]);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimedIds, setClaimedIds] = useState<Set<string>>(new Set());
+  const [unionAffiliation, setUnionAffiliation] = useState("");
+  const [savingUnion, setSavingUnion] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -166,7 +168,11 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
         setConfirming(false);
         return;
       }
-      router.push(isUpdate ? "/settings" : "/dashboard");
+      if (isUpdate) {
+        router.push("/settings");
+      } else {
+        setStep("union");
+      }
     } catch {
       setConfirming(false);
     }
@@ -188,7 +194,25 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ skip: true }),
     });
-    router.push(isUpdate ? "/settings" : "/dashboard");
+    if (isUpdate) {
+      router.push("/settings");
+    } else {
+      setStep("union");
+    }
+  }
+
+  async function saveUnionAffiliation() {
+    setSavingUnion(true);
+    try {
+      await fetch("/api/onboarding/union-affiliation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unionAffiliation: unionAffiliation.trim() || null }),
+      });
+    } finally {
+      setSavingUnion(false);
+      router.push("/dashboard");
+    }
   }
 
   // ── Layout ───────────────────────────────────────────────────────────────────
@@ -408,10 +432,67 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
             </div>
 
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={() => setStep("union")}
               className="btn-accent w-full px-4 py-3.5 text-sm font-medium tracking-wide text-white transition"
             >
-              Continue to my vault
+              Continue
+            </button>
+          </div>
+        )}
+
+        {/* ── Step: Union affiliation ── */}
+        {step === "union" && (
+          <div className="w-full max-w-sm">
+            <h1 className="mb-1 text-3xl font-semibold tracking-tight text-[--color-ink]">
+              Union membership
+            </h1>
+            <p className="mb-8 text-sm" style={{ color: "var(--color-muted)" }}>
+              Are you a member of a performers&apos; union? This helps unions track your activity on the platform.
+            </p>
+
+            {/* Quick-select buttons */}
+            <div className="flex gap-2 mb-4">
+              {["SAG-AFTRA", "Equity"].map((u) => (
+                <button
+                  key={u}
+                  onClick={() => setUnionAffiliation((prev) => prev === u ? "" : u)}
+                  className="px-4 py-2 rounded text-sm font-medium border transition"
+                  style={{
+                    borderColor: unionAffiliation === u ? "var(--color-ink)" : "var(--color-border)",
+                    background: unionAffiliation === u ? "var(--color-ink)" : "transparent",
+                    color: unionAffiliation === u ? "white" : "var(--color-muted)",
+                  }}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+
+            {/* Free-text input */}
+            <input
+              type="text"
+              value={unionAffiliation}
+              onChange={(e) => setUnionAffiliation(e.target.value)}
+              placeholder="Other union or free text…"
+              className="w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-ink] mb-6"
+              style={{ borderRadius: "var(--radius)" }}
+            />
+
+            <button
+              onClick={() => void saveUnionAffiliation()}
+              disabled={savingUnion}
+              className="btn-accent w-full px-4 py-3.5 text-sm font-medium tracking-wide text-white transition disabled:opacity-50 mb-3"
+            >
+              {savingUnion ? "Saving…" : unionAffiliation.trim() ? "Save and enter vault" : "Enter vault"}
+            </button>
+
+            <button
+              onClick={() => void saveUnionAffiliation()}
+              disabled={savingUnion}
+              className="w-full text-xs underline underline-offset-2 transition"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Skip — I&apos;ll set this later
             </button>
           </div>
         )}

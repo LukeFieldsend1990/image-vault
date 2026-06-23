@@ -24,7 +24,7 @@ export async function GET(
 
   const [talent, profile, settings] = await Promise.all([
     db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, talentId)).get(),
-    db.select({ fullName: talentProfiles.fullName }).from(talentProfiles).where(eq(talentProfiles.userId, talentId)).get(),
+    db.select({ fullName: talentProfiles.fullName, unionAffiliation: talentProfiles.unionAffiliation }).from(talentProfiles).where(eq(talentProfiles.userId, talentId)).get(),
     db.select().from(talentSettings).where(eq(talentSettings.talentId, talentId)).get(),
   ]);
 
@@ -34,6 +34,7 @@ export async function GET(
     talentId,
     email: talent.email,
     fullName: profile?.fullName ?? null,
+    unionAffiliation: profile?.unionAffiliation ?? null,
     pipelineEnabled: settings?.pipelineEnabled ?? false,
     talentSharePct: settings?.talentSharePct ?? 80,
     agencySharePct: settings?.agencySharePct ?? 10,
@@ -62,10 +63,11 @@ export async function PUT(
     talentSharePct?: number;
     agencySharePct?: number;
     platformSharePct?: number;
+    unionAffiliation?: string | null;
   };
 
   // If all three percentages are provided, validate they sum to 100
-  const { pipelineEnabled, talentSharePct, agencySharePct, platformSharePct } = body;
+  const { pipelineEnabled, talentSharePct, agencySharePct, platformSharePct, unionAffiliation } = body;
   const hasAllPcts = talentSharePct !== undefined && agencySharePct !== undefined && platformSharePct !== undefined;
   const hasAnyPct = talentSharePct !== undefined || agencySharePct !== undefined || platformSharePct !== undefined;
 
@@ -115,6 +117,14 @@ export async function PUT(
       updatedBy: session.sub,
       updatedAt: now,
     });
+  }
+
+  if (unionAffiliation !== undefined) {
+    const value = typeof unionAffiliation === "string" ? unionAffiliation.trim() || null : null;
+    await db
+      .update(talentProfiles)
+      .set({ unionAffiliation: value })
+      .where(eq(talentProfiles.userId, talentId));
   }
 
   return NextResponse.json({ ok: true });

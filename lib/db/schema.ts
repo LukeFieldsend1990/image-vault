@@ -216,6 +216,7 @@ export const talentProfiles = sqliteTable("talent_profiles", {
   popularity: real("popularity"),
   onboardedAt: integer("onboarded_at").notNull(), // unix timestamp
   pitchVignettesEnabled: integer("pitch_vignettes_enabled", { mode: "boolean" }).notNull().default(false),
+  unionAffiliation: text("union_affiliation"), // self-declared: "SAG-AFTRA", "Equity", free text, or null
 });
 
 export const invites = sqliteTable("invites", {
