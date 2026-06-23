@@ -954,6 +954,41 @@ export function securityAlertEmail(p: SecurityAlertEmailParams): { subject: stri
   };
 }
 
+// ── Rep representation enquiry (TMDB cast outreach) ─────────────────────────
+
+export interface RepRepresentationEnquiryParams {
+  repEmail: string;
+  actorName: string;
+  characterName?: string;
+  productionName: string;
+  companyName: string;
+  coordinatorEmail: string;
+  rosterUrl: string;
+}
+
+export function repRepresentationEnquiryEmail(p: RepRepresentationEnquiryParams): { subject: string; html: string } {
+  const characterRow = p.characterName
+    ? `<div class="kv-row"><span class="kv-key">Character</span><span class="kv-val">${p.characterName}</span></div>`
+    : "";
+  return {
+    subject: `Representation enquiry — ${p.actorName} / ${p.productionName}`,
+    html: layout(`
+      <p>We are building the cast list for <strong>${p.productionName}</strong> on Image Vault and are trying to reach <strong>${p.actorName}</strong>.</p>
+      <p>If you represent ${p.actorName}, we'd like to set them up on the platform so they can upload their scan package and manage licence approvals for this production.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Actor</span><span class="kv-val">${p.actorName}</span></div>
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        ${characterRow}
+        <div class="kv-row"><span class="kv-key">Coordinator</span><span class="kv-val">${p.coordinatorEmail}</span></div>
+      </div>
+      <p>If you represent this actor, visit your Image Vault roster to link them. Once linked they'll receive an invitation to join the production.</p>
+      <a class="btn" href="${p.rosterUrl}">Go to my roster</a>
+      <p class="muted" style="margin-top: 24px;">If you do not represent ${p.actorName}, no action is needed — please disregard this message.</p>
+    `),
+  };
+}
+
 export interface ScanTransferReceivedParams {
   fromOrgName: string;
   lookLabel: string;
