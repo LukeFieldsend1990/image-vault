@@ -720,8 +720,24 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                                 No scan package attached
                               </p>
                               <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                                Your client hasn&apos;t uploaded a scan yet. Ask them to upload a scan package or arrange a studio transfer.
+                                No scan has been uploaded for this licence yet. You can upload one on your client&apos;s behalf, or check for an incoming studio transfer.
                               </p>
+                              <div className="flex gap-2 flex-wrap pt-1">
+                                <Link
+                                  href="/dashboard"
+                                  className="rounded px-3 py-1.5 text-xs font-medium text-white"
+                                  style={{ background: "var(--color-accent)" }}
+                                >
+                                  Upload on their behalf
+                                </Link>
+                                <Link
+                                  href="/transfers"
+                                  className="rounded px-3 py-1.5 text-xs font-medium"
+                                  style={{ border: "1px solid var(--color-border)", color: "var(--color-ink)", background: "transparent" }}
+                                >
+                                  Check for incoming transfers
+                                </Link>
+                              </div>
                             </>
                           ) : (
                             <>
