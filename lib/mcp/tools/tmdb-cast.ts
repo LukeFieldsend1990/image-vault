@@ -25,7 +25,10 @@
  *   6. resolve_cast_member           → once a rep confirms, attach email + invite
  */
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+
+
 import { registerMcpTool } from "../registry";
 import {
   users,
@@ -56,7 +59,11 @@ const MAX_OUTREACH_REPS = 30;
 
 function getTmdbKey(): string | null {
   try {
-    const { env } = getRequestContext();
+
+    const { env } = getCloudflareContext();
+
+    const { env } = getCloudflareContext();
+
     const e = env as unknown as Record<string, string | undefined>;
     return e.TMDB_API_KEY ?? null;
   } catch {
@@ -66,7 +73,11 @@ function getTmdbKey(): string | null {
 
 function getBaseUrl(): string {
   try {
-    const { env } = getRequestContext();
+
+    const { env } = getCloudflareContext();
+
+    const { env } = getCloudflareContext();
+
     const e = env as unknown as Record<string, string | undefined>;
     return e.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
   } catch {
