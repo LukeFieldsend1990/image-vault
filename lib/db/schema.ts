@@ -1145,8 +1145,11 @@ export const complianceGrants = sqliteTable("compliance_grants", {
   // SAG watcher only sees SAG and an Equity watcher only sees Equity. Null for
   // regulator/insurer grants and for legacy union grants predating attribution.
   unionId: text("union_id"),
-  scope: text("scope", { enum: ["platform", "organisation", "production", "talent"] }).notNull(),
-  scopeId: text("scope_id"), // null = platform-wide
+  // "union" scope = read-only visibility into a union's affiliated entities: the
+  // on-platform talent on the union's member roster and the productions those
+  // talent are involved in. scope_id holds the union id (sag_aftra | equity).
+  scope: text("scope", { enum: ["platform", "organisation", "production", "talent", "union"] }).notNull(),
+  scopeId: text("scope_id"), // null = platform-wide; union id for scope = "union"
   grantedBy: text("granted_by").references(() => users.id),
   createdAt: integer("created_at").notNull(),
   revokedAt: integer("revoked_at"),

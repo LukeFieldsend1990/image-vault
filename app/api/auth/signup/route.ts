@@ -227,7 +227,9 @@ export async function POST(req: NextRequest) {
     // invite's org_subtype carries the compliance subtype (a legacy production
     // invite with none defaults to insurer); union_id attributes a union grant.
     // Insurers are bound per production, so they only auto-grant when the invite
-    // names one; a union/regulator invited platform-wide gets a platform grant.
+    // names one; a union invited without a production gets a union-scope grant
+    // (read-only visibility into its affiliated talent + productions); a regulator
+    // invited platform-wide gets a platform grant.
     if (role === "compliance") {
       const sub = inviteRow.orgSubtype;
       const subtype =
@@ -238,12 +240,19 @@ export async function POST(req: NextRequest) {
             : null;
       const canGrant = subtype === "insurer" ? !!inviteRow.productionId : !!subtype;
       if (subtype && canGrant) {
+        // Union watchers without a named production default to the union scope, not
+        // platform-wide, so they see only their union's affiliated entities.
+        const scope = inviteRow.productionId
+          ? "production"
+          : subtype === "union"
+            ? "union"
+            : "platform";
         try {
           await createGrant(db, {
             complianceUserId: userId,
             subtype,
             unionId: subtype === "union" ? inviteRow.unionId : null,
-            scope: inviteRow.productionId ? "production" : "platform",
+            scope,
             scopeId: inviteRow.productionId ?? null,
             grantedBy: inviteRow.invitedBy,
           });

@@ -128,6 +128,7 @@ export async function buildComplianceRolesOverview(db: Db): Promise<ComplianceRo
   function labelFor(scope: string, scopeId: string | null): string | null {
     if (scope === "platform") return "Platform-wide";
     if (!scopeId) return null;
+    if (scope === "union") return getUnionPreset(scopeId)?.shortName ?? scopeId;
     if (scope === "production") return prodName.get(scopeId) ?? null;
     if (scope === "organisation") return orgName.get(scopeId) ?? null;
     if (scope === "talent") return talentName.get(scopeId) ?? null;

@@ -1,15 +1,16 @@
 import { getDb } from "@/lib/db";
-import { complianceGrants, users } from "@/lib/db/schema";
+import { complianceGrants, licences, users } from "@/lib/db/schema";
 import { and, eq, isNull, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isComplianceRole } from "@/lib/auth/roles";
 import { getUnionPreset } from "./unions";
+import { affiliatedProductionIds, affiliatedTalentIds } from "./affiliation";
 
 type Db = ReturnType<typeof getDb>;
 
 export const COMPLIANCE_SUBTYPES = ["union", "regulator", "insurer"] as const;
-export const COMPLIANCE_SCOPES = ["platform", "organisation", "production", "talent"] as const;
+export const COMPLIANCE_SCOPES = ["platform", "organisation", "production", "talent", "union"] as const;
 export type ComplianceSubtype = (typeof COMPLIANCE_SUBTYPES)[number];
 export type ComplianceScope = (typeof COMPLIANCE_SCOPES)[number];
 
@@ -22,6 +23,9 @@ export type ComplianceScope = (typeof COMPLIANCE_SCOPES)[number];
 export const INSURER_ALLOWED_SCOPES: readonly ComplianceScope[] = ["production", "talent"];
 
 export function isAllowedScopeForSubtype(subtype: string, scope: string): boolean {
+  // The "union" scope (a union's affiliated talent + productions) only makes sense
+  // for a union watcher — never a regulator or insurer.
+  if (scope === "union") return subtype === "union";
   if (subtype === "insurer") return (INSURER_ALLOWED_SCOPES as readonly string[]).includes(scope);
   return (COMPLIANCE_SCOPES as readonly string[]).includes(scope);
 }
@@ -78,6 +82,21 @@ export async function hasPlatformGrant(db: Db, userId: string): Promise<boolean>
 }
 
 /**
+ * Union ids the user watches via a union-*scope* grant (scope = "union"), i.e. the
+ * unions whose affiliated talent + productions they may read. Distinct from
+ * getUnionIdsForUser, which covers attribution across all union grants regardless
+ * of scope.
+ */
+export async function getUnionScopeUnionIds(db: Db, userId: string): Promise<string[]> {
+  const grants = await getActiveGrants(db, userId);
+  const ids = new Set<string>();
+  for (const g of grants) {
+    if (g.scope === "union" && g.subtype === "union" && g.scopeId) ids.add(g.scopeId);
+  }
+  return [...ids];
+}
+
+/**
  * Whether a session may use the platform-wide oversight surfaces (platform
  * compliance dashboard, productions tracker, cast visibility): admins always, and
  * compliance watchers only while holding an active platform-wide grant.
@@ -93,8 +112,9 @@ export async function canViewPlatformOversight(
 
 /**
  * Whether a compliance user may view evidence for (scope, scopeId).
- * A platform-wide grant authorises any scope; otherwise the grant must match the
- * requested scope + id exactly.
+ * A platform-wide grant authorises any scope; an exact scope + id grant matches
+ * directly; and a union-scope grant authorises the talent, productions and
+ * licences affiliated with that union (see lib/compliance/affiliation).
  */
 export async function hasGrantForScope(
   db: Db,
@@ -103,9 +123,38 @@ export async function hasGrantForScope(
   scopeId: string,
 ): Promise<boolean> {
   const grants = await getActiveGrants(db, userId);
-  return grants.some(
-    (g) => g.scope === "platform" || (g.scope === scope && g.scopeId === scopeId),
-  );
+  if (grants.some((g) => g.scope === "platform" || (g.scope === scope && g.scopeId === scopeId))) {
+    return true;
+  }
+
+  // Union-scope grants extend visibility to the union's affiliated entities.
+  const unionIds = [
+    ...new Set(
+      grants
+        .filter((g) => g.scope === "union" && g.subtype === "union" && g.scopeId)
+        .map((g) => g.scopeId as string),
+    ),
+  ];
+  if (unionIds.length === 0) return false;
+
+  if (scope === "talent") {
+    return (await affiliatedTalentIds(db, unionIds)).has(scopeId);
+  }
+  if (scope === "production") {
+    return (await affiliatedProductionIds(db, unionIds)).has(scopeId);
+  }
+  if (scope === "licence") {
+    // A licence is in scope if its talent or its production is affiliated.
+    const lic = await db
+      .select({ talentId: licences.talentId, productionId: licences.productionId })
+      .from(licences)
+      .where(eq(licences.id, scopeId))
+      .get();
+    if (!lic) return false;
+    if ((await affiliatedTalentIds(db, unionIds)).has(lic.talentId)) return true;
+    if (lic.productionId && (await affiliatedProductionIds(db, unionIds)).has(lic.productionId)) return true;
+  }
+  return false;
 }
 
 /** Whether a compliance user holds any active insurer grant (i.e. is an insurer watcher). */
@@ -203,17 +252,26 @@ export async function createGrant(
     );
   }
 
-  // union_id only applies to union grants; reject a stray id on other subtypes and
-  // validate it against the known union presets when present.
-  const unionId = params.subtype === "union" ? params.unionId ?? null : null;
+  // Every union watcher must be tied to one of the supported unions: a union grant
+  // always carries a valid union_id, and no other subtype ever does.
   if (params.subtype !== "union" && params.unionId) {
     throw new GrantScopeError("union_id is only valid on union grants");
   }
-  if (unionId && !getUnionPreset(unionId)) {
-    throw new GrantScopeError(`Unknown union: ${unionId}`);
+  let unionId: string | null = null;
+  if (params.subtype === "union") {
+    if (!params.unionId) throw new GrantScopeError("union grants require a unionId");
+    if (!getUnionPreset(params.unionId)) throw new GrantScopeError(`Unknown union: ${params.unionId}`);
+    unionId = params.unionId;
   }
 
-  const scopeId = params.scope === "platform" ? null : params.scopeId;
+  // A union-scope grant's scope_id IS the union id, so it is derived from union_id
+  // (which subtype "union" guarantees) rather than supplied separately.
+  const scopeId =
+    params.scope === "platform"
+      ? null
+      : params.scope === "union"
+        ? unionId
+        : params.scopeId;
 
   const existing = await db
     .select({ id: complianceGrants.id })
