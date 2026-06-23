@@ -591,7 +591,7 @@ function LicenceObligationPanel({ lic }: { lic: LicenceSummary }) {
 function CastOnboardingBar({ co, productionId }: { co: CastOnboarding; productionId: string | null }) {
   if (co.total === 0) return null;
   const color = co.pct === 100 ? "#1a7f37" : co.pct > 50 ? "#b45309" : "#c0392b";
-  const pending = co.invited + co.linked;
+  const pending = co.placeholder + co.invited + co.linked;
   return (
     <div className="rounded p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
       <div className="flex items-center justify-between mb-1.5">
@@ -607,6 +607,11 @@ function CastOnboardingBar({ co, productionId }: { co: CastOnboarding; productio
       </div>
       {pending > 0 && (
         <div className="flex gap-3 mt-1.5 flex-wrap">
+          {co.placeholder > 0 && (
+            <span className="text-[10px]" style={{ color: "#c0392b" }}>
+              ⚠ {co.placeholder} no email yet
+            </span>
+          )}
           {co.invited > 0 && (
             <span className="text-[10px]" style={{ color: "#b45309" }}>
               ⏳ {co.invited} invite{co.invited > 1 ? "s" : ""} pending
@@ -751,14 +756,18 @@ function ProductionCard({
 
 // Only link to pages that actually exist. /licences/[id] has no detail page —
 // only /scrub and /download exist — so 39.E/H/I/J have no linkable destination.
-const ACTION_LINKS: Record<string, (licenceId: string) => string> = {
+const ACTION_LINKS: Record<string, (licenceId: string, productionName?: string) => string> = {
   "platform-scrub-attestation": (id) => `/licences/${id}/scrub`,
 };
 
-function ActionRow({ item, domId, highlight }: { item: ActionItem; domId?: string; highlight?: boolean }) {
+// Cast-onboarding action items carry productionId via licenceProjectName (the prod name),
+// but we resolve the production link from the dashboard data below.
+const CAST_ACTION_IDS = new Set(["platform-cast-no-email", "platform-cast-invite-pending", "platform-cast-scan-pending"]);
+
+function ActionRow({ item, domId, highlight, productionHref }: { item: ActionItem; domId?: string; highlight?: boolean; productionHref?: string | null }) {
   const urgColor = URGENCY_COLORS[item.urgency];
   const linkFn = ACTION_LINKS[item.obligationId];
-  const href = linkFn ? linkFn(item.licenceId) : null;
+  const href = linkFn ? linkFn(item.licenceId) : (CAST_ACTION_IDS.has(item.obligationId) ? (productionHref ?? null) : null);
 
   return (
     <div
@@ -952,6 +961,12 @@ export default function ComplianceDashboardClient() {
     gapInstancesByObligation.set(a.obligationId, list);
   });
 
+  // Build a name→href map for productions so cast onboarding action rows can link.
+  const productionHrefByName = new Map<string, string>();
+  for (const prod of data.productions) {
+    if (prod.id) productionHrefByName.set(prod.name, `/productions/${prod.id}`);
+  }
+
   function scrollToActionQueue() {
     actionQueueRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -1120,6 +1135,7 @@ export default function ComplianceDashboardClient() {
                 item={item}
                 domId={`cq-action-${i}`}
                 highlight={highlightedAction === `cq-action-${i}`}
+                productionHref={productionHrefByName.get(item.productionName) ?? null}
               />
             ))}
           </div>
@@ -1127,7 +1143,9 @@ export default function ComplianceDashboardClient() {
       ) : (
         <div className={card} style={cardStyle}>
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            No open action items — all obligations are met or not applicable.
+            {data.productions.length > 0 && (data.complianceStatus === "critical" || data.complianceStatus === "gap")
+              ? "No obligation gaps to action — complete cast onboarding above to advance licence status."
+              : "No open action items — all obligations are met or not yet applicable."}
           </p>
         </div>
       )}
