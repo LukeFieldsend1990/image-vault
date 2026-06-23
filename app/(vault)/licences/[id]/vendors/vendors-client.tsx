@@ -26,6 +26,18 @@ interface LicenceSummary {
   licenceType: string | null;
   validFrom: number;
   validTo: number;
+  productionId: string | null;
+}
+
+interface ProdVendor {
+  id: string;
+  vendorOrgId: string | null;
+  orgName: string | null;
+  orgType: string | null;
+  orgShortCode: string | null;
+  vendorAuditPassed: boolean | null;
+  invitedOrgName: string | null;
+  status: string;
 }
 
 interface OrgResult {
@@ -55,6 +67,8 @@ export default function VendorsClient({ licenceId }: { licenceId: string }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<OrgResult[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Production vendors (only loaded when canManage + productionId set)
+  const [prodVendors, setProdVendors] = useState<ProdVendor[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -65,6 +79,16 @@ export default function VendorsClient({ licenceId }: { licenceId: string }) {
       setMemberOrgIds(d.memberOrgIds ?? []);
       setAuths(d.authorisations ?? []);
       setLicence(d.licence ?? null);
+      // Fetch the production's vendor list for the direct-authorise picker
+      if (d.canManage && d.licence?.productionId) {
+        try {
+          const pvRes = await fetch(`/api/productions/${d.licence.productionId}/vendors`);
+          if (pvRes.ok) {
+            const pv = await pvRes.json() as { vendors?: ProdVendor[] };
+            setProdVendors((pv.vendors ?? []).filter((v) => v.vendorOrgId && v.status === "active"));
+          }
+        } catch { /* non-fatal */ }
+      }
     } catch {
       setErr("Could not load vendor access.");
     } finally {
@@ -202,7 +226,50 @@ export default function VendorsClient({ licenceId }: { licenceId: string }) {
         <div>
           {pickerFor === "direct" ? (
             <div className="rounded border" style={{ borderColor: "var(--color-border)" }}>
-              <Picker onPick={(orgId) => void authorise(orgId)} />
+              <div className="px-4 py-3 border-b" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+                <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>Select a vendor from this production</p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--color-muted)" }}>Only vendors already attached to the production can be authorised here.</p>
+              </div>
+              {prodVendors.length === 0 ? (
+                <div className="px-4 py-3">
+                  <p className="text-sm" style={{ color: "var(--color-muted)" }}>No vendors attached to this production yet. Add them from the production page first.</p>
+                </div>
+              ) : (
+                <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
+                  {prodVendors.map((v) => {
+                    const alreadyAuthorised = auths.some((a) => a.vendorOrgId === v.vendorOrgId && a.status === "active");
+                    return (
+                      <div key={v.id} className="flex items-center justify-between px-4 py-2.5 gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm truncate" style={{ color: alreadyAuthorised ? "var(--color-muted)" : "var(--color-ink)" }}>
+                            {v.orgName ?? v.invitedOrgName}
+                          </span>
+                          <OrgTypeBadge type={v.orgType} />
+                          <CodeTag code={v.orgShortCode} />
+                          {v.vendorAuditPassed
+                            ? <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#16653418", color: "#166534" }}>Audit ✓</span>
+                            : <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "rgba(217,119,6,0.12)", color: "#b45309" }}>No audit</span>}
+                        </div>
+                        {alreadyAuthorised ? (
+                          <span className="text-[11px] shrink-0" style={{ color: "var(--color-muted)" }}>Already authorised</span>
+                        ) : (
+                          <button
+                            onClick={() => void authorise(v.vendorOrgId!)}
+                            disabled={busy}
+                            className="text-xs px-3 py-1 rounded font-medium disabled:opacity-40 shrink-0"
+                            style={{ background: "var(--color-ink)", color: "var(--color-bg)" }}
+                          >
+                            Authorise
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="px-4 py-2.5 border-t" style={{ borderColor: "var(--color-border)" }}>
+                <button onClick={() => setPickerFor(null)} className="text-xs" style={{ color: "var(--color-muted)" }}>Cancel</button>
+              </div>
             </div>
           ) : (
             <button onClick={() => setPickerFor("direct")} className="text-xs font-medium px-4 py-2 rounded" style={{ background: "var(--color-ink)", color: "var(--color-bg)" }}>Authorise a vendor</button>

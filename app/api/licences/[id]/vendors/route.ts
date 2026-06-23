@@ -24,6 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       licenceType: licences.licenceType,
       validFrom: licences.validFrom,
       validTo: licences.validTo,
+      productionId: licences.productionId,
     })
     .from(licences)
     .where(eq(licences.id, id))
@@ -69,6 +70,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     licenceType: licence.licenceType,
     validFrom: licence.validFrom,
     validTo: licence.validTo,
+    productionId: licence.productionId ?? null,
   };
 
   return NextResponse.json({ canManage: isProd, memberOrgIds: Array.from(memberOrgIds), authorisations: rows, licence: licenceSummary });
