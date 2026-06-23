@@ -6,6 +6,8 @@ import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 import { formatScan } from "@/lib/codes/codes";
 import { computePurgeGrace, formatGraceRemaining } from "@/lib/bridge/purgeGrace";
+import BridgeSetupChecklist from "../settings/bridge/bridge-setup-checklist";
+import type { BridgeSetupStatus } from "@/lib/bridge/setup";
 
 interface NamedPackage {
   packageId: string;
@@ -479,7 +481,7 @@ function EmptyState({ role }: { role: string }) {
   );
 }
 
-export default function BridgeClient({ role }: { role: string }) {
+export default function BridgeClient({ role, setupStatus }: { role: string; setupStatus?: BridgeSetupStatus | null }) {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
@@ -566,7 +568,13 @@ export default function BridgeClient({ role }: { role: string }) {
         </div>
       )}
 
-      {!loading && agents.length === 0 && <EmptyState role={role} />}
+      {!loading && agents.length === 0 && isIndustryRole(role) && setupStatus && (
+        <BridgeSetupChecklist
+          setup={setupStatus}
+          vaultUrl={process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io"}
+        />
+      )}
+      {!loading && agents.length === 0 && (!isIndustryRole(role) || !setupStatus) && <EmptyState role={role} />}
 
       {!loading && agents.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
