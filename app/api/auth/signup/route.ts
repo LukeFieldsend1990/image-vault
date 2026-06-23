@@ -46,6 +46,9 @@ export async function POST(req: NextRequest) {
 
   // Validate invite token for talent and rep roles
   let inviteRow: typeof invites.$inferSelect | undefined;
+  // True when this signup is an agency agent — routes the post-2FA flow through
+  // the agent terms step instead of the default talent/rep landing.
+  let agentOnboarding = false;
 
   if (INVITE_REQUIRED_ROLES.includes(role as Role)) {
     if (!inviteToken) {
@@ -153,6 +156,40 @@ export async function POST(req: NextRequest) {
         .update(productionCast)
         .set({ repId: userId, repInviteId: null })
         .where(eq(productionCast.id, inviteRow.castId));
+    }
+
+    // Agency agent: a rep invited against an agency org (the invite carries the
+    // organisation_id) joins that agency on signup. The first member becomes the
+    // agency owner (the founding admin provisioned by a platform admin); every
+    // subsequent agent joins as a regular member.
+    if (role === "rep" && inviteRow.organisationId) {
+      try {
+        const alreadyMember = await db
+          .select({ userId: organisationMembers.userId })
+          .from(organisationMembers)
+          .where(and(
+            eq(organisationMembers.organisationId, inviteRow.organisationId),
+            eq(organisationMembers.userId, userId),
+          ))
+          .get();
+        if (!alreadyMember) {
+          const existingCount = await db
+            .select({ userId: organisationMembers.userId })
+            .from(organisationMembers)
+            .where(eq(organisationMembers.organisationId, inviteRow.organisationId))
+            .all();
+          await db.insert(organisationMembers).values({
+            organisationId: inviteRow.organisationId,
+            userId,
+            memberRole: existingCount.length === 0 ? "owner" : "member",
+            invitedBy: inviteRow.invitedBy,
+            joinedAt: now,
+          });
+        }
+        agentOnboarding = true;
+      } catch {
+        // Don't block signup; an admin can re-attach membership if this fails.
+      }
     }
 
     // Admin concierge: an industry user invited to a pre-built production becomes
@@ -351,6 +388,11 @@ export async function POST(req: NextRequest) {
   const setupPayload: Record<string, unknown> = { userId, email: normalEmail, role };
   if (role === "industry" && inviteRow?.orgSubtype) {
     setupPayload.orgSubtype = inviteRow.orgSubtype;
+  }
+  // Agency agents continue to the agent terms step after 2FA, then land on the
+  // roster (the agent inbox surface ships with gap #1).
+  if (agentOnboarding) {
+    setupPayload.next = "/agent-onboarding/terms";
   }
   await kv.put(`setup:${setupToken}`, JSON.stringify(setupPayload), { expirationTtl: 1800 });
 

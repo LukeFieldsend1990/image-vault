@@ -4,6 +4,7 @@ import { talentReps, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { createNotification } from "@/lib/notifications/create";
+import { getAgencyMembership } from "@/lib/agency/membership";
 
 /** GET /api/delegation — list reps linked to the authed talent */
 export async function GET(req: NextRequest) {
@@ -84,12 +85,17 @@ export async function POST(req: NextRequest) {
   const now = Math.floor(Date.now() / 1000);
   const id = crypto.randomUUID();
 
+  // If this rep is an agency agent, stamp the routing key so the performer's
+  // requests route to that agency's inbox (gap #1).
+  const agency = await getAgencyMembership(db, rep.id);
+
   await db.insert(talentReps).values({
     id,
     talentId: session.sub,
     repId: rep.id,
     invitedBy: session.sub,
     createdAt: now,
+    agencyOrgId: agency?.organisationId ?? null,
   });
 
   void createNotification(db, {

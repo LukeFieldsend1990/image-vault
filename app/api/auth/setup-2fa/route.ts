@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired setup token" }, { status: 401 });
   }
 
-  const { userId, email } = JSON.parse(raw) as { userId: string; email: string; role: string };
+  const { userId, email, next } = JSON.parse(raw) as { userId: string; email: string; role: string; next?: string };
   const db = getDb();
 
   // Idempotent: reuse existing unverified TOTP secret if present
@@ -54,7 +54,9 @@ export async function GET(req: NextRequest) {
   }
 
   const otpauthUrl = buildOtpauthUrl(email, secret);
-  return NextResponse.json({ otpauthUrl, secret }, { status: 200 });
+  // `next` lets bespoke onboarding arcs (e.g. agents) route past 2FA to their
+  // own follow-up step; the page falls back to /onboarding when absent.
+  return NextResponse.json({ otpauthUrl, secret, next: next ?? null }, { status: 200 });
 }
 
 /** POST /api/auth/setup-2fa

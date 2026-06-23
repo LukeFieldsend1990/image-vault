@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails, productionInclusionRecords } from "@/lib/db/schema";
-import { sql, inArray } from "drizzle-orm";
+import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails, productionInclusionRecords, organisations } from "@/lib/db/schema";
+import { sql, inArray, eq } from "drizzle-orm";
 import { getAllSkills } from "@/lib/skills/registry";
 import "@/lib/skills/definitions";
 
@@ -96,6 +96,12 @@ export default async function AdminOverviewPage() {
   const userEmailMap = new Map(dlUsers.map((u) => [u.id, u.email]));
   const fileNameMap = new Map(dlFiles.map((f) => [f.id, f.filename]));
 
+  const agencyCount = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(organisations)
+    .where(eq(organisations.orgType, "agency"))
+    .get();
+
   const statCards = [
     {
       label: "Total Users",
@@ -156,6 +162,12 @@ export default async function AdminOverviewPage() {
       value: String(inclusionFlaggedCount?.n ?? 0),
       sub: "flagged for review",
       href: "/admin/inclusions",
+    },
+    {
+      label: "Talent Agencies",
+      value: String(agencyCount?.n ?? 0),
+      sub: "provision · invite agents",
+      href: "/admin/agencies",
     },
   ];
 

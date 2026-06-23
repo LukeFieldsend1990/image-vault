@@ -11,6 +11,7 @@ function Setup2faInner() {
 
   const [otpauthUrl, setOtpauthUrl] = useState("");
   const [secret, setSecret] = useState("");
+  const [nextStep, setNextStep] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
@@ -25,13 +26,14 @@ function Setup2faInner() {
     }
 
     fetch(`/api/auth/setup-2fa?token=${encodeURIComponent(token)}`)
-      .then((r) => r.json() as Promise<{ otpauthUrl?: string; secret?: string; error?: string }>)
+      .then((r) => r.json() as Promise<{ otpauthUrl?: string; secret?: string; next?: string | null; error?: string }>)
       .then((data) => {
         if (data.error) {
           setLoadError(data.error);
         } else {
           setOtpauthUrl(data.otpauthUrl ?? "");
           setSecret(data.secret ?? "");
+          setNextStep(data.next ?? null);
           setLoaded(true);
         }
       })
@@ -56,7 +58,7 @@ function Setup2faInner() {
         return;
       }
 
-      router.push("/onboarding");
+      router.push(nextStep ?? "/onboarding");
     } catch {
       setSubmitError("Network error. Please try again.");
     } finally {

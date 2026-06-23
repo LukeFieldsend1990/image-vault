@@ -450,6 +450,19 @@ function NavItem({ item, active, alert }: { item: { href: string; label: string;
   );
 }
 
+const AGENCY_NAV_ITEM = {
+  href: "/agency",
+  label: "Agency",
+  icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 21h18" />
+      <path d="M5 21V7l8-4v18" />
+      <path d="M19 21V11l-6-4" />
+      <path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
+    </svg>
+  ),
+};
+
 const PIPELINE_NAV_ITEM = {
   href: "/vault/pipeline",
   label: "Pipeline",
@@ -461,9 +474,14 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean }) {
+export function NavLinks({ role, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, agencyMember }: { role: Role; email?: string; pipelineEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; agencyMember?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
+  // Agents (reps belonging to a talent agency) get an Agency surface, placed
+  // directly under their Roster.
+  if (role === "rep" && agencyMember && !base.some((item) => item.href === "/agency")) {
+    base = [base[0], AGENCY_NAV_ITEM, ...base.slice(1)];
+  }
   if (!inboundEnabled) {
     base = base.filter((item) => item.href !== "/inbox");
   }

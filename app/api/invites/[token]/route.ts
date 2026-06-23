@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { invites } from "@/lib/db/schema";
+import { invites, organisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq } from "drizzle-orm";
 
@@ -35,10 +35,23 @@ export async function GET(
     return NextResponse.json({ valid: false, reason: "This invite link has expired" });
   }
 
+  // Surface agency context for the agent onboarding arc (rep invite carrying an
+  // organisation_id that points at an agency org).
+  let organisation: { id: string; name: string; orgType: string; shortCode: string | null } | null = null;
+  if (invite.organisationId) {
+    const org = await db
+      .select({ id: organisations.id, name: organisations.name, orgType: organisations.orgType, shortCode: organisations.shortCode })
+      .from(organisations)
+      .where(eq(organisations.id, invite.organisationId))
+      .get();
+    if (org) organisation = org;
+  }
+
   return NextResponse.json({
     valid: true,
     email: invite.email,
     role: invite.role,
+    organisation,
   });
 }
 
