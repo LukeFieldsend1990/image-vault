@@ -733,7 +733,7 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                               </p>
                               <div className="flex gap-2 flex-wrap pt-1">
                                 <Link
-                                  href="/vault/pipeline"
+                                  href="/dashboard"
                                   className="rounded px-3 py-1.5 text-xs font-medium text-white"
                                   style={{ background: "var(--color-accent)" }}
                                 >
