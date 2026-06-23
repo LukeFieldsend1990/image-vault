@@ -542,9 +542,9 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
             {visibleLicences.map((l) => {
               const expanded = expandedId === l.id;
               const feeRef = l.agreedFee ?? l.proposedFee;
-              const sharePct = role === "rep" ? (l.agencySharePct ?? 20) : (l.talentSharePct ?? 65);
+              const sharePct = role === "rep" ? (l.agencySharePct ?? 10) : (l.talentSharePct ?? 80);
               const netEarnings = feeRef ? Math.round(feeRef * sharePct / 100) : null;
-              const platformPct = 100 - (l.agencySharePct ?? 20) - (l.talentSharePct ?? 65);
+              const platformPct = 100 - (l.agencySharePct ?? 10) - (l.talentSharePct ?? 80);
               const preauthActive = l.preauthUntil !== null && l.preauthUntil > now;
               const isExpired = l.validTo + 86400 <= now || l.status === "EXPIRED";
 
@@ -807,13 +807,13 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                             </div>
                             {role === "rep" ? (
                               <div className="flex justify-between">
-                                <span style={{ color: "var(--color-muted)" }}>Talent share ({l.talentSharePct ?? 65}%)</span>
-                                <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * (l.talentSharePct ?? 65) / 100))}</span>
+                                <span style={{ color: "var(--color-muted)" }}>Talent share ({l.talentSharePct ?? 80}%)</span>
+                                <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * (l.talentSharePct ?? 80) / 100))}</span>
                               </div>
                             ) : (
                               <div className="flex justify-between">
-                                <span style={{ color: "var(--color-muted)" }}>Agency commission ({l.agencySharePct ?? 20}%)</span>
-                                <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * (l.agencySharePct ?? 20) / 100))}</span>
+                                <span style={{ color: "var(--color-muted)" }}>Agency commission ({l.agencySharePct ?? 10}%)</span>
+                                <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * (l.agencySharePct ?? 10) / 100))}</span>
                               </div>
                             )}
                             <div className="flex justify-between border-t pt-1 font-semibold" style={{ borderColor: "var(--color-border)" }}>

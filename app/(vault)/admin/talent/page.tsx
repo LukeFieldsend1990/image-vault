@@ -91,7 +91,7 @@ export default async function AdminTalentPage() {
           const profile = profileMap.get(u.id);
           const s = settingsMap.get(u.id);
           const pipelineOn = s?.pipelineEnabled ?? true;
-          const split = `${s?.talentSharePct ?? 65}/${s?.agencySharePct ?? 20}/${s?.platformSharePct ?? 15}`;
+          const split = `${s?.talentSharePct ?? 80}/${s?.agencySharePct ?? 10}/${s?.platformSharePct ?? 10}`;
           const repCount = repCountMap.get(u.id) ?? 0;
           const pkgCount = pkgCountMap.get(u.id) ?? 0;
           const displayName = profile?.fullName ?? u.email;

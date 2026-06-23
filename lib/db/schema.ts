@@ -291,9 +291,9 @@ export const talentLicencePermissions = sqliteTable("talent_licence_permissions"
 export const talentSettings = sqliteTable("talent_settings", {
   talentId: text("talent_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
   pipelineEnabled: integer("pipeline_enabled", { mode: "boolean" }).notNull().default(false),
-  talentSharePct: integer("talent_share_pct").notNull().default(65),
-  agencySharePct: integer("agency_share_pct").notNull().default(20),
-  platformSharePct: integer("platform_share_pct").notNull().default(15),
+  talentSharePct: integer("talent_share_pct").notNull().default(80),
+  agencySharePct: integer("agency_share_pct").notNull().default(10),
+  platformSharePct: integer("platform_share_pct").notNull().default(10),
   // Upfront tier assignment — see lib/financial/config.ts (emerging | established | a_list | bespoke).
   tier: text("tier"),
   updatedBy: text("updated_by").references(() => users.id),
