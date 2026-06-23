@@ -197,6 +197,17 @@ async function getInsurerWatcher(userId: string, role: Role): Promise<boolean> {
   }
 }
 
+// Reps who belong to a talent agency org get the Agency nav surface.
+async function getAgencyMember(userId: string, role: Role): Promise<boolean> {
+  if (role !== "rep" || !userId) return false;
+  try {
+    const { getAgencyMembership } = await import("@/lib/agency/membership");
+    return !!(await getAgencyMembership(getDb(), userId));
+  } catch {
+    return false;
+  }
+}
+
 async function getComplianceEnabled(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
@@ -219,7 +230,7 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher] = await Promise.all([
+  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher, agencyMember] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
@@ -229,6 +240,7 @@ export default async function VaultLayout({
     getPlatformOversight(sub, email, role),
     getInsurerWatcher(sub, role),
     getUnionWatcher(sub, email, role),
+    getAgencyMember(sub, role),
   ]);
 
   const homeHref = isComplianceRole(role)
@@ -250,7 +262,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} />
+            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} />
           </div>
 
           <div>

@@ -201,6 +201,10 @@ export const talentReps = sqliteTable("talent_reps", {
   repId: text("rep_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   invitedBy: text("invited_by").notNull().references(() => users.id),
   createdAt: integer("created_at").notNull(), // unix timestamp
+  // The agency org this rep acts under, if any. Routing key for the agent inbox
+  // (#1): requests for this performer route to this agency. Nullable — legacy /
+  // unaffiliated reps have no agency and can be attached later by an admin.
+  agencyOrgId: text("agency_org_id").references(() => organisations.id, { onDelete: "set null" }),
 });
 
 export const talentProfiles = sqliteTable("talent_profiles", {
@@ -1145,8 +1149,11 @@ export const complianceGrants = sqliteTable("compliance_grants", {
   // SAG watcher only sees SAG and an Equity watcher only sees Equity. Null for
   // regulator/insurer grants and for legacy union grants predating attribution.
   unionId: text("union_id"),
-  scope: text("scope", { enum: ["platform", "organisation", "production", "talent"] }).notNull(),
-  scopeId: text("scope_id"), // null = platform-wide
+  // "union" scope = read-only visibility into a union's affiliated entities: the
+  // on-platform talent on the union's member roster and the productions those
+  // talent are involved in. scope_id holds the union id (sag_aftra | equity).
+  scope: text("scope", { enum: ["platform", "organisation", "production", "talent", "union"] }).notNull(),
+  scopeId: text("scope_id"), // null = platform-wide; union id for scope = "union"
   grantedBy: text("granted_by").references(() => users.id),
   createdAt: integer("created_at").notNull(),
   revokedAt: integer("revoked_at"),

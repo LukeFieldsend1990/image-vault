@@ -5,6 +5,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isComplianceRole } from "@/lib/auth/roles";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { getActiveGrants, hasGrantForScope } from "@/lib/compliance/grants";
+import { getUnionPreset } from "@/lib/compliance/unions";
 import { evaluateScope, type CertScope } from "@/lib/compliance/certificate";
 import type { RegimeId } from "@/lib/compliance/types";
 import { and, eq, desc } from "drizzle-orm";
@@ -77,6 +78,7 @@ export async function GET(req: NextRequest) {
 
 async function scopeLabel(db: ReturnType<typeof getDb>, scope: string, scopeId: string | null): Promise<string> {
   if (scope === "platform" || !scopeId) return "Platform-wide";
+  if (scope === "union") return getUnionPreset(scopeId)?.shortName ?? scopeId;
   try {
     if (scope === "organisation") {
       const o = await db.select({ name: organisations.name }).from(organisations).where(eq(organisations.id, scopeId)).get();

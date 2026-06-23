@@ -4,13 +4,20 @@ import { complianceGrants, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isComplianceRole } from "@/lib/auth/roles";
-import { isAllowedScopeForSubtype, INSURER_ALLOWED_SCOPES } from "@/lib/compliance/grants";
+import {
+  createGrant,
+  GrantScopeError,
+  isAllowedScopeForSubtype,
+  INSURER_ALLOWED_SCOPES,
+  type ComplianceScope,
+  type ComplianceSubtype,
+} from "@/lib/compliance/grants";
 import { getUnionPreset } from "@/lib/compliance/unions";
 import { eq, isNull, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
 const SUBTYPES = ["union", "regulator", "insurer"] as const;
-const SCOPES = ["platform", "organisation", "production", "talent"] as const;
+const SCOPES = ["platform", "organisation", "production", "talent", "union"] as const;
 
 // GET /api/admin/compliance-grants — list active grants with the watcher's email
 export async function GET(req: NextRequest) {
@@ -69,11 +76,13 @@ export async function POST(req: NextRequest) {
   if (!body.scope || !(SCOPES as readonly string[]).includes(body.scope)) {
     return NextResponse.json({ error: "invalid scope" }, { status: 400 });
   }
-  if (body.scope !== "platform" && !body.scopeId) {
+  // A union-scope grant's id is the union itself, so scopeId is derived, not
+  // supplied. Every other non-platform scope needs an explicit id.
+  if (body.scope !== "platform" && body.scope !== "union" && !body.scopeId) {
     return NextResponse.json({ error: "scopeId is required unless scope is platform" }, { status: 400 });
   }
   // Insurance is bound per production — refuse org-/platform-wide insurer grants
-  // even for admins (data minimisation). See INSURER_ALLOWED_SCOPES.
+  // even for admins (data minimisation). The union scope is union-watchers only.
   if (!isAllowedScopeForSubtype(body.subtype, body.scope)) {
     return NextResponse.json(
       { error: `insurer grants are limited to scopes: ${INSURER_ALLOWED_SCOPES.join(" | ")}` },
@@ -90,18 +99,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Target user is not a compliance account" }, { status: 400 });
   }
 
-  const id = crypto.randomUUID();
-  await db.insert(complianceGrants).values({
-    id,
-    complianceUserId: body.complianceUserId,
-    subtype: body.subtype as (typeof SUBTYPES)[number],
-    unionId,
-    scope: body.scope as (typeof SCOPES)[number],
-    scopeId: body.scope === "platform" ? null : (body.scopeId ?? null),
-    grantedBy: session.sub,
-    createdAt: Math.floor(Date.now() / 1000),
-  });
-
-  return NextResponse.json({ id }, { status: 201 });
+  // Route through createGrant so the per-subtype scope rules, union attribution and
+  // idempotency live in one place.
+  try {
+    const id = await createGrant(db, {
+      complianceUserId: body.complianceUserId,
+      subtype: body.subtype as ComplianceSubtype,
+      scope: body.scope as ComplianceScope,
+      scopeId: body.scope === "platform" || body.scope === "union" ? null : (body.scopeId ?? null),
+      unionId,
+      grantedBy: session.sub,
+    });
+    return NextResponse.json({ id }, { status: 201 });
+  } catch (e) {
+    if (e instanceof GrantScopeError) return NextResponse.json({ error: e.message }, { status: 400 });
+    throw e;
+  }
 }
 

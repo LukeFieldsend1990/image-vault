@@ -49,6 +49,24 @@ interface Licence {
   contractUploadedAt: number | null;
 }
 
+interface UpcomingRole {
+  castId: string;
+  productionId: string;
+  productionName: string;
+  name: string;
+  characterName: string | null;
+  status: string;
+}
+
+// Pre-licence cast states shown in the "Upcoming roles" panel.
+const UPCOMING_STATUS: Record<string, { label: string; colour: string }> = {
+  placeholder: { label: "Reserved", colour: "#6b7280" },
+  invited: { label: "Invited", colour: "#b45309" },
+  linked: { label: "Linked", colour: "#1d4ed8" },
+  scan_uploaded: { label: "Reviewing", colour: "#7c3aed" },
+  consented: { label: "Consented", colour: "#166534" },
+};
+
 const BASE_TABS: { label: string; value: LicenceStatus | "ALL" | "SCRUB" }[] = [
   { label: "Pending", value: "PENDING" },
   { label: "Approved", value: "APPROVED" },
@@ -110,6 +128,7 @@ export default function LicencesClient() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
+  const [upcoming, setUpcoming] = useState<UpcomingRole[]>([]);
 
   const tabs = hasScrub
     ? [{ label: "Scrub", value: "SCRUB" as const }, ...BASE_TABS]
@@ -166,6 +185,12 @@ export default function LicencesClient() {
         else setTab("APPROVED");
       })
       .catch(() => setTab("PENDING"));
+
+    // Reserved/invited cast that don't have a licence yet (production-side only).
+    fetch("/api/productions/upcoming-cast")
+      .then((r) => r.json() as Promise<{ roles?: UpcomingRole[] }>)
+      .then((d) => setUpcoming(d.roles ?? []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -198,6 +223,40 @@ export default function LicencesClient() {
           Browse Directory
         </Link>
       </div>
+
+      {/* Upcoming roles — reserved/invited cast that aren't licences yet */}
+      {upcoming.length > 0 && (
+        <div className="mb-6 rounded-lg px-5 py-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>
+            Upcoming roles · {upcoming.length}
+          </p>
+          <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
+            Cast you&apos;ve reserved or invited on your productions. <strong style={{ color: "var(--color-ink)" }}>These aren&apos;t licences yet</strong> — each becomes a pending licence once the performer has an email and joins Image Vault. Add their email from the production to move them forward.
+          </p>
+          <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+            {upcoming.map((r, i) => {
+              const meta = UPCOMING_STATUS[r.status] ?? { label: r.status, colour: "#6b7280" };
+              return (
+                <Link
+                  key={r.castId}
+                  href={`/productions/${r.productionId}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition hover:opacity-80"
+                  style={{ borderBottom: i < upcoming.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium" style={{ color: "var(--color-ink)" }}>{r.name}</span>
+                    {r.characterName && <span className="text-xs ml-2" style={{ color: "var(--color-muted)" }}>as {r.characterName}</span>}
+                    <span className="text-xs ml-2" style={{ color: "var(--color-muted)" }}>· {r.productionName}</span>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded shrink-0" style={{ background: `${meta.colour}18`, color: meta.colour }}>
+                    {meta.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 border-b" style={{ borderColor: "var(--color-border)" }}>

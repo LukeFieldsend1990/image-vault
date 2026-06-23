@@ -23,6 +23,7 @@ export const ORG_TYPES = [
   "ai_company",
   "broadcaster",
   "scan_service",
+  "agency", // talent agency (AGY code) — represents performers; its members are `rep` agents
   "other",
 ] as const;
 
@@ -40,6 +41,7 @@ export const ORG_TYPE_LABELS: Record<OrgType, string> = {
   ai_company: "AI Company",
   broadcaster: "Broadcaster",
   scan_service: "Scan Service",
+  agency: "Talent Agency",
   other: "Other",
 };
 
@@ -55,11 +57,23 @@ export const ORG_TYPE_SHORT_LABELS: Record<OrgType, string> = {
   ai_company: "AI",
   broadcaster: "Broadcast",
   scan_service: "Scan",
+  agency: "Agency",
   other: "Other",
 };
 
 export function isOrgType(v: unknown): v is OrgType {
   return typeof v === "string" && (ORG_TYPES as readonly string[]).includes(v);
+}
+
+/**
+ * Talent agency org type. Its members are `rep`-role "agents" who act on behalf
+ * of represented performers; the agency carries an `AGY` code (distinct from the
+ * `AG` code minted per individual agent on `users.shortCode`).
+ */
+export const AGENCY_ORG_TYPE: OrgType = "agency";
+
+export function isAgencyOrgType(v: OrgType | string | null | undefined): boolean {
+  return v === "agency";
 }
 
 /**

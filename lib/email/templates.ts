@@ -319,6 +319,34 @@ export function inviteEmail(p: InviteEmailParams): { subject: string; html: stri
   };
 }
 
+export interface AgentInviteEmailParams {
+  to: string;
+  agencyName: string;
+  inviterEmail: string;
+  isFirstAdmin: boolean; // true = first agency admin (owner); false = a regular agent
+  onboardingUrl: string;
+  expiresAt: number; // unix timestamp
+}
+
+export function agentInviteEmail(p: AgentInviteEmailParams): { subject: string; html: string } {
+  const roleWord = p.isFirstAdmin ? "administrator" : "agent";
+  return {
+    subject: `You've been invited to ${p.agencyName} on Image Vault`,
+    html: layout(`
+      <p>You've been invited to join <strong>${p.agencyName}</strong> as an ${roleWord} on Image Vault.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Agency</span><span class="kv-val">${p.agencyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Invited by</span><span class="kv-val">${p.inviterEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Role</span><span class="kv-val">${p.isFirstAdmin ? "Agency administrator" : "Agent"}</span></div>
+        <div class="kv-row"><span class="kv-key">Expires</span><span class="kv-val">${formatDate(p.expiresAt)}</span></div>
+      </div>
+      <p>As an agent you'll act on behalf of the performers your agency represents — reviewing and resolving the requests that route to your inbox.</p>
+      <p>Setting up takes a couple of minutes: choose a password, turn on two-factor authentication, and accept the agent terms. This invite link expires in 7 days.</p>
+      <a class="btn" href="${p.onboardingUrl}">Begin agent setup</a>
+    `),
+  };
+}
+
 export interface ScanBookingConfirmedParams {
   talentEmail: string;
   talentName: string;

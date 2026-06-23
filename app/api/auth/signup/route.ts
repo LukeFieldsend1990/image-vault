@@ -46,6 +46,9 @@ export async function POST(req: NextRequest) {
 
   // Validate invite token for talent and rep roles
   let inviteRow: typeof invites.$inferSelect | undefined;
+  // True when this signup is an agency agent — routes the post-2FA flow through
+  // the agent terms step instead of the default talent/rep landing.
+  let agentOnboarding = false;
 
   if (INVITE_REQUIRED_ROLES.includes(role as Role)) {
     if (!inviteToken) {
@@ -155,6 +158,40 @@ export async function POST(req: NextRequest) {
         .where(eq(productionCast.id, inviteRow.castId));
     }
 
+    // Agency agent: a rep invited against an agency org (the invite carries the
+    // organisation_id) joins that agency on signup. The first member becomes the
+    // agency owner (the founding admin provisioned by a platform admin); every
+    // subsequent agent joins as a regular member.
+    if (role === "rep" && inviteRow.organisationId) {
+      try {
+        const alreadyMember = await db
+          .select({ userId: organisationMembers.userId })
+          .from(organisationMembers)
+          .where(and(
+            eq(organisationMembers.organisationId, inviteRow.organisationId),
+            eq(organisationMembers.userId, userId),
+          ))
+          .get();
+        if (!alreadyMember) {
+          const existingCount = await db
+            .select({ userId: organisationMembers.userId })
+            .from(organisationMembers)
+            .where(eq(organisationMembers.organisationId, inviteRow.organisationId))
+            .all();
+          await db.insert(organisationMembers).values({
+            organisationId: inviteRow.organisationId,
+            userId,
+            memberRole: existingCount.length === 0 ? "owner" : "member",
+            invitedBy: inviteRow.invitedBy,
+            joinedAt: now,
+          });
+        }
+        agentOnboarding = true;
+      } catch {
+        // Don't block signup; an admin can re-attach membership if this fails.
+      }
+    }
+
     // Admin concierge: an industry user invited to a pre-built production becomes
     // the owner of its org and the production's coordinator on signup.
     if (role === "industry" && inviteRow.organisationId) {
@@ -227,7 +264,9 @@ export async function POST(req: NextRequest) {
     // invite's org_subtype carries the compliance subtype (a legacy production
     // invite with none defaults to insurer); union_id attributes a union grant.
     // Insurers are bound per production, so they only auto-grant when the invite
-    // names one; a union/regulator invited platform-wide gets a platform grant.
+    // names one; a union invited without a production gets a union-scope grant
+    // (read-only visibility into its affiliated talent + productions); a regulator
+    // invited platform-wide gets a platform grant.
     if (role === "compliance") {
       const sub = inviteRow.orgSubtype;
       const subtype =
@@ -238,12 +277,19 @@ export async function POST(req: NextRequest) {
             : null;
       const canGrant = subtype === "insurer" ? !!inviteRow.productionId : !!subtype;
       if (subtype && canGrant) {
+        // Union watchers without a named production default to the union scope, not
+        // platform-wide, so they see only their union's affiliated entities.
+        const scope = inviteRow.productionId
+          ? "production"
+          : subtype === "union"
+            ? "union"
+            : "platform";
         try {
           await createGrant(db, {
             complianceUserId: userId,
             subtype,
             unionId: subtype === "union" ? inviteRow.unionId : null,
-            scope: inviteRow.productionId ? "production" : "platform",
+            scope,
             scopeId: inviteRow.productionId ?? null,
             grantedBy: inviteRow.invitedBy,
           });
@@ -351,6 +397,11 @@ export async function POST(req: NextRequest) {
   const setupPayload: Record<string, unknown> = { userId, email: normalEmail, role };
   if (role === "industry" && inviteRow?.orgSubtype) {
     setupPayload.orgSubtype = inviteRow.orgSubtype;
+  }
+  // Agency agents continue to the agent terms step after 2FA, then land on the
+  // roster (the agent inbox surface ships with gap #1).
+  if (agentOnboarding) {
+    setupPayload.next = "/agent-onboarding/terms";
   }
   await kv.put(`setup:${setupToken}`, JSON.stringify(setupPayload), { expirationTtl: 1800 });
 

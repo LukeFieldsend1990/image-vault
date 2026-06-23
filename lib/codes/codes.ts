@@ -17,10 +17,11 @@ export function formatCode(prefix: string, n: number): string {
 }
 
 /** Org subtype → code prefix. */
-export function orgPrefix(orgType: string | null | undefined): "VX" | "CC" | "DB" | "OG" {
+export function orgPrefix(orgType: string | null | undefined): "VX" | "CC" | "DB" | "AGY" | "OG" {
   if (orgType === "vfx_vendor") return "VX";
   if (orgType === "scan_service") return "CC";
   if (orgType === "dubbing") return "DB";
+  if (orgType === "agency") return "AGY"; // talent agency org (distinct from per-agent AG codes)
   return "OG";
 }
 

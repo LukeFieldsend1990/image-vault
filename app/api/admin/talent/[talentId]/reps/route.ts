@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { talentReps, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { getAgencyMembership } from "@/lib/agency/membership";
 import { eq, and } from "drizzle-orm";
 
 /**
@@ -87,12 +88,14 @@ export async function POST(
 
   const now = Math.floor(Date.now() / 1000);
   const id = crypto.randomUUID();
+  const agency = await getAgencyMembership(db, repUser.id);
   await db.insert(talentReps).values({
     id,
     talentId,
     repId: repUser.id,
     invitedBy: session.sub,
     createdAt: now,
+    agencyOrgId: agency?.organisationId ?? null,
   });
 
   const newRep = await db
