@@ -17,6 +17,17 @@ interface TalentRow {
   pendingLicences?: number;
 }
 
+interface PendingInvite {
+  castId: string;
+  inviteId: string;
+  email: string;
+  expiresAt: number;
+  actorName: string | null;
+  characterName: string | null;
+  productionName: string;
+  productionId: string;
+}
+
 interface Stats {
   totalScans: number;
   activeLicences: number;
@@ -226,6 +237,76 @@ function TalentCard({ talent }: { talent: TalentRow }) {
   );
 }
 
+// ── Pending invite card ─────────────────────────────────────────────────────────
+
+function PendingInviteCard({ invite }: { invite: PendingInvite }) {
+  const displayName = invite.actorName ?? invite.email;
+  const initials = invite.actorName
+    ? invite.actorName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()
+    : invite.email[0].toUpperCase();
+  const expiryDate = new Date(invite.expiresAt * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+
+  return (
+    <div
+      className="rounded border overflow-hidden flex flex-col"
+      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", opacity: 0.85 }}
+    >
+      {/* Portrait */}
+      <div className="flex flex-col flex-1 min-w-0">
+        <div
+          className="relative w-full overflow-hidden"
+          style={{ aspectRatio: "3/4", background: "var(--color-border)" }}
+        >
+          {/* Initials placeholder */}
+          <div
+            className="w-full h-full flex items-center justify-center text-3xl font-bold"
+            style={{ background: "var(--color-border)", color: "var(--color-muted)" }}
+          >
+            {initials}
+          </div>
+
+          {/* Awaiting badge */}
+          <div
+            className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background: "#b45309", color: "#fff" }}
+          >
+            Awaiting signup
+          </div>
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 px-3 pt-3 pb-2">
+          <p className="text-sm font-semibold truncate" style={{ color: "var(--color-ink)" }}>{displayName}</p>
+          {invite.actorName && (
+            <p className="text-xs truncate mt-0.5" style={{ color: "var(--color-muted)" }}>{invite.email}</p>
+          )}
+          <p className="text-[11px] mt-1.5 truncate" style={{ color: "var(--color-muted)" }}>
+            {invite.productionName}
+            {invite.characterName ? ` · ${invite.characterName}` : ""}
+          </p>
+          <p className="text-[10px] mt-1" style={{ color: "var(--color-muted)" }}>
+            Invite expires {expiryDate}
+          </p>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div
+        className="border-t px-3 py-2.5"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        <Link
+          href={`/productions/${invite.productionId}`}
+          className="text-xs font-medium"
+          style={{ color: "var(--color-accent)" }}
+        >
+          View production →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 const PAGE_SIZE = 6;
 
 // ── Main component ──────────────────────────────────────────────────────────────
@@ -233,6 +314,7 @@ const PAGE_SIZE = 6;
 export default function RosterClient() {
   const [activeTab, setActiveTab] = useState<"roster" | "revenue">("roster");
   const [roster, setRoster] = useState<TalentRow[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -245,11 +327,12 @@ export default function RosterClient() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/roster").then((r) => r.json() as Promise<{ roster?: TalentRow[] }>),
+      fetch("/api/roster").then((r) => r.json() as Promise<{ roster?: TalentRow[]; pendingInvites?: PendingInvite[] }>),
       fetch("/api/roster/stats").then((r) => r.json() as Promise<Stats>),
     ])
       .then(([rosterData, statsData]) => {
         setRoster(rosterData.roster ?? []);
+        setPendingInvites(rosterData.pendingInvites ?? []);
         setStats(statsData);
       })
       .catch(() => {})
@@ -297,11 +380,14 @@ export default function RosterClient() {
           Representative
         </p>
         <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>My Roster</h1>
-        {!loading && roster.length > 0 && (
+        {!loading && (roster.length > 0 || pendingInvites.length > 0) && (
           <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
             {search.trim() && filteredRoster.length !== roster.length
               ? `${filteredRoster.length} of ${roster.length} talent`
               : `${roster.length} talent`}
+            {pendingInvites.length > 0 && (
+              <span style={{ color: "#b45309" }}> · {pendingInvites.length} awaiting signup</span>
+            )}
           </p>
         )}
       </div>
@@ -394,7 +480,7 @@ export default function RosterClient() {
               />
             ))}
           </div>
-        ) : roster.length === 0 ? (
+        ) : roster.length === 0 && pendingInvites.length === 0 ? (
           <div
             className="rounded border p-10 text-center"
             style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
@@ -441,13 +527,17 @@ export default function RosterClient() {
             </div>
 
             {/* Grid */}
-            {filteredRoster.length === 0 ? (
+            {filteredRoster.length === 0 && pendingInvites.length === 0 ? (
               <p className="text-sm py-8 text-center" style={{ color: "var(--color-muted)" }}>
                 No talent matching &ldquo;{search}&rdquo;
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {pagedRoster.map((t) => <TalentCard key={t.talentId} talent={t} />)}
+                {/* Pending invites only show on page 0 of the roster (they are not paginated) */}
+                {page === 0 && pendingInvites.map((inv) => (
+                  <PendingInviteCard key={inv.castId} invite={inv} />
+                ))}
               </div>
             )}
 
