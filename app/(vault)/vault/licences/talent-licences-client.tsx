@@ -733,7 +733,7 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                               </p>
                               <div className="flex gap-2 flex-wrap pt-1">
                                 <Link
-                                  href="/vault"
+                                  href="/vault/pipeline"
                                   className="rounded px-3 py-1.5 text-xs font-medium text-white"
                                   style={{ background: "var(--color-accent)" }}
                                 >
@@ -744,7 +744,7 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                                   className="rounded px-3 py-1.5 text-xs font-medium"
                                   style={{ border: "1px solid var(--color-border)", color: "var(--color-ink)", background: "transparent" }}
                                 >
-                                  Request studio transfer
+                                  Check for incoming transfers
                                 </Link>
                               </div>
                             </>
