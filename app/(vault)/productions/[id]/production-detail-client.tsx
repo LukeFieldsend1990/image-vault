@@ -47,6 +47,8 @@ interface CastRow {
   linkedAt: number | null;
   repId: string | null;
   repInviteId: string | null;
+  repEmail: string | null;
+  repInvite: { email: string; expiresAt: number; accepted: boolean } | null;
   talentProfile: { userId: string; fullName: string; profileImageUrl: string | null } | null;
   invite: { id: string; email: string; usedAt: number | null; expiresAt: number } | null;
   licence: { id: string; status: string; projectName: string } | null;
@@ -972,8 +974,27 @@ export default function ProductionDetailClient() {
                           >
                             {resolvingId === row.id ? "Adding…" : "Add email"}
                           </button>
-                          {row.repId || row.repInviteId ? (
-                            <span className="text-xs" style={{ color: "var(--color-muted)" }} title="Representation invited">Rep invited</span>
+                          {row.repId && row.repEmail ? (
+                            <span
+                              className="text-xs px-1.5 py-0.5 rounded"
+                              style={{ background: "rgba(29,78,216,0.08)", color: "#1d4ed8" }}
+                              title={`Assigned to ${row.repEmail} — awaiting client connection`}
+                            >
+                              Rep: {row.repEmail}
+                            </span>
+                          ) : row.repInviteId && row.repInvite ? (
+                            <span
+                              className="text-xs px-1.5 py-0.5 rounded"
+                              style={{
+                                background: row.repInvite.accepted ? "rgba(22,101,52,0.08)" : "rgba(180,83,9,0.08)",
+                                color: row.repInvite.accepted ? "#166534" : "#b45309",
+                              }}
+                              title={row.repInvite.accepted
+                                ? `${row.repInvite.email} accepted — awaiting client connection`
+                                : `Invite sent to ${row.repInvite.email} · expires ${new Date(row.repInvite.expiresAt * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`}
+                            >
+                              {row.repInvite.accepted ? `Rep: ${row.repInvite.email}` : `Invite: ${row.repInvite.email}`}
+                            </span>
                           ) : (
                             <button
                               onClick={() => setInviteRepFor({ castId: row.id, label: row.actorName ?? "this performer" })}

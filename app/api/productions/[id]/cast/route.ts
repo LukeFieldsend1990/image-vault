@@ -77,7 +77,7 @@ export async function GET(
     .where(eq(productionCast.productionId, id))
     .all();
 
-  // Enrich with talent profile and invite/licence info
+  // Enrich with talent profile, invite/licence, and rep info
   const talentIds = castRows
     .map((r) => r.talentId)
     .filter((t): t is string => t !== null);
@@ -90,7 +90,15 @@ export async function GET(
     .map((r) => r.licenceId)
     .filter((t): t is string => t !== null);
 
-  const [profiles, inviteRows, licenceRows] = await Promise.all([
+  const repUserIds = castRows
+    .map((r) => r.repId)
+    .filter((t): t is string => t !== null);
+
+  const repInviteIds = castRows
+    .map((r) => r.repInviteId)
+    .filter((t): t is string => t !== null);
+
+  const [profiles, inviteRows, licenceRows, repUsers, repInviteRows] = await Promise.all([
     talentIds.length > 0
       ? db
           .select({
@@ -125,17 +133,40 @@ export async function GET(
           .where(inArray(licences.id, licenceIds))
           .all()
       : Promise.resolve([]),
+    repUserIds.length > 0
+      ? db
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(inArray(users.id, repUserIds))
+          .all()
+      : Promise.resolve([]),
+    repInviteIds.length > 0
+      ? db
+          .select({ id: invites.id, email: invites.email, expiresAt: invites.expiresAt, usedAt: invites.usedAt })
+          .from(invites)
+          .where(inArray(invites.id, repInviteIds))
+          .all()
+      : Promise.resolve([]),
   ]);
 
   const profileMap = new Map(profiles.map((p) => [p.userId, p]));
   const inviteMap = new Map(inviteRows.map((i) => [i.id, i]));
   const licenceMap = new Map(licenceRows.map((l) => [l.id, l]));
+  const repUserMap = new Map(repUsers.map((u) => [u.id, u]));
+  const repInviteMap = new Map(repInviteRows.map((i) => [i.id, i]));
 
   const enriched = castRows.map((row) => ({
     ...row,
     talentProfile: row.talentId ? profileMap.get(row.talentId) ?? null : null,
     invite: row.inviteId ? inviteMap.get(row.inviteId) ?? null : null,
     licence: row.licenceId ? licenceMap.get(row.licenceId) ?? null : null,
+    repEmail: row.repId ? (repUserMap.get(row.repId)?.email ?? null) : null,
+    repInvite: row.repInviteId
+      ? (() => {
+          const ri = repInviteMap.get(row.repInviteId);
+          return ri ? { email: ri.email, expiresAt: ri.expiresAt, accepted: ri.usedAt !== null } : null;
+        })()
+      : null,
     // omit licence terms from list response
     licenceTermsJson: undefined,
   }));
