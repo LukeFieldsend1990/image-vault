@@ -941,9 +941,9 @@ function RevenueTab({ talentId }: { talentId: string }) {
     <div className="px-8 py-6">
       {/* Summary cards */}
       {(() => {
-        const t = summary?.talentSharePct ?? 65;
-        const a = summary?.agencySharePct ?? 20;
-        const p = summary?.platformSharePct ?? 15;
+        const t = summary?.talentSharePct ?? 80;
+        const a = summary?.agencySharePct ?? 10;
+        const p = summary?.platformSharePct ?? 10;
         return (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">

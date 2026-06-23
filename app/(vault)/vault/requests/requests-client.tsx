@@ -300,7 +300,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
       <div className="space-y-4">
         {requests.map((r) => {
           const expanded = expandedId === r.id;
-          const sharePct = isRep ? (r.agencySharePct ?? 20) : (r.talentSharePct ?? 65);
+          const sharePct = isRep ? (r.agencySharePct ?? 10) : (r.talentSharePct ?? 80);
           const netEarnings = r.proposedFee ? Math.round(r.proposedFee * sharePct / 100) : null;
 
           return (
@@ -427,7 +427,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                           <span style={{ color: "var(--color-ink)" }}>{fmtGBP(r.proposedFee)}</span>
                         </div>
                         {(() => {
-                          const platPct = 100 - (r.agencySharePct ?? 20) - (r.talentSharePct ?? 65);
+                          const platPct = 100 - (r.agencySharePct ?? 10) - (r.talentSharePct ?? 80);
                           return (
                             <>
                               <div className="flex justify-between">
@@ -436,13 +436,13 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                               </div>
                               {isRep ? (
                                 <div className="flex justify-between">
-                                  <span style={{ color: "var(--color-muted)" }}>Talent share ({r.talentSharePct ?? 65}%)</span>
-                                  <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * (r.talentSharePct ?? 65) / 100))}</span>
+                                  <span style={{ color: "var(--color-muted)" }}>Talent share ({r.talentSharePct ?? 80}%)</span>
+                                  <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * (r.talentSharePct ?? 80) / 100))}</span>
                                 </div>
                               ) : (
                                 <div className="flex justify-between">
-                                  <span style={{ color: "var(--color-muted)" }}>Agency commission ({r.agencySharePct ?? 20}%)</span>
-                                  <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * (r.agencySharePct ?? 20) / 100))}</span>
+                                  <span style={{ color: "var(--color-muted)" }}>Agency commission ({r.agencySharePct ?? 10}%)</span>
+                                  <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * (r.agencySharePct ?? 10) / 100))}</span>
                                 </div>
                               )}
                             </>

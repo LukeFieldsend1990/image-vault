@@ -51,9 +51,9 @@ export async function GET(
     .where(eq(talentSettings.talentId, talentId))
     .get();
 
-  const talentSharePct = settingsRow?.talentSharePct ?? 65;
-  const agencySharePct = settingsRow?.agencySharePct ?? 20;
-  const platformSharePct = settingsRow?.platformSharePct ?? 15;
+  const talentSharePct = settingsRow?.talentSharePct ?? 80;
+  const agencySharePct = settingsRow?.agencySharePct ?? 10;
+  const platformSharePct = settingsRow?.platformSharePct ?? 10;
 
   // Aggregate totals for APPROVED licences
   const [totals, licenceRows] = await Promise.all([

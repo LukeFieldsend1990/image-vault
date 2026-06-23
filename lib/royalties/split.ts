@@ -19,11 +19,11 @@ export interface RoyaltySplit {
   platformPence: number;
 }
 
-/** Default split when a talent has no talent_settings row (matches 0013 defaults). */
+/** Default split when a talent has no talent_settings row. */
 export const DEFAULT_SPLIT: SplitPcts = {
-  talentSharePct: 65,
-  agencySharePct: 20,
-  platformSharePct: 15,
+  talentSharePct: 80,
+  agencySharePct: 10,
+  platformSharePct: 10,
 };
 
 /**

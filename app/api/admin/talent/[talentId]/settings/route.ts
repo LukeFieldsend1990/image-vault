@@ -35,9 +35,9 @@ export async function GET(
     email: talent.email,
     fullName: profile?.fullName ?? null,
     pipelineEnabled: settings?.pipelineEnabled ?? false,
-    talentSharePct: settings?.talentSharePct ?? 65,
-    agencySharePct: settings?.agencySharePct ?? 20,
-    platformSharePct: settings?.platformSharePct ?? 15,
+    talentSharePct: settings?.talentSharePct ?? 80,
+    agencySharePct: settings?.agencySharePct ?? 10,
+    platformSharePct: settings?.platformSharePct ?? 10,
   });
 }
 
@@ -109,9 +109,9 @@ export async function PUT(
     await db.insert(talentSettings).values({
       talentId,
       pipelineEnabled: pipelineEnabled ?? true,
-      talentSharePct: talentSharePct ?? 65,
-      agencySharePct: agencySharePct ?? 20,
-      platformSharePct: platformSharePct ?? 15,
+      talentSharePct: talentSharePct ?? 80,
+      agencySharePct: agencySharePct ?? 10,
+      platformSharePct: platformSharePct ?? 10,
       updatedBy: session.sub,
       updatedAt: now,
     });

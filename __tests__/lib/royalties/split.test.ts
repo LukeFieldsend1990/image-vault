@@ -7,18 +7,18 @@ describe("computeRoyalty", () => {
     expect(s.grossPence).toBe(12000);
   });
 
-  it("splits 65/20/15 by default with no rounding leakage", () => {
+  it("splits 80/10/10 by default with no rounding leakage", () => {
     const s = computeRoyalty(100, 100); // gross = 10000
-    expect(s.talentPence).toBe(6500);
-    expect(s.agencyPence).toBe(2000);
-    expect(s.platformPence).toBe(1500);
+    expect(s.talentPence).toBe(8000);
+    expect(s.agencyPence).toBe(1000);
+    expect(s.platformPence).toBe(1000);
     expect(s.talentPence + s.agencyPence + s.platformPence).toBe(s.grossPence);
   });
 
   it("platform absorbs rounding remainder so the split always reconciles", () => {
     const s = computeRoyalty(1, 1); // gross = 1p, indivisible
-    expect(s.talentPence).toBe(0); // floor(1 * 65/100)
-    expect(s.agencyPence).toBe(0); // floor(1 * 20/100)
+    expect(s.talentPence).toBe(0); // floor(1 * 80/100)
+    expect(s.agencyPence).toBe(0); // floor(1 * 10/100)
     expect(s.platformPence).toBe(1); // remainder
     expect(s.talentPence + s.agencyPence + s.platformPence).toBe(1);
   });
@@ -38,7 +38,7 @@ describe("computeRoyalty", () => {
     expect(f.grossPence).toBe(200); // floor(2) × floor(100)
   });
 
-  it("exposes the 0013 defaults", () => {
-    expect(DEFAULT_SPLIT).toEqual({ talentSharePct: 65, agencySharePct: 20, platformSharePct: 15 });
+  it("exposes the default split", () => {
+    expect(DEFAULT_SPLIT).toEqual({ talentSharePct: 80, agencySharePct: 10, platformSharePct: 10 });
   });
 });
