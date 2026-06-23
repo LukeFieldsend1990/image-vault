@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import LicenceRef from "@/app/components/licence-ref";
 
@@ -120,13 +120,14 @@ function fmtGBP(pence: number) {
 
 type TabValue = LicenceStatus | "ALL" | "SCRUB";
 
-export default function LicencesClient() {
+export default function LicencesClient({ highlight = null }: { highlight?: string | null }) {
   const [licences, setLicences] = useState<Licence[]>([]);
   const [tab, setTab] = useState<TabValue | null>(null);
   const [hasScrub, setHasScrub] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const highlightedRef = useRef(false);
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
   const [upcoming, setUpcoming] = useState<UpcomingRole[]>([]);
 
@@ -203,6 +204,18 @@ export default function LicencesClient() {
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  // Scroll to + expand a highlighted licence once loaded
+  useEffect(() => {
+    if (!highlight || licences.length === 0 || highlightedRef.current) return;
+    highlightedRef.current = true;
+    if (!licences.find((l) => l.id === highlight)) return;
+    setExpandedId(highlight);
+    setTimeout(() => {
+      document.getElementById(`licence-${highlight}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlight, licences]);
 
   return (
     <div className="p-8">
@@ -309,8 +322,9 @@ export default function LicencesClient() {
           return (
             <div
               key={l.id}
+              id={`licence-${l.id}`}
               className="rounded border"
-              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", scrollMarginTop: 80 }}
             >
               <div className="p-5">
                 {/* ── Summary row ──────────────────────────────────────────── */}
