@@ -8,7 +8,7 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { talentProfiles, unionMembers, users } from "@/lib/db/schema";
 import { normaliseName } from "./watchlist";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { getUnionIdsForUser } from "./grants";
+import { getUnionIdsForUser, hasPlatformGrant } from "./grants";
 import { UNION_PRESETS, getUnionPreset } from "./unions";
 import type { getDb } from "@/lib/db";
 
@@ -161,8 +161,13 @@ export interface RosterUnionContext {
 }
 
 /**
- * Resolve which union's roster a caller is acting on. Admins manage any preset;
- * a union watcher manages only the union(s) of their platform-scoped grants.
+ * Resolve which union's roster a caller is acting on:
+ *  - Admins manage every union preset.
+ *  - A union watcher with a platform-scoped union grant manages only that union(s).
+ *  - A platform-wide oversight watcher not tied to a single union (e.g. a regulator
+ *    holding a platform-scoped grant) sees every union's roster, like an admin.
+ *    This mirrors the nav, which surfaces this page to any platform-grant holder
+ *    (hasPlatformGrant), so the API must not 403 a watcher the nav invited in.
  * Returns an error shape (mapped to a 4xx by the route) when the caller has no
  * union to manage, or requested one they don't hold.
  */
@@ -171,12 +176,21 @@ export async function resolveRosterUnion(
   session: { sub: string; email: string; role: string },
   requested?: string | null,
 ): Promise<RosterUnionContext | { error: string; status: number }> {
-  const available = isAdmin(session.email)
-    ? UNION_PRESETS.map((u) => ({ id: u.id, shortName: u.shortName }))
-    : (await getUnionIdsForUser(db, session.sub, { platformOnly: true })).map((id) => ({
-        id,
-        shortName: getUnionPreset(id)?.shortName ?? id,
-      }));
+  const allUnions = () => UNION_PRESETS.map((u) => ({ id: u.id, shortName: u.shortName }));
+
+  let available: { id: string; shortName: string }[];
+  if (isAdmin(session.email)) {
+    available = allUnions();
+  } else {
+    const unionIds = await getUnionIdsForUser(db, session.sub, { platformOnly: true });
+    if (unionIds.length > 0) {
+      available = unionIds.map((id) => ({ id, shortName: getUnionPreset(id)?.shortName ?? id }));
+    } else if (await hasPlatformGrant(db, session.sub)) {
+      available = allUnions();
+    } else {
+      available = [];
+    }
+  }
 
   if (available.length === 0) return { error: "Forbidden", status: 403 };
 
