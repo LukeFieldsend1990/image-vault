@@ -36,13 +36,25 @@ const inputClass =
 export default function AgenciesClient({ agencies }: { agencies: AgencyRow[] }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const [ownerMode, setOwnerMode] = useState<"invite" | "existing">("invite");
   const [name, setName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
+  const [existingRepEmail, setExistingRepEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [createError, setCreateError] = useState("");
   const [createOk, setCreateOk] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  function resetForm() {
+    setName("");
+    setAdminEmail("");
+    setExistingRepEmail("");
+    setWebsite("");
+    setCreateError("");
+    setCreateOk("");
+    setOwnerMode("invite");
+  }
 
   async function createAgency(e: React.FormEvent) {
     e.preventDefault();
@@ -50,20 +62,28 @@ export default function AgenciesClient({ agencies }: { agencies: AgencyRow[] }) 
     setCreateOk("");
     setBusy(true);
     try {
+      const payload =
+        ownerMode === "existing"
+          ? { name, existingRepEmail, website: website || undefined }
+          : { name, adminEmail, website: website || undefined };
+
       const res = await fetch("/api/admin/agencies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, adminEmail, website: website || undefined }),
+        body: JSON.stringify(payload),
       });
-      const data = (await res.json()) as { error?: string; shortCode?: string };
+      const data = (await res.json()) as { error?: string; shortCode?: string; ownerLinked?: boolean };
       if (!res.ok) {
         setCreateError(data.error ?? "Could not create agency.");
         return;
       }
-      setCreateOk(`Agency created${data.shortCode ? ` (${data.shortCode})` : ""}. Invite sent to ${adminEmail}.`);
-      setName("");
-      setAdminEmail("");
-      setWebsite("");
+      const codeStr = data.shortCode ? ` (${data.shortCode})` : "";
+      if (ownerMode === "existing") {
+        setCreateOk(`Agency created${codeStr}. ${existingRepEmail} is now the owner.`);
+      } else {
+        setCreateOk(`Agency created${codeStr}. Invite sent to ${adminEmail}.`);
+      }
+      resetForm();
       setCreating(false);
       router.refresh();
     } catch {
@@ -97,13 +117,55 @@ export default function AgenciesClient({ agencies }: { agencies: AgencyRow[] }) 
               <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>Agency name</label>
               <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Curtis Brown" className={inputClass} style={{ borderColor: "var(--color-border)" }} />
             </div>
+
+            {/* Owner mode toggle */}
             <div>
-              <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>First administrator&apos;s email</label>
-              <input value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} required type="email" placeholder="admin@curtisbrown.com" className={inputClass} style={{ borderColor: "var(--color-border)" }} />
-              <p className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>
-                They receive the agent onboarding link and become the agency owner on signup.
-              </p>
+              <p className="text-xs mb-2" style={{ color: "var(--color-muted)" }}>Owner</p>
+              <div className="flex gap-0 rounded overflow-hidden border text-xs" style={{ borderColor: "var(--color-border)" }}>
+                <button
+                  type="button"
+                  onClick={() => setOwnerMode("invite")}
+                  className="flex-1 px-3 py-2 text-center transition"
+                  style={{
+                    background: ownerMode === "invite" ? "var(--color-accent)" : "var(--color-surface)",
+                    color: ownerMode === "invite" ? "#fff" : "var(--color-muted)",
+                  }}
+                >
+                  Invite new agent
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOwnerMode("existing")}
+                  className="flex-1 px-3 py-2 text-center transition"
+                  style={{
+                    background: ownerMode === "existing" ? "var(--color-accent)" : "var(--color-surface)",
+                    color: ownerMode === "existing" ? "#fff" : "var(--color-muted)",
+                    borderLeft: "1px solid var(--color-border)",
+                  }}
+                >
+                  Assign existing agent
+                </button>
+              </div>
             </div>
+
+            {ownerMode === "invite" ? (
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>First administrator&apos;s email</label>
+                <input value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} required type="email" placeholder="admin@curtisbrown.com" className={inputClass} style={{ borderColor: "var(--color-border)" }} />
+                <p className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>
+                  They receive the agent onboarding link and become the agency owner on signup.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>Existing agent&apos;s email</label>
+                <input value={existingRepEmail} onChange={(e) => setExistingRepEmail(e.target.value)} required type="email" placeholder="agent@curtisbrown.com" className={inputClass} style={{ borderColor: "var(--color-border)" }} />
+                <p className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>
+                  Must already have a rep account. They will be set as owner immediately.
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>Website (optional)</label>
               <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" className={inputClass} style={{ borderColor: "var(--color-border)" }} />
@@ -111,9 +173,9 @@ export default function AgenciesClient({ agencies }: { agencies: AgencyRow[] }) 
             {createError && <p className="text-xs text-red-600">{createError}</p>}
             <div className="flex gap-2">
               <button type="submit" disabled={busy} className="btn-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-                {busy ? "Creating…" : "Create & invite"}
+                {busy ? "Creating…" : ownerMode === "existing" ? "Create & assign" : "Create & invite"}
               </button>
-              <button type="button" onClick={() => setCreating(false)} className="px-4 py-2 text-sm" style={{ color: "var(--color-muted)" }}>
+              <button type="button" onClick={() => { setCreating(false); resetForm(); }} className="px-4 py-2 text-sm" style={{ color: "var(--color-muted)" }}>
                 Cancel
               </button>
             </div>
