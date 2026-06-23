@@ -29,7 +29,7 @@ interface Production {
   orgType?: string | null;
   orgShortCode?: string | null;
   licenceCount: number;
-  viewerRole?: "admin" | "owner" | "vendor" | "none";
+  viewerRole?: "admin" | "owner" | "vendor" | "rep" | "none";
   viewerVendorType?: string | null;
 }
 
@@ -554,6 +554,96 @@ export default function ProductionDetailClient() {
         </div>
 
         {!isScanService && <VendorAuthorisedScans productionId={id} />}
+      </div>
+    );
+  }
+
+  // Reps get a read-only view scoped to their assigned cast slot(s).
+  if (production.viewerRole === "rep") {
+    return (
+      <div className="p-8 max-w-3xl">
+        <div className="mb-2">
+          <Link href="/roster" className="text-xs" style={{ color: "var(--color-muted)" }}>← Roster</Link>
+        </div>
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h1 className="text-2xl font-semibold flex items-center gap-2" style={{ color: "var(--color-text)" }}>
+              <span>{production.name}</span>
+              <CodeTag code={production.shortCode} />
+            </h1>
+            {production.type && (
+              <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}>
+                {production.type.replace("_", " ")}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {(production.orgName ?? production.companyName) && (
+              <span className="text-sm flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
+                <span>{production.orgName ?? production.companyName}</span>
+                <OrgTypeBadge type={production.orgType} />
+              </span>
+            )}
+            {production.year && <span className="text-sm" style={{ color: "var(--color-muted)" }}>{production.year}</span>}
+          </div>
+        </div>
+
+        <div className="rounded p-5 mb-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>Your role</p>
+          <p className="text-sm" style={{ color: "var(--color-text)" }}>
+            You have been assigned to represent cast on this production. The production company manages the overall cast — you can see your assigned slot(s) below.
+          </p>
+        </div>
+
+        {cast.length === 0 ? (
+          <div className="rounded p-6 text-center" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>No active cast assignments on this production.</p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>Your cast assignment{cast.length !== 1 ? "s" : ""}</p>
+            <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+              {cast.map((row, i) => (
+                <div
+                  key={row.id}
+                  className="flex items-center justify-between gap-4 px-4 py-3"
+                  style={{
+                    borderBottom: i < cast.length - 1 ? "1px solid var(--color-border)" : "none",
+                    background: "var(--color-bg)",
+                  }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>
+                      {row.talentProfile?.fullName ?? row.invite?.email ?? row.actorName ?? "—"}
+                    </p>
+                    {row.characterName && (
+                      <p className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
+                        as {row.characterName}
+                        {row.department ? ` · ${row.department}` : ""}
+                      </p>
+                    )}
+                    {row.invite && !row.talentProfile && (
+                      <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+                        Invite sent · {row.invite.usedAt
+                          ? "signed up"
+                          : `expires ${new Date(row.invite.expiresAt * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
+                    style={{
+                      background: `${CAST_STATUS_COLOUR[row.status] ?? "#6b7280"}18`,
+                      color: CAST_STATUS_COLOUR[row.status] ?? "#6b7280",
+                    }}
+                  >
+                    {CAST_STATUS_LABEL[row.status] ?? row.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
