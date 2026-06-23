@@ -61,8 +61,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Work out how this viewer relates to the production. Owners/admins get the
-  // full management UI; vendors get a scoped view; anyone else is denied.
-  let viewerRole: "admin" | "owner" | "vendor" | "none" = "none";
+  // full management UI; vendors/reps get scoped views; anyone else is denied.
+  let viewerRole: "admin" | "owner" | "vendor" | "rep" | "none" = "none";
   let viewerVendorType: string | null = null;
 
   if (isAdmin(session.email)) {
@@ -97,6 +97,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         viewerVendorType = vendor.vendorType;
       }
     }
+  } else if (session.role === "rep") {
+    // Reps can view a production if they have at least one cast slot assigned to them.
+    const repCast = await db
+      .select({ id: productionCast.id })
+      .from(productionCast)
+      .where(and(eq(productionCast.productionId, id), eq(productionCast.repId, session.sub)))
+      .get();
+    if (repCast) viewerRole = "rep";
   }
 
   if (viewerRole === "none") {

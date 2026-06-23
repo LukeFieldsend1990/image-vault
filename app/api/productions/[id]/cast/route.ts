@@ -49,12 +49,15 @@ export async function GET(
     return NextResponse.json({ error: "Production not found" }, { status: 404 });
   }
 
-  // Auth check: admin or licensee org member
+  // Auth check: admin, licensee org member, or rep with an assigned cast slot
+  let repScopedView = false;
   if (!isAdmin(session.email)) {
-    if (!isIndustryRole(session.role)) {
+    if (session.role === "rep") {
+      // Reps can view only their own assigned cast slots on this production.
+      repScopedView = true;
+    } else if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (production.organisationId) {
+    } else if (production.organisationId) {
       const membership = await db
         .select({ memberRole: organisationMembers.memberRole })
         .from(organisationMembers)
@@ -74,7 +77,11 @@ export async function GET(
   const castRows = await db
     .select()
     .from(productionCast)
-    .where(eq(productionCast.productionId, id))
+    .where(
+      repScopedView
+        ? and(eq(productionCast.productionId, id), eq(productionCast.repId, session.sub))
+        : eq(productionCast.productionId, id)
+    )
     .all();
 
   // Enrich with talent profile, invite/licence, and rep info
