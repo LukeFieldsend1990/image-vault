@@ -70,7 +70,7 @@ export default function ComplianceAccessClient() {
     try {
       const res = await fetch("/api/admin/compliance-grants", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ complianceUserId: watcher?.id, subtype, unionId: subtype === "union" ? unionId : undefined, scope, scopeId: scope === "platform" ? undefined : scopeId.trim() }),
+        body: JSON.stringify({ complianceUserId: watcher?.id, subtype, unionId: subtype === "union" ? unionId : undefined, scope, scopeId: scope === "platform" || scope === "union" ? undefined : scopeId.trim() }),
       });
       if (!res.ok) { const d = (await res.json()) as { error?: string }; setErr(d.error ?? "Could not grant."); }
       else { setWatcher(null); setQuery(""); setResults([]); setScopeId(""); await load(); }
@@ -111,7 +111,7 @@ export default function ComplianceAccessClient() {
           )}
         </div>
         <div className="flex gap-2 flex-wrap">
-          <select value={subtype} onChange={(e) => setSubtype(e.target.value)} className="text-sm px-2 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}>
+          <select value={subtype} onChange={(e) => { const v = e.target.value; setSubtype(v); if (v !== "union" && scope === "union") setScope("production"); }} className="text-sm px-2 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}>
             <option value="union">Union</option><option value="regulator">Regulator</option><option value="insurer">Insurer</option>
           </select>
           {subtype === "union" && (
@@ -120,9 +120,11 @@ export default function ComplianceAccessClient() {
             </select>
           )}
           <select value={scope} onChange={(e) => setScope(e.target.value)} className="text-sm px-2 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}>
+            {/* The union scope (affiliated talent + productions) is union-watchers only. */}
+            {subtype === "union" && <option value="union">Union (affiliated)</option>}
             <option value="production">Production</option><option value="organisation">Organisation</option><option value="talent">Talent</option><option value="platform">Platform-wide</option>
           </select>
-          {scope !== "platform" && (
+          {scope !== "platform" && scope !== "union" && (
             <input value={scopeId} onChange={(e) => setScopeId(e.target.value)} placeholder={`${scope} ID`} className="flex-1 min-w-[160px] text-sm px-3 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }} />
           )}
         </div>
