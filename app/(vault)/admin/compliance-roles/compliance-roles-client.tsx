@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import Link from "next/link";
+import { useState, useCallback, useRef } from "react";
 import type {
   ComplianceRolesOverview,
   UnionSummary,
   InsurerSummary,
   WatcherGrant,
 } from "@/lib/compliance/compliance-roles";
+import { UNION_PRESETS } from "@/lib/compliance/unions";
 
 function fmtDate(epoch: number) {
   return new Date(epoch * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -26,7 +26,7 @@ function fmtMoney(total: number, currencies: string[]) {
 
 const SUBTYPE_LABEL: Record<string, string> = { union: "Union", regulator: "Regulator", insurer: "Insurer" };
 
-type Tab = "unions" | "insurers" | "watchers";
+type Tab = "unions" | "insurers" | "watchers" | "grant";
 
 export default function ComplianceRolesClient({ initial }: { initial: ComplianceRolesOverview }) {
   const [data, setData] = useState<ComplianceRolesOverview>(initial);
@@ -74,12 +74,8 @@ export default function ComplianceRolesClient({ initial }: { initial: Compliance
           Compliance Roles
         </h1>
         <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-          Manage the oversight bodies that watch the platform: union presets and their regimes, insurer cover, and every
-          active watcher grant. To grant a new account access, use{" "}
-          <Link href="/admin/compliance-access" className="underline" style={{ color: "var(--color-accent)" }}>
-            Compliance Access
-          </Link>
-          .
+          Manage the oversight bodies that watch the platform: union presets and their regimes, insurer cover, active
+          watcher grants, and grant new compliance account access.
         </p>
       </div>
 
@@ -106,11 +102,15 @@ export default function ComplianceRolesClient({ initial }: { initial: Compliance
         <TabButton active={tab === "watchers"} onClick={() => setTab("watchers")}>
           Watchers
         </TabButton>
+        <TabButton active={tab === "grant"} onClick={() => setTab("grant")}>
+          Grant Access
+        </TabButton>
       </div>
 
       {tab === "unions" && <UnionsTab unions={unions} />}
       {tab === "insurers" && <InsurersTab insurers={insurers} />}
       {tab === "watchers" && <WatchersTab watchers={watchers} busy={busy} onRevoke={revoke} />}
+      {tab === "grant" && <GrantTab onGranted={refresh} />}
     </div>
   );
 }
@@ -231,6 +231,144 @@ function InsurersTab({ insurers }: { insurers: InsurerSummary[] }) {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+interface UserResult {
+  id: string;
+  email: string;
+}
+
+const UNION_LABEL: Record<string, string> = Object.fromEntries(UNION_PRESETS.map((u) => [u.id, u.shortName]));
+
+function GrantTab({ onGranted }: { onGranted: () => Promise<void> }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<UserResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [watcher, setWatcher] = useState<UserResult | null>(null);
+  const [subtype, setSubtype] = useState("union");
+  const [unionId, setUnionId] = useState<string>(UNION_PRESETS[0]?.id ?? "");
+  const [scope, setScope] = useState("production");
+  const [scopeId, setScopeId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function onQuery(v: string) {
+    setQuery(v);
+    setWatcher(null);
+    setSuccess(false);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (v.trim().length < 2) { setResults([]); setSearching(false); return; }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/users/search?role=compliance&email=${encodeURIComponent(v.trim())}`);
+        const d = (await res.json()) as { users?: UserResult[] };
+        setResults(d.users ?? []);
+      } catch { setResults([]); }
+      finally { setSearching(false); }
+    }, 300);
+  }
+
+  async function grant(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setErr(null); setSuccess(false);
+    try {
+      const res = await fetch("/api/admin/compliance-grants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          complianceUserId: watcher?.id,
+          subtype,
+          unionId: subtype === "union" ? unionId : undefined,
+          scope,
+          scopeId: scope === "platform" || scope === "union" ? undefined : scopeId.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const d = (await res.json()) as { error?: string };
+        setErr(d.error ?? "Could not grant.");
+      } else {
+        setWatcher(null); setQuery(""); setResults([]); setScopeId(""); setSuccess(true);
+        await onGranted();
+      }
+    } catch { setErr("Could not grant."); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="space-y-4 max-w-lg">
+      <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+        Grant read-only evidence access to a Union, Regulator, or Insurer compliance account. Invite the account first
+        (role: Compliance), then grant scopes here.
+      </p>
+
+      {err && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{err}</p>}
+      {success && <p className="text-xs" style={{ color: "var(--color-ink)" }}>Access granted.</p>}
+
+      <form onSubmit={grant} className="rounded border p-4 space-y-3" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>Grant access</h2>
+        <div className="relative">
+          <input
+            value={watcher ? watcher.email : query}
+            onChange={(e) => onQuery(e.target.value)}
+            placeholder="Search compliance account by email…"
+            className="w-full text-sm px-3 py-2 rounded border"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+          />
+          {results.length > 0 && !watcher && (
+            <div className="absolute z-10 left-0 right-0 mt-1 rounded border overflow-hidden" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}>
+              {results.map((u) => (
+                <button type="button" key={u.id} onClick={() => { setWatcher(u); setResults([]); }} className="block w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface)]" style={{ color: "var(--color-ink)" }}>
+                  {u.email}
+                </button>
+              ))}
+            </div>
+          )}
+          {!watcher && query.trim().length >= 2 && !searching && results.length === 0 && (
+            <p className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>No compliance accounts match. Check the account has accepted its invite and completed signup.</p>
+          )}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <select
+            value={subtype}
+            onChange={(e) => { const v = e.target.value; setSubtype(v); if (v !== "union" && scope === "union") setScope("production"); }}
+            className="text-sm px-2 py-2 rounded border"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+          >
+            <option value="union">Union</option>
+            <option value="regulator">Regulator</option>
+            <option value="insurer">Insurer</option>
+          </select>
+          {subtype === "union" && (
+            <select value={unionId} onChange={(e) => setUnionId(e.target.value)} className="text-sm px-2 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}>
+              {UNION_PRESETS.map((u) => <option key={u.id} value={u.id}>{UNION_LABEL[u.id] ?? u.id}</option>)}
+            </select>
+          )}
+          <select value={scope} onChange={(e) => setScope(e.target.value)} className="text-sm px-2 py-2 rounded border" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}>
+            {subtype === "union" && <option value="union">Union (affiliated)</option>}
+            <option value="production">Production</option>
+            <option value="organisation">Organisation</option>
+            <option value="talent">Talent</option>
+            <option value="platform">Platform-wide</option>
+          </select>
+          {scope !== "platform" && scope !== "union" && (
+            <input
+              value={scopeId}
+              onChange={(e) => setScopeId(e.target.value)}
+              placeholder={`${scope} ID`}
+              className="flex-1 min-w-[160px] text-sm px-3 py-2 rounded border"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
+            />
+          )}
+        </div>
+        <button type="submit" disabled={busy || !watcher} className="text-xs font-medium px-4 py-2 rounded disabled:opacity-40" style={{ background: "var(--color-ink)", color: "var(--color-bg)" }}>
+          {busy ? "Saving…" : "Grant"}
+        </button>
+      </form>
     </section>
   );
 }

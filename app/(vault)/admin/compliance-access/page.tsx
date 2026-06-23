@@ -1,7 +1,5 @@
-import { requireAdmin } from "@/lib/auth/requireAdmin";
-import ComplianceAccessClient from "./compliance-access-client";
+import { redirect } from "next/navigation";
 
-export default async function AdminComplianceAccessPage() {
-  await requireAdmin();
-  return <ComplianceAccessClient />;
+export default function AdminComplianceAccessPage() {
+  redirect("/admin/compliance-roles");
 }
