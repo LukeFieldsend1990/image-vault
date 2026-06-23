@@ -58,6 +58,7 @@ interface Licence {
   talentShortCode?: string | null;
   productionId: string | null;
   licenseeId: string;
+  talentId: string | null;
 }
 
 interface ScrubData {
@@ -251,6 +252,8 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
   const [activeTab, setActiveTab] = useState<LicenceTab>("active");
   const [scrubDataById, setScrubDataById] = useState<Record<string, ScrubData | "loading">>({});
   const [packages, setPackages] = useState<{ id: string; name: string }[]>([]);
+  // Rep mode: packages keyed by talentId (fetched per-talent via ?for=)
+  const [talentPackages, setTalentPackages] = useState<Record<string, { id: string; name: string }[]>>({});
   const [attachingPkg, setAttachingPkg] = useState<Record<string, string>>({});
   const [attachingId, setAttachingId] = useState<string | null>(null);
 
@@ -308,6 +311,28 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
       })
       .catch(() => {/* non-fatal */});
   }, []);
+
+  // Rep mode: fetch each managed talent's packages so the rep can attach them.
+  useEffect(() => {
+    if (role !== "rep" || licences.length === 0) return;
+    const ids = [...new Set(
+      licences
+        .filter((l) => l.status === "APPROVED" && l.productionId && !l.packageName && l.talentId)
+        .map((l) => l.talentId!)
+    )];
+    if (ids.length === 0) return;
+    void Promise.all(ids.map(async (talentId) => {
+      try {
+        const r = await fetch(`/api/vault/packages?for=${talentId}`);
+        const d = await r.json() as { packages?: { id: string; name: string; status?: string }[] };
+        setTalentPackages((prev) => ({
+          ...prev,
+          [talentId]: (d.packages ?? []).filter((p) => p.status === "ready"),
+        }));
+      } catch { /* non-fatal */ }
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, licences]);
 
   async function attachPackage(licenceId: string) {
     const pkgId = attachingPkg[licenceId];
@@ -653,66 +678,80 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                     </div>
 
                     {/* ── Attach scan for APPROVED production licences with no package ── */}
-                    {l.status === "APPROVED" && l.productionId && !l.packageName && (
-                      <div
-                        className="mt-3 rounded border p-3 space-y-2"
-                        style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
-                      >
-                        {packages.length > 0 ? (
-                          <>
-                            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                              This production licence has no scan attached.
-                            </p>
-                            <div className="flex gap-2 items-center flex-wrap">
-                              <select
-                                value={attachingPkg[l.id] ?? ""}
-                                onChange={(e) => setAttachingPkg((prev) => ({ ...prev, [l.id]: e.target.value }))}
-                                className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
-                                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
-                              >
-                                <option value="">— select a package —</option>
-                                {packages.map((p) => (
-                                  <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                              </select>
-                              <button
-                                onClick={() => void attachPackage(l.id)}
-                                disabled={!attachingPkg[l.id] || attachingId === l.id}
-                                className="rounded px-3 py-2 text-xs font-medium text-white transition disabled:opacity-60"
-                                style={{ background: "var(--color-accent)" }}
-                              >
-                                {attachingId === l.id ? "Attaching…" : "Attach"}
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
-                              No scan package attached
-                            </p>
-                            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                              This licence is waiting for a scan. You need to either upload your own scan package, or have a capture studio transfer one into your vault.
-                            </p>
-                            <div className="flex gap-2 flex-wrap pt-1">
-                              <Link
-                                href="/vault"
-                                className="rounded px-3 py-1.5 text-xs font-medium text-white"
-                                style={{ background: "var(--color-accent)" }}
-                              >
-                                Upload a scan
-                              </Link>
-                              <Link
-                                href="/transfers"
-                                className="rounded px-3 py-1.5 text-xs font-medium"
-                                style={{ border: "1px solid var(--color-border)", color: "var(--color-ink)", background: "transparent" }}
-                              >
-                                Request studio transfer
-                              </Link>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
+                    {l.status === "APPROVED" && l.productionId && !l.packageName && (() => {
+                      const pkgList = role === "rep"
+                        ? (l.talentId ? (talentPackages[l.talentId] ?? []) : [])
+                        : packages;
+                      return (
+                        <div
+                          className="mt-3 rounded border p-3 space-y-2"
+                          style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                        >
+                          {pkgList.length > 0 ? (
+                            <>
+                              <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                                This production licence has no scan attached.
+                              </p>
+                              <div className="flex gap-2 items-center flex-wrap">
+                                <select
+                                  value={attachingPkg[l.id] ?? ""}
+                                  onChange={(e) => setAttachingPkg((prev) => ({ ...prev, [l.id]: e.target.value }))}
+                                  className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                                  style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+                                >
+                                  <option value="">— select a package —</option>
+                                  {pkgList.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => void attachPackage(l.id)}
+                                  disabled={!attachingPkg[l.id] || attachingId === l.id}
+                                  className="rounded px-3 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                                  style={{ background: "var(--color-accent)" }}
+                                >
+                                  {attachingId === l.id ? "Attaching…" : "Attach"}
+                                </button>
+                              </div>
+                            </>
+                          ) : role === "rep" ? (
+                            <>
+                              <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+                                No scan package attached
+                              </p>
+                              <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                                Your client hasn&apos;t uploaded a scan yet. Ask them to upload a scan package or arrange a studio transfer.
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+                                No scan package attached
+                              </p>
+                              <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                                This licence is waiting for a scan. You need to either upload your own scan package, or have a capture studio transfer one into your vault.
+                              </p>
+                              <div className="flex gap-2 flex-wrap pt-1">
+                                <Link
+                                  href="/vault"
+                                  className="rounded px-3 py-1.5 text-xs font-medium text-white"
+                                  style={{ background: "var(--color-accent)" }}
+                                >
+                                  Upload a scan
+                                </Link>
+                                <Link
+                                  href="/transfers"
+                                  className="rounded px-3 py-1.5 text-xs font-medium"
+                                  style={{ border: "1px solid var(--color-border)", color: "var(--color-ink)", background: "transparent" }}
+                                >
+                                  Request studio transfer
+                                </Link>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* ── Expanded details ─────────────────────────────────── */}
                     {expanded && (
