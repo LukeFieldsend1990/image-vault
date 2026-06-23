@@ -17,7 +17,7 @@ export default async function AdminTalentDetailPage({
 
   const [talent, profile, settings] = await Promise.all([
     db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, talentId)).get(),
-    db.select({ fullName: talentProfiles.fullName, profileImageUrl: talentProfiles.profileImageUrl })
+    db.select({ fullName: talentProfiles.fullName, profileImageUrl: talentProfiles.profileImageUrl, unionAffiliation: talentProfiles.unionAffiliation })
       .from(talentProfiles).where(eq(talentProfiles.userId, talentId)).get(),
     db.select().from(talentSettings).where(eq(talentSettings.talentId, talentId)).get(),
   ]);
@@ -29,6 +29,7 @@ export default async function AdminTalentDetailPage({
     talentSharePct: settings?.talentSharePct ?? 80,
     agencySharePct: settings?.agencySharePct ?? 10,
     platformSharePct: settings?.platformSharePct ?? 10,
+    unionAffiliation: profile?.unionAffiliation ?? null,
   };
 
   const displayName = profile?.fullName ?? talent.email;

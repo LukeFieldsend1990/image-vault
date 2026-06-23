@@ -9,6 +9,7 @@ interface TalentSettings {
   talentSharePct: number;
   agencySharePct: number;
   platformSharePct: number;
+  unionAffiliation: string | null;
 }
 
 interface Permission {
@@ -29,10 +30,13 @@ function SettingsTab({ talentId, initial }: { talentId: string; initial: TalentS
   const [talentPct, setTalentPct] = useState(String(initial.talentSharePct));
   const [agencyPct, setAgencyPct] = useState(String(initial.agencySharePct));
   const [platformPct, setPlatformPct] = useState(String(initial.platformSharePct));
+  const [unionAffiliation, setUnionAffiliation] = useState(initial.unionAffiliation ?? "");
   const [savingPipeline, setSavingPipeline] = useState(false);
   const [savingSplit, setSavingSplit] = useState(false);
+  const [savingUnion, setSavingUnion] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState<string | null>(null);
   const [splitMsg, setSplitMsg] = useState<string | null>(null);
+  const [unionMsg, setUnionMsg] = useState<string | null>(null);
 
   const t = Number(talentPct) || 0;
   const a = Number(agencyPct) || 0;
@@ -84,6 +88,28 @@ function SettingsTab({ talentId, initial }: { talentId: string; initial: TalentS
       setSplitMsg("Save failed.");
     } finally {
       setSavingSplit(false);
+    }
+  }
+
+  async function saveUnion() {
+    setSavingUnion(true);
+    setUnionMsg(null);
+    try {
+      const res = await fetch(`/api/admin/talent/${talentId}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unionAffiliation: unionAffiliation.trim() || null }),
+      });
+      if (res.ok) {
+        setUnionMsg("Saved.");
+      } else {
+        const data = await res.json() as { error?: string };
+        setUnionMsg(data.error ?? "Save failed.");
+      }
+    } catch {
+      setUnionMsg("Save failed.");
+    } finally {
+      setSavingUnion(false);
     }
   }
 
@@ -186,6 +212,58 @@ function SettingsTab({ talentId, initial }: { talentId: string; initial: TalentS
         </button>
         {splitMsg && (
           <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>{splitMsg}</p>
+        )}
+      </div>
+
+      {/* Union affiliation */}
+      <div className="rounded border p-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <h2 className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>Union Affiliation</h2>
+        <p className="text-xs mb-5" style={{ color: "var(--color-muted)" }}>
+          The talent&apos;s declared union membership. Visible to union watchers in their read-only compliance view.
+          Use &quot;SAG-AFTRA&quot;, &quot;Equity&quot;, or any free-text value. Clear the field to remove.
+        </p>
+
+        <div className="flex gap-2 mb-3">
+          {["SAG-AFTRA", "Equity"].map((u) => (
+            <button
+              key={u}
+              onClick={() => setUnionAffiliation((prev) => prev === u ? "" : u)}
+              className="px-3 py-1.5 rounded text-xs font-medium border transition"
+              style={{
+                borderColor: unionAffiliation === u ? "var(--color-ink)" : "var(--color-border)",
+                background: unionAffiliation === u ? "var(--color-ink)" : "transparent",
+                color: unionAffiliation === u ? "white" : "var(--color-muted)",
+              }}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2 items-center">
+          <input
+            type="text"
+            value={unionAffiliation}
+            onChange={(e) => { setUnionAffiliation(e.target.value); setUnionMsg(null); }}
+            placeholder="Union name or leave blank"
+            className="flex-1 rounded border px-3 py-2 text-sm focus:outline-none"
+            style={{
+              borderColor: "var(--color-border)",
+              background: "var(--color-bg)",
+              color: "var(--color-ink)",
+            }}
+          />
+          <button
+            onClick={() => void saveUnion()}
+            disabled={savingUnion}
+            className="shrink-0 px-4 py-2 rounded text-xs font-medium text-white transition disabled:opacity-40"
+            style={{ background: "var(--color-accent)" }}
+          >
+            {savingUnion ? "Saving…" : "Save"}
+          </button>
+        </div>
+        {unionMsg && (
+          <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>{unionMsg}</p>
         )}
       </div>
     </div>

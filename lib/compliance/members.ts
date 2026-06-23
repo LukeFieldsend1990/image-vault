@@ -21,6 +21,7 @@ export interface MemberRow {
   onPlatform: boolean;
   matchedTalentId: string | null;
   matchedEmail: string | null;
+  unionAffiliation: string | null;
 }
 
 export interface MemberRoster {
@@ -46,16 +47,16 @@ export function parseMemberNames(raw: string): string[] {
 }
 
 /** Talent on the platform, keyed by normalised full name. */
-async function loadTalentByName(db: Db): Promise<Map<string, { userId: string; email: string | null }>> {
+async function loadTalentByName(db: Db): Promise<Map<string, { userId: string; email: string | null; unionAffiliation: string | null }>> {
   const talent = await db
-    .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName, email: users.email })
+    .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName, email: users.email, unionAffiliation: talentProfiles.unionAffiliation })
     .from(talentProfiles)
     .leftJoin(users, eq(talentProfiles.userId, users.id))
     .all();
-  const byName = new Map<string, { userId: string; email: string | null }>();
+  const byName = new Map<string, { userId: string; email: string | null; unionAffiliation: string | null }>();
   for (const t of talent) {
     const key = normaliseName(t.fullName);
-    if (key && !byName.has(key)) byName.set(key, { userId: t.userId, email: t.email });
+    if (key && !byName.has(key)) byName.set(key, { userId: t.userId, email: t.email, unionAffiliation: t.unionAffiliation ?? null });
   }
   return byName;
 }
@@ -84,6 +85,7 @@ export async function buildMemberRoster(db: Db, unionId: string): Promise<Member
       onPlatform: !!match,
       matchedTalentId: match?.userId ?? null,
       matchedEmail: match?.email ?? null,
+      unionAffiliation: match?.unionAffiliation ?? null,
     };
   });
 

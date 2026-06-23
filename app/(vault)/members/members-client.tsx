@@ -11,6 +11,7 @@ interface MemberRow {
   onPlatform: boolean;
   matchedTalentId: string | null;
   matchedEmail: string | null;
+  unionAffiliation: string | null;
 }
 
 interface UnionOption { id: string; shortName: string }
@@ -215,7 +216,17 @@ export default function MembersClient() {
             <div key={m.id} className="flex items-center gap-3 px-4 py-2.5"
               style={{ background: m.onPlatform ? undefined : "rgba(180,83,9,0.04)" }}>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>{m.name}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>{m.name}</p>
+                  {m.onPlatform && m.unionAffiliation && (
+                    <span
+                      className="text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded shrink-0"
+                      style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)", border: "1px solid rgba(192,57,43,0.2)" }}
+                    >
+                      {m.unionAffiliation}
+                    </span>
+                  )}
+                </div>
                 {m.onPlatform && m.matchedEmail && (
                   <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>{m.matchedEmail}</p>
                 )}
