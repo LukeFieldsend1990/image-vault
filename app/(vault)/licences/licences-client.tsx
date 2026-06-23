@@ -306,12 +306,48 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
 
       {loading && <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>}
       {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
-      {!loading && !error && licences.length === 0 && (
+      {!loading && !error && licences.length === 0 && !(tab === "PENDING" && upcoming.length > 0) && (
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           No licences found.{tab !== "DENIED" && tab !== null && (
             <>{" "}<Link href="/directory" className="underline">Browse the directory</Link> to request one.</>
           )}
         </p>
+      )}
+
+      {/* Upcoming roles in the Pending tab */}
+      {tab === "PENDING" && upcoming.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {upcoming.map((r) => {
+            const meta = UPCOMING_STATUS[r.status] ?? { label: r.status, colour: "#6b7280" };
+            return (
+              <Link
+                key={r.castId}
+                href={`/productions/${r.productionId}`}
+                className="flex items-center justify-between gap-4 rounded border p-4 transition hover:opacity-80"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm" style={{ color: "var(--color-ink)" }}>{r.name}</span>
+                    {r.characterName && (
+                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>as {r.characterName}</span>
+                    )}
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                      style={{ background: `${meta.colour}18`, color: meta.colour }}
+                    >
+                      {meta.label}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
+                    {r.productionName} · Not yet a licence
+                  </p>
+                </div>
+                <span className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>View production →</span>
+              </Link>
+            );
+          })}
+        </div>
       )}
 
       <div className="space-y-3">
