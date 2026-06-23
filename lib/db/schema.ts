@@ -15,7 +15,7 @@ export const users = sqliteTable("users", {
   aiDisabled: integer("ai_disabled", { mode: "boolean" }).notNull().default(false),
   inboundEnabled: integer("inbound_enabled", { mode: "boolean" }).notNull().default(false),
   geoFingerprintEnabled: integer("geo_fingerprint_enabled", { mode: "boolean" }).notNull().default(false),
-  royaltyMeterEnabled: integer("royalty_meter_enabled", { mode: "boolean" }).notNull().default(true),
+  royaltyMeterEnabled: integer("royalty_meter_enabled", { mode: "boolean" }).notNull().default(false),
   complianceEnabled: integer("compliance_enabled", { mode: "boolean" }).notNull().default(true),
   // Gates whether the talent sees the (under-test) upfront fee model. Off by default.
   financialVisibilityEnabled: integer("financial_visibility_enabled", { mode: "boolean" }).notNull().default(false),
@@ -290,7 +290,7 @@ export const talentLicencePermissions = sqliteTable("talent_licence_permissions"
 
 export const talentSettings = sqliteTable("talent_settings", {
   talentId: text("talent_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  pipelineEnabled: integer("pipeline_enabled", { mode: "boolean" }).notNull().default(true),
+  pipelineEnabled: integer("pipeline_enabled", { mode: "boolean" }).notNull().default(false),
   talentSharePct: integer("talent_share_pct").notNull().default(65),
   agencySharePct: integer("agency_share_pct").notNull().default(20),
   platformSharePct: integer("platform_share_pct").notNull().default(15),

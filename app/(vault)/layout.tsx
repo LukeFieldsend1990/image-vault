@@ -78,9 +78,24 @@ async function getPipelineEnabled(userId: string): Promise<boolean> {
       .from(talentSettings)
       .where(eq(talentSettings.talentId, userId))
       .get();
-    return row?.pipelineEnabled ?? true;
+    return row?.pipelineEnabled ?? false;
   } catch {
-    return true;
+    return false;
+  }
+}
+
+async function getRoyaltyMeterEnabled(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const db = getDb();
+    const row = await db
+      .select({ royaltyMeterEnabled: users.royaltyMeterEnabled })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
+    return row?.royaltyMeterEnabled ?? false;
+  } catch {
+    return false;
   }
 }
 
@@ -230,9 +245,10 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher, agencyMember] = await Promise.all([
+  const [identity, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher, agencyMember] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
+    role === "talent" ? getRoyaltyMeterEnabled(sub) : Promise.resolve(false),
     getInboundEnabled(sub),
     getLicenceAlert(sub, role),
     getComplianceEnabled(sub),
@@ -262,7 +278,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} />
+            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} royaltyMeterEnabled={royaltyMeterEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} />
           </div>
 
           <div>
