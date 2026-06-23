@@ -414,6 +414,29 @@ export async function POST(req: NextRequest) {
           })
           .where(eq(productionCast.id, castRow.id));
       }
+
+      // Auto-link the talent to the rep who resolved their placeholder slot,
+      // so the rep's roster immediately reflects the new relationship.
+      if (castRow?.repId) {
+        try {
+          const alreadyLinked = await db
+            .select({ id: talentReps.id })
+            .from(talentReps)
+            .where(and(eq(talentReps.talentId, userId), eq(talentReps.repId, castRow.repId)))
+            .get();
+          if (!alreadyLinked) {
+            await db.insert(talentReps).values({
+              id: crypto.randomUUID(),
+              talentId: userId,
+              repId: castRow.repId,
+              invitedBy: castRow.repId,
+              createdAt: now,
+            });
+          }
+        } catch {
+          // Don't block signup; the rep can manually link later.
+        }
+      }
     }
   }
 
