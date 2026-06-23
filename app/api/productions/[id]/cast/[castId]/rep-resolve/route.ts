@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCast, users, organisationMembers } from "@/lib/db/schema";
+import { productions, productionCast, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { promoteCastMember, loadProductionDefaultTerms, type CastLicenceTerms } from "@/lib/productions/cast";
@@ -53,8 +53,7 @@ export async function POST(
   }
 
   // The producer who reserved the slot is the licensee on the resulting licence.
-  const producer = await db.select({ email: users.email }).from(users).where(eq(users.id, cast.addedBy)).get();
-
+  // The rep is the one contacting the talent, so their email is shown as coordinator.
   const overrides: CastLicenceTerms = {};
   if (typeof body.intendedUse === "string") overrides.intendedUse = body.intendedUse;
   if (typeof body.validFrom === "number") overrides.validFrom = body.validFrom;
@@ -68,7 +67,7 @@ export async function POST(
     castId,
     email: body.email,
     actorUserId: cast.addedBy,
-    actorEmail: producer?.email ?? "the production company",
+    actorEmail: session.email,
     baseUrl,
     overrides,
     defaults,
