@@ -169,6 +169,31 @@ export const CONCEPTS: ConceptEntry[] = [
     related: ["data-model", "auth-sessions-2fa"],
   },
   {
+    id: "tmdb-cast-suggestions",
+    name: "TMDB Cast Suggestion & Population Flow",
+    summary: "Four MCP tools using the TMDB API: auto-search by production title, save the TMDB ID, suggest cast with platform matching, bulk-populate, and outreach reps for unlinked actors.",
+    details:
+      "Mirrors the webapp's production cast UI flow end-to-end. " +
+      "Flow: (1) suggest_production_cast — if the production has no tmdbId, automatically searches TMDB by production title via /search/multi " +
+      "and returns up to 8 title candidates (same as the webapp's title-search UI). " +
+      "(2) link_production_tmdb (mutating) — saves the chosen tmdbId to the production record; infers production type from TMDB mediaType if not set. " +
+      "(3) suggest_production_cast again — now fetches TMDB /movie or /tv credits; matches talent by TMDB ID first, then by full name (case-insensitive), " +
+      "mirroring /api/productions/[id]/cast/tmdb. platformStatus per actor: 'registered', 'on_cast', or 'not_on_platform'. " +
+      "overrideTmdbId param lets the admin preview a specific tmdbId without saving it first. " +
+      "(4) populate_cast_from_tmdb — takes selected actors; registered talent (matched by tmdbId or name) get an AWAITING_PACKAGE licence + linked cast row + email; " +
+      "others become placeholder rows. " +
+      "(5) outreach_unlinked_cast — for placeholder rows, targets reps linked to a talent with the same tmdbId, or all rep users in the system, " +
+      "asking 'do you represent [actor]?' After a rep confirms, resolve_cast_member issues the invite. " +
+      "Requires TMDB_API_KEY env secret.",
+    codePaths: [
+      "lib/mcp/tools/tmdb-cast.ts",
+      "app/api/productions/[id]/cast/tmdb/route.ts (webapp equivalent)",
+      "app/api/productions/[id]/cast/tmdb/search/route.ts (title search equivalent)",
+      "lib/email/templates.ts (repRepresentationEnquiryEmail)",
+    ],
+    related: ["product-overview", "licensing-lifecycle", "mcp-admin-integration"],
+  },
+  {
     id: "mcp-admin-integration",
     name: "Admin MCP Integration",
     summary: "This integration: an MCP server at /api/mcp giving whitelisted admins visibility and corrective tools over the platform.",
