@@ -1,5 +1,10 @@
 import LicencesClient from "./licences-client";
 
-export default function LicencesPage() {
-  return <LicencesClient />;
+export default async function LicencesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ highlight?: string }>;
+}) {
+  const { highlight } = await searchParams;
+  return <LicencesClient highlight={highlight ?? null} />;
 }

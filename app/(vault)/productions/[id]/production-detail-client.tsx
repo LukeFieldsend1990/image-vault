@@ -1164,7 +1164,7 @@ export default function ProductionDetailClient() {
                   return (
                     <tr key={lic.id} style={{ borderBottom: i < licences.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
                       <td className="px-4 py-3">
-                        <Link href={`/licences/${lic.id}`} className="inline-flex items-center gap-1.5" style={{ color: "var(--color-accent)" }}>
+                        <Link href={`/licences?highlight=${lic.id}`} className="inline-flex items-center gap-1.5" style={{ color: "var(--color-accent)" }}>
                           <span className="text-sm font-medium">{lic.talentName ?? lic.talentEmail ?? "—"}</span>
                           <CodeTag code={lic.talentShortCode} />
                         </Link>
