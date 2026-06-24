@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Image Vault — Industry &amp; Production Onboarding Walkthrough (Admin)</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --text:#2b2b2b; --muted:#6b7280; --border:#e5e5e5;
+    --bg:#ffffff; --surface:#fafafa; --accent:#c0392b; --green:#166534; --amber:#d97706;
+    --radius:8px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; color:var(--text); background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:15px;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:56px 28px 120px;}
+  header.doc{border-bottom:2px solid var(--ink); padding-bottom:24px; margin-bottom:40px;}
+  .eyebrow{font-size:11px; letter-spacing:.18em; text-transform:uppercase; font-weight:700; color:var(--accent); margin:0 0 8px;}
+  h1{font-size:30px; line-height:1.2; letter-spacing:-.01em; margin:0 0 10px; color:var(--ink); font-weight:650;}
+  .lede{font-size:16px; color:var(--muted); margin:0; max-width:680px;}
+  h2{font-size:21px; letter-spacing:-.01em; margin:52px 0 14px; padding-top:16px; border-top:1px solid var(--border); color:var(--ink); font-weight:650;}
+  h3{font-size:16px; margin:28px 0 8px; color:var(--ink); font-weight:650;}
+  p{margin:10px 0;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  code{background:var(--surface); border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; color:var(--ink); white-space:nowrap;}
+  .path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; background:#1a1a1a; color:#fff; border-radius:5px; padding:1px 7px; white-space:nowrap;}
+  ul,ol{margin:10px 0; padding-left:22px;}
+  li{margin:6px 0;}
+  .toc{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px 24px; margin-bottom:8px;}
+  .toc h2{border:0; margin:0 0 10px; padding:0; font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted);}
+  .toc ol{columns:2; column-gap:36px; margin:0; padding-left:18px; font-size:14px;}
+  .toc a{color:var(--text);}
+  .card{border:1px solid var(--border); background:var(--surface); border-radius:var(--radius); padding:18px 20px; margin:18px 0;}
+  .note{border-left:3px solid var(--accent); background:rgba(192,57,43,.05); border-radius:0 var(--radius) var(--radius) 0; padding:14px 18px; margin:18px 0;}
+  .note strong{color:var(--accent);}
+  .tip{border-left:3px solid var(--green); background:rgba(22,101,52,.06); border-radius:0 var(--radius) var(--radius) 0; padding:14px 18px; margin:18px 0;}
+  .tip strong{color:var(--green);}
+  .warn{border-left:3px solid var(--amber); background:rgba(217,119,6,.07); border-radius:0 var(--radius) var(--radius) 0; padding:14px 18px; margin:18px 0;}
+  .warn strong{color:var(--amber);}
+  table{width:100%; border-collapse:collapse; margin:16px 0; font-size:14px;}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top;}
+  th{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:700; background:var(--surface);}
+  td code{white-space:normal;}
+  .step{display:flex; gap:16px; margin:22px 0; align-items:flex-start;}
+  .step .num{flex:0 0 32px; height:32px; width:32px; border-radius:50%; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;}
+  .step .body{flex:1;}
+  .step .body h3{margin-top:2px;}
+  .pill{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 9px; border-radius:99px; text-transform:uppercase;}
+  .pill.talent{background:#eef2ff; color:#3730a3;}
+  .pill.industry{background:#fdecea; color:#9b2c20;}
+  .pill.rep{background:#fff7ed; color:#9a3412;}
+  .pill.admin{background:#1a1a1a; color:#fff;}
+  .pill.compliance{background:#f0fdf4; color:#166534;}
+  .btn{display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:5px; background:var(--accent); color:#fff;}
+  .mono-block{background:#1a1a1a; color:#e5e5e5; border-radius:var(--radius); padding:16px 18px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; line-height:1.7; overflow-x:auto;}
+  .mono-block .c{color:#9ca3af;}
+  hr{border:0; border-top:1px solid var(--border); margin:40px 0;}
+  footer.doc{margin-top:60px; padding-top:20px; border-top:1px solid var(--border); font-size:12px; color:var(--muted);}
+  @media print{ body{font-size:12px;} .wrap{padding:0;} h2{page-break-after:avoid;} .step,.card,table{page-break-inside:avoid;} a{color:var(--ink);} }
+  @media (max-width:640px){ .toc ol{columns:1;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <p class="eyebrow">Image Vault · Admin Test Playbook</p>
+  <h1>Onboarding an Industry User &amp; Production — End to End</h1>
+  <p class="lede">A start-to-finish walkthrough for testing the full lifecycle: pre-build a production, invite the industry owner, link talent, upload a scan, run a licence, and complete a dual-custody download — all from alias accounts on a single inbox.</p>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#model">How the system fits together</a></li>
+    <li><a href="#aliases">The alias-account trick</a></li>
+    <li><a href="#prereq">Before you start</a></li>
+    <li><a href="#partA">Part A — Pre-build &amp; invite the production</a></li>
+    <li><a href="#partB">Part B — Industry user signs up</a></li>
+    <li><a href="#partC">Part C — Create a talent account</a></li>
+    <li><a href="#partD">Part D — Talent uploads a scan</a></li>
+    <li><a href="#partE">Part E — Request &amp; approve a licence</a></li>
+    <li><a href="#partF">Part F — Dual-custody download</a></li>
+    <li><a href="#partG">Part G — Watch it as admin</a></li>
+    <li><a href="#ref">Reference: URLs, roles, states</a></li>
+    <li><a href="#gotchas">Gotchas &amp; tips</a></li>
+  </ol>
+</nav>
+
+<!-- ───────────────────────── MODEL ───────────────────────── -->
+<h2 id="model">1 · How the system fits together</h2>
+<p>Image Vault is a secure biometric-likeness archive. <strong>Talent</strong> (actors) store 3D scan packages of their likeness; <strong>industry users</strong> (production companies) license those scans for a specific production. Every actual file download requires <strong>dual-custody 2FA</strong> — both the talent and the licensee approve with their authenticator codes — and downloads run on time-limited tokens with a full audit trail.</p>
+
+<div class="note">
+  <strong>Set expectations correctly.</strong> Image Vault is <em>server-mediated</em>, not "zero-knowledge" or "end-to-end encrypted". The platform handles the file bytes and can technically read stored content. Its security comes from access control — authentication, dual-custody 2FA, time-limited download tokens, audit logging — plus encryption at rest from the storage provider. Avoid describing it as zero-knowledge in any demo or copy.
+</div>
+
+<h3>The five roles</h3>
+<table>
+  <tr><th>Role</th><th>Who they are</th><th>What they do</th></tr>
+  <tr><td><span class="pill talent">talent</span></td><td>Actor / performer / model</td><td>Uploads scans, approves/denies licences, approves downloads, can invite their own rep. <strong>Invite-only.</strong></td></tr>
+  <tr><td><span class="pill rep">rep</span></td><td>Agent or agency</td><td>Acts on behalf of managed talent (delegation). <strong>Invite-only.</strong></td></tr>
+  <tr><td><span class="pill industry">industry</span></td><td>Production company / studio (the "licensee")</td><td>Owns an organisation &amp; productions, requests licences, initiates downloads. Can self-sign-up or be concierge-invited.</td></tr>
+  <tr><td><span class="pill compliance">compliance</span></td><td>Union / regulator / insurer</td><td>Read-only watcher. Never reaches file content.</td></tr>
+  <tr><td><span class="pill admin">admin</span></td><td>You &amp; your partner</td><td>Everything. Whitelist-only — set in code, not assignable through the UI.</td></tr>
+</table>
+<p class="muted" style="font-size:13px;color:var(--muted)">Note: <code>industry</code> is the current name for what older parts of the system call <code>licensee</code> — they are the same role.</p>
+
+<h3>Organisations vs. productions vs. packages vs. licences</h3>
+<ul>
+  <li><strong>Organisation</strong> — the company entity (a production company, VFX vendor, agency…). An industry user owns one and can run multiple productions under it.</li>
+  <li><strong>Production</strong> — a specific film / TV show / game / commercial. Belongs to an organisation, has a cast list and default licence terms.</li>
+  <li><strong>Package (scan)</strong> — a talent's uploaded 3D scan (mesh, textures, metadata such as scan type, resolution, polygon count). The thing being licensed.</li>
+  <li><strong>Licence</strong> — the agreement linking one talent's package to one production: type, territory, dates, fee, AI-training permission. Moves through states (see <a href="#ref">reference</a>).</li>
+</ul>
+
+<!-- ───────────────────────── ALIASES ───────────────────────── -->
+<h2 id="aliases">2 · The alias-account trick</h2>
+<p>To test the full flow you need <strong>several separate accounts</strong> — at minimum one industry user and one talent — because dual-custody requires two different people to approve. You can run them all from the one inbox <code>martin.davison@gmail.com</code> using Gmail's <strong>plus-addressing</strong>: anything after a <code>+</code> is ignored for delivery but makes a distinct address.</p>
+
+<div class="mono-block">
+<span class="c"># All of these deliver to martin.davison@gmail.com,</span>
+<span class="c"># but each is a separate Image Vault account:</span>
+
+martin.davison+studio@gmail.com    <span class="c">→ Industry user (production owner / licensee)</span>
+martin.davison+talent@gmail.com    <span class="c">→ Talent (the actor being licensed)</span>
+martin.davison+talent2@gmail.com   <span class="c">→ Second actor (optional)</span>
+martin.davison+rep@gmail.com       <span class="c">→ Agent / rep (optional)</span>
+</div>
+
+<div class="warn">
+  <strong>Each account is fully separate.</strong> Every alias needs its <em>own</em> authenticator (TOTP) entry — Image Vault makes 2FA mandatory. Add each as a distinct entry in your authenticator app and name it clearly (e.g. "IV — studio", "IV — talent") so you can tell the codes apart during the dual-custody download. Plus-addressing also means an alias counts as a "new" email for signup even though replies land in the same inbox.
+</div>
+
+<div class="tip">
+  <strong>2FA does not depend on email.</strong> The authenticator QR code is shown on screen during signup, so you can set up 2FA even if no invite email ever arrives. Email is only needed to <em>receive the invite link</em> and notifications — and as admin you can skip email entirely and copy the invite link directly (see Part C).
+</div>
+
+<!-- ───────────────────────── PREREQ ───────────────────────── -->
+<h2 id="prereq">3 · Before you start</h2>
+<ul>
+  <li>Confirm your partner's email is on the <strong>admin whitelist</strong> (<code>lib/auth/adminEmails.ts</code>). Admin is granted in code, never through the UI — if he isn't whitelisted, the <span class="path">/admin</span> pages will be inaccessible.</li>
+  <li>Have an <strong>authenticator app</strong> ready (Google Authenticator, Authy, 1Password, or Bitwarden all work) with room for several entries.</li>
+  <li>Decide your alias plan (above). For a minimal end-to-end test you need <strong>two</strong>: <code>+studio</code> (industry) and <code>+talent</code>.</li>
+  <li>Use the production URL for the environment under test (e.g. <code>https://changling.io</code>). Paths below are written relative to that host.</li>
+</ul>
+
+<!-- ───────────────────────── PART A ───────────────────────── -->
+<h2 id="partA">Part A — Pre-build the production &amp; invite the industry owner</h2>
+<p>The fastest way to onboard an industry user is the admin <strong>Concierge setup</strong>: you build the production first, then invite the owner so they arrive to a ready-made project.</p>
+
+<div class="step"><div class="num">1</div><div class="body">
+  <h3>Open the concierge page</h3>
+  <p>As admin, go to <span class="path">/admin/productions/invite</span> ("Set up &amp; invite a production").</p>
+</div></div>
+
+<div class="step"><div class="num">2</div><div class="body">
+  <h3>Fill in the company &amp; invitee</h3>
+  <ul>
+    <li><strong>Company name *</strong> — e.g. <code>Davison Pictures</code></li>
+    <li><strong>Invitee email *</strong> — <code>martin.davison+studio@gmail.com</code> &nbsp;<span style="font-size:13px;color:var(--muted)">(this person becomes the organisation <em>owner</em> on signup)</span></li>
+  </ul>
+</div></div>
+
+<div class="step"><div class="num">3</div><div class="body">
+  <h3>(Optional) Link to TMDB &amp; import cast</h3>
+  <p>Search a real film/TV title under <strong>"Link to TMDB (optional)"</strong> to auto-fill the production name, type and year. If you link a title you can tick <strong>"Import the TMDB cast as reserved placeholders"</strong> to seed a cast list — handy for testing cast resolution later.</p>
+</div></div>
+
+<div class="step"><div class="num">4</div><div class="body">
+  <h3>Set the production details</h3>
+  <ul>
+    <li><strong>Production name *</strong> — e.g. <code>Project Northwind</code></li>
+    <li><strong>Type</strong> — Film / TV Series / TV Movie / Commercial / Game / Music Video / Other</li>
+    <li><strong>Year</strong>, and optionally <strong>Union project number</strong> + <strong>SAG-AFTRA</strong> / <strong>Equity</strong> flags</li>
+  </ul>
+</div></div>
+
+<div class="step"><div class="num">5</div><div class="body">
+  <h3>(Optional) Set default licence terms</h3>
+  <p>Tick <strong>"Set default licence terms"</strong> to pre-fill terms that flow onto cast invites: intended use, licence type (Digital double · Film / Game character / Commercial / AI avatar / Training data / Monitoring reference), territory, valid-from/to dates, <strong>proposed fee per actor (£)</strong>, and <strong>Permit AI training</strong>.</p>
+</div></div>
+
+<div class="step"><div class="num">6</div><div class="body">
+  <h3>Send it</h3>
+  <p>Click <span class="btn">Set up &amp; send invite</span>. You'll see "Production set up &amp; invite sent" with a <span class="btn">View production</span> link. An invite email goes to the studio alias with a signup link valid <strong>7 days</strong>.</p>
+</div></div>
+
+<div class="note"><strong>What just happened under the hood:</strong> the concierge created a production company, an organisation (type <code>production_company</code>), the production, optional cast placeholders &amp; default terms, and an <code>industry</code> invite tied to that org and production.</div>
+
+<!-- ───────────────────────── PART B ───────────────────────── -->
+<h2 id="partB">Part B — The industry user signs up</h2>
+<p>Now act as the studio alias. Open the invite email in <code>martin.davison@gmail.com</code> (it'll be the one addressed to <code>+studio</code>) and click <strong>"Set up your account"</strong>, or paste the signup link.</p>
+
+<div class="step"><div class="num">1</div><div class="body">
+  <h3>Create the account</h3>
+  <p>At <span class="path">/signup?invite=…</span> the <strong>email and account type are pre-filled and locked</strong> (a green banner confirms "You've been invited as Industry"). Set a <strong>password (12+ characters)</strong>, confirm it, and click <span class="btn">Create account</span>.</p>
+</div></div>
+
+<div class="step"><div class="num">2</div><div class="body">
+  <h3>Set up two-factor authentication (mandatory)</h3>
+  <p>You land on <span class="path">/setup-2fa</span> ("Set up authenticator"). Scan the QR with your authenticator app — name the entry "IV — studio" — or click <strong>"Can't scan? Enter key manually"</strong> for the text key. Enter the 6-digit <strong>Verification code</strong> and click <span class="btn">Verify and continue</span>. You're now logged in.</p>
+</div></div>
+
+<div class="step"><div class="num">3</div><div class="body">
+  <h3>Arrive at the production dashboard</h3>
+  <p>Because the production was pre-built, you're routed to <span class="path">/productions</span> and can open your ready-made project. (A self-signed-up industry user with no production instead gets the guided wizard at <span class="path">/productions/setup</span>.)</p>
+</div></div>
+
+<!-- ───────────────────────── PART C ───────────────────────── -->
+<h2 id="partC">Part C — Create a talent account</h2>
+<p>Talent is <strong>invite-only</strong>, so create one as admin. (Switch back to your admin login — keep the studio session in a separate browser/profile so you can flip between them.)</p>
+
+<div class="step"><div class="num">1</div><div class="body">
+  <h3>Send a talent invite</h3>
+  <p>Go to <span class="path">/admin/invites</span> ("Invites" → "Send Invitation"). Set:</p>
+  <ul>
+    <li><strong>Email</strong> — <code>martin.davison+talent@gmail.com</code></li>
+    <li><strong>Role</strong> — <code>Talent</code></li>
+  </ul>
+  <p>Click <span class="btn">Send invite</span>.</p>
+</div></div>
+
+<div class="tip"><strong>No email delivery? Use the link.</strong> Tick <strong>"Skip email notification (generate link only)"</strong> before sending — the page then shows a <strong>"Share this link directly"</strong> box with a <span class="btn">Copy</span> button. Paste that link straight into your other browser profile to sign up. The link is valid 7 days and pre-fills the email and role. (You can revoke any pending invite from the table below the form.)</p></div>
+
+<div class="step"><div class="num">2</div><div class="body">
+  <h3>Sign up as talent</h3>
+  <p>Open the invite link as the talent alias. Same flow as Part B: set a 12+ char password → <span class="btn">Create account</span> → set up 2FA (name it "IV — talent", a <em>separate</em> authenticator entry) → <span class="btn">Verify and continue</span>.</p>
+</div></div>
+
+<div class="step"><div class="num">3</div><div class="body">
+  <h3>Complete talent onboarding</h3>
+  <p>Talent are routed to <span class="path">/onboarding</span>, where they confirm their public identity (search TMDB to claim their acting profile). Finish it to reach the talent dashboard.</p>
+</div></div>
+
+<!-- ───────────────────────── PART D ───────────────────────── -->
+<h2 id="partD">Part D — Talent uploads a scan package</h2>
+<p>Still acting as the talent alias:</p>
+<div class="step"><div class="num">1</div><div class="body">
+  <h3>Upload from the vault</h3>
+  <p>From the talent dashboard (<span class="path">/dashboard</span>), use the scan uploader to add a package. Files stream to storage and the package moves to <strong>ready</strong> once the processing pipeline validates it.</p>
+</div></div>
+<div class="step"><div class="num">2</div><div class="body">
+  <h3>Fill in package metadata</h3>
+  <p>Open the package under <span class="path">/vault/packages</span> and set the descriptive fields — scan type (Light Stage / Photogrammetry / LiDAR / Structured Light), resolution, polygon count, compatible engines, tags. A licensee can request a licence against a ready package.</p>
+</div></div>
+<div class="tip"><strong>For a quick test</strong> any small placeholder file works — you're exercising the licence + dual-custody flow, not the scan quality.</div>
+
+<!-- ───────────────────────── PART E ───────────────────────── -->
+<h2 id="partE">Part E — Request a licence &amp; approve it</h2>
+
+<div class="step"><div class="num">1</div><div class="body">
+  <h3>Industry user requests the licence <span class="pill industry">studio</span></h3>
+  <p>As the studio alias, find the talent (e.g. via <span class="path">/directory</span>) and start a licence request against their package. Work through the request form: licence type → project details (project name / production company / which org you're acting for) → commercial terms (territory, exclusivity) → AI &amp; data terms → declaration. Submit. The licence is created in a <strong>pending</strong> state and the talent is notified.</p>
+</div></div>
+
+<div class="step"><div class="num">2</div><div class="body">
+  <h3>Talent reviews &amp; approves <span class="pill talent">talent</span></h3>
+  <p>As the talent alias, go to <span class="path">/vault/requests</span>. You'll see the pending request (and any "Cast Invitation" / awaiting-package items). Open the details to review terms and fee, attach a package if needed, then <strong>Approve</strong> (or <strong>Deny</strong> with a reason). On approval the licence becomes <strong>approved</strong> and the licensee is notified.</p>
+</div></div>
+
+<div class="note"><strong>Two states worth knowing:</strong> a request can start as <code>AWAITING_PACKAGE</code> (a cast slot created by the production before the talent has uploaded) which the talent converts to a real request, or as a direct <code>PENDING</code> request against an existing package. Either way the destination is <code>APPROVED</code>.</div>
+
+<!-- ───────────────────────── PART F ───────────────────────── -->
+<h2 id="partF">Part F — The dual-custody download</h2>
+<p>This is the headline security flow: an approved licence does <em>not</em> grant a silent download. Both parties must approve with live 2FA codes, and the resulting links expire. You'll be flipping between the <strong>studio</strong> and <strong>talent</strong> logins — this is exactly why each needs its own authenticator entry.</p>
+
+<div class="step"><div class="num">1</div><div class="body">
+  <h3>Licensee initiates <span class="pill industry">studio</span></h3>
+  <p>As the studio alias, open the approved licence under <span class="path">/licences</span> and start the download. Enter <strong>your</strong> 6-digit authenticator code ("IV — studio") to verify. The request then waits on the talent — you'll see an "awaiting talent verification" state.</p>
+</div></div>
+
+<div class="step"><div class="num">2</div><div class="body">
+  <h3>Talent authorises <span class="pill talent">talent</span></h3>
+  <p>As the talent alias, go to <span class="path">/vault/authorise</span> (or the download-approval prompt on <span class="path">/vault/licences</span>). Enter <strong>your</strong> code ("IV — talent"). Optionally set a pre-authorisation window so repeat downloads from this licensee skip your step for a set period (not available for AI-training licences).</p>
+</div></div>
+
+<div class="step"><div class="num">3</div><div class="body">
+  <h3>Download <span class="pill industry">studio</span></h3>
+  <p>Once both codes are verified, time-limited download links are issued (valid <strong>~48 hours</strong>). Back as the studio alias, download the file(s) — individually or as a zip. Every download is written to the audit log.</p>
+</div></div>
+
+<div class="warn"><strong>Codes are time-based.</strong> If you're slow flipping between the two logins, an authenticator code may roll over — just read the current one. The dual-custody session itself is valid for about an hour; if it lapses, re-initiate from step 1.</div>
+
+<!-- ───────────────────────── PART G ───────────────────────── -->
+<h2 id="partG">Part G — Watch the whole thing as admin</h2>
+<p>Switch to your admin login to confirm everything landed. Useful admin views:</p>
+<table>
+  <tr><th>Page</th><th>What to check</th></tr>
+  <tr><td><span class="path">/admin</span></td><td>Dashboard — user counts, package count &amp; storage, licence totals, recent downloads &amp; requests.</td></tr>
+  <tr><td><span class="path">/admin/users</span></td><td>Your alias accounts with roles; per-user flags (suspend, mute email, etc.) and force-reset.</td></tr>
+  <tr><td><span class="path">/admin/organisations</span></td><td>The studio organisation and its members.</td></tr>
+  <tr><td><span class="path">/admin/productions</span></td><td>The production, cast onboarding %, and linked licences. Click in to resolve cast → talent.</td></tr>
+  <tr><td><span class="path">/admin/licences</span></td><td>Platform-wide licence list with status, fees, and download history.</td></tr>
+  <tr><td><span class="path">/admin/packages</span></td><td>The uploaded scan, its files, and per-file download counts.</td></tr>
+  <tr><td><span class="path">/admin/downloads</span></td><td>The download-event log — confirm the dual-custody download was recorded.</td></tr>
+</table>
+
+<!-- ───────────────────────── REFERENCE ───────────────────────── -->
+<h2 id="ref">Reference</h2>
+
+<h3>Key URLs</h3>
+<table>
+  <tr><th>URL</th><th>Who</th><th>Purpose</th></tr>
+  <tr><td><span class="path">/admin/productions/invite</span></td><td><span class="pill admin">admin</span></td><td>Concierge: pre-build production + invite the industry owner</td></tr>
+  <tr><td><span class="path">/admin/invites</span></td><td><span class="pill admin">admin</span></td><td>Send/revoke invites for talent, rep, industry, compliance</td></tr>
+  <tr><td><span class="path">/signup?invite=…</span></td><td>invitee</td><td>Create account (email + role pre-filled when invited)</td></tr>
+  <tr><td><span class="path">/setup-2fa</span></td><td>everyone</td><td>Mandatory authenticator enrolment</td></tr>
+  <tr><td><span class="path">/onboarding</span></td><td><span class="pill talent">talent</span></td><td>Claim public identity (TMDB)</td></tr>
+  <tr><td><span class="path">/productions</span> · <span class="path">/productions/setup</span></td><td><span class="pill industry">industry</span></td><td>Production dashboard / guided setup wizard</td></tr>
+  <tr><td><span class="path">/dashboard</span> · <span class="path">/vault/packages</span></td><td><span class="pill talent">talent</span></td><td>Upload &amp; manage scan packages</td></tr>
+  <tr><td><span class="path">/directory</span></td><td><span class="pill industry">industry</span></td><td>Find talent to license</td></tr>
+  <tr><td><span class="path">/licences</span></td><td><span class="pill industry">industry</span></td><td>Licensee's licences; initiate downloads</td></tr>
+  <tr><td><span class="path">/vault/requests</span></td><td><span class="pill talent">talent</span></td><td>Approve / deny incoming licence requests</td></tr>
+  <tr><td><span class="path">/vault/authorise</span> · <span class="path">/vault/licences</span></td><td><span class="pill talent">talent</span></td><td>Authorise dual-custody downloads</td></tr>
+</table>
+
+<h3>Licence states</h3>
+<table>
+  <tr><th>State</th><th>Meaning</th></tr>
+  <tr><td><code>AWAITING_PACKAGE</code></td><td>Cast slot created by a production; talent hasn't uploaded/attached a scan yet</td></tr>
+  <tr><td><code>PENDING</code></td><td>Request submitted by licensee, awaiting talent approval</td></tr>
+  <tr><td><code>APPROVED</code></td><td>Talent approved; downloads possible (via dual-custody)</td></tr>
+  <tr><td><code>DENIED</code></td><td>Talent rejected (with optional reason)</td></tr>
+  <tr><td><code>REVOKED</code></td><td>Talent cancelled an approved licence</td></tr>
+  <tr><td><code>SCRUB_PERIOD</code> / <code>OVERDUE</code></td><td>Post-expiry cleanup window — confirm deletion of downloaded files</td></tr>
+  <tr><td><code>EXPIRED</code> / <code>CLOSED</code></td><td>Licence period ended / fully completed</td></tr>
+</table>
+
+<!-- ───────────────────────── GOTCHAS ───────────────────────── -->
+<h2 id="gotchas">Gotchas &amp; tips</h2>
+<ul>
+  <li><strong>Use two browser profiles (or one normal + one incognito).</strong> You'll constantly switch between the studio, talent, and admin sessions; separate profiles save you from logging in and out.</li>
+  <li><strong>One authenticator entry per account.</strong> Don't reuse a single TOTP secret — each signup generates its own. Name them clearly; the dual-custody download needs two different codes back-to-back.</li>
+  <li><strong>Plus-addressing = real, distinct accounts.</strong> <code>+studio</code> and <code>+talent</code> are different users to the system even though both inbox to <code>martin.davison@gmail.com</code>.</li>
+  <li><strong>If invite emails don't arrive,</strong> use the admin "Skip email notification → generate link only" toggle and copy the link. 2FA never depends on email (QR is on-screen).</li>
+  <li><strong>Passwords must be 12+ characters</strong> — the signup form enforces it.</li>
+  <li><strong>Talent &amp; rep are invite-only</strong>; industry can self-sign-up, but concierge pre-building gives the cleanest demo.</li>
+  <li><strong>Admin is whitelist-only</strong> and cannot be granted through the UI — your partner must already be in <code>lib/auth/adminEmails.ts</code>.</li>
+  <li><strong>Keep the "not zero-knowledge" framing</strong> when describing the platform to others.</li>
+</ul>
+
+<footer class="doc">
+  Image Vault — internal admin test playbook. Paths and labels reflect the current build; minor wording in the UI may differ. Generated for onboarding-flow testing.
+</footer>
+
+</div>
+</body>
+</html>
