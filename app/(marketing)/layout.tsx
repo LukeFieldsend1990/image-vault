@@ -43,6 +43,13 @@ export default function MarketingLayout({
           </nav>
 
           <div className="flex items-center gap-4">
+            <a
+              href="https://changling.io/demo"
+              className="text-xs font-medium tracking-wide uppercase transition hover:opacity-60"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Demo
+            </a>
             <Link
               href="/login"
               className="text-xs font-medium tracking-wide uppercase transition hover:opacity-60"
