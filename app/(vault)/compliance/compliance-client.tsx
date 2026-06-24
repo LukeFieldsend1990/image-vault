@@ -843,6 +843,7 @@ export default function ComplianceClient({
   title = "My Compliance Dashboard",
   subtitle,
   readOnly = false,
+  hideRegimeSelector = false,
 }: {
   talentId?: string;
   /** Override the data source. Defaults to the talent dashboard endpoint. */
@@ -853,6 +854,8 @@ export default function ComplianceClient({
   subtitle?: string;
   /** Hide every write control (consent grant/revoke, certificate generation). */
   readOnly?: boolean;
+  /** Hide the regime picker — for scopes that lock to a single regime (e.g. one union). */
+  hideRegimeSelector?: boolean;
 }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -984,7 +987,7 @@ export default function ComplianceClient({
           )}
         </div>
         <div className="flex flex-col items-end gap-2">
-          <RegimeSelector value={regime} onChange={setRegime} disabled={loading} />
+          {!hideRegimeSelector && <RegimeSelector value={regime} onChange={setRegime} disabled={loading} />}
           {!readOnly && (
             <div className="flex flex-col items-end gap-1">
               <button

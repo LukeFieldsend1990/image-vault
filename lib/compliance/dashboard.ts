@@ -26,6 +26,8 @@ import {
 } from "@/lib/db/schema";
 import { evaluateObligations } from "./registry";
 import "./regimes";
+import { affiliatedProductionIds, affiliatedTalentIds, productionIdsForTalent } from "./affiliation";
+import { getUnionPreset } from "./unions";
 import type { getDb } from "@/lib/db";
 import type { ComplianceEventType, EvaluatedEvent, LicenceLike, ObligationResult, RegimeId } from "./types";
 
@@ -1277,32 +1279,73 @@ export async function buildTalentDashboard(
 // than a per-scope drill-down. Includes cast onboarding, every active strike,
 // every pending transfer, and the most recent certificates across all scopes.
 
+export interface PlatformDashboardScope {
+  /** When set, restrict productions + licences + cast stats to this id set. */
+  productionIds?: Set<string>;
+  /** Overrides for the returned scope name / id (used by buildUnionDashboard). */
+  orgId?: string;
+  orgName?: string;
+}
+
 export async function buildPlatformDashboard(
   db: Db,
   regime: RegimeId,
+  scope: PlatformDashboardScope = {},
 ): Promise<DashboardData> {
-  // Every production on the platform — needed for cast-onboarding coverage even
-  // before any licence exists.
-  const allProductions = await db
-    .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
-    .from(productions)
-    .all();
+  const restrict = scope.productionIds;
+  const restrictArr = restrict ? [...restrict] : null;
+  const PLATFORM_NAME = scope.orgName ?? "Platform-wide";
+  const PLATFORM_ID = scope.orgId ?? "platform";
 
-  const licenceRows = await db
-    .select({
-      id: licences.id,
-      projectName: licences.projectName,
-      productionId: licences.productionId,
-      licenceType: licences.licenceType,
-      permitAiTraining: licences.permitAiTraining,
-      status: licences.status,
-      createdAt: licences.createdAt,
-      lastDownloadAt: licences.lastDownloadAt,
-      scrubAttestedAt: licences.scrubAttestedAt,
-      scrubDeadline: licences.scrubDeadline,
-    })
-    .from(licences)
-    .all();
+  // Every production on the platform (or just the scoped subset) — needed for
+  // cast-onboarding coverage even before any licence exists.
+  const allProductions = restrictArr
+    ? (restrictArr.length === 0
+        ? []
+        : await db
+            .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
+            .from(productions)
+            .where(inArray(productions.id, restrictArr))
+            .all())
+    : await db
+        .select({ id: productions.id, name: productions.name, type: productions.type, sagProjectNumber: productions.sagProjectNumber })
+        .from(productions)
+        .all();
+
+  const licenceRows = restrictArr
+    ? (restrictArr.length === 0
+        ? []
+        : await db
+            .select({
+              id: licences.id,
+              projectName: licences.projectName,
+              productionId: licences.productionId,
+              licenceType: licences.licenceType,
+              permitAiTraining: licences.permitAiTraining,
+              status: licences.status,
+              createdAt: licences.createdAt,
+              lastDownloadAt: licences.lastDownloadAt,
+              scrubAttestedAt: licences.scrubAttestedAt,
+              scrubDeadline: licences.scrubDeadline,
+            })
+            .from(licences)
+            .where(inArray(licences.productionId, restrictArr))
+            .all())
+    : await db
+        .select({
+          id: licences.id,
+          projectName: licences.projectName,
+          productionId: licences.productionId,
+          licenceType: licences.licenceType,
+          permitAiTraining: licences.permitAiTraining,
+          status: licences.status,
+          createdAt: licences.createdAt,
+          lastDownloadAt: licences.lastDownloadAt,
+          scrubAttestedAt: licences.scrubAttestedAt,
+          scrubDeadline: licences.scrubDeadline,
+        })
+        .from(licences)
+        .all();
 
   // Platform-wide counts that apply regardless of the licence set.
   const activeStrikeRows = await db
@@ -1322,8 +1365,6 @@ export async function buildPlatformDashboard(
     .limit(8)
     .all();
   const recentCertificates = await enrichCertificates(db, certRows);
-
-  const PLATFORM_NAME = "Platform-wide";
 
   if (licenceRows.length === 0) {
     // No licences yet — still surface productions that have cast in onboarding.
@@ -1400,7 +1441,7 @@ export async function buildPlatformDashboard(
       }
     }
     return {
-      orgId: "platform",
+      orgId: PLATFORM_ID,
       orgName: PLATFORM_NAME,
       regime,
       healthScore: castOnlyProductions.length > 0 ? 0 : 100,
@@ -1675,7 +1716,7 @@ export async function buildPlatformDashboard(
   const compliantProductions = productionResults.filter((p) => p.complianceStatus === "compliant").length;
 
   return {
-    orgId: "platform",
+    orgId: PLATFORM_ID,
     orgName: PLATFORM_NAME,
     regime,
     healthScore: orgHealthScore,
@@ -1693,4 +1734,26 @@ export async function buildPlatformDashboard(
     actionItems,
     recentCertificates,
   };
+}
+
+// Union-scoped dashboard — the productions an affiliated talent is involved in
+// (via cast slot or licence), evaluated against the union's regime. Reuses the
+// platform builder so the wire-shape is identical and the existing
+// ComplianceClient can render it in read-only mode.
+export async function buildUnionDashboard(
+  db: Db,
+  regime: RegimeId,
+  unionId: string,
+): Promise<DashboardData> {
+  const talentIds = [...(await affiliatedTalentIds(db, [unionId]))];
+  const productionIds = talentIds.length === 0
+    ? await affiliatedProductionIds(db, [unionId])
+    : await productionIdsForTalent(db, talentIds);
+  const preset = getUnionPreset(unionId);
+  const shortName = preset?.shortName ?? unionId;
+  return buildPlatformDashboard(db, regime, {
+    productionIds,
+    orgId: `union:${unionId}`,
+    orgName: `${shortName} compliance`,
+  });
 }

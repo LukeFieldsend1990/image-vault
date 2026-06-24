@@ -412,6 +412,9 @@ export const productionWatchlist = sqliteTable("production_watchlist", {
   addedAt: integer("added_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
   archivedAt: integer("archived_at"),
+  // Which union this entry belongs to (e.g. "sag_aftra" | "equity"). Null for
+  // legacy rows added before per-union attribution.
+  unionId: text("union_id"),
 });
 
 // Union member roster: a union's membership list (plain names), so it can see which
