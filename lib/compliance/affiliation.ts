@@ -19,6 +19,7 @@
 import { and, inArray, isNull } from "drizzle-orm";
 import { licences, productionCast, productions, talentProfiles, unionMembers } from "@/lib/db/schema";
 import { normaliseName } from "./watchlist";
+import { getUnionPreset } from "./unions";
 import type { getDb } from "@/lib/db";
 
 type Db = ReturnType<typeof getDb>;
@@ -44,8 +45,11 @@ export interface AffiliatedProduction {
 }
 
 /**
- * On-platform talent affiliated with the given union(s): the union's active
- * member-roster names matched against talent profiles by normalised full name.
+ * On-platform talent affiliated with the given union(s). A talent is affiliated
+ * if either:
+ *   • their name appears on the union's active member roster (normalised match), or
+ *   • they self-declared the union as their affiliation at onboarding (matched
+ *     case-insensitively against the union's shortName, e.g. "Equity" / "SAG-AFTRA").
  */
 export async function affiliatedTalent(db: Db, unionIds: string[]): Promise<AffiliatedTalent[]> {
   if (unionIds.length === 0) return [];
@@ -55,21 +59,29 @@ export async function affiliatedTalent(db: Db, unionIds: string[]): Promise<Affi
     .from(unionMembers)
     .where(and(inArray(unionMembers.unionId, unionIds), isNull(unionMembers.archivedAt)))
     .all();
-  if (rosterRows.length === 0) return [];
-
   const rosterKeys = new Set(rosterRows.map((r) => normaliseName(r.name)).filter(Boolean));
-  if (rosterKeys.size === 0) return [];
 
-  // Talent index by normalised name (first profile wins on a name collision).
+  const selfDeclaredKeys = new Set(
+    unionIds
+      .map((id) => getUnionPreset(id)?.shortName.toLowerCase())
+      .filter((s): s is string => !!s),
+  );
+
   const talent = await db
-    .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName })
+    .select({
+      userId: talentProfiles.userId,
+      fullName: talentProfiles.fullName,
+      unionAffiliation: talentProfiles.unionAffiliation,
+    })
     .from(talentProfiles)
     .all();
 
   const out = new Map<string, AffiliatedTalent>();
   for (const t of talent) {
-    const key = normaliseName(t.fullName);
-    if (key && rosterKeys.has(key) && !out.has(t.userId)) {
+    const nameKey = normaliseName(t.fullName);
+    const rosterHit = !!nameKey && rosterKeys.has(nameKey);
+    const declaredHit = !!t.unionAffiliation && selfDeclaredKeys.has(t.unionAffiliation.trim().toLowerCase());
+    if ((rosterHit || declaredHit) && !out.has(t.userId)) {
       out.set(t.userId, { talentId: t.userId, name: t.fullName });
     }
   }
