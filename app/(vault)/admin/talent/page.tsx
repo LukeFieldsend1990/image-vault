@@ -34,7 +34,7 @@ export default async function AdminTalentPage() {
   }
 
   const [profiles, settings, repCounts, pkgCounts] = await Promise.all([
-    db.select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName, profileImageUrl: talentProfiles.profileImageUrl })
+    db.select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName, profileImageUrl: talentProfiles.profileImageUrl, unionAffiliation: talentProfiles.unionAffiliation })
       .from(talentProfiles).all(),
 
     db.select({
@@ -73,7 +73,7 @@ export default async function AdminTalentPage() {
         <div
           className="grid text-[10px] uppercase tracking-widest font-semibold px-5 py-3 min-w-[800px]"
           style={{
-            gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1fr 1fr",
+            gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.2fr 1fr",
             color: "var(--color-muted)",
             background: "var(--color-surface)",
             borderBottom: "1px solid var(--color-border)",
@@ -84,6 +84,7 @@ export default async function AdminTalentPage() {
           <span>Split</span>
           <span>Reps</span>
           <span>Packages</span>
+          <span>Union</span>
           <span></span>
         </div>
 
@@ -101,7 +102,7 @@ export default async function AdminTalentPage() {
               key={u.id}
               className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[800px]"
               style={{
-                gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1fr 1fr",
+                gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.2fr 1fr",
                 borderColor: "var(--color-border)",
               }}
             >
@@ -159,6 +160,18 @@ export default async function AdminTalentPage() {
               <span className="text-xs" style={{ color: "var(--color-muted)" }}>
                 {pkgCount > 0 ? `${pkgCount} ready` : "—"}
               </span>
+
+              {/* Union affiliation */}
+              {profile?.unionAffiliation ? (
+                <span
+                  className="inline-flex items-center text-[9px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded w-fit truncate max-w-full"
+                  style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)", border: "1px solid rgba(192,57,43,0.2)" }}
+                >
+                  {profile.unionAffiliation}
+                </span>
+              ) : (
+                <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
+              )}
 
               {/* Manage link */}
               <Link
