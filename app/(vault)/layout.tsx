@@ -187,15 +187,17 @@ async function getPlatformOversight(userId: string, email: string, role: Role): 
   }
 }
 
-// The Member roster is union-owned (one list per union). Only a union watcher —
-// a compliance user holding a platform-scoped union grant — maintains it; a
-// platform-wide regulator has no union and does not get the link. Admins manage
-// every union but use the talent nav, so they never see this compliance link.
+// A union watcher is any compliance user whose active grants attribute them to a
+// union — whether by platform-scoped grant (manages the whole list) or by a
+// union-scope grant (read access into one union's slate). Both groups get the
+// per-union Members + Watchlist surfaces; the API layer enforces the actual
+// per-entry scope. Admins manage every union but use the talent nav, so they
+// never see this compliance link.
 async function getUnionWatcher(userId: string, email: string, role: Role): Promise<boolean> {
   if (isAdmin(email)) return true;
   if (!isComplianceRole(role) || !userId) return false;
   try {
-    return (await getUnionIdsForUser(getDb(), userId, { platformOnly: true })).length > 0;
+    return (await getUnionIdsForUser(getDb(), userId)).length > 0;
   } catch {
     return false;
   }

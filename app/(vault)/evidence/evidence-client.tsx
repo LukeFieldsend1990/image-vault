@@ -28,14 +28,6 @@ interface Evidence {
   certificates: { id: string; regime: string; ledgerTipHash: string; eventCount: number; generatedAt: number }[];
 }
 
-interface UnionView {
-  unionId: string;
-  shortName: string;
-  name: string;
-  talent: { talentId: string; name: string }[];
-  productions: { id: string; name: string; status: string | null }[];
-}
-
 function fmtDate(epoch: number) {
   return new Date(epoch * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -53,16 +45,17 @@ export default function EvidenceClient() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Grant | null>(null);
   const [evidence, setEvidence] = useState<Evidence | null>(null);
-  const [unionView, setUnionView] = useState<UnionView | null>(null);
-  // Drill-down from a union view into one affiliated talent / production.
-  const [drill, setDrill] = useState<{ scope: string; id: string; label: string } | null>(null);
   const [loadingEv, setLoadingEv] = useState(false);
 
   const loadGrants = useCallback(async () => {
     try {
       const res = await fetch("/api/compliance/evidence");
       const d = (await res.json()) as { grants?: Grant[] };
-      setGrants(d.grants ?? []);
+      const list = d.grants ?? [];
+      setGrants(list);
+      // Auto-select the first non-platform grant so the user lands on usable evidence.
+      const firstUsable = list.find((g) => g.scope !== "platform") ?? list[0] ?? null;
+      if (firstUsable) setSelected(firstUsable);
     } catch {
       // ignore
     } finally {
@@ -72,7 +65,7 @@ export default function EvidenceClient() {
 
   useEffect(() => { void loadGrants(); }, [loadGrants]);
 
-  async function fetchEvidence(scope: string, id: string, regime?: string) {
+  const fetchEvidence = useCallback(async (scope: string, id: string, regime?: string) => {
     setLoadingEv(true); setEvidence(null);
     try {
       const qs = new URLSearchParams({ scope, id });
@@ -84,36 +77,15 @@ export default function EvidenceClient() {
     } finally {
       setLoadingEv(false);
     }
-  }
+  }, []);
 
-  async function open(g: Grant) {
-    setSelected(g); setEvidence(null); setUnionView(null); setDrill(null);
-    if (g.scope === "platform") return;
-    if (g.scope === "union") {
-      setLoadingEv(true);
-      try {
-        const res = await fetch(`/api/compliance/union?id=${encodeURIComponent(g.scopeId ?? "")}`);
-        if (res.ok) {
-          const d = (await res.json()) as { unions?: UnionView[] };
-          setUnionView(d.unions?.[0] ?? null);
-        }
-      } catch {
-        // ignore
-      } finally {
-        setLoadingEv(false);
-      }
-      return;
-    }
-    void fetchEvidence(g.scope, g.scopeId ?? "");
-  }
-
-  function drillInto(scope: string, id: string, label: string) {
-    setDrill({ scope, id, label });
-    // A union watcher should see the obligations of their union's regime, not the
-    // sag_aftra default. Union id is shared with the regime id (see UNION_PRESETS).
-    const regime = selected?.scope === "union" ? selected.scopeId ?? undefined : undefined;
-    void fetchEvidence(scope, id, regime);
-  }
+  // When the selected scope isn't a union, fetch per-scope evidence. Union scopes
+  // render a full ComplianceClient instead — no per-scope evidence fetch needed.
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.scope === "platform" || selected.scope === "union") return;
+    void fetchEvidence(selected.scope, selected.scopeId ?? "");
+  }, [selected, fetchEvidence]);
 
   if (loading) return <p className="p-8 text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>;
 
@@ -198,107 +170,55 @@ export default function EvidenceClient() {
     );
   }
 
-  function unionPanel(uv: UnionView) {
-    return (
-      <div className="space-y-5">
-        <div className="rounded border p-4" style={{ borderColor: "var(--color-border)" }}>
-          <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{uv.name}</p>
-          <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
-            {uv.talent.length} affiliated talent on platform · {uv.productions.length} production(s) they are involved in
-          </p>
-        </div>
-
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--color-muted)" }}>Affiliated talent</h2>
-          {uv.talent.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--color-muted)" }}>No roster members are on the platform yet.</p>
-          ) : (
-            <div className="rounded border divide-y" style={{ borderColor: "var(--color-border)" }}>
-              {uv.talent.map((t) => (
-                <button key={t.talentId} onClick={() => drillInto("talent", t.talentId, t.name)} className="flex w-full items-center justify-between px-4 py-2 text-left hover:bg-[var(--color-surface)]">
-                  <span className="text-sm" style={{ color: "var(--color-ink)" }}>{t.name}</span>
-                  <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>View evidence →</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--color-muted)" }}>Affiliated productions</h2>
-          {uv.productions.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--color-muted)" }}>No productions yet involve an affiliated member.</p>
-          ) : (
-            <div className="rounded border divide-y" style={{ borderColor: "var(--color-border)" }}>
-              {uv.productions.map((p) => (
-                <button key={p.id} onClick={() => drillInto("production", p.id, p.name)} className="flex w-full items-center justify-between px-4 py-2 text-left hover:bg-[var(--color-surface)]">
-                  <span className="text-sm" style={{ color: "var(--color-ink)" }}>{p.name}</span>
-                  <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{p.status ?? "—"}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-8 max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Compliance Evidence</h1>
-        <p className="text-xs" style={{ color: "var(--color-muted)" }}>Read-only obligation status and audit trail for the scopes you have been granted.</p>
+    <div className="flex h-full">
+      {/* Scope picker — kept on the far left as the regime selector for a union watcher. */}
+      <aside className="shrink-0 w-[220px] border-r p-4 space-y-1 overflow-y-auto" style={{ borderColor: "var(--color-border)" }}>
+        <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>Scopes</p>
+        {grants.length === 0 ? (
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>No scopes shared yet.</p>
+        ) : (
+          grants.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => setSelected(g)}
+              className="w-full text-left px-3 py-2 rounded border text-sm transition"
+              style={{
+                borderColor: selected?.id === g.id ? "var(--color-accent)" : "var(--color-border)",
+                background: selected?.id === g.id ? "var(--color-surface)" : "transparent",
+                color: "var(--color-ink)",
+              }}
+            >
+              <div className="truncate">{g.label}</div>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>{g.subtype} · {g.scope}</div>
+            </button>
+          ))
+        )}
+      </aside>
+
+      {/* Detail pane */}
+      <div className="flex-1 min-w-0 overflow-y-auto">
+        {!selected ? (
+          <p className="p-8 text-sm" style={{ color: "var(--color-muted)" }}>Select a scope to view its evidence.</p>
+        ) : selected.scope === "platform" ? (
+          <p className="p-8 text-sm" style={{ color: "var(--color-muted)" }}>Platform-wide grant — request a specific production, organisation or talent scope to view its obligation status.</p>
+        ) : selected.scope === "union" ? (
+          // Full across-slate compliance view for the union — KPIs, obligation
+          // progress, productions cards, action queue. ProductionCard click opens
+          // the existing per-production drill-down modal inside ComplianceClient.
+          <ComplianceClient
+            readOnly
+            hideRegimeSelector
+            dashboardUrl={`/api/compliance/union-dashboard?unionId=${encodeURIComponent(selected.scopeId ?? "")}`}
+            title={`${selected.label} compliance`}
+            subtitle="Read-only · obligations across every production an affiliated talent is involved in."
+          />
+        ) : (
+          <div className="p-8 max-w-3xl">
+            {evidencePanel()}
+          </div>
+        )}
       </div>
-
-      {grants.length === 0 ? (
-        <p className="text-sm" style={{ color: "var(--color-muted)" }}>No scopes have been shared with you yet.</p>
-      ) : (
-        <div className="grid grid-cols-[220px_1fr] gap-6">
-          {/* Scope list */}
-          <div className="space-y-1">
-            {grants.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => void open(g)}
-                className="w-full text-left px-3 py-2 rounded border text-sm transition"
-                style={{
-                  borderColor: selected?.id === g.id ? "var(--color-accent)" : "var(--color-border)",
-                  background: selected?.id === g.id ? "var(--color-surface)" : "transparent",
-                  color: "var(--color-ink)",
-                }}
-              >
-                <div className="truncate">{g.label}</div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>{g.subtype} · {g.scope}</div>
-              </button>
-            ))}
-          </div>
-
-          {/* Detail */}
-          <div>
-            {!selected ? (
-              <p className="text-sm" style={{ color: "var(--color-muted)" }}>Select a scope to view its evidence.</p>
-            ) : selected.scope === "platform" ? (
-              <p className="text-sm" style={{ color: "var(--color-muted)" }}>Platform-wide grant — request a specific production, organisation or talent scope to view its obligation status.</p>
-            ) : selected.scope === "union" ? (
-              drill ? (
-                <div className="space-y-4">
-                  <button onClick={() => { setDrill(null); setEvidence(null); }} className="text-[11px]" style={{ color: "var(--color-accent)" }}>← Back to {selected.label}</button>
-                  <p className="text-xs font-medium" style={{ color: "var(--color-muted)" }}>{drill.scope === "talent" ? "Talent" : "Production"}: {drill.label}</p>
-                  {evidencePanel()}
-                </div>
-              ) : loadingEv ? (
-                <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>
-              ) : !unionView ? (
-                <p className="text-sm" style={{ color: "var(--color-muted)" }}>No affiliated entities available for this union yet.</p>
-              ) : (
-                unionPanel(unionView)
-              )
-            ) : (
-              evidencePanel()
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

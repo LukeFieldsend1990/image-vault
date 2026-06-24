@@ -179,7 +179,7 @@ export async function resolveRosterUnion(
 ): Promise<RosterUnionContext | { error: string; status: number }> {
   const available = isAdmin(session.email)
     ? UNION_PRESETS.map((u) => ({ id: u.id, shortName: u.shortName }))
-    : (await getUnionIdsForUser(db, session.sub, { platformOnly: true })).map((id) => ({
+    : (await getUnionIdsForUser(db, session.sub)).map((id) => ({
         id,
         shortName: getUnionPreset(id)?.shortName ?? id,
       }));

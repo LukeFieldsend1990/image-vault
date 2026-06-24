@@ -19,11 +19,14 @@ interface WatchlistEntry {
   outreachNotes: string | null;
   addedByName: string | null;
   addedAt: number;
+  unionId: string | null;
   ratified: boolean;
   matchedProductionId: string | null;
   matchedProductionName: string | null;
   matchedStatus: string | null;
 }
+
+interface UnionOption { id: string; shortName: string }
 
 interface Candidate {
   tmdbId: number;
@@ -51,7 +54,7 @@ function fmtDate(ts: number | null): string {
 
 // ── add panel (TMDB-assisted promotion + manual) ──────────────────────────────
 
-function AddPanel({ onAdded, onClose }: { onAdded: () => void; onClose: () => void }) {
+function AddPanel({ onAdded, onClose, unionId }: { onAdded: () => void; onClose: () => void; unionId: string | null }) {
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [searching, setSearching] = useState(false);
@@ -67,7 +70,9 @@ function AddPanel({ onAdded, onClose }: { onAdded: () => void; onClose: () => vo
     setSearching(true);
     setError(null);
     try {
-      const res = await fetch(`/api/compliance/watchlist/discover?q=${encodeURIComponent(q)}`);
+      const qs = new URLSearchParams({ q });
+      if (unionId) qs.set("unionId", unionId);
+      const res = await fetch(`/api/compliance/watchlist/discover?${qs.toString()}`);
       const d = (await res.json()) as { results?: Candidate[]; error?: string };
       if (d.error) setError(d.error);
       setCandidates(d.results ?? []);
@@ -77,7 +82,7 @@ function AddPanel({ onAdded, onClose }: { onAdded: () => void; onClose: () => vo
     } finally {
       setSearching(false);
     }
-  }, [query]);
+  }, [query, unionId]);
 
   const promote = useCallback(async (c: Candidate) => {
     setBusyId(c.tmdbId);
@@ -86,7 +91,7 @@ function AddPanel({ onAdded, onClose }: { onAdded: () => void; onClose: () => vo
       const res = await fetch("/api/compliance/watchlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: c.name, tmdbId: c.tmdbId, type: c.type, source: "tmdb" }),
+        body: JSON.stringify({ name: c.name, tmdbId: c.tmdbId, type: c.type, source: "tmdb", unionId }),
       });
       if (!res.ok) {
         const d = (await res.json()) as { error?: string };
@@ -98,7 +103,7 @@ function AddPanel({ onAdded, onClose }: { onAdded: () => void; onClose: () => vo
     } finally {
       setBusyId(null);
     }
-  }, [onAdded]);
+  }, [onAdded, unionId]);
 
   const addManual = useCallback(async () => {
     const name = manualName.trim();
@@ -109,7 +114,7 @@ function AddPanel({ onAdded, onClose }: { onAdded: () => void; onClose: () => vo
       const res = await fetch("/api/compliance/watchlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, companyName: manualCompany.trim() || null, source: "manual" }),
+        body: JSON.stringify({ name, companyName: manualCompany.trim() || null, source: "manual", unionId }),
       });
       if (!res.ok) {
         const d = (await res.json()) as { error?: string };
@@ -122,7 +127,7 @@ function AddPanel({ onAdded, onClose }: { onAdded: () => void; onClose: () => vo
     } finally {
       setBusyId(null);
     }
-  }, [manualName, manualCompany, onAdded]);
+  }, [manualName, manualCompany, onAdded, unionId]);
 
   return (
     <div className="rounded-lg p-4 mb-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
@@ -297,17 +302,25 @@ function EntryRow({ entry, onChanged }: { entry: WatchlistEntry; onChanged: () =
 
 export default function WatchlistClient() {
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
+  const [unions, setUnions] = useState<UnionOption[]>([]);
+  const [unionId, setUnionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [pendingOnly, setPendingOnly] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forUnion?: string | null) => {
     try {
-      const res = await fetch("/api/compliance/watchlist");
-      const d = (await res.json()) as { entries?: WatchlistEntry[]; error?: string };
+      const qs = forUnion ? `?unionId=${encodeURIComponent(forUnion)}` : "";
+      const res = await fetch(`/api/compliance/watchlist${qs}`);
+      const d = (await res.json()) as { entries?: WatchlistEntry[]; unions?: UnionOption[]; unionId?: string | null; error?: string };
       if (!res.ok || d.error) setError(d.error ?? `Failed (${res.status})`);
-      else setEntries(d.entries ?? []);
+      else {
+        setEntries(d.entries ?? []);
+        if (d.unions) setUnions(d.unions);
+        if (d.unionId !== undefined) setUnionId(d.unionId);
+        setError(null);
+      }
     } catch {
       setError("Failed to load watchlist.");
     } finally {
@@ -316,6 +329,12 @@ export default function WatchlistClient() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  const selectUnion = useCallback((id: string) => {
+    setUnionId(id);
+    setLoading(true);
+    void load(id);
+  }, [load]);
 
   const shown = entries
     .filter((e) => (pendingOnly ? !e.ratified : true))
@@ -336,6 +355,24 @@ export default function WatchlistClient() {
           mandated — this is visibility, so the union can ask a production what it&apos;s doing for compliance.
         </p>
       </div>
+
+      {/* Union picker — only when the caller may see more than one union's list. */}
+      {unions.length > 1 && (
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
+          <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>Union</span>
+          {unions.map((u) => (
+            <button key={u.id} onClick={() => selectUnion(u.id)}
+              className="text-xs rounded px-3 py-1 font-medium"
+              style={{
+                background: unionId === u.id ? "var(--color-ink)" : "transparent",
+                color: unionId === u.id ? "#fff" : "var(--color-muted)",
+                border: "1px solid var(--color-border)",
+              }}>
+              {u.shortName}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
         <button onClick={() => setAdding((v) => !v)}
@@ -362,7 +399,7 @@ export default function WatchlistClient() {
         )}
       </div>
 
-      {adding && <AddPanel onAdded={load} onClose={() => setAdding(false)} />}
+      {adding && <AddPanel onAdded={() => load(unionId)} onClose={() => setAdding(false)} unionId={unionId} />}
 
       {loading ? (
         <div className="space-y-3">
@@ -381,7 +418,7 @@ export default function WatchlistClient() {
         </p>
       ) : (
         <div className="space-y-3">
-          {shown.map((e) => <EntryRow key={e.id} entry={e} onChanged={load} />)}
+          {shown.map((e) => <EntryRow key={e.id} entry={e} onChanged={() => load(unionId)} />)}
         </div>
       )}
     </div>

@@ -6,7 +6,7 @@
 // `productions` table (by tmdbId first, then normalised name) so an entry flips to
 // "on Image Vault" automatically the moment a matching production is registered.
 
-import { desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { productionWatchlist, productions, users } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 
@@ -26,6 +26,7 @@ export interface WatchlistEntry {
   outreachNotes: string | null;
   addedByName: string | null;
   addedAt: number;
+  unionId: string | null;
   // Derived ratification status
   ratified: boolean;
   matchedProductionId: string | null;
@@ -39,12 +40,18 @@ export function normaliseName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-/** Active watchlist entries, each enriched with live ratification status. */
-export async function buildWatchlist(db: Db): Promise<WatchlistEntry[]> {
+/** Active watchlist entries, each enriched with live ratification status. When
+ *  `unionIds` is given, restricts to entries tagged with one of those unions —
+ *  the per-union scoping watchers expect. Pass an empty array to get everything
+ *  (admin view). */
+export async function buildWatchlist(db: Db, unionIds?: string[]): Promise<WatchlistEntry[]> {
+  const where = unionIds && unionIds.length > 0
+    ? and(isNull(productionWatchlist.archivedAt), inArray(productionWatchlist.unionId, unionIds))
+    : isNull(productionWatchlist.archivedAt);
   const entries = await db
     .select()
     .from(productionWatchlist)
-    .where(isNull(productionWatchlist.archivedAt))
+    .where(where)
     .orderBy(desc(productionWatchlist.flaggedForOutreach), desc(productionWatchlist.addedAt))
     .all();
   if (entries.length === 0) return [];
@@ -86,6 +93,7 @@ export async function buildWatchlist(db: Db): Promise<WatchlistEntry[]> {
       outreachNotes: e.outreachNotes,
       addedByName: adderEmail.get(e.addedBy) ?? null,
       addedAt: e.addedAt,
+      unionId: e.unionId,
       ratified: !!match,
       matchedProductionId: match?.id ?? null,
       matchedProductionName: match?.name ?? null,
@@ -104,21 +112,24 @@ export interface AddWatchlistInput {
   source?: "tmdb" | "manual";
   notes?: string | null;
   addedBy: string;
+  unionId?: string | null;
 }
 
 const STAGES = new Set(["development", "pre_production", "production", "unknown"]);
 const TYPES = new Set(["film", "tv_series", "tv_movie", "commercial", "game", "music_video", "other"]);
 
-/** Add an entry. Returns the new id, or null if a non-archived entry already
- *  tracks the same TMDB id (avoids duplicate promotions). */
+/** Add an entry. Returns the new id, or null if a non-archived entry on the
+ *  same union list already tracks the same TMDB id. Per-union scoping means
+ *  SAG and Equity may independently watch the same upcoming production. */
 export async function addWatchlistEntry(db: Db, input: AddWatchlistInput): Promise<string | null> {
   if (input.tmdbId != null) {
-    const existing = await db
-      .select({ id: productionWatchlist.id })
+    const existingRows = await db
+      .select({ id: productionWatchlist.id, unionId: productionWatchlist.unionId, archivedAt: productionWatchlist.archivedAt })
       .from(productionWatchlist)
       .where(eq(productionWatchlist.tmdbId, input.tmdbId))
       .all();
-    if (existing.length > 0) return null;
+    const dup = existingRows.find((r) => r.archivedAt == null && (r.unionId ?? null) === (input.unionId ?? null));
+    if (dup) return null;
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -136,6 +147,7 @@ export async function addWatchlistEntry(db: Db, input: AddWatchlistInput): Promi
     addedBy: input.addedBy,
     addedAt: now,
     updatedAt: now,
+    unionId: input.unionId ?? null,
   });
   return id;
 }
@@ -167,6 +179,17 @@ export async function updateWatchlistEntry(db: Db, id: string, patch: UpdateWatc
   return true;
 }
 
+/** The union id (if any) a watchlist entry belongs to — used for per-call scope
+ *  checks before patch/delete. */
+export async function getWatchlistEntryUnionId(db: Db, id: string): Promise<string | null | undefined> {
+  const row = await db
+    .select({ unionId: productionWatchlist.unionId })
+    .from(productionWatchlist)
+    .where(eq(productionWatchlist.id, id))
+    .get();
+  return row ? (row.unionId ?? null) : undefined;
+}
+
 /** Soft-remove (archive) an entry so it drops off the active watchlist. */
 export async function archiveWatchlistEntry(db: Db, id: string): Promise<boolean> {
   const existing = await db.select({ id: productionWatchlist.id }).from(productionWatchlist).where(eq(productionWatchlist.id, id)).get();
@@ -175,12 +198,17 @@ export async function archiveWatchlistEntry(db: Db, id: string): Promise<boolean
   return true;
 }
 
-/** TMDB ids already on the active watchlist — used to dedupe discovery candidates. */
-export async function activeWatchlistTmdbIds(db: Db): Promise<Set<number>> {
+/** TMDB ids already on the active watchlist — used to dedupe discovery
+ *  candidates. Scoped per union so a SAG watcher's "already on watchlist"
+ *  signal isn't polluted by Equity's list. */
+export async function activeWatchlistTmdbIds(db: Db, unionIds?: string[]): Promise<Set<number>> {
+  const where = unionIds && unionIds.length > 0
+    ? and(isNull(productionWatchlist.archivedAt), inArray(productionWatchlist.unionId, unionIds))
+    : isNull(productionWatchlist.archivedAt);
   const rows = await db
     .select({ tmdbId: productionWatchlist.tmdbId })
     .from(productionWatchlist)
-    .where(isNull(productionWatchlist.archivedAt))
+    .where(where)
     .all();
   return new Set(rows.map((r) => r.tmdbId).filter((t): t is number => t != null));
 }

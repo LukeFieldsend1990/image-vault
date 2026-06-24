@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { canViewPlatformOversight } from "@/lib/compliance/grants";
+import { isAdmin } from "@/lib/auth/adminEmails";
+import { getUnionIdsForUser } from "@/lib/compliance/grants";
 import { activeWatchlistTmdbIds } from "@/lib/compliance/watchlist";
 import { productions } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 
-// GET /api/compliance/watchlist/discover?q=<title>
+// GET /api/compliance/watchlist/discover?q=<title>&unionId=
 // TMDB candidate search for promoting an upcoming production onto the watchlist.
 // Each candidate is annotated with whether it is already ratified on Image Vault
-// (a production shares its tmdbId) or already on the watchlist, so the maintainer
-// only promotes genuinely-missing productions.
+// (a production shares its tmdbId) or already on the watchlist for the given
+// union (one union's promotion shouldn't hide a different union's candidate).
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
   const db = getDb();
-  if (!(await canViewPlatformOversight(db, session))) {
+  const callerUnions = isAdmin(session.email)
+    ? null // null = no union filter on dedup
+    : await getUnionIdsForUser(db, session.sub);
+  if (callerUnions && callerUnions.length === 0) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -57,7 +61,15 @@ export async function GET(req: NextRequest) {
       .all();
     for (const p of existing) if (p.tmdbId != null) ratifiedTmdbIds.add(p.tmdbId);
   }
-  const onWatchlist = await activeWatchlistTmdbIds(db);
+  const sp = new URL(req.url).searchParams;
+  const requestedUnion = sp.get("unionId");
+  let dedupUnionIds: string[] | undefined;
+  if (callerUnions) {
+    dedupUnionIds = requestedUnion && callerUnions.includes(requestedUnion) ? [requestedUnion] : callerUnions;
+  } else if (requestedUnion) {
+    dedupUnionIds = [requestedUnion];
+  }
+  const onWatchlist = await activeWatchlistTmdbIds(db, dedupUnionIds);
 
   const results = raw.map((r) => {
     const date = r.release_date || r.first_air_date || null;

@@ -489,11 +489,15 @@ export function NavLinks({ role, pipelineEnabled, royaltyMeterEnabled, inboundEn
   if (complianceEnabled === false) {
     base = base.filter((item) => !item.href.startsWith("/compliance"));
   }
-  // The oversight Productions tracker + repeat-offender Scorecard + Watchlist are
-  // only for compliance watchers holding a platform-wide grant; hide them for
-  // scoped watchers.
+  // The oversight Productions tracker + repeat-offender Scorecard are only for
+  // compliance watchers holding a platform-wide grant; hide them for scoped
+  // watchers. The Watchlist is per-union, so any union watcher (platform- or
+  // union-scoped) sees their own list.
   if (isComplianceRole(role) && !platformOversight) {
-    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight" && item.href !== "/watchlist");
+    base = base.filter((item) => item.href !== "/productions" && item.href !== "/oversight");
+  }
+  if (isComplianceRole(role) && !platformOversight && !unionWatcher) {
+    base = base.filter((item) => item.href !== "/watchlist");
   }
   // The Member roster is union-owned (one list per union). Only a union watcher
   // maintains it — a platform-wide regulator has no union, so hide it from them.
