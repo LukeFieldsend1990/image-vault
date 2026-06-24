@@ -12,10 +12,11 @@ interface Grant {
 }
 
 interface Obligation {
-  key: string;
-  label: string;
-  status: string;
-  severity: string;
+  id: string;
+  clauseRef: string;
+  title: string;
+  status: "met" | "gap" | "n/a" | "pending";
+  severity: "required" | "recommended";
 }
 
 interface Evidence {
@@ -40,7 +41,11 @@ function fmtDate(epoch: number) {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  satisfied: "#166534", met: "#166534", gap: "#c0392b", pending: "#92400e",
+  met: "#1a7f37", gap: "#c0392b", pending: "#2563eb", "n/a": "var(--color-muted)",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  met: "✓ Met", gap: "⚠ Gap", pending: "⏳ Pending", "n/a": "N/A",
 };
 
 export default function EvidenceClient() {
@@ -67,10 +72,12 @@ export default function EvidenceClient() {
 
   useEffect(() => { void loadGrants(); }, [loadGrants]);
 
-  async function fetchEvidence(scope: string, id: string) {
+  async function fetchEvidence(scope: string, id: string, regime?: string) {
     setLoadingEv(true); setEvidence(null);
     try {
-      const res = await fetch(`/api/compliance/evidence?scope=${scope}&id=${encodeURIComponent(id)}`);
+      const qs = new URLSearchParams({ scope, id });
+      if (regime) qs.set("regime", regime);
+      const res = await fetch(`/api/compliance/evidence?${qs.toString()}`);
       if (res.ok) setEvidence((await res.json()) as Evidence);
     } catch {
       // ignore
@@ -102,7 +109,10 @@ export default function EvidenceClient() {
 
   function drillInto(scope: string, id: string, label: string) {
     setDrill({ scope, id, label });
-    void fetchEvidence(scope, id);
+    // A union watcher should see the obligations of their union's regime, not the
+    // sag_aftra default. Union id is shared with the regime id (see UNION_PRESETS).
+    const regime = selected?.scope === "union" ? selected.scopeId ?? undefined : undefined;
+    void fetchEvidence(scope, id, regime);
   }
 
   if (loading) return <p className="p-8 text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>;
@@ -134,15 +144,39 @@ export default function EvidenceClient() {
         </div>
 
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--color-muted)" }}>Obligations</h2>
-          <div className="rounded border divide-y" style={{ borderColor: "var(--color-border)" }}>
-            {evidence.obligations.map((o) => (
-              <div key={o.key} className="flex items-center justify-between px-4 py-2">
-                <span className="text-sm" style={{ color: "var(--color-ink)" }}>{o.label}</span>
-                <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: STATUS_COLOR[o.status] ?? "var(--color-muted)" }}>{o.status}</span>
-              </div>
-            ))}
-          </div>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--color-muted)" }}>Obligation progress</h2>
+          {evidence.obligations.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>No obligations apply to this scope yet.</p>
+          ) : (
+            <div className="rounded border px-3" style={{ borderColor: "var(--color-border)" }}>
+              {evidence.obligations.map((o) => {
+                const color = STATUS_COLOR[o.status] ?? "var(--color-muted)";
+                const advisory = o.severity !== "required";
+                const isMet = o.status === "met";
+                const isGap = o.status === "gap";
+                const barColor = isGap ? (advisory ? "#b45309" : color) : isMet ? "#1a7f37" : "var(--color-border)";
+                const pct = isMet ? 100 : isGap ? 100 : 0;
+                return (
+                  <div key={o.id} className="flex items-center gap-4 py-2" style={{ borderBottom: "1px solid var(--color-border)" }}>
+                    <span className="text-xs font-mono w-12 shrink-0" style={{ color: "var(--color-muted)" }}>
+                      {o.clauseRef}
+                    </span>
+                    <span className="text-sm flex-1 min-w-0 truncate" style={{ color: "var(--color-ink)" }}>
+                      {o.title}
+                    </span>
+                    <div className="w-32 shrink-0">
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: barColor, transition: "width 0.4s ease" }} />
+                      </div>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-widest w-20 text-right shrink-0 font-medium" style={{ color }}>
+                      {STATUS_LABEL[o.status] ?? o.status}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section>
