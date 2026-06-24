@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { VaultMockup, LicenceMockup, InboxMockup, RoyaltiesMockup, ComplianceMockup } from "./mockups";
+import ExplainerFilm from "./explainer-film";
 
 export const metadata: Metadata = {
   title: "Image Vault — Your likeness. Your terms.",
@@ -22,8 +23,24 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export default function ProductPage() {
   return (
     <>
+      {/* ─────────────── Explainer film ─────────────── */}
+      <section className="mx-auto max-w-6xl px-6 pt-12 pb-2 md:pt-16">
+        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <p
+            className="text-xs font-medium tracking-widest uppercase"
+            style={{ color: "var(--color-accent)" }}
+          >
+            What Image Vault does
+          </p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            A sixty-second tour
+          </p>
+        </div>
+        <ExplainerFilm />
+      </section>
+
       {/* ─────────────── Hero ─────────────── */}
-      <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 md:pt-28">
+      <section className="mx-auto max-w-6xl px-6 pt-14 pb-16 md:pt-20">
         <div className="max-w-3xl">
           <SectionLabel>The likeness licensing platform</SectionLabel>
           <h1
