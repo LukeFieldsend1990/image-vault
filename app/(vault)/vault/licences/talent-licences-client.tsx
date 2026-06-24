@@ -269,7 +269,7 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
   async function load() {
     const r = await fetch("/api/licences");
     const d = await r.json() as { licences?: Licence[] };
-    setLicences((d.licences ?? []).filter((l) => l.status !== "PENDING"));
+    setLicences((d.licences ?? []).filter((l) => l.status !== "PENDING" && l.status !== "AWAITING_PACKAGE"));
     setLoading(false);
   }
 
