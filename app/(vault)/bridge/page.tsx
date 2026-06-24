@@ -30,6 +30,7 @@ export default async function BridgePage() {
 
   if (isIndustryRole(user.role) || user.role === "admin") {
     const db = getDb();
+    // eslint-disable-next-line react-hooks/purity
     const now = Math.floor(Date.now() / 1000);
 
     const memberships = await db
