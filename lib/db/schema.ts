@@ -389,7 +389,30 @@ export const productions = sqliteTable("productions", {
   sagProjectNumber: text("sag_project_number"),
   isSag: integer("is_sag", { mode: "boolean" }).notNull().default(false),
   isEquity: integer("is_equity", { mode: "boolean" }).notNull().default(false),
+  otherUnion: text("other_union"), // free-text "Other" union when a title falls outside SAG-AFTRA / Equity
   shortCode: text("short_code"), // PR-#### production code. System-generated; see lib/codes.
+  // Home jurisdiction — the country the production company is registered in.
+  // Set during setup; additional countries the show operates in live in
+  // production_countries. Mirrored as the is_home=1 row there so the UI
+  // renders one unified list.
+  homeCountry: text("home_country"),
+});
+
+// Countries in scope for a production — every place data activity (filming,
+// capture, vendor processing) happens. One row per jurisdiction. Removing a
+// country is a soft-delete (status='removed' + removedAt) so the compliance
+// audit trail survives. The home country sits here too with is_home=1.
+export const productionCountries = sqliteTable("production_countries", {
+  id: text("id").primaryKey(),
+  productionId: text("production_id").notNull().references(() => productions.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  topLevelId: text("top_level_id").notNull(), // 'UK' | 'EU' | 'US' | 'CH' | 'CA' | ...
+  isHome: integer("is_home", { mode: "boolean" }).notNull().default(false),
+  status: text("status", { enum: ["in_scope", "removed"] }).notNull().default("in_scope"),
+  addedAt: integer("added_at").notNull(),
+  addedBy: text("added_by").references(() => users.id),
+  removedAt: integer("removed_at"),
+  removedBy: text("removed_by").references(() => users.id),
 });
 
 // Upcoming productions believed to be heading into pre-production that are NOT yet
@@ -1031,6 +1054,10 @@ export const productionCast = sqliteTable("production_cast", {
   characterName: text("character_name"),
   department: text("department"),
   sagMember: integer("sag_member", { mode: "boolean" }).notNull().default(false),
+  // Self-declared union for the cast member: "SAG-AFTRA" | "Equity" | free text | null.
+  // Kept consistent with talentProfiles.unionAffiliation; sagMember is derived from
+  // this by the app (sagMember = unionAffiliation === "SAG-AFTRA") for back-compat.
+  unionAffiliation: text("union_affiliation"),
   status: text("status").notNull().default("invited"),
   // placeholder | invited | linked | scan_uploaded | consented | declined
   // placeholder = recorded by name only; promoted to invited/linked once an email is attached.

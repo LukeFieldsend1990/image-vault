@@ -48,6 +48,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       orgShortCode: organisations.shortCode,
       shortCode: productions.shortCode,
       sagProjectNumber: productions.sagProjectNumber,
+      homeCountry: productions.homeCountry,
+      isSag: productions.isSag,
+      isEquity: productions.isEquity,
+      otherUnion: productions.otherUnion,
       createdAt: productions.createdAt,
       updatedAt: productions.updatedAt,
     })
@@ -126,11 +130,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
-  if (!isAdmin(session.email) && session.role !== "rep") {
+  const { id } = await params;
+  const db = getDb();
+
+  // Auth: admin, rep, or an owner/member of the production's owning organisation
+  // (so producers can edit their own production's compliance details).
+  let allowed = isAdmin(session.email) || session.role === "rep";
+  if (!allowed && isIndustryRole(session.role)) {
+    const prod = await db
+      .select({ organisationId: productions.organisationId })
+      .from(productions)
+      .where(eq(productions.id, id))
+      .get();
+    if (!prod) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!prod.organisationId) {
+      allowed = true; // legacy production with no owning org
+    } else {
+      const membership = await db
+        .select({ r: organisationMembers.memberRole })
+        .from(organisationMembers)
+        .where(and(eq(organisationMembers.organisationId, prod.organisationId), eq(organisationMembers.userId, session.sub)))
+        .get();
+      if (membership) allowed = true;
+    }
+  }
+  if (!allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id } = await params;
   let body: Record<string, unknown>;
   try {
     body = JSON.parse(await req.text());
@@ -138,13 +165,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const db = getDb();
   const now = Math.floor(Date.now() / 1000);
 
   const updates: Record<string, unknown> = { updatedAt: now };
-  const allowedFields = ["name", "companyId", "type", "year", "status", "imdbId", "tmdbId", "director", "vfxSupervisor", "notes"];
+  const allowedFields = ["name", "companyId", "type", "year", "status", "imdbId", "tmdbId", "director", "vfxSupervisor", "notes", "isSag", "isEquity"];
   for (const field of allowedFields) {
     if (field in body) updates[field] = body[field];
+  }
+  // Free-text fields are trimmed; empty string clears them to null.
+  for (const field of ["sagProjectNumber", "otherUnion"] as const) {
+    if (field in body) {
+      const v = body[field];
+      updates[field] = typeof v === "string" && v.trim() ? v.trim() : null;
+    }
   }
 
   await db.update(productions).set(updates).where(eq(productions.id, id));

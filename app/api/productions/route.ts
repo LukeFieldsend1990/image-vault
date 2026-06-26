@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionCompanies, organisations, organisationMembers } from "@/lib/db/schema";
+import { productions, productionCountries, productionCompanies, organisations, organisationMembers } from "@/lib/db/schema";
+import { topLevelById } from "@/lib/jurisdictions/countries";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { mintProductionCode } from "@/lib/codes/codes";
@@ -75,6 +76,8 @@ export async function POST(req: NextRequest) {
     sagProjectNumber?: string;
     isSag?: boolean;
     isEquity?: boolean;
+    homeCountry?: { name: string; topLevelId: string };
+    otherUnion?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -84,6 +87,14 @@ export async function POST(req: NextRequest) {
 
   if (!body.name?.trim()) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  }
+
+  // Validate home country if provided — must reference a known top-level regime
+  // so the compliance commitment shown to the user matches what we store.
+  if (body.homeCountry) {
+    if (!body.homeCountry.name?.trim() || !topLevelById(body.homeCountry.topLevelId)) {
+      return NextResponse.json({ error: "Invalid home country" }, { status: 400 });
+    }
   }
 
   // Licensee role must supply an organisationId and be a member of it
@@ -157,9 +168,27 @@ export async function POST(req: NextRequest) {
     sagProjectNumber: body.sagProjectNumber ?? null,
     isSag: body.isSag ?? false,
     isEquity: body.isEquity ?? false,
+    homeCountry: body.homeCountry?.name.trim() ?? null,
+    otherUnion: body.otherUnion?.trim() || null,
     createdAt: now,
     updatedAt: now,
   });
+
+  // Seed the home country into production_countries so the "Countries in scope"
+  // list always has it. The detail page renders one unified list with the home
+  // row marked.
+  if (body.homeCountry) {
+    await db.insert(productionCountries).values({
+      id: crypto.randomUUID(),
+      productionId,
+      name: body.homeCountry.name.trim(),
+      topLevelId: body.homeCountry.topLevelId,
+      isHome: true,
+      status: "in_scope",
+      addedAt: now,
+      addedBy: session.sub,
+    });
+  }
 
   await mintProductionCode(db, productionId);
 
