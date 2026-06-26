@@ -5,9 +5,10 @@ import SidebarShell from "./sidebar-shell";
 import NotificationBell from "./notification-bell";
 import { CodesProvider } from "@/app/components/code-tag";
 import { getDb } from "@/lib/db";
-import { licences, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
+import { licences, organisationMembers, organisations, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
+import type { OrgType } from "@/lib/organisations/orgTypes";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { hasPlatformGrant, hasInsurerGrant, getUnionIdsForUser } from "@/lib/compliance/grants";
 
@@ -214,6 +215,22 @@ async function getInsurerWatcher(userId: string, role: Role): Promise<boolean> {
   }
 }
 
+async function getIndustryOrgType(userId: string, role: Role): Promise<OrgType | null> {
+  if (!isIndustryRole(role) || !userId) return null;
+  try {
+    const db = getDb();
+    const row = await db
+      .select({ orgType: organisations.orgType })
+      .from(organisationMembers)
+      .innerJoin(organisations, eq(organisationMembers.organisationId, organisations.id))
+      .where(eq(organisationMembers.userId, userId))
+      .get();
+    return row?.orgType ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Reps who belong to a talent agency org get the Agency nav surface.
 async function getAgencyMember(userId: string, role: Role): Promise<boolean> {
   if (role !== "rep" || !userId) return false;
@@ -247,7 +264,7 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher, agencyMember] = await Promise.all([
+  const [identity, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher, agencyMember, industryOrgType] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     role === "talent" ? getRoyaltyMeterEnabled(sub) : Promise.resolve(false),
@@ -259,6 +276,7 @@ export default async function VaultLayout({
     getInsurerWatcher(sub, role),
     getUnionWatcher(sub, email, role),
     getAgencyMember(sub, role),
+    getIndustryOrgType(sub, role),
   ]);
 
   const homeHref = isComplianceRole(role)
@@ -280,7 +298,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} pipelineEnabled={pipelineEnabled} royaltyMeterEnabled={royaltyMeterEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} />
+            <NavLinks role={role} email={email} industryOrgType={industryOrgType} pipelineEnabled={pipelineEnabled} royaltyMeterEnabled={royaltyMeterEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} />
           </div>
 
           <div>

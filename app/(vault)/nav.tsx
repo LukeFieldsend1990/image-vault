@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
+import type { OrgType } from "@/lib/organisations/orgTypes";
 
 type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
 
@@ -475,7 +476,7 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember }: { role: Role; email?: string; pipelineEnabled?: boolean; royaltyMeterEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean }) {
+export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember }: { role: Role; email?: string; industryOrgType?: OrgType | null; pipelineEnabled?: boolean; royaltyMeterEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   // Agents (reps belonging to a talent agency) get an Agency surface, placed
@@ -511,6 +512,16 @@ export function NavLinks({ role, pipelineEnabled, royaltyMeterEnabled, inboundEn
   }
   if (role === "talent" && !royaltyMeterEnabled) {
     base = base.filter((item) => item.href !== "/royalties" && item.href !== "/vault/monitor");
+  }
+  // Scan-service (capture) and dubbing companies: receiving/processing only —
+  // directory browsing, licence management, and render bridge are not relevant.
+  if (isIndustryRole(role) && (industryOrgType === "scan_service" || industryOrgType === "dubbing")) {
+    base = base.filter((item) => item.href !== "/directory" && item.href !== "/licences" && item.href !== "/bridge");
+  }
+  // VFX vendors: receiving only — the transfers section describes outbound
+  // dispatch workflows that don't apply to them.
+  if (isIndustryRole(role) && industryOrgType === "vfx_vendor") {
+    base = base.filter((item) => item.href !== "/transfers");
   }
   const items = role === "talent" && pipelineEnabled
     ? [...base.slice(0, -1), PIPELINE_NAV_ITEM, base[base.length - 1]]
