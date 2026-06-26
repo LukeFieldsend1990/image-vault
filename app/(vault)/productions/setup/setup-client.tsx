@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import VendorsPanel from "@/app/(vault)/productions/[id]/vendors-panel";
 import {
   COUNTRY_TOP_LEVEL,
   complianceStatement,
@@ -76,7 +75,7 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-const STEPS = ["Welcome", "Company", "Production", "Jurisdiction", "Cast", "Vendors", "Terms", "Done"];
+const STEPS = ["Welcome", "Company", "Production", "Jurisdiction", "Cast", "Terms", "Done"];
 
 // ── Small UI helpers ───────────────────────────────────────────────────────────
 
@@ -169,13 +168,14 @@ export default function SetupClient() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [importResult, setImportResult] = useState<{ imported: number; matched: number } | null>(null);
 
-  // Step 6 — default terms
+  // Step 5 — default terms
   const [terms, setTerms] = useState({
-    intendedUse: "", licenceType: "film_double", territory: "Worldwide",
+    intendedUse: "", licenceTypes: ["film_double"] as string[], territory: "Worldwide",
     exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
+    feeNA: false, isRelicense: false,
   });
 
-  // Step 7 — done
+  // Step 6 — done
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null);
 
   // Load eligible orgs once (owner/admin → can create productions).
@@ -278,6 +278,10 @@ export default function SetupClient() {
   async function confirmJurisdiction() {
     setError("");
     if (!jurTopLevel || !jurSub) { setError("Pick a country to continue."); return; }
+    // Item 8 — seed the default territory from the home country (the only in-scope
+    // country at wizard time). Editable on the Terms step; more countries can be
+    // added later from the production detail page.
+    setTerms((t) => ({ ...t, territory: jurSub }));
     setBusy(true);
     try {
       const details = {
@@ -386,13 +390,14 @@ export default function SetupClient() {
   // Whether the producer has actually entered anything. The pre-filled licence
   // type / territory don't count — an untouched form is treated as a skip.
   const termsHaveContent = Boolean(
-    terms.intendedUse.trim() || terms.validFrom || terms.validTo || terms.feePounds.trim() || terms.permitAiTraining
+    terms.intendedUse.trim() || terms.validFrom || terms.validTo || terms.feePounds.trim() || terms.permitAiTraining || terms.feeNA || terms.isRelicense
   );
 
   function clearTerms() {
     setTerms({
-      intendedUse: "", licenceType: "film_double", territory: "Worldwide",
+      intendedUse: "", licenceTypes: ["film_double"], territory: "Worldwide",
       exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
+      feeNA: false, isRelicense: false,
     });
     setError("");
   }
@@ -400,29 +405,31 @@ export default function SetupClient() {
   async function submitTerms() {
     setError("");
     // Nothing entered → treat Continue as a skip and move on without saving.
-    if (!termsHaveContent) { setStep(7); return; }
+    if (!termsHaveContent) { setStep(6); return; }
     const validFrom = toUnix(terms.validFrom);
     const validTo = toUnix(terms.validTo);
     if (validFrom && validTo && validTo <= validFrom) { setError("End date must be after start date."); return; }
     setBusy(true);
     try {
-      const feePence = terms.feePounds.trim() ? Math.round(parseFloat(terms.feePounds) * 100) : undefined;
+      // N/A fee (item 9) persists as null, distinct from £0; otherwise pence.
+      const feePence = terms.feeNA ? null : (terms.feePounds.trim() ? Math.round(parseFloat(terms.feePounds) * 100) : undefined);
       const r = await fetch(`/api/productions/${productionId}/default-terms`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           intendedUse: terms.intendedUse.trim() || undefined,
-          licenceType: terms.licenceType,
+          licenceTypes: terms.licenceTypes,
           territory: terms.territory.trim() || undefined,
           exclusivity: terms.exclusivity,
           permitAiTraining: terms.permitAiTraining,
+          isRelicense: terms.isRelicense,
           validFrom, validTo,
-          proposedFee: Number.isFinite(feePence) ? feePence : undefined,
+          proposedFee: feePence,
         }),
       });
       const d = await r.json() as { ok?: boolean; error?: string };
       if (!r.ok) { setError(d.error ?? "Failed to save terms."); return; }
-      setStep(7);
+      setStep(6);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -815,27 +822,8 @@ export default function SetupClient() {
         </div>
       )}
 
-      {/* Step 5 — Vendors */}
+      {/* Step 5 — Default terms */}
       {step === 5 && (
-        <div className="space-y-5">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Vendors on this production</h1>
-            <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-              Add the VFX, dubbing or scan vendors working on this production — optional, and you can do it later. Attaching a vendor lists them here; scan access is granted per licence and needs their environment audit to pass.
-            </p>
-          </div>
-
-          {productionId && <VendorsPanel productionId={productionId} embedded />}
-
-          <div className="flex items-center gap-3 pt-2">
-            <PrimaryButton onClick={() => setStep(6)}>Continue</PrimaryButton>
-            <GhostButton onClick={() => setStep(prodForm.tmdbId ? 4 : 3)}>Back</GhostButton>
-          </div>
-        </div>
-      )}
-
-      {/* Step 6 — Default terms */}
-      {step === 6 && (
         <div className="space-y-5">
           <div>
             <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Set your default terms</h1>
@@ -846,23 +834,61 @@ export default function SetupClient() {
           <Field label="Intended use">
             <input type="text" value={terms.intendedUse} onChange={(e) => setTerms((t) => ({ ...t, intendedUse: e.target.value }))} placeholder="e.g. Digital double for VFX" style={inputStyle} />
           </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Licence type">
-              <select value={terms.licenceType} onChange={(e) => setTerms((t) => ({ ...t, licenceType: e.target.value }))} style={inputStyle}>
-                {LICENCE_TYPES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Territory">
-              <input type="text" value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={inputStyle} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Valid from"><input type="date" value={terms.validFrom} onChange={(e) => setTerms((t) => ({ ...t, validFrom: e.target.value }))} style={inputStyle} /></Field>
-            <Field label="Valid to"><input type="date" value={terms.validTo} onChange={(e) => setTerms((t) => ({ ...t, validTo: e.target.value }))} style={inputStyle} /></Field>
-          </div>
-          <Field label="Proposed fee per actor (£)" hint="Optional — leave blank to negotiate individually.">
-            <input type="number" min={0} step="0.01" value={terms.feePounds} onChange={(e) => setTerms((t) => ({ ...t, feePounds: e.target.value }))} style={inputStyle} />
+          {/* Use type(s) — multi-select (item 7). One licence covers every ticked type. */}
+          <Field label="Use type(s)" hint="One licence covers all selected use types — no separate contract per type.">
+            <div className="flex flex-wrap gap-2">
+              {LICENCE_TYPES.map((l) => {
+                const active = terms.licenceTypes.includes(l.value);
+                return (
+                  <button
+                    key={l.value}
+                    type="button"
+                    onClick={() => setTerms((t) => ({ ...t, licenceTypes: active ? t.licenceTypes.filter((v) => v !== l.value) : [...t.licenceTypes, l.value] }))}
+                    className="px-3 py-1.5 rounded text-xs font-medium border transition"
+                    style={{ borderColor: active ? "var(--color-accent)" : "var(--color-border)", background: active ? "var(--color-accent)" : "transparent", color: active ? "white" : "var(--color-muted)" }}
+                  >
+                    {l.label}
+                  </button>
+                );
+              })}
+            </div>
           </Field>
+          <Field label="Territory" hint="Pre-filled from the home country — editable.">
+            <input type="text" value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={inputStyle} />
+          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Valid from">
+              <input
+                type="date"
+                value={terms.validFrom}
+                onChange={(e) => {
+                  // Item 6 — suggest an 18-month term when the start date is set.
+                  const validFrom = e.target.value;
+                  let validTo = terms.validTo;
+                  if (validFrom) {
+                    const d = new Date(validFrom + "T00:00:00");
+                    if (!Number.isNaN(d.getTime())) { d.setMonth(d.getMonth() + 18); validTo = d.toISOString().slice(0, 10); }
+                  }
+                  setTerms((t) => ({ ...t, validFrom, validTo }));
+                }}
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Valid to" hint="Suggested 18-month term — adjust as needed.">
+              <input type="date" value={terms.validTo} onChange={(e) => setTerms((t) => ({ ...t, validTo: e.target.value }))} style={inputStyle} />
+            </Field>
+          </div>
+          <Field label="Proposed fee per actor (£)" hint="Optional — leave blank to negotiate individually, or mark N/A when scanning is part of production costs.">
+            <input type="number" min={0} step="0.01" value={terms.feeNA ? "" : terms.feePounds} disabled={terms.feeNA} onChange={(e) => setTerms((t) => ({ ...t, feePounds: e.target.value }))} style={{ ...inputStyle, opacity: terms.feeNA ? 0.5 : 1 }} placeholder={terms.feeNA ? "N/A" : undefined} />
+          </Field>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={terms.feeNA} onChange={(e) => setTerms((t) => ({ ...t, feeNA: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
+            <span className="text-sm" style={{ color: "var(--color-text)" }}>Fee N/A (scanning is part of production costs)</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={terms.isRelicense} onChange={(e) => setTerms((t) => ({ ...t, isRelicense: e.target.checked, feeNA: e.target.checked ? false : t.feeNA }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
+            <span className="text-sm" style={{ color: "var(--color-text)" }}>This is a re-licence of an existing scan (a fee is expected)</span>
+          </label>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={terms.permitAiTraining} onChange={(e) => setTerms((t) => ({ ...t, permitAiTraining: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
             <span className="text-sm" style={{ color: "var(--color-text)" }}>Permit AI training on this likeness</span>
@@ -870,7 +896,7 @@ export default function SetupClient() {
 
           <div className="flex items-center gap-3 pt-2">
             <PrimaryButton onClick={submitTerms} disabled={busy}>{busy ? "Saving…" : "Continue"}</PrimaryButton>
-            <GhostButton onClick={() => setStep(5)}>Back</GhostButton>
+            <GhostButton onClick={() => setStep(prodForm.tmdbId ? 4 : 3)}>Back</GhostButton>
             {termsHaveContent && (
               <button type="button" onClick={clearTerms} className="text-xs ml-auto" style={{ color: "var(--color-muted)" }}>
                 Clear all
@@ -880,8 +906,8 @@ export default function SetupClient() {
         </div>
       )}
 
-      {/* Step 7 — Done */}
-      {step === 7 && (
+      {/* Step 6 — Done */}
+      {step === 6 && (
         <div className="space-y-6">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>{prodForm.name || "Your production"} is set up 🎬</h1>

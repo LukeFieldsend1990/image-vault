@@ -4,7 +4,7 @@ import { productions, productionDefaultTerms, organisationMembers } from "@/lib/
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
-import { CAST_LICENCE_TYPES, CAST_EXCLUSIVITIES } from "@/lib/productions/cast";
+import { CAST_LICENCE_TYPES, CAST_EXCLUSIVITIES, serializeLicenceTypes } from "@/lib/productions/cast";
 import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/use-categories";
 import { eq, and } from "drizzle-orm";
 
@@ -87,6 +87,7 @@ export async function PUT(
   let body: {
     intendedUse?: unknown;
     licenceType?: unknown;
+    licenceTypes?: unknown;
     territory?: unknown;
     exclusivity?: unknown;
     permitAiTraining?: unknown;
@@ -94,6 +95,7 @@ export async function PUT(
     validFrom?: unknown;
     validTo?: unknown;
     proposedFee?: unknown;
+    isRelicense?: unknown;
   };
   try {
     body = JSON.parse(await req.text());
@@ -102,7 +104,12 @@ export async function PUT(
   }
 
   const intendedUse = typeof body.intendedUse === "string" && body.intendedUse.trim() ? body.intendedUse.trim() : null;
-  const licenceType = typeof body.licenceType === "string" && (CAST_LICENCE_TYPES as readonly string[]).includes(body.licenceType) ? body.licenceType : null;
+  // Multi-select use types (item 7); legacy single licenceType = primary (first).
+  const licenceTypesJson = serializeLicenceTypes(body.licenceTypes);
+  const licenceTypesArr = licenceTypesJson ? (JSON.parse(licenceTypesJson) as string[]) : [];
+  const licenceType = licenceTypesArr[0]
+    ?? (typeof body.licenceType === "string" && (CAST_LICENCE_TYPES as readonly string[]).includes(body.licenceType) ? body.licenceType : null);
+  const isRelicense = typeof body.isRelicense === "boolean" ? body.isRelicense : null;
   const territory = typeof body.territory === "string" && body.territory.trim() ? body.territory.trim() : null;
   const exclusivity = typeof body.exclusivity === "string" && (CAST_EXCLUSIVITIES as readonly string[]).includes(body.exclusivity) ? body.exclusivity : null;
   // Reconcile the use-category taxonomy with the legacy permitAiTraining boolean
@@ -128,6 +135,8 @@ export async function PUT(
       productionId: id,
       intendedUse,
       licenceType,
+      licenceTypesJson,
+      isRelicense,
       territory,
       exclusivity,
       permitAiTraining,
@@ -140,7 +149,7 @@ export async function PUT(
     })
     .onConflictDoUpdate({
       target: productionDefaultTerms.productionId,
-      set: { intendedUse, licenceType, territory, exclusivity, permitAiTraining, useCategoriesJson, validFrom, validTo, proposedFee, updatedBy: session.sub, updatedAt: now },
+      set: { intendedUse, licenceType, licenceTypesJson, isRelicense, territory, exclusivity, permitAiTraining, useCategoriesJson, validFrom, validTo, proposedFee, updatedBy: session.sub, updatedAt: now },
     });
 
   return NextResponse.json({ ok: true });

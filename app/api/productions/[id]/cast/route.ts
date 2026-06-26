@@ -14,6 +14,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { mintLicenceCode } from "@/lib/codes/codes";
+import { normaliseLicenceTypes, serializeLicenceTypes } from "@/lib/productions/cast";
 import { eq, and, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import {
@@ -191,17 +192,20 @@ interface CastMemberInput {
   tmdbId?: number;
   sourceNote?: string;
   characterName?: string;
+  /** @deprecated cast department is no longer captured (item 1); column retained for a later cleanup migration. */
   department?: string;
   sagMember?: boolean;
   unionAffiliation?: string;
   intendedUse?: string;
   validFrom?: number;
   validTo?: number;
-  licenceType?: string;
+  licenceType?: string;          // legacy primary use type
+  licenceTypes?: string[];       // multi-select use types (item 7)
   territory?: string;
   exclusivity?: string;
   permitAiTraining?: boolean;
-  proposedFee?: number;
+  proposedFee?: number | null;   // null = N/A (distinct from 0); item 9
+  isRelicense?: boolean;         // item 9
 }
 
 // POST /api/productions/[id]/cast
@@ -306,17 +310,20 @@ export async function POST(
       tmdbId: typeof member.tmdbId === "number" ? Math.floor(member.tmdbId) : undefined,
       sourceNote: typeof member.sourceNote === "string" ? member.sourceNote : undefined,
       characterName: typeof member.characterName === "string" ? member.characterName : undefined,
-      department: typeof member.department === "string" ? member.department : undefined,
+      // department deprecated (item 1) — intentionally not read from the client payload.
       sagMember,
       unionAffiliation,
       intendedUse: typeof member.intendedUse === "string" ? member.intendedUse : undefined,
       validFrom: typeof member.validFrom === "number" ? member.validFrom : undefined,
       validTo: typeof member.validTo === "number" ? member.validTo : undefined,
+      licenceTypes: normaliseLicenceTypes(member.licenceTypes),
       licenceType: typeof member.licenceType === "string" ? member.licenceType : undefined,
       territory: typeof member.territory === "string" ? member.territory : undefined,
       exclusivity: typeof member.exclusivity === "string" ? member.exclusivity : undefined,
       permitAiTraining: typeof member.permitAiTraining === "boolean" ? member.permitAiTraining : false,
-      proposedFee: typeof member.proposedFee === "number" ? member.proposedFee : undefined,
+      // null is a deliberate "N/A" signal (item 9); only a real number is a fee.
+      proposedFee: typeof member.proposedFee === "number" ? member.proposedFee : (member.proposedFee === null ? null : undefined),
+      isRelicense: typeof member.isRelicense === "boolean" ? member.isRelicense : undefined,
     });
   }
 
@@ -347,16 +354,22 @@ export async function POST(
   let placeholders = 0;
   const errors: string[] = [];
 
+  // Primary single use type (first of the multi-select array) for legacy readers.
+  const primaryType = (member: CastMemberInput) =>
+    (member.licenceTypes && member.licenceTypes.length ? member.licenceTypes[0] : member.licenceType) ?? null;
+
   // Stored licence-terms blob carried on a row until a licence is created.
   const termsBlob = (member: CastMemberInput) => ({
     intendedUse: member.intendedUse,
     validFrom: member.validFrom,
     validTo: member.validTo,
-    licenceType: member.licenceType ?? null,
+    licenceType: primaryType(member),
+    licenceTypes: member.licenceTypes ?? [],
     territory: member.territory ?? null,
     exclusivity: member.exclusivity ?? "non_exclusive",
     permitAiTraining: member.permitAiTraining ?? false,
     proposedFee: member.proposedFee ?? null,
+    isRelicense: member.isRelicense ?? false,
     projectName: production.name,
     productionCompany: companyName,
   });
@@ -380,6 +393,10 @@ export async function POST(
           unionAffiliation: member.unionAffiliation ?? null,
           status: "placeholder",
           licenceTermsJson: JSON.stringify(termsBlob(member)),
+          // Item 11 — unclaimed likeness: the production is the GDPR data controller
+          // until the talent claims their vault (handover recorded on claim).
+          dataControllerOrgId: production.organisationId ?? null,
+          dataControllerSince: production.organisationId ? now : null,
           addedBy: session.sub,
           addedAt: now,
           linkedAt: null,
@@ -417,7 +434,9 @@ export async function POST(
           validFrom,
           validTo,
           status: "AWAITING_PACKAGE",
-          licenceType: (member.licenceType as typeof licences.$inferInsert["licenceType"]) ?? null,
+          licenceType: (primaryType(member) as typeof licences.$inferInsert["licenceType"]) ?? null,
+          licenceTypesJson: serializeLicenceTypes(member.licenceTypes),
+          isRelicense: member.isRelicense ?? null,
           territory: member.territory ?? null,
           exclusivity: (member.exclusivity as typeof licences.$inferInsert["exclusivity"]) ?? "non_exclusive",
           permitAiTraining: member.permitAiTraining ?? false,
@@ -453,7 +472,7 @@ export async function POST(
             coordinatorEmail,
             characterName: member.characterName,
             intendedUse,
-            proposedFee: member.proposedFee,
+            proposedFee: member.proposedFee ?? undefined,
             reviewUrl: `${baseUrl}/licences/${licenceId}`,
           });
           await sendEmail({ to: email, subject, html });
@@ -469,11 +488,13 @@ export async function POST(
           intendedUse,
           validFrom,
           validTo,
-          licenceType: member.licenceType ?? null,
+          licenceType: primaryType(member),
+          licenceTypes: member.licenceTypes ?? [],
           territory: member.territory ?? null,
           exclusivity: member.exclusivity ?? "non_exclusive",
           permitAiTraining: member.permitAiTraining ?? false,
           proposedFee: member.proposedFee ?? null,
+          isRelicense: member.isRelicense ?? false,
           projectName: production.name,
           productionCompany: companyName,
         };
@@ -504,6 +525,9 @@ export async function POST(
           unionAffiliation: member.unionAffiliation ?? null,
           status: "invited",
           licenceTermsJson: JSON.stringify(licenceTerms),
+          // Item 11 — still unclaimed (no talentId): production is data controller.
+          dataControllerOrgId: production.organisationId ?? null,
+          dataControllerSince: production.organisationId ? now : null,
           addedBy: session.sub,
           addedAt: now,
           linkedAt: null,

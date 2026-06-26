@@ -144,6 +144,15 @@ export const licences = sqliteTable("licences", {
   licenceType: text("licence_type", {
     enum: ["film_double", "game_character", "commercial", "ai_avatar", "training_data", "monitoring_reference"],
   }),
+  // Multi-select use types (item 7). JSON array of the same enum values as
+  // licenceType. licenceType above is kept populated with the primary (first)
+  // selection for back-compat; this array is the full set the licence covers.
+  // One licence row carries the array — no per-type contract fan-out.
+  licenceTypesJson: text("licence_types_json"),
+  // Re-licence flag (item 9): true when this is a re-licence of an existing scan
+  // (a fee is expected) rather than a fresh production scan. Distinct from
+  // productionIncluded (£0, paid as part of the production).
+  isRelicense: integer("is_relicense", { mode: "boolean" }),
   territory: text("territory"),
   exclusivity: text("exclusivity", { enum: ["non_exclusive", "sole", "exclusive"] }).default("non_exclusive"),
   permitAiTraining: integer("permit_ai_training", { mode: "boolean" }).notNull().default(false),
@@ -1062,6 +1071,12 @@ export const productionCast = sqliteTable("production_cast", {
   // placeholder | invited | linked | scan_uploaded | consented | declined
   // placeholder = recorded by name only; promoted to invited/linked once an email is attached.
   licenceTermsJson: text("licence_terms_json"), // stored until talent registers; then licence created
+  // Data-controller attribution (item 11). While talentId is null the production
+  // company is the GDPR data controller for this unclaimed likeness (side
+  // agreement 39J). Set when a placeholder/unclaimed row is created; cleared and
+  // recorded in the chain of custody when the talent claims their vault.
+  dataControllerOrgId: text("data_controller_org_id").references(() => organisations.id),
+  dataControllerSince: integer("data_controller_since"), // unix seconds
   addedBy: text("added_by").notNull().references(() => users.id),
   addedAt: integer("added_at").notNull(),
   linkedAt: integer("linked_at"),
@@ -1085,6 +1100,10 @@ export const productionDefaultTerms = sqliteTable("production_default_terms", {
   exclusivity: text("exclusivity"),        // non_exclusive | sole | exclusive
   permitAiTraining: integer("permit_ai_training", { mode: "boolean" }).notNull().default(false),
   useCategoriesJson: text("use_categories_json"), // JSON array of use-category ids (lib/consent/use-categories.ts)
+  // Default multi-select use types (item 7) — JSON array of licenceType enum values.
+  licenceTypesJson: text("licence_types_json"),
+  // Default re-licence flag (item 9).
+  isRelicense: integer("is_relicense", { mode: "boolean" }),
   validFrom: integer("valid_from"),        // unix seconds
   validTo: integer("valid_to"),            // unix seconds
   proposedFee: integer("proposed_fee"),    // pence

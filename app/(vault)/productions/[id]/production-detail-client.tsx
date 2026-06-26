@@ -41,10 +41,13 @@ interface CastRow {
   licenceId: string | null;
   actorName: string | null;
   characterName: string | null;
-  department: string | null;
+  // department is deprecated for cast (item 1) — no longer surfaced in the UI.
   sagMember: boolean;
   unionAffiliation: string | null;
   status: "placeholder" | "invited" | "linked" | "scan_uploaded" | "consented" | "declined";
+  // Item 11 — production is the GDPR data controller while the slot is unclaimed.
+  dataControllerOrgId: string | null;
+  dataControllerSince: number | null;
   addedAt: number;
   linkedAt: number | null;
   repId: string | null;
@@ -74,6 +77,8 @@ interface LicenceSummary {
   talentShortCode?: string | null;
   status: string;
   licenceType: string | null;
+  licenceTypesJson?: string | null;
+  isRelicense?: boolean | null;
   validFrom: number;
   validTo: number;
   agreedFee: number | null;
@@ -88,11 +93,13 @@ interface LicenceTerms {
   intendedUse: string;
   validFrom: string;
   validTo: string;
-  licenceType: string;
+  licenceTypes: string[];     // multi-select use types (item 7)
   territory: string;
   exclusivity: string;
   permitAiTraining: boolean;
   proposedFee: string;
+  feeNA: boolean;             // item 9 — fee is N/A (null), distinct from £0
+  isRelicense: boolean;       // item 9 — re-licence of an existing scan
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -125,8 +132,9 @@ const TERRITORY_OPTIONS = [
   "Other",
 ];
 
+// Use types a single licence can cover (item 7 — multi-select). One licence row
+// carries the whole array; there is no per-type contract fan-out.
 const LICENCE_TYPE_OPTIONS = [
-  { value: "", label: "Select type…" },
   { value: "film_double", label: "Film / Double" },
   { value: "game_character", label: "Game Character" },
   { value: "commercial", label: "Commercial" },
@@ -134,6 +142,23 @@ const LICENCE_TYPE_OPTIONS = [
   { value: "training_data", label: "Training Data" },
   { value: "monitoring_reference", label: "Identity Reference" },
 ];
+
+const LICENCE_TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  LICENCE_TYPE_OPTIONS.map((o) => [o.value, o.label]),
+);
+
+// valid-to suggestion: valid-from + 18 months (item 6). Operates on yyyy-mm-dd strings.
+function addMonthsISO(dateStr: string, months: number): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return "";
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const EXCLUSIVITY_OPTIONS = [
   { value: "non_exclusive", label: "Non-exclusive" },
@@ -152,16 +177,22 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-const defaultTerms: LicenceTerms = {
-  intendedUse: "",
-  validFrom: "",
-  validTo: "",
-  licenceType: "film_double",
-  territory: "",
-  exclusivity: "non_exclusive",
-  permitAiTraining: false,
-  proposedFee: "",
-};
+// Initial terms: today → +18 months is the suggested default window (item 6).
+function makeDefaultTerms(): LicenceTerms {
+  const from = todayISO();
+  return {
+    intendedUse: "",
+    validFrom: from,
+    validTo: addMonthsISO(from, 18),
+    licenceTypes: ["film_double"],
+    territory: "",
+    exclusivity: "non_exclusive",
+    permitAiTraining: false,
+    proposedFee: "",
+    feeNA: false,
+    isRelicense: false,
+  };
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -175,12 +206,30 @@ export default function ProductionDetailClient() {
   const [invitedCount, setInvitedCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Tabbed dashboard (item 3). Default to Cast; persist in the URL hash so refreshes
+  // and shared links keep position. No router change — hash only.
+  const [activeTab, setActiveTab] = useState<"overview" | "cast" | "vendors">("cast");
+  useEffect(() => {
+    const fromHash = typeof window !== "undefined" ? window.location.hash.replace("#", "") : "";
+    if (fromHash === "overview" || fromHash === "cast" || fromHash === "vendors") setActiveTab(fromHash);
+  }, []);
+  function selectTab(tab: "overview" | "cast" | "vendors") {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `#${tab}`);
+    }
+  }
+
   // Add cast tab: "tmdb" | "manual" | "csv"
   const [addTab, setAddTab] = useState<"tmdb" | "manual" | "csv">("manual");
   const [showAddPanel, setShowAddPanel] = useState(false);
 
   // Licence terms (shared across all members being added)
-  const [terms, setTerms] = useState<LicenceTerms>(defaultTerms);
+  const [terms, setTerms] = useState<LicenceTerms>(makeDefaultTerms);
+
+  // In-scope countries → pre-filled territory (item 8). Captured as a snapshot on
+  // the licence; later country changes don't retro-edit issued licences.
+  const [territoryPrefill, setTerritoryPrefill] = useState("");
 
   // TMDB import
   const [tmdbCast, setTmdbCast] = useState<TmdbCastMember[]>([]);
@@ -197,16 +246,21 @@ export default function ProductionDetailClient() {
   const [manualActorName, setManualActorName] = useState("");
   const [manualEmail, setManualEmail] = useState("");
   const [manualCharacter, setManualCharacter] = useState("");
-  const [manualDept, setManualDept] = useState("");
+  const [manualTmdbId, setManualTmdbId] = useState<number | null>(null);
   // Union affiliation: "SAG-AFTRA" | "Equity" | free text. manualUnionOther flags the
   // free-text "Other" mode so the input binds to manualUnion.
   const [manualUnion, setManualUnion] = useState("");
   const [manualUnionOther, setManualUnionOther] = useState(false);
-  const [manualQueue, setManualQueue] = useState<{ email?: string; actorName?: string; characterName?: string; department?: string; unionAffiliation?: string }[]>([]);
+  const [manualQueue, setManualQueue] = useState<{ email?: string; actorName?: string; tmdbId?: number; characterName?: string; unionAffiliation?: string }[]>([]);
+
+  // Name-matching (item 5): live lookup of platform talent + TMDB typo suggestions.
+  const [nameMatches, setNameMatches] = useState<{ type: "platform" | "tmdb"; name: string; talentId?: string; email?: string | null; tmdbId?: number | null; profilePath?: string | null }[]>([]);
+  const [showMatches, setShowMatches] = useState(false);
+  const matchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // CSV
   const csvRef = useRef<HTMLInputElement>(null);
-  const [csvRows, setCsvRows] = useState<{ email: string; characterName?: string; department?: string; sagMember: boolean }[]>([]);
+  const [csvRows, setCsvRows] = useState<{ email: string; characterName?: string; sagMember: boolean }[]>([]);
   const [csvError, setCsvError] = useState("");
 
   const [licences, setLicences] = useState<LicenceSummary[]>([]);
@@ -228,14 +282,27 @@ export default function ProductionDetailClient() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [prodRes, castRes, licRes] = await Promise.all([
+      const [prodRes, castRes, licRes, countriesRes] = await Promise.all([
         fetch(`/api/productions/${id}`),
         fetch(`/api/productions/${id}/cast`),
         fetch(`/api/licences`),
+        fetch(`/api/productions/${id}/countries`),
       ]);
       if (prodRes.ok) {
         const d = await prodRes.json() as { production: Production };
         setProduction(d.production);
+      }
+      if (countriesRes.ok) {
+        // Item 8 — derive a default territory from the production's in-scope
+        // countries. Pre-fills the licence-terms field (editable; captured as a
+        // snapshot on the licence so later country changes don't rewrite it).
+        const d = await countriesRes.json().catch(() => ({})) as { countries?: { name: string; status: string }[] };
+        const names = (d.countries ?? []).filter((c) => c.status === "in_scope").map((c) => c.name);
+        const derived = names.length ? names.join(", ") : "";
+        setTerritoryPrefill(derived);
+        if (derived) {
+          setTerms((t) => (t.territory.trim() ? t : { ...t, territory: derived }));
+        }
       }
       if (castRes.ok) {
         const d = await castRes.json() as { cast: CastRow[]; castTotal: number; consentedCount: number; invitedCount: number };
@@ -311,16 +378,16 @@ export default function ProductionDetailClient() {
       const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
       const rows: typeof csvRows = [];
       for (const line of lines.slice(1)) { // skip header
-        const [email, sagMemberRaw, characterName, department] = line.split(",").map((s) => s.trim().replace(/^"|"$/g, ""));
+        // department column (item 1) is no longer imported; any 4th column is ignored.
+        const [email, sagMemberRaw, characterName] = line.split(",").map((s) => s.trim().replace(/^"|"$/g, ""));
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
         rows.push({
           email: email.toLowerCase(),
           sagMember: sagMemberRaw?.toLowerCase() === "yes" || sagMemberRaw === "1" || sagMemberRaw?.toLowerCase() === "true",
           characterName: characterName || undefined,
-          department: department || undefined,
         });
       }
-      if (rows.length === 0) { setCsvError("No valid rows found. Expected columns: email, sag_member, character_name, department"); return; }
+      if (rows.length === 0) { setCsvError("No valid rows found. Expected columns: email, sag_member, character_name"); return; }
       setCsvRows(rows);
     };
     reader.readAsText(file);
@@ -333,24 +400,59 @@ export default function ProductionDetailClient() {
     const actorName = manualActorName.trim();
     if (!email && !actorName) return;
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
-    setManualQueue((q) => [...q, { email: email || undefined, actorName: actorName || undefined, characterName: manualCharacter || undefined, department: manualDept || undefined, unionAffiliation: manualUnion.trim() || undefined }]);
-    setManualActorName(""); setManualEmail(""); setManualCharacter(""); setManualDept(""); setManualUnion(""); setManualUnionOther(false);
+    setManualQueue((q) => [...q, { email: email || undefined, actorName: actorName || undefined, tmdbId: manualTmdbId ?? undefined, characterName: manualCharacter || undefined, unionAffiliation: manualUnion.trim() || undefined }]);
+    setManualActorName(""); setManualEmail(""); setManualCharacter(""); setManualTmdbId(null); setManualUnion(""); setManualUnionOther(false);
+    setNameMatches([]); setShowMatches(false);
     // Copy terms forward (already in state, no action needed)
+  }
+
+  // Debounced name lookup (item 5). Resets any prior match to a fresh placeholder
+  // unless the producer explicitly picks a suggestion.
+  function onActorNameChange(value: string) {
+    setManualActorName(value);
+    setManualTmdbId(null);
+    if (matchTimer.current) clearTimeout(matchTimer.current);
+    const q = value.trim();
+    if (q.length < 2) { setNameMatches([]); setShowMatches(false); return; }
+    matchTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/productions/${id}/cast/match?q=${encodeURIComponent(q)}`);
+        if (!r.ok) { setNameMatches([]); return; }
+        const d = await r.json() as { matches?: typeof nameMatches };
+        setNameMatches(d.matches ?? []);
+        setShowMatches(true);
+      } catch { setNameMatches([]); }
+    }, 250);
+  }
+
+  // Select a suggestion: platform talent pre-fills the email (so they link rather
+  // than create a placeholder); a TMDB hit pre-fills the canonical name + tmdbId.
+  function pickMatch(m: typeof nameMatches[number]) {
+    setManualActorName(m.name);
+    if (m.type === "platform" && m.email) setManualEmail(m.email);
+    setManualTmdbId(m.tmdbId ?? null);
+    setShowMatches(false);
+    setNameMatches([]);
   }
 
   // Build members array from the active tab
   function buildMembers() {
+    const licenceTypes = terms.licenceTypes.filter(Boolean);
     const termsPayload = {
       intendedUse: terms.intendedUse,
       validFrom: terms.validFrom ? Math.floor(new Date(terms.validFrom).getTime() / 1000) : 0,
       validTo: terms.validTo ? Math.floor(new Date(terms.validTo).getTime() / 1000) : 0,
-      licenceType: terms.licenceType || undefined,
+      // Item 7 — send the full array; the primary single type keeps legacy readers happy.
+      licenceTypes: licenceTypes.length ? licenceTypes : undefined,
+      licenceType: licenceTypes[0] || undefined,
       territory: terms.territory || undefined,
       exclusivity: terms.exclusivity || "non_exclusive",
       permitAiTraining: terms.permitAiTraining,
-      proposedFee: terms.proposedFee ? parseInt(terms.proposedFee) * 100 : undefined,
+      // Item 9 — N/A fee is sent as null (distinct from £0); relicense flag carried through.
+      proposedFee: terms.feeNA ? null : (terms.proposedFee ? Math.round(parseFloat(terms.proposedFee) * 100) : undefined),
+      isRelicense: terms.isRelicense,
     };
-
+    // department is intentionally omitted from every path (item 1).
     if (addTab === "tmdb") {
       return [...tmdbSelected].map((tmdbId) => {
         const m = tmdbCast.find((x) => x.tmdbId === tmdbId)!;
@@ -358,8 +460,8 @@ export default function ProductionDetailClient() {
         // With an email the performer is invited now; without one they are
         // reserved as a placeholder carrying their name + TMDB id.
         return email
-          ? { email, characterName: m.character, department: m.department, sagMember: false, ...termsPayload }
-          : { actorName: m.name, tmdbId: m.tmdbId, sourceNote: "TMDB credits", characterName: m.character, department: m.department, sagMember: false, ...termsPayload };
+          ? { email, characterName: m.character, sagMember: false, ...termsPayload }
+          : { actorName: m.name, tmdbId: m.tmdbId, sourceNote: "TMDB credits", characterName: m.character, sagMember: false, ...termsPayload };
       });
     }
     if (addTab === "csv") {
@@ -650,7 +752,6 @@ export default function ProductionDetailClient() {
                     {row.characterName && (
                       <p className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
                         as {row.characterName}
-                        {row.department ? ` · ${row.department}` : ""}
                       </p>
                     )}
                     {row.invite && !row.talentProfile && (
@@ -749,6 +850,29 @@ export default function ProductionDetailClient() {
         )}
       </div>
 
+      {/* Tab strip (item 3) — Overview / Cast / Vendors. Default Cast. */}
+      <div className="flex gap-6 mb-6" style={{ borderBottom: "1px solid var(--color-border)" }}>
+        {([["overview", "Overview"], ["cast", "Cast"], ["vendors", "Vendors"]] as const).map(([key, label]) => {
+          const active = activeTab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => selectTab(key)}
+              className="text-xs font-medium tracking-widest uppercase pb-2 -mb-px transition"
+              style={{
+                color: active ? "#c0392b" : "var(--color-muted)",
+                borderBottom: active ? "2px solid #c0392b" : "2px solid transparent",
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Overview tab — permanent production infrastructure ── */}
+      {activeTab === "overview" && (
+        <div>
       {/* Union project number — editable by the production owner/admin. */}
       {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
         <div className="mb-6 flex items-center gap-2 flex-wrap text-xs">
@@ -784,6 +908,19 @@ export default function ProductionDetailClient() {
         </div>
       )}
 
+          {/* Countries in scope — owner/admin only; structural production detail. */}
+          {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
+            <CountriesPanel productionId={production.id} />
+          )}
+
+          {/* Insurers */}
+          <InsurersPanel productionId={id} />
+        </div>
+      )}
+
+      {/* ── Cast tab — roster, add panel, licence summary ── */}
+      {activeTab === "cast" && (
+        <div>
       {/* Cast list */}
       <div className="mb-4 flex items-center justify-between">
         <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
@@ -923,21 +1060,50 @@ export default function ProductionDetailClient() {
                 Enter an email to invite a performer now, or add a name only to reserve them as a placeholder — you can add their email later, or they’ll be matched automatically when they join.
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="relative">
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Actor Name</label>
-                  <input type="text" value={manualActorName} onChange={(e) => setManualActorName(e.target.value)} style={inputStyle} placeholder="e.g. Cate Blanchett" />
+                  <input
+                    type="text"
+                    value={manualActorName}
+                    onChange={(e) => onActorNameChange(e.target.value)}
+                    onFocus={() => { if (nameMatches.length) setShowMatches(true); }}
+                    onBlur={() => setTimeout(() => setShowMatches(false), 150)}
+                    style={inputStyle}
+                    placeholder="Name or code (e.g. Cate Blanchett · AH-0247)"
+                    autoComplete="off"
+                  />
+                  {/* Name-matching suggestions (item 5) */}
+                  {showMatches && nameMatches.length > 0 && (
+                    <div className="absolute z-10 left-0 right-0 mt-1 rounded overflow-hidden shadow-lg" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+                      {nameMatches.map((m, mi) => (
+                        <button
+                          key={`${m.type}-${m.tmdbId ?? m.talentId ?? mi}`}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); pickMatch(m); }}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm"
+                          style={{ borderBottom: mi < nameMatches.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)", color: "var(--color-text)" }}
+                        >
+                          <span className="truncate">
+                            {m.type === "tmdb" && <span className="mr-1" style={{ color: "var(--color-muted)" }}>Did you mean</span>}
+                            <span className="font-medium">{m.name}</span>
+                          </span>
+                          {m.type === "platform" ? (
+                            <span className="text-[11px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On Image Vault</span>
+                          ) : (
+                            <span className="text-[11px] shrink-0" style={{ color: "var(--color-muted)" }}>online</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Email</label>
                   <input type="email" value={manualEmail} onChange={(e) => setManualEmail(e.target.value)} style={inputStyle} placeholder="actor@example.com (optional)" />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Character Name</label>
                   <input type="text" value={manualCharacter} onChange={(e) => setManualCharacter(e.target.value)} style={inputStyle} placeholder="e.g. Elizabeth I" />
-                </div>
-                <div>
-                  <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Department</label>
-                  <input type="text" value={manualDept} onChange={(e) => setManualDept(e.target.value)} style={inputStyle} placeholder="e.g. Principal, VFX" />
                 </div>
               </div>
               <div>
@@ -992,7 +1158,7 @@ export default function ProductionDetailClient() {
           {addTab === "csv" && (
             <div className="space-y-3">
               <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                CSV format: <code className="font-mono">email,sag_member,character_name,department</code> (header row skipped)
+                CSV format: <code className="font-mono">email,sag_member,character_name</code> (header row skipped)
               </p>
               <input ref={csvRef} type="file" accept=".csv,text/csv" onChange={handleCsvUpload} className="text-sm" style={{ color: "var(--color-text)" }} />
               {csvError && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{csvError}</p>}
@@ -1015,38 +1181,108 @@ export default function ProductionDetailClient() {
               </div>
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Valid From *</label>
-                <input type="date" value={terms.validFrom} onChange={(e) => setTerms((t) => ({ ...t, validFrom: e.target.value }))} style={inputStyle} />
+                <input
+                  type="date"
+                  value={terms.validFrom}
+                  onChange={(e) => {
+                    const validFrom = e.target.value;
+                    // Item 6 — suggest an 18-month term whenever the start date changes.
+                    setTerms((t) => ({ ...t, validFrom, validTo: validFrom ? addMonthsISO(validFrom, 18) : t.validTo }));
+                  }}
+                  style={inputStyle}
+                />
               </div>
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Valid To *</label>
                 <input type="date" value={terms.validTo} onChange={(e) => setTerms((t) => ({ ...t, validTo: e.target.value }))} style={inputStyle} />
+                <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>Suggested 18-month term — adjust as needed.</p>
               </div>
-              <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Licence Type</label>
-                <select value={terms.licenceType} onChange={(e) => setTerms((t) => ({ ...t, licenceType: e.target.value }))} style={{ ...inputStyle }}>
-                  {LICENCE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+
+              {/* Use type — multi-select (item 7). One licence carries every ticked type. */}
+              <div className="col-span-2">
+                <label className="text-xs mb-1.5 block" style={{ color: "var(--color-muted)" }}>Use type(s)</label>
+                <div className="flex flex-wrap gap-2">
+                  {LICENCE_TYPE_OPTIONS.map((o) => {
+                    const active = terms.licenceTypes.includes(o.value);
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => setTerms((t) => ({
+                          ...t,
+                          licenceTypes: active ? t.licenceTypes.filter((v) => v !== o.value) : [...t.licenceTypes, o.value],
+                        }))}
+                        className="px-3 py-1.5 rounded text-xs font-medium border transition"
+                        style={{
+                          borderColor: active ? "var(--color-accent)" : "var(--color-border)",
+                          background: active ? "var(--color-accent)" : "transparent",
+                          color: active ? "white" : "var(--color-muted)",
+                        }}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] mt-1.5" style={{ color: "var(--color-muted)" }}>One licence covers all selected use types — no separate contract per type.</p>
               </div>
+
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Exclusivity</label>
                 <select value={terms.exclusivity} onChange={(e) => setTerms((t) => ({ ...t, exclusivity: e.target.value }))} style={{ ...inputStyle }}>
                   {EXCLUSIVITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
+              {/* Territory — pre-filled from countries in scope (item 8), editable. */}
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Territory</label>
-                <select value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={{ ...inputStyle }}>
-                  <option value="">Select territory…</option>
-                  {TERRITORY_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <input
+                  type="text"
+                  value={terms.territory}
+                  onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))}
+                  list="territory-options"
+                  style={inputStyle}
+                  placeholder={territoryPrefill || "e.g. Worldwide"}
+                />
+                <datalist id="territory-options">
+                  {[territoryPrefill, ...TERRITORY_OPTIONS].filter(Boolean).map((t) => <option key={t} value={t} />)}
+                </datalist>
+                {territoryPrefill && (
+                  <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
+                    Pre-filled from countries in scope · editable.
+                    {terms.territory !== territoryPrefill && (
+                      <button type="button" onClick={() => setTerms((t) => ({ ...t, territory: territoryPrefill }))} className="ml-1 font-medium" style={{ color: "var(--color-accent)" }}>Reset</button>
+                    )}
+                  </p>
+                )}
               </div>
+
+              {/* Fee + relicense (item 9). N/A fee (null) is distinct from £0. */}
               <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Proposed Fee ($)</label>
-                <input type="number" min={0} value={terms.proposedFee} onChange={(e) => setTerms((t) => ({ ...t, proposedFee: e.target.value }))} style={inputStyle} placeholder="0" />
+                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Proposed Fee (£)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={terms.feeNA ? "" : terms.proposedFee}
+                  disabled={terms.feeNA}
+                  onChange={(e) => setTerms((t) => ({ ...t, proposedFee: e.target.value }))}
+                  style={{ ...inputStyle, opacity: terms.feeNA ? 0.5 : 1 }}
+                  placeholder={terms.feeNA ? "N/A" : "0"}
+                />
+                <label className="flex items-center gap-1.5 mt-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-muted)" }}>
+                  <input type="checkbox" checked={terms.feeNA} onChange={(e) => setTerms((t) => ({ ...t, feeNA: e.target.checked }))} />
+                  Fee N/A (scanning is part of production costs)
+                </label>
               </div>
-              <div className="col-span-2 flex items-center gap-2">
-                <input type="checkbox" id="aitraining" checked={terms.permitAiTraining} onChange={(e) => setTerms((t) => ({ ...t, permitAiTraining: e.target.checked }))} />
-                <label htmlFor="aitraining" className="text-xs cursor-pointer" style={{ color: "var(--color-muted)" }}>Permit AI training use</label>
+              <div className="col-span-2 flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--color-muted)" }}>
+                  <input type="checkbox" checked={terms.isRelicense} onChange={(e) => setTerms((t) => ({ ...t, isRelicense: e.target.checked, feeNA: e.target.checked ? false : t.feeNA }))} />
+                  This is a re-licence of an existing scan (a fee is expected)
+                </label>
+                <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--color-muted)" }}>
+                  <input type="checkbox" checked={terms.permitAiTraining} onChange={(e) => setTerms((t) => ({ ...t, permitAiTraining: e.target.checked }))} />
+                  Permit AI training use
+                </label>
               </div>
             </div>
           </div>
@@ -1082,7 +1318,7 @@ export default function ProductionDetailClient() {
           <table className="w-full text-sm" style={{ minWidth: 700 }}>
             <thead>
               <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
-                {["Talent", "Character", "Dept", "Union", "Status", "Licence", ""].map((h) => (
+                {["Talent", "Character", "Union", "Status", "Licence", ""].map((h) => (
                   <th key={h} className="text-left px-4 py-2.5 text-xs font-medium tracking-wider uppercase" style={{ color: "var(--color-muted)" }}>{h}</th>
                 ))}
               </tr>
@@ -1098,12 +1334,16 @@ export default function ProductionDetailClient() {
                     ) : (
                       <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.invite?.email ?? row.actorName ?? "—"}</span>
                     )}
+                    {/* Item 11 — production is GDPR data controller while the slot is unclaimed. */}
+                    {!row.talentId && row.dataControllerOrgId && (
+                      <p className="text-[11px] mt-0.5 flex items-center gap-1" style={{ color: "var(--color-muted)" }} title="Until the talent claims their vault, the production company is the GDPR data controller for this likeness (side agreement 39J).">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                        Production is data controller until talent claims their vault
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.characterName ?? "—"}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.department ?? "—"}</span>
                   </td>
                   <td className="px-4 py-3">
                     {(() => {
@@ -1266,9 +1506,24 @@ export default function ProductionDetailClient() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                          {lic.licenceType ? lic.licenceType.replace(/_/g, " ") : "—"}
-                        </span>
+                        {(() => {
+                          // Item 7 — list every selected use type (fall back to the single legacy type).
+                          let types: string[] = [];
+                          if (lic.licenceTypesJson) { try { types = JSON.parse(lic.licenceTypesJson) as string[]; } catch { types = []; } }
+                          if (types.length === 0 && lic.licenceType) types = [lic.licenceType];
+                          return (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {lic.isRelicense && (
+                                <span className="text-[11px] px-1.5 py-0.5 rounded font-medium" style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}>Relicense</span>
+                              )}
+                              {types.length > 0 ? types.map((t) => (
+                                <span key={t} className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-muted)" }}>
+                                  {LICENCE_TYPE_LABEL[t] ?? t.replace(/_/g, " ")}
+                                </span>
+                              )) : <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${colour}18`, color: colour }}>
@@ -1321,16 +1576,13 @@ export default function ProductionDetailClient() {
         </div>
       )}
 
-      {/* Vendors */}
-      <VendorsPanel productionId={id} />
-
-      {/* Countries in scope — owner/admin only; vendors/reps don't manage scope */}
-      {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
-        <CountriesPanel productionId={production.id} />
+        </div>
       )}
 
-      {/* Insurers */}
-      <InsurersPanel productionId={id} />
+      {/* ── Vendors tab — secondary / post-go-live work ── */}
+      {activeTab === "vendors" && (
+        <VendorsPanel productionId={id} />
+      )}
 
       {/* Path C — invite representation to a reserved slot */}
       {inviteRepFor && (
