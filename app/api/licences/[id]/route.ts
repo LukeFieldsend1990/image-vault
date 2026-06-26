@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { licences, scanPackages, users, productions, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { getRepAgencyContext } from "@/lib/agency/rep-visibility";
 import { eq, and } from "drizzle-orm";
 
 // GET /api/licences/[id] — fetch a single licence (talent, licensee, admin)
@@ -46,6 +47,7 @@ export async function GET(
       createdAt: licences.createdAt,
       preauthUntil: licences.preauthUntil,
       preauthSetBy: licences.preauthSetBy,
+      productionId: licences.productionId,
     })
     .from(licences)
     .leftJoin(scanPackages, eq(scanPackages.id, licences.packageId))
@@ -57,7 +59,29 @@ export async function GET(
 
   const isOwner = row.talentId === session.sub || row.licenseeId === session.sub;
   const admin = isAdmin(session.email);
-  if (!isOwner && !admin) {
+
+  // Agency-shared rep access: a rep can read this licence when the licence is
+  // APPROVED on a production their agency can see AND the talent is managed by
+  // some rep in the same agency. Mirrors the production-scoped list endpoint —
+  // rosters stay segregated, only production-tied licences cross the line.
+  let repAgencyAccess = false;
+  if (!isOwner && !admin && session.role === "rep") {
+    const ctx = await getRepAgencyContext(db, session.sub);
+    const ownsTalent = ctx.ownTalentIds.includes(row.talentId);
+    const agencyTalent = ctx.agencyTalentIds.includes(row.talentId);
+    if (ownsTalent) {
+      repAgencyAccess = true;
+    } else if (
+      agencyTalent
+      && row.status === "APPROVED"
+      && row.productionId
+      && ctx.agencyProductionIds.includes(row.productionId)
+    ) {
+      repAgencyAccess = true;
+    }
+  }
+
+  if (!isOwner && !admin && !repAgencyAccess) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -4,6 +4,7 @@ import { productions, productionCompanies, organisations, organisationMembers, l
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { getRepAgencyContext } from "@/lib/agency/rep-visibility";
 import { eq, and, or, inArray, count, desc } from "drizzle-orm";
 
 // GET /api/productions/list — productions scoped to the caller's organisations
@@ -90,6 +91,49 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(productions.createdAt))
       .limit(100)
       .all();
+  } else if (session.role === "rep") {
+    // Agency-shared production visibility: a rep can see productions where any
+    // talent managed by a rep in their agency holds an APPROVED licence. Rep is
+    // ALSO entitled to productions where they personally hold a reserved cast
+    // slot (existing path C invite flow). Rosters stay segregated — this list
+    // only spans agency colleagues at the production level.
+    const ctx = await getRepAgencyContext(db, session.sub);
+
+    const castSlotRows = await db
+      .select({ productionId: productionCast.productionId })
+      .from(productionCast)
+      .where(eq(productionCast.repId, session.sub))
+      .all();
+    const castProdIds = [...new Set(castSlotRows.map((r) => r.productionId))];
+
+    const visibleIds = [...new Set([...ctx.agencyProductionIds, ...castProdIds])];
+    if (visibleIds.length === 0) {
+      return NextResponse.json({ productions: [] });
+    }
+
+    productionRows = await db
+      .select({
+        id: productions.id,
+        name: productions.name,
+        companyName: productionCompanies.name,
+        type: productions.type,
+        year: productions.year,
+        status: productions.status,
+        sagProjectNumber: productions.sagProjectNumber,
+        shortCode: productions.shortCode,
+        organisationId: productions.organisationId,
+        orgName: organisations.name,
+        orgType: organisations.orgType,
+        orgShortCode: organisations.shortCode,
+        createdAt: productions.createdAt,
+      })
+      .from(productions)
+      .leftJoin(productionCompanies, eq(productionCompanies.id, productions.companyId))
+      .leftJoin(organisations, eq(organisations.id, productions.organisationId))
+      .where(inArray(productions.id, visibleIds))
+      .orderBy(desc(productions.createdAt))
+      .limit(100)
+      .all();
   } else {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -122,16 +166,24 @@ export async function GET(req: NextRequest) {
     castMap.set(c.productionId, cur);
   }
 
-  const result = productionRows.map((p) => ({
-    ...p,
-    licenceCount: countMap.get(p.id) ?? 0,
-    cast: castMap.get(p.id) ?? null,
-    // "owner" when the caller's org owns the production, else "vendor" (their org
-    // is only attached as a vendor). Admins see everything as owner.
-    relationship: isAdmin(session.email) || (p.organisationId !== null && viewerOrgIds.includes(p.organisationId))
-      ? "owner"
-      : "vendor",
-  }));
+  const result = productionRows.map((p) => {
+    let relationship: "owner" | "vendor" | "rep";
+    if (isAdmin(session.email) || (p.organisationId !== null && viewerOrgIds.includes(p.organisationId))) {
+      relationship = "owner";
+    } else if (session.role === "rep") {
+      // Reps see productions via agency-shared licence visibility — they're
+      // neither owner nor vendor; this surfaces as a read-only entry point.
+      relationship = "rep";
+    } else {
+      relationship = "vendor";
+    }
+    return {
+      ...p,
+      licenceCount: countMap.get(p.id) ?? 0,
+      cast: castMap.get(p.id) ?? null,
+      relationship,
+    };
+  });
 
   return NextResponse.json({ productions: result });
 }

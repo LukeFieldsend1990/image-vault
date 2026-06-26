@@ -13,6 +13,7 @@ import {
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { getRepAgencyContext } from "@/lib/agency/rep-visibility";
 import { mintLicenceCode } from "@/lib/codes/codes";
 import { normaliseLicenceTypes, serializeLicenceTypes } from "@/lib/productions/cast";
 import { eq, and, inArray } from "drizzle-orm";
@@ -51,11 +52,16 @@ export async function GET(
   }
 
   // Auth check: admin, licensee org member, or rep with an assigned cast slot
+  // (rep-scoped view) or agency-shared visibility (full production cast).
   let repScopedView = false;
   if (!isAdmin(session.email)) {
     if (session.role === "rep") {
-      // Reps can view only their own assigned cast slots on this production.
-      repScopedView = true;
+      // Reps with agency-shared visibility on this production see the full
+      // cast; otherwise they only see slots assigned directly to them.
+      const ctx = await getRepAgencyContext(db, session.sub);
+      if (!ctx.agencyProductionIds.includes(id)) {
+        repScopedView = true;
+      }
     } else if (!isIndustryRole(session.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     } else if (production.organisationId) {

@@ -19,5 +19,5 @@ export default async function ProductionsPage() {
   // tracker. Everyone else keeps the production-management view.
   if (isComplianceRole(role)) return <OversightProductionsClient />;
 
-  return <ProductionsClient />;
+  return <ProductionsClient role={role} />;
 }

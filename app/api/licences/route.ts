@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/email/send";
 import { licenceRequestedEmail, placeholderLicenceCreatedEmail } from "@/lib/email/templates";
 import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { getRepAgencyContext } from "@/lib/agency/rep-visibility";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { mintLicenceCode } from "@/lib/codes/codes";
 import { resolveCompanyOrg } from "@/lib/organisations/resolveCompany";
@@ -100,20 +101,36 @@ export async function GET(req: NextRequest) {
       : eq(licences.talentId, session.sub);
     rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
   } else if (session.role === "rep") {
-    const talentRows = await db
-      .select({ talentId: talentReps.talentId })
-      .from(talentReps)
-      .where(eq(talentReps.repId, session.sub))
-      .all();
-    const talentIds = talentRows.map((r) => r.talentId);
-    if (talentIds.length === 0) return NextResponse.json({ licences: [] });
-    // Optional talentId filter — scope to a single managed talent
-    const forTalent = searchParams.get("talentId");
-    const scopeIds = forTalent && talentIds.includes(forTalent) ? [forTalent] : talentIds;
-    const whereClause = statusFilter
-      ? and(inArray(licences.talentId, scopeIds), eq(licences.status, statusFilter as LicenceStatus))
-      : inArray(licences.talentId, scopeIds);
-    rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
+    const ctx = await getRepAgencyContext(db, session.sub);
+    const productionId = searchParams.get("productionId");
+    const scope = searchParams.get("scope"); // "own" | "agency" (default: own)
+
+    // Production-scoped view: when the rep is browsing a single production
+    // they're entitled to see (agency-shared visibility), allow listing
+    // licences for any agency-managed talent on that production. Roster
+    // segregation is preserved because this is gated on the production.
+    if (productionId && ctx.agencyProductionIds.includes(productionId)) {
+      const scopeIds = scope === "agency" ? ctx.agencyTalentIds : ctx.ownTalentIds;
+      if (scopeIds.length === 0) return NextResponse.json({ licences: [] });
+      const clauses = [
+        inArray(licences.talentId, scopeIds),
+        eq(licences.productionId, productionId),
+      ];
+      // Agency-shared scope only exposes APPROVED licences; own-client scope
+      // returns everything the rep would normally see for that production.
+      if (scope === "agency") clauses.push(eq(licences.status, "APPROVED"));
+      if (statusFilter) clauses.push(eq(licences.status, statusFilter as LicenceStatus));
+      rows = await base.where(and(...clauses)).orderBy(desc(licences.createdAt)).limit(100).all();
+    } else {
+      // Default roster-scoped view — only directly managed talent.
+      if (ctx.ownTalentIds.length === 0) return NextResponse.json({ licences: [] });
+      const forTalent = searchParams.get("talentId");
+      const scopeIds = forTalent && ctx.ownTalentIds.includes(forTalent) ? [forTalent] : ctx.ownTalentIds;
+      const whereClause = statusFilter
+        ? and(inArray(licences.talentId, scopeIds), eq(licences.status, statusFilter as LicenceStatus))
+        : inArray(licences.talentId, scopeIds);
+      rows = await base.where(whereClause).orderBy(desc(licences.createdAt)).limit(100).all();
+    }
   } else if (isIndustryRole(session.role)) {
     // Include licences owned directly + licences owned by any org the user belongs to
     const userOrgRows = await db
