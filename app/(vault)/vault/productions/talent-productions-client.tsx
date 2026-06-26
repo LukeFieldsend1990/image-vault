@@ -42,6 +42,9 @@ const ACTIVE_STATUSES: Set<LicenceStatus> = new Set([
   "APPROVED", "PENDING", "AWAITING_PACKAGE", "SCRUB_PERIOD", "OVERDUE",
 ]);
 
+// Statuses that represent incoming cast requests — talent hasn't agreed yet
+const REQUEST_STATUSES: Set<LicenceStatus> = new Set(["PENDING", "AWAITING_PACKAGE"]);
+
 const TYPE_LABEL: Record<string, string> = {
   film_double: "Film / Double",
   game_character: "Game Character",
@@ -109,6 +112,147 @@ function StatusDot({ status }: { status: LicenceStatus }) {
       <span className="inline-block h-2 w-2 rounded-full flex-shrink-0" style={{ background: "#9ca3af" }} />
       <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#9ca3af" }}>{status.replace("_", " ")}</span>
     </span>
+  );
+}
+
+function CastRequestCard({ group }: { group: ProductionGroup }) {
+  const primary = primaryLicence(group.licences);
+  const feeRef = primary.agreedFee ?? primary.proposedFee;
+  const year = new Date(primary.validFrom * 1000).getFullYear();
+  const category = primary.licenceType ? TYPE_CATEGORY[primary.licenceType] : null;
+
+  const statusLabel =
+    primary.status === "AWAITING_PACKAGE"
+      ? "Awaiting scan package"
+      : "Pending your review";
+
+  return (
+    <article
+      className="rounded-lg overflow-hidden"
+      style={{
+        border: "2px dashed rgba(180,83,9,0.45)",
+        background: "rgba(180,83,9,0.03)",
+      }}
+    >
+      {/* Request banner */}
+      <div
+        className="px-6 py-2.5 flex items-center justify-between gap-3"
+        style={{ background: "rgba(180,83,9,0.09)", borderBottom: "1px dashed rgba(180,83,9,0.25)" }}
+      >
+        <div className="flex items-center gap-2">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#b45309" }}>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#b45309" }}>
+            Cast request — not yet agreed
+          </span>
+        </div>
+        <span className="text-[10px] font-medium uppercase tracking-widest" style={{ color: "#b45309" }}>
+          {statusLabel}
+        </span>
+      </div>
+
+      {/* Main content */}
+      <div className="px-6 pt-5 pb-5">
+        {/* Eyebrow row */}
+        <div className="flex items-center gap-3 mb-3">
+          {category && (
+            <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+              {category}
+            </span>
+          )}
+          {category && <span className="text-[10px]" style={{ color: "var(--color-border)" }}>·</span>}
+          <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+            {year}
+          </span>
+        </div>
+
+        {/* Title + proposed fee */}
+        <div className="flex items-start justify-between gap-6 mb-5">
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold tracking-tight leading-none" style={{ color: "var(--color-ink)" }}>
+              {group.projectName}
+            </h2>
+            <p className="mt-1.5 text-sm" style={{ color: "var(--color-muted)" }}>
+              {group.productionCompany}
+            </p>
+          </div>
+          {feeRef !== null && (
+            <div className="text-right shrink-0">
+              <p className="text-lg font-semibold tabular-nums" style={{ color: "#b45309" }}>
+                {fmtMoney(feeRef)}
+              </p>
+              <p className="text-[10px] uppercase tracking-widest" style={{ color: "#b45309" }}>
+                Proposed
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Tags row */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {primary.licenceType && (
+            <span
+              className="inline-flex text-[10px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-sm"
+              style={{ background: "rgba(180,83,9,0.08)", color: "#b45309" }}
+            >
+              {TYPE_LABEL[primary.licenceType] ?? primary.licenceType}
+            </span>
+          )}
+          {primary.territory && (
+            <span
+              className="inline-flex text-[10px] font-medium px-2.5 py-1 rounded-sm"
+              style={{ background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}
+            >
+              {primary.territory}
+            </span>
+          )}
+          {primary.exclusivity && primary.exclusivity !== "non_exclusive" && (
+            <span
+              className="inline-flex text-[10px] font-medium px-2.5 py-1 rounded-sm"
+              style={{ background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}
+            >
+              {EXCLUSIVITY_LABEL[primary.exclusivity] ?? primary.exclusivity}
+            </span>
+          )}
+        </div>
+
+        {/* Date range */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+            {fmtDate(primary.validFrom)}
+          </span>
+          <svg width="16" height="8" viewBox="0 0 16 8" fill="none" style={{ color: "var(--color-muted)" }}>
+            <line x1="0" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1" />
+            <polyline points="9,1 12,4 9,7" stroke="currentColor" strokeWidth="1" fill="none" />
+          </svg>
+          <span className="text-sm" style={{ color: "var(--color-muted)" }}>
+            {fmtDate(primary.validTo)}
+          </span>
+        </div>
+
+        {/* Intended use */}
+        {primary.intendedUse && (
+          <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
+            <span className="font-medium" style={{ color: "var(--color-text)" }}>Usage: </span>
+            {primary.intendedUse}
+          </p>
+        )}
+
+        {/* CTA */}
+        <div className="flex items-center justify-end pt-2" style={{ borderTop: "1px solid rgba(180,83,9,0.15)" }}>
+          <Link
+            href={`/vault/licences?highlight=${primary.id}`}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide hover:opacity-80 transition-opacity"
+            style={{ color: "#b45309" }}
+          >
+            Review request →
+          </Link>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -353,6 +497,9 @@ export default function TalentProductionsClient({ talentId }: { talentId?: strin
       .catch(() => setLoading(false));
   }, [talentId]);
 
+  const requestGroups = groups.filter((g) => REQUEST_STATUSES.has(primaryLicence(g.licences).status));
+  const confirmedGroups = groups.filter((g) => !REQUEST_STATUSES.has(primaryLicence(g.licences).status));
+
   return (
     <div className="p-8 max-w-3xl">
       <div className="mb-10">
@@ -395,11 +542,50 @@ export default function TalentProductionsClient({ talentId }: { talentId?: strin
         </div>
       )}
 
-      <div className="space-y-5">
-        {groups.map((group) => (
-          <ProductionCard key={group.productionId} group={group} />
-        ))}
-      </div>
+      {/* Pending cast requests — visually distinct, shown first */}
+      {!loading && requestGroups.length > 0 && (
+        <div className="mb-10">
+          <div className="flex items-center gap-3 mb-4">
+            <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "#b45309" }}>
+              Pending cast requests
+            </p>
+            <span
+              className="inline-flex items-center justify-center h-4 min-w-[1rem] rounded-full text-[10px] font-bold px-1"
+              style={{ background: "rgba(180,83,9,0.15)", color: "#b45309" }}
+            >
+              {requestGroups.length}
+            </span>
+            <span className="flex-1 h-px" style={{ background: "rgba(180,83,9,0.2)" }} />
+          </div>
+          <p className="text-xs mb-5" style={{ color: "#b45309" }}>
+            These productions have added you to their cast, but you have not yet agreed to the terms. Review each request before your likeness data can be accessed.
+          </p>
+          <div className="space-y-4">
+            {requestGroups.map((group) => (
+              <CastRequestCard key={group.productionId} group={group} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmed engagements */}
+      {!loading && confirmedGroups.length > 0 && (
+        <div>
+          {requestGroups.length > 0 && (
+            <div className="flex items-center gap-3 mb-4">
+              <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
+                Active &amp; past engagements
+              </p>
+              <span className="flex-1 h-px" style={{ background: "var(--color-border)" }} />
+            </div>
+          )}
+          <div className="space-y-5">
+            {confirmedGroups.map((group) => (
+              <ProductionCard key={group.productionId} group={group} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
