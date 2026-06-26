@@ -8,6 +8,7 @@
 export const ADMIN_EMAILS: readonly string[] = [
   "lukefieldsend@googlemail.com",
   "martindavison@gmail.com",
+  "martin.davison@gmail.com",
 ];
 
 export function isAdmin(email: string | undefined | null): boolean {
