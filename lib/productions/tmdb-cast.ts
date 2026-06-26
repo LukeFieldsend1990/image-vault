@@ -49,10 +49,10 @@ export async function fetchTmdbCastWithMatches(
   overrideTmdbId?: number | null,
 ): Promise<TmdbCastResult> {
   const tmdbId = overrideTmdbId ?? production.tmdbId;
-  if (!tmdbId) return { ok: false, status: 422, error: "Production has no TMDB ID" };
+  if (!tmdbId) return { ok: false, status: 422, error: "Production isn't linked to an online title" };
 
   const tmdbKey = process.env.TMDB_API_KEY;
-  if (!tmdbKey) return { ok: false, status: 503, error: "TMDB API key not configured" };
+  if (!tmdbKey) return { ok: false, status: 503, error: "Online cast lookup not configured" };
 
   const mediaType = production.type === "tv_series" ? "tv" : "movie";
   const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/credits?api_key=${tmdbKey}`;
@@ -60,10 +60,10 @@ export async function fetchTmdbCastWithMatches(
   let tmdbData: TmdbCreditsResponse;
   try {
     const res = await fetch(tmdbUrl);
-    if (!res.ok) return { ok: false, status: 502, error: "TMDB API request failed" };
+    if (!res.ok) return { ok: false, status: 502, error: "Online cast lookup failed" };
     tmdbData = (await res.json()) as TmdbCreditsResponse;
   } catch {
-    return { ok: false, status: 502, error: "Failed to fetch TMDB credits" };
+    return { ok: false, status: 502, error: "Failed to fetch online credits" };
   }
 
   const castList = tmdbData.cast ?? [];

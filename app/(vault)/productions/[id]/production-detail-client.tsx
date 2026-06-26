@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
-import CountriesPanel from "./countries-panel";
 import InsurersPanel from "./insurers-panel";
 import VendorsPanel from "./vendors-panel";
 import VendorAuthorisedScans from "./vendor-authorised-scans";
@@ -43,7 +42,6 @@ interface CastRow {
   characterName: string | null;
   department: string | null;
   sagMember: boolean;
-  unionAffiliation: string | null;
   status: "placeholder" | "invited" | "linked" | "scan_uploaded" | "consented" | "declined";
   addedAt: number;
   linkedAt: number | null;
@@ -198,11 +196,8 @@ export default function ProductionDetailClient() {
   const [manualEmail, setManualEmail] = useState("");
   const [manualCharacter, setManualCharacter] = useState("");
   const [manualDept, setManualDept] = useState("");
-  // Union affiliation: "SAG-AFTRA" | "Equity" | free text. manualUnionOther flags the
-  // free-text "Other" mode so the input binds to manualUnion.
-  const [manualUnion, setManualUnion] = useState("");
-  const [manualUnionOther, setManualUnionOther] = useState(false);
-  const [manualQueue, setManualQueue] = useState<{ email?: string; actorName?: string; characterName?: string; department?: string; unionAffiliation?: string }[]>([]);
+  const [manualSag, setManualSag] = useState(false);
+  const [manualQueue, setManualQueue] = useState<{ email?: string; actorName?: string; characterName?: string; department?: string; sagMember: boolean }[]>([]);
 
   // CSV
   const csvRef = useRef<HTMLInputElement>(null);
@@ -219,11 +214,6 @@ export default function ProductionDetailClient() {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [markingIncludedId, setMarkingIncludedId] = useState<string | null>(null);
   const [inviteRepFor, setInviteRepFor] = useState<{ castId: string; label: string } | null>(null);
-
-  // Union project number — set here rather than in the guided setup (bare-minimum onboarding).
-  const [editingUnionNum, setEditingUnionNum] = useState(false);
-  const [unionNumInput, setUnionNumInput] = useState("");
-  const [savingUnionNum, setSavingUnionNum] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -333,8 +323,8 @@ export default function ProductionDetailClient() {
     const actorName = manualActorName.trim();
     if (!email && !actorName) return;
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
-    setManualQueue((q) => [...q, { email: email || undefined, actorName: actorName || undefined, characterName: manualCharacter || undefined, department: manualDept || undefined, unionAffiliation: manualUnion.trim() || undefined }]);
-    setManualActorName(""); setManualEmail(""); setManualCharacter(""); setManualDept(""); setManualUnion(""); setManualUnionOther(false);
+    setManualQueue((q) => [...q, { email: email || undefined, actorName: actorName || undefined, characterName: manualCharacter || undefined, department: manualDept || undefined, sagMember: manualSag }]);
+    setManualActorName(""); setManualEmail(""); setManualCharacter(""); setManualDept(""); setManualSag(false);
     // Copy terms forward (already in state, no action needed)
   }
 
@@ -472,27 +462,6 @@ export default function ProductionDetailClient() {
       }
     } finally {
       setResolvingId(null);
-    }
-  }
-
-  async function saveUnionNumber() {
-    setSavingUnionNum(true);
-    try {
-      const value = unionNumInput.trim();
-      const r = await fetch(`/api/productions/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sagProjectNumber: value }),
-      });
-      if (r.ok) {
-        setProduction((p) => (p ? { ...p, sagProjectNumber: value || null } : p));
-        setEditingUnionNum(false);
-      } else {
-        const d = await r.json().catch(() => ({})) as { error?: string };
-        alert(d.error ?? "Couldn't save the union project number.");
-      }
-    } finally {
-      setSavingUnionNum(false);
     }
   }
 
@@ -749,46 +718,6 @@ export default function ProductionDetailClient() {
         )}
       </div>
 
-      {/* Countries in scope — owner/admin only; vendors/reps don't manage scope */}
-      {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
-        <CountriesPanel productionId={production.id} />
-      )}
-
-      {/* Union project number — editable by the production owner/admin. */}
-      {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
-        <div className="mb-6 flex items-center gap-2 flex-wrap text-xs">
-          <span className="font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>Union project number</span>
-          {editingUnionNum ? (
-            <>
-              <input
-                type="text"
-                value={unionNumInput}
-                onChange={(e) => setUnionNumInput(e.target.value)}
-                placeholder="e.g. 24-FS-0123"
-                style={{ ...inputStyle, width: 180, padding: "4px 8px" }}
-              />
-              <button onClick={saveUnionNumber} disabled={savingUnionNum} className="font-medium" style={{ color: "var(--color-accent)" }}>
-                {savingUnionNum ? "Saving…" : "Save"}
-              </button>
-              <button onClick={() => setEditingUnionNum(false)} style={{ color: "var(--color-muted)" }}>Cancel</button>
-            </>
-          ) : (
-            <>
-              <span style={{ color: production.sagProjectNumber ? "var(--color-text)" : "var(--color-muted)", fontFamily: production.sagProjectNumber ? "monospace" : undefined }}>
-                {production.sagProjectNumber ?? "Not set"}
-              </span>
-              <button
-                onClick={() => { setUnionNumInput(production.sagProjectNumber ?? ""); setEditingUnionNum(true); }}
-                className="font-medium"
-                style={{ color: "var(--color-accent)" }}
-              >
-                {production.sagProjectNumber ? "Edit" : "Add"}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
       {/* Cast list */}
       <div className="mb-4 flex items-center justify-between">
         <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
@@ -823,7 +752,7 @@ export default function ProductionDetailClient() {
                   color: addTab === tab ? "white" : "var(--color-muted)",
                 }}
               >
-                {tab === "tmdb" ? "Database Import" : tab === "csv" ? "CSV Upload" : "Manual Entry"}
+                {tab === "tmdb" ? "Online Import" : tab === "csv" ? "CSV Upload" : "Manual Entry"}
               </button>
             ))}
           </div>
@@ -834,7 +763,7 @@ export default function ProductionDetailClient() {
               {!tmdbFetched ? (
                 <div>
                   <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
-                    Import cast from our production database. Matched talent will be pre-ticked. You must supply emails for unmatched members.
+                    Import cast from online credits. Matched talent will be pre-ticked. You must supply emails for unmatched members.
                   </p>
                   <button
                     onClick={fetchTmdbCast}
@@ -842,13 +771,13 @@ export default function ProductionDetailClient() {
                     className="rounded px-4 py-2 text-sm font-medium text-white"
                     style={{ background: tmdbLoading ? "var(--color-muted)" : "var(--color-accent)", cursor: tmdbLoading ? "not-allowed" : "pointer" }}
                   >
-                    {tmdbLoading ? "Fetching cast…" : "Fetch Cast"}
+                    {tmdbLoading ? "Fetching credits…" : "Fetch online credits"}
                   </button>
                 </div>
               ) : tmdbCast.length === 0 ? (
                 <div className="space-y-3">
                   <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-                    No cast found in our production database for this production. Search for the correct title to try again.
+                    No online credits found for this production. Search for the correct title to try again.
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -856,7 +785,7 @@ export default function ProductionDetailClient() {
                       value={tmdbSearchQ}
                       onChange={(e) => setTmdbSearchQ(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") void searchTmdbTitles(); }}
-                      placeholder="Search by title…"
+                      placeholder="Search title…"
                       style={{ ...inputStyle, flex: 1 }}
                     />
                     <button
@@ -944,33 +873,12 @@ export default function ProductionDetailClient() {
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Department</label>
                   <input type="text" value={manualDept} onChange={(e) => setManualDept(e.target.value)} style={inputStyle} placeholder="e.g. Principal, VFX" />
                 </div>
-              </div>
-              <div>
-                <label className="text-xs mb-1.5 block" style={{ color: "var(--color-muted)" }}>Union affiliation</label>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { key: "SAG-AFTRA", label: "SAG-AFTRA", active: !manualUnionOther && manualUnion === "SAG-AFTRA", onClick: () => { setManualUnionOther(false); setManualUnion((u) => u === "SAG-AFTRA" ? "" : "SAG-AFTRA"); } },
-                    { key: "Equity", label: "Equity", active: !manualUnionOther && manualUnion === "Equity", onClick: () => { setManualUnionOther(false); setManualUnion((u) => u === "Equity" ? "" : "Equity"); } },
-                    { key: "Other", label: "Other", active: manualUnionOther, onClick: () => setManualUnionOther((v) => { setManualUnion(""); return !v; }) },
-                  ].map((u) => (
-                    <button
-                      key={u.key}
-                      type="button"
-                      onClick={u.onClick}
-                      className="px-3 py-1.5 rounded text-xs font-medium border transition"
-                      style={{
-                        borderColor: u.active ? "var(--color-accent)" : "var(--color-border)",
-                        background: u.active ? "var(--color-accent)" : "transparent",
-                        color: u.active ? "white" : "var(--color-muted)",
-                      }}
-                    >
-                      {u.label}
-                    </button>
-                  ))}
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={manualSag} onChange={(e) => setManualSag(e.target.checked)} />
+                    <span className="text-xs" style={{ color: "var(--color-muted)" }}>SAG-AFTRA member</span>
+                  </label>
                 </div>
-                {manualUnionOther && (
-                  <input type="text" value={manualUnion} onChange={(e) => setManualUnion(e.target.value)} style={{ ...inputStyle, marginTop: 8 }} placeholder="Union name" />
-                )}
               </div>
               <button
                 type="button"
@@ -1080,14 +988,14 @@ export default function ProductionDetailClient() {
       {cast.length === 0 ? (
         <div className="rounded p-8 text-center" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
           <p className="text-sm mb-1" style={{ color: "var(--color-text)" }}>No cast members yet</p>
-          <p className="text-xs" style={{ color: "var(--color-muted)" }}>Use the Add Cast button to import from our production database, enter manually, or upload a CSV.</p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>Use the Add Cast button to import online, enter manually, or upload a CSV.</p>
         </div>
       ) : (
         <div className="rounded overflow-x-auto" style={{ border: "1px solid var(--color-border)" }}>
           <table className="w-full text-sm" style={{ minWidth: 700 }}>
             <thead>
               <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
-                {["Talent", "Character", "Dept", "Union", "Status", "Licence", ""].map((h) => (
+                {["Talent", "Character", "Dept", "SAG", "Status", "Licence", ""].map((h) => (
                   <th key={h} className="text-left px-4 py-2.5 text-xs font-medium tracking-wider uppercase" style={{ color: "var(--color-muted)" }}>{h}</th>
                 ))}
               </tr>
@@ -1111,14 +1019,11 @@ export default function ProductionDetailClient() {
                     <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.department ?? "—"}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {(() => {
-                      const union = row.unionAffiliation ?? (row.sagMember ? "SAG-AFTRA" : null);
-                      return union ? (
-                        <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>{union}</span>
-                      ) : (
-                        <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
-                      );
-                    })()}
+                    {row.sagMember ? (
+                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>SAG</span>
+                    ) : (
+                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span

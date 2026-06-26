@@ -181,7 +181,7 @@ export default function NewProductionClient() {
         {/* TMDB search */}
         <div className="rounded p-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
           <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
-            Link to TMDB (optional)
+            Link to title (optional)
           </p>
           {tmdbLinked ? (
             <div className="flex items-center justify-between">
@@ -190,7 +190,7 @@ export default function NewProductionClient() {
                   {tmdbLinked.title ?? tmdbLinked.name}
                 </span>
                 <span className="text-xs ml-2" style={{ color: "var(--color-muted)" }}>
-                  TMDB #{tmdbLinked.id}
+                  #{tmdbLinked.id}
                 </span>
               </div>
               <button
@@ -240,7 +240,7 @@ export default function NewProductionClient() {
             </div>
           )}
           <p className="text-xs mt-2" style={{ color: "var(--color-muted)" }}>
-            Linking to TMDB allows cast auto-import from the credits list.
+            Linking to a title allows cast auto-import from the credits list.
           </p>
         </div>
 
