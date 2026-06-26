@@ -36,7 +36,7 @@ function typeLabel(t: string): string {
  *
  * Reused on the production page and as a step in the guided setup wizard.
  */
-export default function VendorsPanel({ productionId, embedded = false }: { productionId: string; embedded?: boolean }) {
+export default function VendorsPanel({ productionId, embedded = false, canWrite = true }: { productionId: string; embedded?: boolean; canWrite?: boolean }) {
   const [vendors, setVendors] = useState<VendorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -53,7 +53,7 @@ export default function VendorsPanel({ productionId, embedded = false }: { produ
   // Add panel toggle. Embedded (guided setup) keeps the form open inline; on the
   // production page it sits behind an "Add Vendor" button, mirroring the cast section.
   const [showAdd, setShowAdd] = useState(false);
-  const addOpen = embedded || showAdd;
+  const addOpen = (embedded || showAdd) && canWrite;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -157,17 +157,19 @@ export default function VendorsPanel({ productionId, embedded = false }: { produ
             <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
               Vendors{vendors.length > 0 ? ` · ${vendors.length}` : ""}
             </p>
-            <button
-              type="button"
-              onClick={() => setShowAdd((v) => !v)}
-              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white"
-              style={{ background: "var(--color-accent)" }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Add Vendor
-            </button>
+            {canWrite && (
+              <button
+                type="button"
+                onClick={() => setShowAdd((v) => !v)}
+                className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white"
+                style={{ background: "var(--color-accent)" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Add Vendor
+              </button>
+            )}
           </div>
           <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
             VFX, dubbing and scan vendors working on this production. Attaching a vendor doesn&apos;t grant scan access — that&apos;s granted per licence and requires their environment audit to pass.
@@ -272,9 +274,11 @@ export default function VendorsPanel({ productionId, embedded = false }: { produ
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => remove(v)} disabled={removingId === v.id} className="text-xs" style={{ color: "var(--color-accent)" }}>
-                        {removingId === v.id ? "Removing…" : pending ? "Cancel" : "Remove"}
-                      </button>
+                      {canWrite && (
+                        <button onClick={() => remove(v)} disabled={removingId === v.id} className="text-xs" style={{ color: "var(--color-accent)" }}>
+                          {removingId === v.id ? "Removing…" : pending ? "Cancel" : "Remove"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

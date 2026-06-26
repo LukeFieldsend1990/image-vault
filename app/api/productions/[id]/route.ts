@@ -12,12 +12,14 @@ import {
   productionCast,
   productionDefaultTerms,
   productionVendors,
+  productionMembers,
   insurerPolicies,
   organisationMembers,
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { resolveOwnerAccess } from "@/lib/productions/access";
 import { getRepAgencyContext } from "@/lib/agency/rep-visibility";
 import { eq, and, count } from "drizzle-orm";
 
@@ -68,6 +70,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Work out how this viewer relates to the production. Owners/admins get the
   // full management UI; vendors/reps get scoped views; anyone else is denied.
   let viewerRole: "admin" | "owner" | "vendor" | "rep" | "none" = "none";
+  // Operational rights on the owner side. Org owners/admins (and system admins)
+  // get the lot; explicitly-added editors can mutate but not manage the team;
+  // explicitly-added viewers are read-only.
+  let viewerCanWrite = false;
+  let viewerCanManageTeam = false;
   let viewerVendorType: string | null = null;
   // For reps, why are they allowed here? "cast" = directly assigned to a slot
   // (path-C invite flow); "agency" = agency-shared visibility via a colleague's
@@ -76,18 +83,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (isAdmin(session.email)) {
     viewerRole = "admin";
+    viewerCanWrite = true;
+    viewerCanManageTeam = true;
   } else if (isIndustryRole(session.role)) {
-    if (!row.organisationId) {
-      // Legacy productions with no owning org — mirror the cast route's behaviour
-      // of letting industry users through.
+    const access = await resolveOwnerAccess(db, id, row.organisationId, session.sub);
+    if (access.isMember) {
       viewerRole = "owner";
-    } else {
-      const membership = await db
-        .select({ r: organisationMembers.memberRole })
-        .from(organisationMembers)
-        .where(and(eq(organisationMembers.organisationId, row.organisationId), eq(organisationMembers.userId, session.sub)))
-        .get();
-      if (membership) viewerRole = "owner";
+      viewerCanWrite = access.canWrite;
+      viewerCanManageTeam = access.canManageTeam;
     }
     if (viewerRole === "none") {
       // Not an owner — are they a member of an org attached as an active vendor?
@@ -139,7 +142,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .where(eq(licences.productionId, id))
     .all();
 
-  return NextResponse.json({ production: { ...row, licenceCount: licenceCount?.count ?? 0, viewerRole, viewerVendorType, viewerRepKind } });
+  return NextResponse.json({ production: { ...row, licenceCount: licenceCount?.count ?? 0, viewerRole, viewerCanWrite, viewerCanManageTeam, viewerVendorType, viewerRepKind } });
 }
 
 // PATCH /api/productions/[id] — update production metadata
@@ -150,8 +153,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const db = getDb();
 
-  // Auth: admin, rep, or an owner/member of the production's owning organisation
-  // (so producers can edit their own production's compliance details).
+  // Auth: admin, rep, or someone with write access to the production's owning org
+  // (org owner/admin, or an explicitly-added production editor) — so producers and
+  // delegated colleagues can edit their own production's non-key details.
   let allowed = isAdmin(session.email) || session.role === "rep";
   if (!allowed && isIndustryRole(session.role)) {
     const prod = await db
@@ -160,16 +164,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .where(eq(productions.id, id))
       .get();
     if (!prod) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (!prod.organisationId) {
-      allowed = true; // legacy production with no owning org
-    } else {
-      const membership = await db
-        .select({ r: organisationMembers.memberRole })
-        .from(organisationMembers)
-        .where(and(eq(organisationMembers.organisationId, prod.organisationId), eq(organisationMembers.userId, session.sub)))
-        .get();
-      if (membership) allowed = true;
-    }
+    const access = await resolveOwnerAccess(db, id, prod.organisationId, session.sub);
+    if (access.canWrite) allowed = true;
   }
   if (!allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -232,6 +228,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   await db.delete(insurerPolicies).where(eq(insurerPolicies.productionId, id));
   await db.delete(productionVendors).where(eq(productionVendors.productionId, id));
   await db.delete(productionDefaultTerms).where(eq(productionDefaultTerms.productionId, id));
+  await db.delete(productionMembers).where(eq(productionMembers.productionId, id));
   await db.delete(productionCast).where(eq(productionCast.productionId, id));
 
   await db.delete(productions).where(eq(productions.id, id));

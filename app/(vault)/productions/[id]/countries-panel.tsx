@@ -20,7 +20,7 @@ function formatDate(unix: number | null): string {
   });
 }
 
-export default function CountriesPanel({ productionId }: { productionId: string }) {
+export default function CountriesPanel({ productionId, canWrite = true }: { productionId: string; canWrite?: boolean }) {
   const [countries, setCountries] = useState<CountryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRemoved, setShowRemoved] = useState(false);
@@ -63,16 +63,18 @@ export default function CountriesPanel({ productionId }: { productionId: string 
         <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
           Countries in scope
         </p>
-        <Link
-          href={`/productions/${productionId}/countries/add`}
-          className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium"
-          style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Add country
-        </Link>
+        {canWrite && (
+          <Link
+            href={`/productions/${productionId}/countries/add`}
+            className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium"
+            style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add country
+          </Link>
+        )}
       </div>
       <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
         Every country where data activity happens for this show. The right local data protection rules apply to each one.
@@ -128,7 +130,7 @@ export default function CountriesPanel({ productionId }: { productionId: string 
                   </p>
                 </div>
               </div>
-              {!c.isHome && c.status === "in_scope" && (
+              {canWrite && !c.isHome && c.status === "in_scope" && (
                 <button
                   onClick={() => remove(c.id)}
                   disabled={removingId === c.id}
