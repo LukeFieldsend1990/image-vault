@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
 import { ORG_TYPES } from "@/lib/organisations/orgTypes";
 
 export const users = sqliteTable("users", {
@@ -1161,6 +1161,20 @@ export const productionVendors = sqliteTable("production_vendors", {
   addedAt: integer("added_at").notNull(),
   revokedAt: integer("revoked_at"),
 });
+
+// Production team — explicit per-production access for org "member"-role users.
+// Org owners/admins manage every production implicitly; this table grants
+// individual colleagues either read-only (viewer) or operational (editor) access
+// to a single production. See lib/productions/access.ts for how it's resolved.
+export const productionMembers = sqliteTable("production_members", {
+  productionId: text("production_id").notNull().references(() => productions.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role", { enum: ["viewer", "editor"] }).notNull().default("viewer"),
+  addedBy: text("added_by").references(() => users.id),
+  addedAt: integer("added_at").notNull(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.productionId, t.userId] }),
+}));
 
 // ── Admin MCP integration ─────────────────────────────────────────────────────
 

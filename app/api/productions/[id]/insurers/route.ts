@@ -3,13 +3,13 @@ import { getDb } from "@/lib/db";
 import {
   productions,
   organisations,
-  organisationMembers,
   users,
   invites,
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
+import { resolveOwnerAccess } from "@/lib/productions/access";
 import { createGrant, listGrantsForScope, GrantScopeError } from "@/lib/compliance/grants";
 import { insurerInviteEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
@@ -46,29 +46,14 @@ async function authorizeProductionManager(
     if (!isIndustryRole(session.role)) {
       return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
-    if (production.organisationId) {
-      const membership = await db
-        .select({ memberRole: organisationMembers.memberRole })
-        .from(organisationMembers)
-        .where(
-          and(
-            eq(organisationMembers.organisationId, production.organisationId),
-            eq(organisationMembers.userId, session.sub),
-          ),
-        )
-        .get();
-      if (!membership) {
-        return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-      }
-      if (
-        requireOwnerOrAdmin &&
-        membership.memberRole !== "owner" &&
-        membership.memberRole !== "admin"
-      ) {
-        return {
-          error: NextResponse.json({ error: "Forbidden — org owner or admin required" }, { status: 403 }),
-        };
-      }
+    const access = await resolveOwnerAccess(db, productionId, production.organisationId, session.sub);
+    if (!access.isMember) {
+      return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
+    if (requireOwnerOrAdmin && !access.canWrite) {
+      return {
+        error: NextResponse.json({ error: "Forbidden — operational access required" }, { status: 403 }),
+      };
     }
   }
 

@@ -8,6 +8,7 @@ import CodeTag from "@/app/components/code-tag";
 import CountriesPanel from "./countries-panel";
 import InsurersPanel from "./insurers-panel";
 import VendorsPanel from "./vendors-panel";
+import TeamPanel from "./team-panel";
 import VendorAuthorisedScans from "./vendor-authorised-scans";
 import InviteRepModal from "./invite-rep-modal";
 import { formatScan } from "@/lib/codes/codes";
@@ -31,6 +32,8 @@ interface Production {
   orgShortCode?: string | null;
   licenceCount: number;
   viewerRole?: "admin" | "owner" | "vendor" | "rep" | "none";
+  viewerCanWrite?: boolean;
+  viewerCanManageTeam?: boolean;
   viewerVendorType?: string | null;
   viewerRepKind?: "cast" | "agency" | null;
 }
@@ -209,12 +212,12 @@ export default function ProductionDetailClient() {
 
   // Tabbed dashboard (item 3). Default to Cast; persist in the URL hash so refreshes
   // and shared links keep position. No router change — hash only.
-  const [activeTab, setActiveTab] = useState<"overview" | "cast" | "vendors">("cast");
+  const [activeTab, setActiveTab] = useState<"overview" | "cast" | "vendors" | "team">("cast");
   useEffect(() => {
     const fromHash = typeof window !== "undefined" ? window.location.hash.replace("#", "") : "";
-    if (fromHash === "overview" || fromHash === "cast" || fromHash === "vendors") setActiveTab(fromHash);
+    if (fromHash === "overview" || fromHash === "cast" || fromHash === "vendors" || fromHash === "team") setActiveTab(fromHash);
   }, []);
-  function selectTab(tab: "overview" | "cast" | "vendors") {
+  function selectTab(tab: "overview" | "cast" | "vendors" | "team") {
     setActiveTab(tab);
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `#${tab}`);
@@ -872,6 +875,11 @@ export default function ProductionDetailClient() {
     );
   }
 
+  // Operational rights for the owner-side view. Org owners/admins and editors can
+  // mutate; read-only team members see the page but no action controls. Default
+  // open for legacy responses that don't carry the flag.
+  const canWrite = production.viewerCanWrite !== false;
+
   const pct = castTotal > 0 ? Math.round((consentedCount / castTotal) * 100) : 0;
   const circumference = 2 * Math.PI * 28;
 
@@ -942,9 +950,9 @@ export default function ProductionDetailClient() {
         )}
       </div>
 
-      {/* Tab strip (item 3) — Overview / Cast / Vendors. Default Cast. */}
+      {/* Tab strip (item 3) — Overview / Cast / Vendors / Team. Default Cast. */}
       <div className="flex gap-6 mb-6" style={{ borderBottom: "1px solid var(--color-border)" }}>
-        {([["overview", "Overview"], ["cast", "Cast"], ["vendors", "Vendors"]] as const).map(([key, label]) => {
+        {([["overview", "Overview"], ["cast", "Cast"], ["vendors", "Vendors"], ["team", "Team"]] as const).map(([key, label]) => {
           const active = activeTab === key;
           return (
             <button
@@ -965,8 +973,8 @@ export default function ProductionDetailClient() {
       {/* ── Overview tab — permanent production infrastructure ── */}
       {activeTab === "overview" && (
         <div>
-      {/* Union project number — editable by the production owner/admin. */}
-      {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
+      {/* Union project number — editable by owners/admins and operational members. */}
+      {canWrite && (production.viewerRole === "owner" || production.viewerRole === "admin") && (
         <div className="mb-6 flex items-center gap-2 flex-wrap text-xs">
           <span className="font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>Union project number</span>
           {editingUnionNum ? (
@@ -1000,13 +1008,13 @@ export default function ProductionDetailClient() {
         </div>
       )}
 
-          {/* Countries in scope — owner/admin only; structural production detail. */}
+          {/* Countries in scope — structural production detail. */}
           {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
-            <CountriesPanel productionId={production.id} />
+            <CountriesPanel productionId={production.id} canWrite={canWrite} />
           )}
 
           {/* Insurers */}
-          <InsurersPanel productionId={id} />
+          <InsurersPanel productionId={id} canWrite={canWrite} />
         </div>
       )}
 
@@ -1018,16 +1026,18 @@ export default function ProductionDetailClient() {
         <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
           Cast · {castTotal} member{castTotal !== 1 ? "s" : ""}
         </p>
-        <button
-          onClick={() => setShowAddPanel((v) => !v)}
-          className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white"
-          style={{ background: "var(--color-accent)" }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Add Cast
-        </button>
+        {canWrite && (
+          <button
+            onClick={() => setShowAddPanel((v) => !v)}
+            className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white"
+            style={{ background: "var(--color-accent)" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add Cast
+          </button>
+        )}
       </div>
 
       {/* Add cast panel */}
@@ -1475,7 +1485,7 @@ export default function ProductionDetailClient() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      {row.status === "placeholder" && (
+                      {canWrite && row.status === "placeholder" && (
                         <>
                           <button
                             onClick={() => handleAddEmail(row.id, row.actorName ?? "this performer")}
@@ -1519,7 +1529,7 @@ export default function ProductionDetailClient() {
                           )}
                         </>
                       )}
-                      {row.status === "invited" && (
+                      {canWrite && row.status === "invited" && (
                         <button
                           onClick={() => handleResend(row.id)}
                           disabled={resendingId === row.id}
@@ -1530,7 +1540,7 @@ export default function ProductionDetailClient() {
                           {resendingId === row.id ? "…" : "Resend"}
                         </button>
                       )}
-                      {row.status === "linked" && row.talentId && !row.licence && (
+                      {canWrite && row.status === "linked" && row.talentId && !row.licence && (
                         <button
                           onClick={() => handleRequestLicence(row.id)}
                           disabled={requestingId === row.id}
@@ -1541,7 +1551,7 @@ export default function ProductionDetailClient() {
                           {requestingId === row.id ? "Sending…" : "Send licence request"}
                         </button>
                       )}
-                      {(row.status === "placeholder" || row.status === "invited" || row.status === "linked") && (
+                      {canWrite && (row.status === "placeholder" || row.status === "invited" || row.status === "linked") && (
                         <button
                           onClick={() => handleRemove(row.id)}
                           disabled={removingId === row.id}
@@ -1647,15 +1657,17 @@ export default function ProductionDetailClient() {
                             <span className="text-xs" style={{ color: "var(--color-muted)" }}>
                               {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
                             </span>
-                            <button
-                              onClick={() => handleMarkIncluded(lic.id)}
-                              disabled={markingIncludedId === lic.id}
-                              className="text-[11px] text-left"
-                              style={{ color: "var(--color-accent)" }}
-                              title="Mark this scan as included in the production (no licence fee)"
-                            >
-                              {markingIncludedId === lic.id ? "Marking…" : "Mark included"}
-                            </button>
+                            {canWrite && (
+                              <button
+                                onClick={() => handleMarkIncluded(lic.id)}
+                                disabled={markingIncludedId === lic.id}
+                                className="text-[11px] text-left"
+                                style={{ color: "var(--color-accent)" }}
+                                title="Mark this scan as included in the production (no licence fee)"
+                              >
+                                {markingIncludedId === lic.id ? "Marking…" : "Mark included"}
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -1673,7 +1685,12 @@ export default function ProductionDetailClient() {
 
       {/* ── Vendors tab — secondary / post-go-live work ── */}
       {activeTab === "vendors" && (
-        <VendorsPanel productionId={id} />
+        <VendorsPanel productionId={id} canWrite={canWrite} />
+      )}
+
+      {/* ── Team tab — associate org colleagues with this production ── */}
+      {activeTab === "team" && (
+        <TeamPanel productionId={id} />
       )}
 
       {/* Path C — invite representation to a reserved slot */}

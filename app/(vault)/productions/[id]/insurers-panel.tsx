@@ -29,7 +29,7 @@ function fmtDate(unix: number): string {
  * Insurers attached to this production. Insurance is bound per production, so an
  * insurer added here gets read-only, production-scoped oversight only.
  */
-export default function InsurersPanel({ productionId }: { productionId: string }) {
+export default function InsurersPanel({ productionId, canWrite = true }: { productionId: string; canWrite?: boolean }) {
   const [insurers, setInsurers] = useState<InsurerGrant[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,24 +117,26 @@ export default function InsurersPanel({ productionId }: { productionId: string }
         <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
           Insurers{total > 0 ? ` · ${total}` : ""}
         </p>
-        <button
-          type="button"
-          onClick={() => setShowAdd((v) => !v)}
-          className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white"
-          style={{ background: "var(--color-accent)" }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Add Insurer
-        </button>
+        {canWrite && (
+          <button
+            type="button"
+            onClick={() => setShowAdd((v) => !v)}
+            className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white"
+            style={{ background: "var(--color-accent)" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add Insurer
+          </button>
+        )}
       </div>
       <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
         Read-only oversight of this production&apos;s consent &amp; custody evidence. Scoped to this production only.
       </p>
 
       {/* Add insurer */}
-      {showAdd && (
+      {showAdd && canWrite && (
         <div className="rounded p-4 mb-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
@@ -199,14 +201,16 @@ export default function InsurersPanel({ productionId }: { productionId: string }
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: "var(--color-muted)" }}>{fmtDate(g.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => void handleRemove(g.id, g.email ?? "this insurer")}
-                      disabled={removingId === g.id}
-                      className="text-xs"
-                      style={{ color: "var(--color-accent)" }}
-                    >
-                      {removingId === g.id ? "Removing…" : "Revoke"}
-                    </button>
+                    {canWrite && (
+                      <button
+                        onClick={() => void handleRemove(g.id, g.email ?? "this insurer")}
+                        disabled={removingId === g.id}
+                        className="text-xs"
+                        style={{ color: "var(--color-accent)" }}
+                      >
+                        {removingId === g.id ? "Removing…" : "Revoke"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -226,14 +230,16 @@ export default function InsurersPanel({ productionId }: { productionId: string }
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: "var(--color-muted)" }}>{fmtDate(inv.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => void handleRemove(inv.id, inv.email)}
-                      disabled={removingId === inv.id}
-                      className="text-xs"
-                      style={{ color: "var(--color-accent)" }}
-                    >
-                      {removingId === inv.id ? "Removing…" : "Cancel"}
-                    </button>
+                    {canWrite && (
+                      <button
+                        onClick={() => void handleRemove(inv.id, inv.email)}
+                        disabled={removingId === inv.id}
+                        className="text-xs"
+                        style={{ color: "var(--color-accent)" }}
+                      >
+                        {removingId === inv.id ? "Removing…" : "Cancel"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -3,19 +3,21 @@ import { getDb } from "@/lib/db";
 import {
   productions,
   productionCountries,
-  organisationMembers,
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { resolveOwnerAccess } from "@/lib/productions/access";
 import { topLevelById } from "@/lib/jurisdictions/countries";
 import { eq, and, asc } from "drizzle-orm";
 
-// Authorise the caller as owner-or-admin of the production. Returns the
-// production row on success, a NextResponse on failure.
+// Authorise the caller on the production. `requireWrite` distinguishes reads
+// (any team member) from mutations (org owner/admin or production editor).
+// Returns the production row on success, a NextResponse on failure.
 async function authorise(
   req: NextRequest,
-  productionId: string
+  productionId: string,
+  requireWrite: boolean
 ): Promise<
   | { ok: true; productionRow: { id: string; organisationId: string | null }; sub: string }
   | { ok: false; response: NextResponse }
@@ -41,22 +43,8 @@ async function authorise(
     return { ok: false, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
-  if (!row.organisationId) {
-    // Legacy productions with no owning org — mirror the cast route.
-    return { ok: true, productionRow: row, sub: session.sub };
-  }
-
-  const membership = await db
-    .select({ memberRole: organisationMembers.memberRole })
-    .from(organisationMembers)
-    .where(
-      and(
-        eq(organisationMembers.organisationId, row.organisationId),
-        eq(organisationMembers.userId, session.sub)
-      )
-    )
-    .get();
-  if (!membership) {
+  const access = await resolveOwnerAccess(db, productionId, row.organisationId, session.sub);
+  if (!access.isMember || (requireWrite && !access.canWrite)) {
     return { ok: false, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
   return { ok: true, productionRow: row, sub: session.sub };
@@ -69,7 +57,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const auth = await authorise(req, id);
+  const auth = await authorise(req, id, false);
   if (!auth.ok) return auth.response;
 
   const db = getDb();
@@ -98,7 +86,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const auth = await authorise(req, id);
+  const auth = await authorise(req, id, true);
   if (!auth.ok) return auth.response;
 
   let body: { name?: string; topLevelId?: string };

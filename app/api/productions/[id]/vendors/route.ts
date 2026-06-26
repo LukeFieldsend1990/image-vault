@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, organisations, organisationMembers } from "@/lib/db/schema";
+import { productions, organisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { resolveOwnerAccess } from "@/lib/productions/access";
 import { attachVendor, listProductionVendors } from "@/lib/productions/vendors";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -26,19 +27,10 @@ async function authorize(
 
   if (!isAdmin(session.email)) {
     if (!isIndustryRole(session.role)) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-    if (production.organisationId) {
-      const membership = await db
-        .select({ memberRole: organisationMembers.memberRole })
-        .from(organisationMembers)
-        .where(and(
-          eq(organisationMembers.organisationId, production.organisationId),
-          eq(organisationMembers.userId, session.sub),
-        ))
-        .get();
-      if (!membership) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-      if (requireWrite && membership.memberRole !== "owner" && membership.memberRole !== "admin") {
-        return { error: NextResponse.json({ error: "Forbidden — org owner or admin required" }, { status: 403 }) };
-      }
+    const access = await resolveOwnerAccess(db, productionId, production.organisationId, session.sub);
+    if (!access.isMember) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    if (requireWrite && !access.canWrite) {
+      return { error: NextResponse.json({ error: "Forbidden — operational access required" }, { status: 403 }) };
     }
   }
   return { production };
