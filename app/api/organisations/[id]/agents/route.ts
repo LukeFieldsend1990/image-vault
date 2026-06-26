@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { organisations, organisationMembers, invites, users } from "@/lib/db/schema";
+import { organisations, organisationMembers, invites, users, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isAgencyAdmin } from "@/lib/agency/membership";
@@ -104,15 +104,66 @@ export async function POST(
   const now = Math.floor(Date.now() / 1000);
 
   const existingUser = await db
-    .select({ id: users.id })
+    .select({ id: users.id, role: users.role, shortCode: users.shortCode })
     .from(users)
     .where(eq(users.email, email))
     .get();
   if (existingUser) {
-    return NextResponse.json(
-      { error: "An account with that email already exists. Ask an admin to attach them as an existing rep." },
-      { status: 409 },
-    );
+    if (existingUser.role !== "rep") {
+      return NextResponse.json(
+        { error: "That account is not a rep and cannot be added as an agent." },
+        { status: 409 },
+      );
+    }
+
+    // Check if the rep is already in a different agency.
+    const otherAgency = await db
+      .select({ organisationId: organisationMembers.organisationId })
+      .from(organisationMembers)
+      .innerJoin(organisations, eq(organisations.id, organisationMembers.organisationId))
+      .where(
+        and(
+          eq(organisationMembers.userId, existingUser.id),
+          eq(organisations.orgType, "agency"),
+        ),
+      )
+      .get();
+    if (otherAgency && otherAgency.organisationId !== id) {
+      return NextResponse.json(
+        { error: "That agent is already a member of another agency." },
+        { status: 409 },
+      );
+    }
+    if (otherAgency && otherAgency.organisationId === id) {
+      return NextResponse.json(
+        { error: "That agent is already a member of this agency." },
+        { status: 409 },
+      );
+    }
+
+    // Attach the existing rep to this agency.
+    await db.insert(organisationMembers).values({
+      organisationId: id,
+      userId: existingUser.id,
+      memberRole: "member",
+      invitedBy: session.sub,
+      joinedAt: now,
+    });
+
+    // Backfill routing on any unaffiliated representation rows.
+    await db
+      .update(talentReps)
+      .set({ agencyOrgId: id })
+      .where(and(eq(talentReps.repId, existingUser.id), isNull(talentReps.agencyOrgId)));
+
+    return NextResponse.json({
+      attached: true,
+      userId: existingUser.id,
+      email,
+      shortCode: existingUser.shortCode,
+      memberRole: "member",
+      joinedAt: now,
+    }, { status: 201 });
   }
 
   const existingInvite = await db
