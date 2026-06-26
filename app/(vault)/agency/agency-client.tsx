@@ -35,7 +35,7 @@ export default function AgencyClient({
   initialMembers: AgentMember[];
   initialPending: PendingInvite[];
 }) {
-  const [members] = useState(initialMembers);
+  const [members, setMembers] = useState(initialMembers);
   const [pending, setPending] = useState(initialPending);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,12 +51,31 @@ export default function AgencyClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = (await res.json()) as { error?: string; inviteId?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        inviteId?: string;
+        attached?: boolean;
+        userId?: string;
+        shortCode?: string | null;
+        memberRole?: "owner" | "admin" | "member";
+        joinedAt?: number;
+      };
       if (!res.ok) { setMsg({ kind: "err", text: data.error ?? "Could not send invite." }); return; }
-      setMsg({ kind: "ok", text: `Invite sent to ${email}.` });
-      if (data.inviteId) {
-        const now = Math.floor(Date.now() / 1000);
-        setPending((p) => [...p, { id: data.inviteId!, email, createdAt: now, expiresAt: now + 7 * 24 * 60 * 60 }]);
+      if (data.attached && data.userId) {
+        setMsg({ kind: "ok", text: `${email} added to the agency.` });
+        setMembers((m) => [...m, {
+          userId: data.userId!,
+          email,
+          shortCode: data.shortCode ?? null,
+          memberRole: data.memberRole ?? "member",
+          joinedAt: data.joinedAt ?? Math.floor(Date.now() / 1000),
+        }]);
+      } else {
+        setMsg({ kind: "ok", text: `Invite sent to ${email}.` });
+        if (data.inviteId) {
+          const now = Math.floor(Date.now() / 1000);
+          setPending((p) => [...p, { id: data.inviteId!, email, createdAt: now, expiresAt: now + 7 * 24 * 60 * 60 }]);
+        }
       }
       setEmail("");
     } finally {
