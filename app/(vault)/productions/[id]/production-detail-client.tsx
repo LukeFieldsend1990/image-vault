@@ -32,6 +32,7 @@ interface Production {
   licenceCount: number;
   viewerRole?: "admin" | "owner" | "vendor" | "rep" | "none";
   viewerVendorType?: string | null;
+  viewerRepKind?: "cast" | "agency" | null;
 }
 
 interface CastRow {
@@ -264,6 +265,10 @@ export default function ProductionDetailClient() {
   const [csvError, setCsvError] = useState("");
 
   const [licences, setLicences] = useState<LicenceSummary[]>([]);
+  // For reps with agency-shared visibility: default scope is "own clients only".
+  // Toggling to "agency" broadens the licence list to all agency-managed talent
+  // on this production. Rosters elsewhere remain segregated either way.
+  const [licenceScope, setLicenceScope] = useState<"own" | "agency">("own");
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -285,7 +290,9 @@ export default function ProductionDetailClient() {
       const [prodRes, castRes, licRes, countriesRes] = await Promise.all([
         fetch(`/api/productions/${id}`),
         fetch(`/api/productions/${id}/cast`),
-        fetch(`/api/licences`),
+        // Scope licences server-side so reps using agency-shared visibility
+        // only ever pull their permitted slice (own clients by default).
+        fetch(`/api/licences?productionId=${id}&scope=${licenceScope}`),
         fetch(`/api/productions/${id}/countries`),
       ]);
       if (prodRes.ok) {
@@ -318,7 +325,7 @@ export default function ProductionDetailClient() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, licenceScope]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -691,12 +698,16 @@ export default function ProductionDetailClient() {
     );
   }
 
-  // Reps get a read-only view scoped to their assigned cast slot(s).
+  // Reps get a read-only view. Two flavours, distinguished by the cast API
+  // response shape: a direct cast-slot assignment narrows the cast list to
+  // their own slot(s); agency-shared visibility (a colleague at the same
+  // agency has an APPROVED licence here) returns the full production cast.
   if (production.viewerRole === "rep") {
+    const ownCastSlot = production.viewerRepKind === "cast";
     return (
       <div className="p-8 max-w-3xl">
         <div className="mb-2">
-          <Link href="/roster" className="text-xs" style={{ color: "var(--color-muted)" }}>← Roster</Link>
+          <Link href="/productions" className="text-xs" style={{ color: "var(--color-muted)" }}>← Productions</Link>
         </div>
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -722,19 +733,19 @@ export default function ProductionDetailClient() {
         </div>
 
         <div className="rounded p-5 mb-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-          <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>Your role</p>
+          <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>Your access</p>
           <p className="text-sm" style={{ color: "var(--color-text)" }}>
-            You have been assigned to represent cast on this production. The production company manages the overall cast — you can see your assigned slot(s) below.
+            {ownCastSlot
+              ? "You represent cast on this production. The production company manages the overall cast — you can see your assigned slot(s) and any agency-shared licence detail below."
+              : "Your agency has clients with active licences on this production. You can see the cast and any licence detail tied to those clients here; your own roster stays private to you."}
           </p>
         </div>
 
-        {cast.length === 0 ? (
-          <div className="rounded p-6 text-center" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-            <p className="text-sm" style={{ color: "var(--color-muted)" }}>No active cast assignments on this production.</p>
-          </div>
-        ) : (
-          <div>
-            <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>Your cast assignment{cast.length !== 1 ? "s" : ""}</p>
+        {cast.length > 0 && (
+          <div className="mb-8">
+            <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>
+              {ownCastSlot ? `Your cast assignment${cast.length !== 1 ? "s" : ""}` : `Cast · ${cast.length}`}
+            </p>
             <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
               {cast.map((row, i) => (
                 <div
@@ -776,6 +787,87 @@ export default function ProductionDetailClient() {
             </div>
           </div>
         )}
+
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
+              Licences · {licences.length}
+            </p>
+            <div className="inline-flex rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+              {(["own", "agency"] as const).map((scope) => (
+                <button
+                  key={scope}
+                  onClick={() => setLicenceScope(scope)}
+                  className="text-[11px] font-medium px-3 py-1"
+                  style={{
+                    background: licenceScope === scope ? "var(--color-accent)" : "var(--color-surface)",
+                    color: licenceScope === scope ? "white" : "var(--color-muted)",
+                  }}
+                >
+                  {scope === "own" ? "My clients" : "All agency"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {licences.length === 0 ? (
+            <div className="rounded p-6 text-center text-xs" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-muted)" }}>
+              {licenceScope === "own"
+                ? "None of your clients have a licence on this production yet."
+                : "No agency-managed talent has an approved licence on this production yet."}
+            </div>
+          ) : (
+            <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
+                    {["Talent", "Type", "Status", "Valid To", "Fee"].map((h) => (
+                      <th key={h} className="text-left px-4 py-2.5 text-xs font-medium tracking-wider uppercase" style={{ color: "var(--color-muted)" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {licences.map((lic, i) => {
+                    const licColour: Record<string, string> = {
+                      APPROVED: "#166534", PENDING: "#b45309", AWAITING_PACKAGE: "#7c3aed",
+                      DENIED: "#991b1b", REVOKED: "#6b7280", EXPIRED: "#6b7280",
+                    };
+                    const colour = licColour[lic.status] ?? "#6b7280";
+                    return (
+                      <tr key={lic.id} style={{ borderBottom: i < licences.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{lic.talentName ?? lic.talentEmail ?? "—"}</span>
+                            <CodeTag code={lic.talentShortCode} />
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                            {lic.licenceType ? lic.licenceType.replace(/_/g, " ") : "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${colour}18`, color: colour }}>
+                            {lic.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                            {new Date(lic.validTo * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                            {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     );
   }

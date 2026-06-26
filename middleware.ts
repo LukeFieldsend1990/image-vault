@@ -44,7 +44,7 @@ function getTokenPayload(req: NextRequest): { email: string | null; role: string
 // Routes each role is allowed to access
 const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
   talent: ["/dashboard", "/vault", "/licences", "/settings", "/onboarding", "/inbox", "/bookings"],
-  rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences", "/talent"],
+  rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences", "/talent", "/productions"],
   licensee: ["/directory", "/talent", "/licences", "/settings", "/inbox", "/productions"],
   industry: ["/directory", "/talent", "/licences", "/settings", "/inbox", "/productions"],
   // Read-only watcher: evidence + account settings only. Everything else redirects to /evidence.

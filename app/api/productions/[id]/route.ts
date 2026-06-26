@@ -18,6 +18,7 @@ import {
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { getRepAgencyContext } from "@/lib/agency/rep-visibility";
 import { eq, and, count } from "drizzle-orm";
 
 // GET /api/productions/[id] — get production detail
@@ -68,6 +69,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // full management UI; vendors/reps get scoped views; anyone else is denied.
   let viewerRole: "admin" | "owner" | "vendor" | "rep" | "none" = "none";
   let viewerVendorType: string | null = null;
+  // For reps, why are they allowed here? "cast" = directly assigned to a slot
+  // (path-C invite flow); "agency" = agency-shared visibility via a colleague's
+  // APPROVED licence. Drives copy and the cast-scope query.
+  let viewerRepKind: "cast" | "agency" | null = null;
 
   if (isAdmin(session.email)) {
     viewerRole = "admin";
@@ -102,13 +107,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
   } else if (session.role === "rep") {
-    // Reps can view a production if they have at least one cast slot assigned to them.
+    // Reps see a production if (a) they hold a reserved cast slot on it
+    // (existing path C flow), or (b) any talent managed by a rep in their
+    // agency holds an APPROVED licence on it (agency-shared visibility —
+    // rosters stay segregated, only the production view crosses the line).
     const repCast = await db
       .select({ id: productionCast.id })
       .from(productionCast)
       .where(and(eq(productionCast.productionId, id), eq(productionCast.repId, session.sub)))
       .get();
-    if (repCast) viewerRole = "rep";
+    if (repCast) {
+      viewerRole = "rep";
+      viewerRepKind = "cast";
+    } else {
+      const ctx = await getRepAgencyContext(db, session.sub);
+      if (ctx.agencyProductionIds.includes(id)) {
+        viewerRole = "rep";
+        viewerRepKind = "agency";
+      }
+    }
   }
 
   if (viewerRole === "none") {
@@ -122,7 +139,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .where(eq(licences.productionId, id))
     .all();
 
-  return NextResponse.json({ production: { ...row, licenceCount: licenceCount?.count ?? 0, viewerRole, viewerVendorType } });
+  return NextResponse.json({ production: { ...row, licenceCount: licenceCount?.count ?? 0, viewerRole, viewerVendorType, viewerRepKind } });
 }
 
 // PATCH /api/productions/[id] — update production metadata

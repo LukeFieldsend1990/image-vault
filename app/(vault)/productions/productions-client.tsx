@@ -21,7 +21,7 @@ interface Production {
   createdAt: number;
   licenceCount: number;
   cast: { total: number; consented: number; invited: number; linked: number; placeholder: number; resolved: number } | null;
-  relationship?: "owner" | "vendor";
+  relationship?: "owner" | "vendor" | "rep";
 }
 
 interface ActivityItem {
@@ -96,10 +96,13 @@ function PhaseIndicator({ status }: { status: string | null }) {
   );
 }
 
-export default function ProductionsClient() {
+export default function ProductionsClient({ role }: { role?: string | null } = {}) {
   const [productions, setProductions] = useState<Production[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // Reps reach this page via agency-shared visibility — they don't create or
+  // own productions, so we hide setup affordances and reframe the header.
+  const isRep = role === "rep";
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
@@ -115,8 +118,8 @@ export default function ProductionsClient() {
   }, []);
 
   // Productions still needing attention — no cast yet, or reserved placeholders
-  // remaining. Only the productions the caller owns; vendor-attached ones aren't theirs to set up.
-  const needsSetup = productions.filter((p) => p.relationship !== "vendor" && (!p.cast || p.cast.placeholder > 0));
+  // remaining. Only owner productions; vendor- and rep-attached ones aren't theirs to set up.
+  const needsSetup = productions.filter((p) => p.relationship === "owner" && (!p.cast || p.cast.placeholder > 0));
 
   return (
     <div className="p-8 max-w-4xl">
@@ -130,28 +133,32 @@ export default function ProductionsClient() {
             Productions
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-            Manage cast, licences, and compliance for each production.
+            {isRep
+              ? "Productions where your agency's clients hold active licences. Cast and licence terms are visible per production; roster stays private."
+              : "Manage cast, licences, and compliance for each production."}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/productions/setup"
-            className="flex items-center gap-2 rounded px-4 py-2 text-sm font-medium text-white"
-            style={{ background: "var(--color-accent)" }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Guided setup
-          </Link>
-          <Link
-            href="/productions/new"
-            className="rounded px-4 py-2 text-sm font-medium"
-            style={{ border: "1px solid var(--color-border)", color: "var(--color-muted)" }}
-          >
-            Manual
-          </Link>
-        </div>
+        {!isRep && (
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/productions/setup"
+              className="flex items-center gap-2 rounded px-4 py-2 text-sm font-medium text-white"
+              style={{ background: "var(--color-accent)" }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Guided setup
+            </Link>
+            <Link
+              href="/productions/new"
+              className="rounded px-4 py-2 text-sm font-medium"
+              style={{ border: "1px solid var(--color-border)", color: "var(--color-muted)" }}
+            >
+              Manual
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Loading skeletons */}
@@ -174,21 +181,29 @@ export default function ProductionsClient() {
             <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
           </svg>
           <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>No productions yet</p>
-          <p className="text-xs mb-6 max-w-sm mx-auto" style={{ color: "var(--color-muted)" }}>
-            Set up your first production in a few minutes — we&apos;ll pull the cast from public data, so you don&apos;t need anyone&apos;s email to get started.
-          </p>
-          <Link
-            href="/productions/setup"
-            className="inline-flex items-center gap-2 rounded px-5 py-2 text-sm font-medium text-white"
-            style={{ background: "var(--color-accent)" }}
-          >
-            Set up your first production
-          </Link>
-          <p className="mt-3">
-            <Link href="/productions/new" className="text-xs" style={{ color: "var(--color-muted)" }}>
-              or create one manually
-            </Link>
-          </p>
+          {isRep ? (
+            <p className="text-xs max-w-sm mx-auto" style={{ color: "var(--color-muted)" }}>
+              Productions appear here once a client of yours — or of a colleague at your agency — has an approved licence on one.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs mb-6 max-w-sm mx-auto" style={{ color: "var(--color-muted)" }}>
+                Set up your first production in a few minutes — we&apos;ll pull the cast from public data, so you don&apos;t need anyone&apos;s email to get started.
+              </p>
+              <Link
+                href="/productions/setup"
+                className="inline-flex items-center gap-2 rounded px-5 py-2 text-sm font-medium text-white"
+                style={{ background: "var(--color-accent)" }}
+              >
+                Set up your first production
+              </Link>
+              <p className="mt-3">
+                <Link href="/productions/new" className="text-xs" style={{ color: "var(--color-muted)" }}>
+                  or create one manually
+                </Link>
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -297,6 +312,11 @@ export default function ProductionsClient() {
                   {p.relationship === "vendor" && (
                     <span className="text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ background: "rgba(124,58,237,0.1)", color: "#7c3aed" }}>
                       Vendor
+                    </span>
+                  )}
+                  {p.relationship === "rep" && (
+                    <span className="text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ background: "rgba(12,74,110,0.1)", color: "#0c4a6e" }}>
+                      Agency
                     </span>
                   )}
                   <PhaseIndicator status={p.status} />
