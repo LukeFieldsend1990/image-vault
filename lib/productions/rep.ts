@@ -15,6 +15,7 @@ import {
 import { createNotification } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import { castRepInviteEmail } from "@/lib/email/templates";
+import { loadProductionDefaultTerms, type CastLicenceTerms } from "@/lib/productions/cast";
 import type { getDb } from "@/lib/db";
 
 type Db = ReturnType<typeof getDb>;
@@ -55,6 +56,7 @@ export async function inviteRepForCast(
       repInviteId: productionCast.repInviteId,
       actorName: productionCast.actorName,
       characterName: productionCast.characterName,
+      licenceTermsJson: productionCast.licenceTermsJson,
     })
     .from(productionCast)
     .where(and(eq(productionCast.id, opts.castId), eq(productionCast.productionId, opts.productionId)))
@@ -62,6 +64,24 @@ export async function inviteRepForCast(
   if (!cast) return { ok: false, message: "Cast member not found on this production." };
   if (cast.status !== "placeholder") return { ok: false, message: `Cast member is "${cast.status}", not a reservable placeholder.` };
   if (cast.repId || cast.repInviteId) return { ok: false, message: "Representation has already been invited for this role." };
+
+  // Gate: terms (intended use + dates) must exist somewhere before a rep is
+  // pulled in, otherwise the rep gets stuck at "Connect client" with a backend
+  // validation error. Check row-stored terms first, then production defaults.
+  let stored: CastLicenceTerms = {};
+  if (cast.licenceTermsJson) {
+    try { stored = JSON.parse(cast.licenceTermsJson) as CastLicenceTerms; } catch { stored = {}; }
+  }
+  const defaults = await loadProductionDefaultTerms(db, opts.productionId);
+  const intendedUse = (stored.intendedUse ?? defaults.intendedUse ?? "").trim();
+  const validFrom = stored.validFrom ?? defaults.validFrom;
+  const validTo = stored.validTo ?? defaults.validTo;
+  if (!intendedUse || typeof validFrom !== "number" || typeof validTo !== "number") {
+    return {
+      ok: false,
+      message: "Add intended use and licence dates to this role (or set production-level default terms) before inviting representation.",
+    };
+  }
 
   const production = await db
     .select({ id: productions.id, name: productions.name, organisationId: productions.organisationId, companyId: productions.companyId })
