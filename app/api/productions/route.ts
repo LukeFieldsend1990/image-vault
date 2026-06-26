@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
     isSag?: boolean;
     isEquity?: boolean;
     homeCountry?: { name: string; topLevelId: string };
+    otherUnion?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -168,6 +169,7 @@ export async function POST(req: NextRequest) {
     isSag: body.isSag ?? false,
     isEquity: body.isEquity ?? false,
     homeCountry: body.homeCountry?.name.trim() ?? null,
+    otherUnion: body.otherUnion?.trim() || null,
     createdAt: now,
     updatedAt: now,
   });
