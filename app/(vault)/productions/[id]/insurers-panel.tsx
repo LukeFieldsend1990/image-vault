@@ -165,7 +165,10 @@ export default function InsurersPanel({ productionId }: { productionId: string }
       {loading ? (
         <p className="text-xs" style={{ color: "var(--color-muted)" }}>Loading…</p>
       ) : total === 0 ? (
-        <p className="text-xs" style={{ color: "var(--color-muted)" }}>No insurers added yet.</p>
+        <div className="rounded p-8 text-center" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <p className="text-sm mb-1" style={{ color: "var(--color-text)" }}>No insurers yet</p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>Use the Add Insurer button to grant read-only oversight.</p>
+        </div>
       ) : (
         <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
           <table className="w-full text-sm">

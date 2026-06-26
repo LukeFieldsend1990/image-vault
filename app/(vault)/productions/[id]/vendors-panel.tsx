@@ -233,7 +233,10 @@ export default function VendorsPanel({ productionId, embedded = false }: { produ
       {loading ? (
         <p className="text-xs" style={{ color: "var(--color-muted)" }}>Loading…</p>
       ) : vendors.length === 0 ? (
-        <p className="text-xs" style={{ color: "var(--color-muted)" }}>No vendors added yet.</p>
+        <div className="rounded p-8 text-center" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <p className="text-sm mb-1" style={{ color: "var(--color-text)" }}>No vendors yet</p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>Use the Add Vendor button to attach a VFX, dubbing or scan vendor.</p>
+        </div>
       ) : (
         <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
           <table className="w-full text-sm">
