@@ -5,6 +5,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { isOrgType, type OrgType } from "@/lib/organisations/orgTypes";
 import { mintOrgCode } from "@/lib/codes/codes";
+import { validateCountry } from "@/lib/organisations/country";
 import { eq } from "drizzle-orm";
 
 // GET /api/organisations — list orgs the calling user belongs to
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest) {
     billingEmail?: string;
     productionCompanyId?: string;
     orgType?: string;
+    country?: string;
+    countryTopLevelId?: string;
   };
   try {
     body = JSON.parse(await req.text());
@@ -66,6 +69,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid orgType" }, { status: 400 });
     }
     orgType = body.orgType;
+  }
+
+  // Country is required at onboarding. Caller may omit it (e.g. legacy paths
+  // that haven't been updated yet); in that case the row is created with NULL
+  // and the user is steered into /org-onboarding to set it.
+  let country: string | null = null;
+  let countryTopLevelId: string | null = null;
+  if (body.country !== undefined || body.countryTopLevelId !== undefined) {
+    const v = validateCountry(body.country, body.countryTopLevelId);
+    if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
+    country = v.country;
+    countryTopLevelId = v.topLevelId;
   }
 
   if (body.productionCompanyId) {
@@ -92,6 +107,8 @@ export async function POST(req: NextRequest) {
     billingEmail: body.billingEmail?.trim() ?? null,
     productionCompanyId: body.productionCompanyId ?? null,
     orgType,
+    country,
+    countryTopLevelId,
     createdBy: session.sub,
     createdAt: now,
     updatedAt: now,

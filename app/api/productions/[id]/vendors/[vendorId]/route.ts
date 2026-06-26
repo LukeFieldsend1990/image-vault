@@ -4,6 +4,7 @@ import { productions, productionVendors, organisationMembers, invites } from "@/
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { unsyncVendorCountryOnProduction } from "@/lib/productions/vendors";
 import { eq, and, isNull } from "drizzle-orm";
 
 // DELETE /api/productions/[id]/vendors/[vendorId]
@@ -43,7 +44,7 @@ export async function DELETE(
   }
 
   const row = await db
-    .select({ id: productionVendors.id, status: productionVendors.status, inviteId: productionVendors.inviteId })
+    .select({ id: productionVendors.id, status: productionVendors.status, inviteId: productionVendors.inviteId, vendorOrgId: productionVendors.vendorOrgId })
     .from(productionVendors)
     .where(and(eq(productionVendors.id, vendorId), eq(productionVendors.productionId, id)))
     .get();
@@ -52,7 +53,8 @@ export async function DELETE(
   const now = Math.floor(Date.now() / 1000);
 
   if (row.status === "pending") {
-    // Cancel the pending invite + drop the row.
+    // Cancel the pending invite + drop the row. Pending vendors have no
+    // org yet, so there's nothing to unsync from production_countries.
     if (row.inviteId) {
       await db.update(invites).set({ expiresAt: now }).where(and(eq(invites.id, row.inviteId), isNull(invites.usedAt)));
     }
@@ -61,5 +63,18 @@ export async function DELETE(
   }
 
   await db.update(productionVendors).set({ status: "revoked", revokedAt: now }).where(eq(productionVendors.id, row.id));
+
+  // Drop the country this vendor caused to be added — but only if no other
+  // active vendor on this production still needs it and it wasn't a manual
+  // or home-country addition (see unsyncVendorCountryOnProduction).
+  try {
+    await unsyncVendorCountryOnProduction(db, {
+      productionId: id,
+      productionVendorId: row.id,
+      vendorOrgId: row.vendorOrgId,
+      actorUserId: session.sub,
+    });
+  } catch { /* best-effort; revocation already persisted */ }
+
   return NextResponse.json({ status: "revoked" });
 }

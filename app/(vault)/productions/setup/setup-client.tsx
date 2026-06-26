@@ -139,6 +139,12 @@ export default function SetupClient() {
   const [orgMode, setOrgMode] = useState<"pick" | "create">("create");
   const [orgId, setOrgId] = useState("");
   const [orgForm, setOrgForm] = useState({ name: "", website: "", billingEmail: "" });
+  // Country the new company is registered in. Two-part shape mirrors the
+  // production jurisdiction picker — top-level regime, then country/state for
+  // EU/US. Only required when creating a new company (existing ones already
+  // have a country on file).
+  const [orgCountryTop, setOrgCountryTop] = useState<string>("");
+  const [orgCountrySub, setOrgCountrySub] = useState<string>("");
 
   // Step 2 — production
   const [tmdbQuery, setTmdbQuery] = useState("");
@@ -212,6 +218,10 @@ export default function SetupClient() {
       return;
     }
     if (!orgForm.name.trim()) { setError("Company name is required."); return; }
+    if (!orgCountryTop) { setError("Pick the country your company is registered in."); return; }
+    const top = COUNTRY_TOP_LEVEL.find((c) => c.id === orgCountryTop);
+    const countryName = hasSubPick(orgCountryTop) ? orgCountrySub : top?.label ?? "";
+    if (!countryName) { setError(`Pick a ${subPickLabel(orgCountryTop)}.`); return; }
     setBusy(true);
     try {
       const r = await fetch("/api/organisations", {
@@ -222,6 +232,8 @@ export default function SetupClient() {
           website: orgForm.website.trim() || undefined,
           billingEmail: orgForm.billingEmail.trim() || undefined,
           orgType: "production_company",
+          country: countryName,
+          countryTopLevelId: orgCountryTop,
         }),
       });
       const d = await r.json() as { organisationId?: string; error?: string };
@@ -551,6 +563,26 @@ export default function SetupClient() {
               <Field label="Company name *">
                 <input type="text" value={orgForm.name} onChange={(e) => setOrgForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Left Bank Pictures" style={inputStyle} />
               </Field>
+              <Field label="Country of registration *" hint="Where your company is registered — sets the data-protection regime for the company itself.">
+                <select
+                  value={orgCountryTop}
+                  onChange={(e) => { setOrgCountryTop(e.target.value); setOrgCountrySub(""); }}
+                  style={inputStyle}
+                >
+                  <option value="">Select country…</option>
+                  {COUNTRY_TOP_LEVEL.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}{c.sub ? ` — ${c.sub}` : ""}</option>
+                  ))}
+                </select>
+              </Field>
+              {orgCountryTop && hasSubPick(orgCountryTop) && (
+                <Field label={`${subPickLabel(orgCountryTop)} *`}>
+                  <select value={orgCountrySub} onChange={(e) => setOrgCountrySub(e.target.value)} style={inputStyle}>
+                    <option value="">Select…</option>
+                    {subPickList(orgCountryTop).map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+              )}
               <details>
                 <summary className="text-xs cursor-pointer" style={{ color: "var(--color-muted)" }}>Optional details</summary>
                 <div className="space-y-4 mt-3">

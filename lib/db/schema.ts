@@ -422,6 +422,10 @@ export const productionCountries = sqliteTable("production_countries", {
   addedBy: text("added_by").references(() => users.id),
   removedAt: integer("removed_at"),
   removedBy: text("removed_by").references(() => users.id),
+  // Set when the row was auto-added because a vendor org with this country was
+  // attached to the production. Auto-removal on vendor detach only considers
+  // rows with this set; manually-added countries stay regardless.
+  addedViaVendorId: text("added_via_vendor_id"),
 });
 
 // Upcoming productions believed to be heading into pre-production that are NOT yet
@@ -760,6 +764,12 @@ export const organisations = sqliteTable("organisations", {
   vendorAuditPassed: integer("vendor_audit_passed", { mode: "boolean" }).notNull().default(false),
   // Pretty-print code by subtype (VX vfx_vendor, CC scan_service, DB dubbing, OG other). System-generated.
   shortCode: text("short_code"),
+  // Country the org is registered in. Two-part shape mirrors production_countries:
+  // `countryTopLevelId` ('UK' | 'EU' | 'US' | 'CH' | ...) names the jurisdiction
+  // regime; `country` is the human-readable country/region (e.g. "Germany",
+  // "California"). Collected at onboarding; existing rows backfilled to UK.
+  country: text("country"),
+  countryTopLevelId: text("country_top_level_id"),
 });
 
 export const organisationMembers = sqliteTable("organisation_members", {

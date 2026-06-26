@@ -3,6 +3,8 @@ import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { validateCountry } from "@/lib/organisations/country";
+import { syncOrgCountryAcrossProductions } from "@/lib/productions/vendors";
 import { eq, and } from "drizzle-orm";
 
 // GET /api/organisations/[id] — org details + member list
@@ -79,7 +81,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { name?: string; website?: string; billingEmail?: string };
+  let body: { name?: string; website?: string; billingEmail?: string; country?: string; countryTopLevelId?: string };
   try {
     body = JSON.parse(await req.text());
   } catch {
@@ -90,8 +92,20 @@ export async function PATCH(
   if (body.name?.trim()) updates.name = body.name.trim();
   if ("website" in body) updates.website = body.website?.trim() ?? null;
   if ("billingEmail" in body) updates.billingEmail = body.billingEmail?.trim() ?? null;
+  if (body.country !== undefined || body.countryTopLevelId !== undefined) {
+    const v = validateCountry(body.country, body.countryTopLevelId);
+    if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
+    updates.country = v.country;
+    updates.countryTopLevelId = v.topLevelId;
+  }
 
   await db.update(organisations).set(updates).where(eq(organisations.id, id));
+
+  // When the org's country is (re)set, fan it out to every production the org
+  // is attached to as a vendor — productions inherit vendor jurisdictions.
+  if ("country" in updates) {
+    try { await syncOrgCountryAcrossProductions(db, id); } catch { /* best-effort */ }
+  }
 
   return NextResponse.json({ ok: true });
 }

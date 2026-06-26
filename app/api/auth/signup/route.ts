@@ -298,7 +298,9 @@ export async function POST(req: NextRequest) {
 
     // Vendor onboarding: an industry user invited as a production vendor (the
     // invite's orgSubtype carries the vendor org type) gets their org created and
-    // the pending production_vendors row linked + activated on signup.
+    // the pending production_vendors row linked + activated on signup. The org's
+    // country is left NULL on auto-create and collected on the post-2FA
+    // /org-onboarding step (vendorOrgOnboarding below).
     if (role === "industry" && inviteRow.orgSubtype && isVendorOrgType(inviteRow.orgSubtype)) {
       const pendingVendor = await db
         .select({ id: productionVendors.id, invitedOrgName: productionVendors.invitedOrgName })
@@ -521,6 +523,12 @@ export async function POST(req: NextRequest) {
   // roster (the agent inbox surface ships with gap #1).
   if (agentOnboarding) {
     setupPayload.next = "/agent-onboarding/terms";
+  }
+  // Vendor signups had their org auto-created above without a country — send
+  // them to /org-onboarding after 2FA to pick the country it's registered in.
+  // Same shape as the production setup wizard's jurisdiction picker.
+  if (role === "industry" && inviteRow?.orgSubtype && isVendorOrgType(inviteRow.orgSubtype)) {
+    setupPayload.next = "/org-onboarding";
   }
   await kv.put(`setup:${setupToken}`, JSON.stringify(setupPayload), { expirationTtl: 1800 });
 
