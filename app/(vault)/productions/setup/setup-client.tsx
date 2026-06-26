@@ -271,7 +271,7 @@ export default function SetupClient() {
   // ── Step 3: cast ──
   async function loadCast(pid: string) {
     if (!prodForm.tmdbId) {
-      setCastNote("This production isn't linked to TMDB, so there's no cast to auto-import. You can add cast by name or CSV from the production page after setup.");
+      setCastNote("This production isn't linked to an online title, so there's no cast to auto-import. You can add cast by name or CSV from the production page after setup.");
       return;
     }
     setCastLoading(true);
@@ -279,12 +279,12 @@ export default function SetupClient() {
     try {
       const r = await fetch(`/api/productions/${pid}/cast/tmdb`);
       const d = await r.json() as { cast?: MatchedCastMember[]; error?: string };
-      if (!r.ok) { setCastNote(d.error ?? "Couldn't load the TMDB cast list."); return; }
+      if (!r.ok) { setCastNote(d.error ?? "Couldn't load the cast list."); return; }
       const cast = d.cast ?? [];
       setTmdbCast(cast);
       setSelected(new Set(cast.map((c) => c.tmdbId))); // all selected by default
     } catch {
-      setCastNote("Couldn't reach TMDB. You can import cast later from the production page.");
+      setCastNote("Couldn't reach the online title database. You can import cast later from the production page.");
     } finally {
       setCastLoading(false);
     }
@@ -514,7 +514,7 @@ export default function SetupClient() {
             <div className="space-y-4">
               {prodForm.tmdbId && (
                 <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                  Linked to TMDB #{prodForm.tmdbId} — we&apos;ll pull the cast next.{" "}
+                  Linked to title #{prodForm.tmdbId} — we&apos;ll pull the cast next.{" "}
                   <button type="button" onClick={() => { setManualMode(false); setProdForm((f) => ({ ...f, tmdbId: null, name: "" })); }} style={{ color: "var(--color-accent)" }}>Change</button>
                 </p>
               )}
@@ -685,7 +685,7 @@ export default function SetupClient() {
                   {importResult.matched > 0 && <> — <strong style={{ color: "var(--color-text)" }}>{importResult.matched}</strong> {importResult.matched === 1 ? "is" : "are"} already on Image Vault and ready to license</>}.
                   {" "}We&apos;ll let you know the moment a reserved performer joins.</>
               ) : (
-                <>Your production is ready. Add cast any time from the production page — by name, CSV, or TMDB.</>
+                <>Your production is ready. Add cast any time from the production page — by name, CSV, or online import.</>
               )}
             </p>
           </div>

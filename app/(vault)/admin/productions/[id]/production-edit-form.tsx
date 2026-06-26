@@ -133,7 +133,7 @@ export default function ProductionEditForm({ production }: { production: Product
           <input type="text" value={imdbId} onChange={(e) => setImdbId(e.target.value)} placeholder="e.g. tt1234567" className={inputClass} style={inputStyle} />
         </div>
         <div>
-          <label className={labelClass} style={{ color: "var(--color-text)" }}>TMDB ID</label>
+          <label className={labelClass} style={{ color: "var(--color-text)" }}>Online ID</label>
           <input type="number" value={tmdbId} onChange={(e) => setTmdbId(e.target.value)} className={inputClass} style={inputStyle} />
         </div>
       </div>

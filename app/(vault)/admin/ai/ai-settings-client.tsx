@@ -212,7 +212,7 @@ export function AiSettingsClient({ initialSettings, initialCosts, repSuggestions
                 Watchlist Discovery
               </p>
               <ToggleRow
-                label="TMDB Pre-Production Discovery"
+                label="Online Pre-Production Discovery"
                 sublabel="Nightly job that surfaces upcoming productions not yet on Image Vault"
                 checked={settings["watchlist_discovery_enabled"] !== "false"}
                 saving={saving === "watchlist_discovery_enabled"}

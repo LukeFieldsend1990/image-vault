@@ -221,7 +221,7 @@ export default function ProductionsClient() {
                     </span>
                   )}
                   <span className="text-xs flex items-center gap-1" style={{ color: "var(--color-accent)" }}>
-                    {total === 0 ? "Import your cast from TMDB" : `${reserved} reserved — add emails or invite agencies`}
+                    {total === 0 ? "Import your cast online" : `${reserved} reserved — add emails or invite agencies`}
                     <span className="transition-transform group-hover:translate-x-0.5">→</span>
                   </span>
                 </Link>

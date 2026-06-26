@@ -142,7 +142,7 @@ function AddPanel({ onAdded, onClose, unionId }: { onAdded: () => void; onClose:
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void search()}
-          placeholder="Search TMDB by title…"
+          placeholder="Search by title…"
           className="text-sm rounded px-3 py-1.5 flex-1"
           style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
         />
@@ -181,7 +181,7 @@ function AddPanel({ onAdded, onClose, unionId }: { onAdded: () => void; onClose:
         </div>
       )}
       {searched && candidates.length === 0 && !searching && (
-        <p className="text-xs mt-2" style={{ color: "var(--color-muted)" }}>No TMDB matches — add it manually below.</p>
+        <p className="text-xs mt-2" style={{ color: "var(--color-muted)" }}>No matches — add it manually below.</p>
       )}
 
       {/* Manual add */}
@@ -280,7 +280,7 @@ function EntryRow({ entry, onChanged }: { entry: WatchlistEntry; onChanged: () =
       {entry.notes && <p className="text-xs mt-2" style={{ color: "var(--color-muted)" }}>{entry.notes}</p>}
 
       <div className="flex items-center gap-4 mt-3 text-[11px]" style={{ color: "var(--color-muted)" }}>
-        <span>{entry.source === "tmdb" ? "TMDB" : "Manual"}{entry.addedByName ? ` · added by ${entry.addedByName}` : ""}</span>
+        <span>{entry.source === "tmdb" ? "Online" : "Manual"}{entry.addedByName ? ` · added by ${entry.addedByName}` : ""}</span>
         <span className="ml-auto flex items-center gap-3">
           {!entry.ratified && (
             <button onClick={() => void patch({ flaggedForOutreach: !entry.flaggedForOutreach })} disabled={busy}

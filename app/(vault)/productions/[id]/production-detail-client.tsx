@@ -752,7 +752,7 @@ export default function ProductionDetailClient() {
                   color: addTab === tab ? "white" : "var(--color-muted)",
                 }}
               >
-                {tab === "tmdb" ? "TMDB Import" : tab === "csv" ? "CSV Upload" : "Manual Entry"}
+                {tab === "tmdb" ? "Online Import" : tab === "csv" ? "CSV Upload" : "Manual Entry"}
               </button>
             ))}
           </div>
@@ -763,7 +763,7 @@ export default function ProductionDetailClient() {
               {!tmdbFetched ? (
                 <div>
                   <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
-                    Import cast from TMDB credits. Matched talent will be pre-ticked. You must supply emails for unmatched members.
+                    Import cast from online credits. Matched talent will be pre-ticked. You must supply emails for unmatched members.
                   </p>
                   <button
                     onClick={fetchTmdbCast}
@@ -771,13 +771,13 @@ export default function ProductionDetailClient() {
                     className="rounded px-4 py-2 text-sm font-medium text-white"
                     style={{ background: tmdbLoading ? "var(--color-muted)" : "var(--color-accent)", cursor: tmdbLoading ? "not-allowed" : "pointer" }}
                   >
-                    {tmdbLoading ? "Fetching credits…" : "Fetch TMDB Credits"}
+                    {tmdbLoading ? "Fetching credits…" : "Fetch online credits"}
                   </button>
                 </div>
               ) : tmdbCast.length === 0 ? (
                 <div className="space-y-3">
                   <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-                    No TMDB credits found for this production. Search for the correct title to try again.
+                    No online credits found for this production. Search for the correct title to try again.
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -785,7 +785,7 @@ export default function ProductionDetailClient() {
                       value={tmdbSearchQ}
                       onChange={(e) => setTmdbSearchQ(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") void searchTmdbTitles(); }}
-                      placeholder="Search TMDB title…"
+                      placeholder="Search title…"
                       style={{ ...inputStyle, flex: 1 }}
                     />
                     <button
@@ -988,7 +988,7 @@ export default function ProductionDetailClient() {
       {cast.length === 0 ? (
         <div className="rounded p-8 text-center" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
           <p className="text-sm mb-1" style={{ color: "var(--color-text)" }}>No cast members yet</p>
-          <p className="text-xs" style={{ color: "var(--color-muted)" }}>Use the Add Cast button to import from TMDB, enter manually, or upload a CSV.</p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>Use the Add Cast button to import online, enter manually, or upload a CSV.</p>
         </div>
       ) : (
         <div className="rounded overflow-x-auto" style={{ border: "1px solid var(--color-border)" }}>

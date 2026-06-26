@@ -52,11 +52,11 @@ export async function GET(
   }
 
   const tmdbKey = process.env.TMDB_API_KEY;
-  if (!tmdbKey) return NextResponse.json({ error: "TMDB not configured" }, { status: 503 });
+  if (!tmdbKey) return NextResponse.json({ error: "Title search not configured" }, { status: 503 });
 
   const url = `https://api.themoviedb.org/3/search/multi?api_key=${tmdbKey}&query=${encodeURIComponent(q)}&include_adult=false`;
   const res = await fetch(url);
-  if (!res.ok) return NextResponse.json({ error: "TMDB search failed" }, { status: 502 });
+  if (!res.ok) return NextResponse.json({ error: "Title search failed" }, { status: 502 });
 
   const data = await res.json() as {
     results: Array<{

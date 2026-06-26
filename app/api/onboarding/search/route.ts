@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "TMDB not configured" }, { status: 503 });
+    return NextResponse.json({ error: "Identity search not configured" }, { status: 503 });
   }
 
   const url = new URL(`${TMDB_BASE}/search/person`);
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
   });
 
   if (!tmdbRes.ok) {
-    return NextResponse.json({ error: "TMDB search failed" }, { status: 502 });
+    return NextResponse.json({ error: "Identity search failed" }, { status: 502 });
   }
 
   const tmdbData = await tmdbRes.json() as { results?: TmdbRawResult[] };

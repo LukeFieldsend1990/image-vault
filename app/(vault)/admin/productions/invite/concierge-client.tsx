@@ -175,10 +175,10 @@ export default function ConciergeClient() {
 
         {/* TMDB link */}
         <div className="rounded p-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-          <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>Link to TMDB (optional)</p>
+          <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>Link to title (optional)</p>
           {prod.tmdbId ? (
             <div className="flex items-center justify-between">
-              <span className="text-sm" style={{ color: "var(--color-text)" }}>{prod.name} <span className="text-xs" style={{ color: "var(--color-muted)" }}>TMDB #{prod.tmdbId}</span></span>
+              <span className="text-sm" style={{ color: "var(--color-text)" }}>{prod.name} <span className="text-xs" style={{ color: "var(--color-muted)" }}>#{prod.tmdbId}</span></span>
               <button type="button" onClick={() => setProd((p) => ({ ...p, tmdbId: null }))} className="text-xs" style={{ color: "var(--color-accent)" }}>Remove</button>
             </div>
           ) : (
@@ -200,7 +200,7 @@ export default function ConciergeClient() {
           {prod.tmdbId && (
             <label className="flex items-center gap-2 cursor-pointer select-none mt-3">
               <input type="checkbox" checked={importCast} onChange={(e) => setImportCast(e.target.checked)} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
-              <span className="text-sm" style={{ color: "var(--color-text)" }}>Import the TMDB cast as reserved placeholders</span>
+              <span className="text-sm" style={{ color: "var(--color-text)" }}>Import the cast as reserved placeholders</span>
             </label>
           )}
         </div>
