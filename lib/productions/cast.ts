@@ -51,12 +51,34 @@ export interface CastLicenceTerms {
   intendedUse?: string;
   validFrom?: number; // unix seconds
   validTo?: number;   // unix seconds
-  licenceType?: CastLicenceType | null;
+  licenceType?: CastLicenceType | null;          // legacy primary use type (first of licenceTypes)
+  licenceTypes?: CastLicenceType[];              // multi-select use types (item 7)
   territory?: string | null;
   exclusivity?: CastExclusivity;
   permitAiTraining?: boolean;
   useCategoryIds?: UseCategoryId[]; // canonical taxonomy ids (lib/consent/use-categories.ts)
-  proposedFee?: number | null; // cents
+  proposedFee?: number | null; // cents; null = N/A (distinct from 0)
+  isRelicense?: boolean;        // item 9 — re-licence of an existing scan
+}
+
+/** Filter arbitrary input to the valid, de-duplicated set of cast licence types (canonical order). */
+export function normaliseLicenceTypes(input: unknown): CastLicenceType[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<CastLicenceType>();
+  for (const v of input) if (CAST_LICENCE_TYPES.includes(v as CastLicenceType)) seen.add(v as CastLicenceType);
+  return CAST_LICENCE_TYPES.filter((t) => seen.has(t));
+}
+
+/** Serialize licence types for a *_types_json text column (null when empty). */
+export function serializeLicenceTypes(input: unknown): string | null {
+  const ids = normaliseLicenceTypes(input);
+  return ids.length ? JSON.stringify(ids) : null;
+}
+
+/** Parse a licence_types_json text column back into validated licence types. */
+export function parseLicenceTypes(json: string | null | undefined): CastLicenceType[] {
+  if (!json) return [];
+  try { return normaliseLicenceTypes(JSON.parse(json)); } catch { return []; }
 }
 
 export interface PromoteResult {
@@ -95,6 +117,8 @@ export async function loadProductionDefaultTerms(db: Db, productionId: string): 
       exclusivity: productionDefaultTerms.exclusivity,
       permitAiTraining: productionDefaultTerms.permitAiTraining,
       useCategoriesJson: productionDefaultTerms.useCategoriesJson,
+      licenceTypesJson: productionDefaultTerms.licenceTypesJson,
+      isRelicense: productionDefaultTerms.isRelicense,
       proposedFee: productionDefaultTerms.proposedFee,
     })
     .from(productionDefaultTerms)
@@ -102,16 +126,19 @@ export async function loadProductionDefaultTerms(db: Db, productionId: string): 
     .get();
   if (!row) return {};
   const useCategoryIds = parseUseCategoryIds(row.useCategoriesJson);
+  const licenceTypes = parseLicenceTypes(row.licenceTypesJson);
   return {
     intendedUse: row.intendedUse ?? undefined,
     validFrom: row.validFrom ?? undefined,
     validTo: row.validTo ?? undefined,
-    licenceType: normaliseType(row.licenceType),
+    licenceType: licenceTypes[0] ?? normaliseType(row.licenceType),
+    licenceTypes: licenceTypes.length ? licenceTypes : undefined,
     territory: row.territory ?? undefined,
     exclusivity: row.exclusivity ? normaliseExclusivity(row.exclusivity) : undefined,
     permitAiTraining: row.permitAiTraining ?? undefined,
     useCategoryIds: useCategoryIds.length ? useCategoryIds : undefined,
     proposedFee: row.proposedFee ?? undefined,
+    isRelicense: row.isRelicense ?? undefined,
   };
 }
 
@@ -167,7 +194,17 @@ export async function promoteCastMember(
   const intendedUse = (o.intendedUse ?? stored.intendedUse ?? d.intendedUse ?? "").trim();
   const validFrom = o.validFrom ?? stored.validFrom ?? d.validFrom;
   const validTo = o.validTo ?? stored.validTo ?? d.validTo;
-  const licenceType = normaliseType(o.licenceType ?? stored.licenceType ?? d.licenceType);
+  // Multi-select use types (item 7). Primary licenceType is the first of the array
+  // (kept for back-compat); the full array is persisted on the licence.
+  const licenceTypes = normaliseLicenceTypes(
+    (o.licenceTypes && o.licenceTypes.length ? o.licenceTypes : undefined)
+    ?? (stored.licenceTypes && stored.licenceTypes.length ? stored.licenceTypes : undefined)
+    ?? (d.licenceTypes && d.licenceTypes.length ? d.licenceTypes : undefined)
+    ?? [],
+  );
+  const licenceType = licenceTypes[0] ?? normaliseType(o.licenceType ?? stored.licenceType ?? d.licenceType);
+  const licenceTypesJson = serializeLicenceTypes(licenceTypes);
+  const isRelicense = o.isRelicense ?? stored.isRelicense ?? d.isRelicense ?? undefined;
   const territory = (o.territory ?? stored.territory ?? d.territory) || null;
   const exclusivity = normaliseExclusivity(o.exclusivity ?? stored.exclusivity ?? d.exclusivity);
   // Reconcile the use-category taxonomy with the legacy permitAiTraining boolean
@@ -213,6 +250,8 @@ export async function promoteCastMember(
       validTo,
       status: "AWAITING_PACKAGE",
       licenceType,
+      licenceTypesJson,
+      isRelicense: isRelicense ?? null,
       territory,
       exclusivity,
       permitAiTraining,
@@ -228,6 +267,9 @@ export async function promoteCastMember(
       licenceId,
       status: "linked",
       licenceTermsJson: null,
+      // Item 11 — talent now linked: clear the production's data-controller attribution.
+      dataControllerOrgId: null,
+      dataControllerSince: null,
       linkedAt: now,
     }).where(eq(productionCast.id, opts.castId));
 
@@ -264,7 +306,7 @@ export async function promoteCastMember(
   const inviteId = crypto.randomUUID();
   const expiresAt = now + SEVEN_DAYS;
   const licenceTerms = {
-    intendedUse, validFrom, validTo, licenceType, territory, exclusivity, permitAiTraining, useCategoryIds, proposedFee,
+    intendedUse, validFrom, validTo, licenceType, licenceTypes, territory, exclusivity, permitAiTraining, useCategoryIds, proposedFee, isRelicense,
     projectName: production.name, productionCompany: production.company,
   };
 

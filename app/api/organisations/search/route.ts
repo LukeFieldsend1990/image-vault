@@ -4,7 +4,8 @@ import { organisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { VENDOR_ORG_TYPES } from "@/lib/organisations/orgTypes";
-import { like, and, inArray, type SQL } from "drizzle-orm";
+import { canonicalCode } from "@/lib/codes/codes";
+import { eq, like, or, and, inArray, type SQL } from "drizzle-orm";
 
 // GET /api/organisations/search?q=&vendor=1 — look up orgs to authorise as vendors
 export async function GET(req: NextRequest) {
@@ -20,7 +21,12 @@ export async function GET(req: NextRequest) {
   if (q.length < 2) return NextResponse.json({ organisations: [] });
 
   const db = getDb();
-  const filters: SQL[] = [like(organisations.name, `%${q}%`)];
+  // A code-shaped query (VX/CC/DB/AGY/OG-####) resolves by system code as well as name.
+  const code = canonicalCode(q);
+  const nameOrCode = code
+    ? or(like(organisations.name, `%${q}%`), eq(organisations.shortCode, code))
+    : like(organisations.name, `%${q}%`);
+  const filters: SQL[] = [nameOrCode as SQL];
   if (vendorOnly) filters.push(inArray(organisations.orgType, [...VENDOR_ORG_TYPES]));
 
   const rows = await db

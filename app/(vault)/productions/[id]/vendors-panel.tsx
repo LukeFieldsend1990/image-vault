@@ -179,7 +179,7 @@ export default function VendorsPanel({ productionId, embedded = false }: { produ
         <div className={embedded ? "mb-3" : "rounded p-4 mb-4"} style={embedded ? undefined : { border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
           {/* Attach existing */}
           <div className="relative mb-2">
-            <input type="text" value={query} onChange={(e) => handleSearch(e.target.value)} placeholder="Search vendors already on Image Vault…" style={inputStyle} />
+            <input type="text" value={query} onChange={(e) => handleSearch(e.target.value)} placeholder="Search vendors by name or code (e.g. VX-0012)…" style={inputStyle} />
             {matches.length > 0 && (
               <div className="absolute z-10 left-0 right-0 top-full mt-1 rounded shadow-lg overflow-hidden" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
                 {matches.map((m) => (

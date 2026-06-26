@@ -92,17 +92,17 @@ export default function AddCountryClient({ productionId }: { productionId: strin
         </Link>
       </div>
 
-      <p className="text-[10px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--color-accent)" }}>
+      <p className="text-xs font-medium tracking-widest uppercase mb-4" style={{ color: "var(--color-muted)" }}>
         Add a country to {productionName}
       </p>
 
       {step === "pick" && (
         <div className="space-y-5">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+            <h1 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
               Which country are you adding?
             </h1>
-            <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
               Pick the country, region, or jurisdiction. We&apos;ll show you the compliance commitment in the next step.
             </p>
           </div>
@@ -112,7 +112,7 @@ export default function AddCountryClient({ productionId }: { productionId: strin
                 key={c.id}
                 type="button"
                 onClick={() => pickTopLevel(c.id)}
-                className="text-left rounded p-4"
+                className="text-left rounded p-4 transition-colors hover:border-[var(--color-accent)]"
                 style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
               >
                 <div className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{c.label}</div>
@@ -126,10 +126,10 @@ export default function AddCountryClient({ productionId }: { productionId: strin
       {step === "sub" && topLevel && (
         <div className="space-y-5">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+            <h1 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
               Which {subPickLabel(topLevel)}?
             </h1>
-            <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
               Pick one. You can come back and add more in separate steps.
             </p>
           </div>
@@ -147,7 +147,7 @@ export default function AddCountryClient({ productionId }: { productionId: strin
                 key={c}
                 type="button"
                 onClick={() => { setSub(c); setStep("confirm"); }}
-                className="text-left rounded px-4 py-3"
+                className="text-left rounded px-4 py-3 transition-colors hover:border-[var(--color-accent)]"
                 style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
               >
                 <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{c}</span>
@@ -175,10 +175,10 @@ export default function AddCountryClient({ productionId }: { productionId: strin
       {step === "confirm" && topLevel && sub && (
         <div className="space-y-5">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+            <h1 className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
               Add {sub} to {productionName}?
             </h1>
-            <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>Please read this before confirming.</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>Please read this before confirming.</p>
           </div>
           <div className="rounded p-4" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
             <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>Country</p>

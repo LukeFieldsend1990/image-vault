@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LicenceTermsSummary, { type LicenceTermsView } from "@/app/components/licence-terms-summary";
 
 interface Assignment {
   castId: string;
@@ -10,6 +11,7 @@ interface Assignment {
   productionName: string;
   companyName: string;
   hasTerms: boolean;
+  terms?: LicenceTermsView;
   coordinatorEmail: string | null;
 }
 
@@ -70,6 +72,9 @@ export default function RepReservedRoles() {
               <p className="text-xs mb-2" style={{ color: "var(--color-muted)" }}>Reserved by {a.companyName}</p>
               {a.hasTerms ? (
                 <>
+                  <div className="mb-3">
+                    <LicenceTermsSummary terms={a.terms} />
+                  </div>
                   <div className="flex items-center gap-2">
                     <input
                       type="email"

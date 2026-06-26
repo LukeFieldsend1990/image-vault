@@ -76,7 +76,7 @@ export default function InviteRepModal({
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search agents, or type an email address…"
+          placeholder="Search agents by code (AG-####) or email…"
           className="w-full mb-3"
           style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "8px 12px", fontSize: 14, color: "var(--color-text)", outline: "none" }}
         />

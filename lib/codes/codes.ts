@@ -16,6 +16,23 @@ export function formatCode(prefix: string, n: number): string {
   return `${prefix}-${String(n).padStart(4, "0")}`;
 }
 
+/**
+ * Normalise a free-text query that looks like a system code (AH-0247, ag-3,
+ * "VX 12", lc-0001) into its canonical PREFIX-NNNN form, or null if it isn't
+ * code-shaped. Lets lookup/selection surfaces (actor, vendor, rep pickers)
+ * resolve an entity by its printed code regardless of case, spacing, hyphen, or
+ * un-padded digits. Decorative codes are zero-padded to a minimum of 4 digits to
+ * match how they're stored; a wider number (e.g. 12476) is left as-is.
+ */
+export function canonicalCode(q: string | null | undefined): string | null {
+  if (!q) return null;
+  const cleaned = q.trim().toUpperCase().replace(/\s+/g, "");
+  const m = cleaned.match(/^([A-Z]{2,3})-?0*(\d+)$/);
+  if (!m) return null;
+  const [, prefix, digits] = m;
+  return `${prefix}-${digits.padStart(4, "0")}`;
+}
+
 /** Org subtype → code prefix. */
 export function orgPrefix(orgType: string | null | undefined): "VX" | "CC" | "DB" | "AGY" | "OG" {
   if (orgType === "vfx_vendor") return "VX";

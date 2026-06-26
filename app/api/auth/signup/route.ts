@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { users, invites, talentReps, productionCast, licences, productions, organisations, organisationMembers, productionVendors } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { createGrant } from "@/lib/compliance/grants";
+import { appendEvent, talentChain } from "@/lib/compliance/ledger";
 import { mintLicenceCode, mintOrgCode } from "@/lib/codes/codes";
 import { isVendorOrgType } from "@/lib/organisations/orgTypes";
 import { createNotification } from "@/lib/notifications/create";
@@ -14,6 +15,53 @@ type Role = (typeof VALID_ROLES)[number];
 
 // Roles that require an invite token
 const INVITE_REQUIRED_ROLES: Role[] = ["talent", "rep", "industry", "compliance"];
+
+// 39J data-controller handover. While an unclaimed cast row's talentId is null
+// the production company is recorded as the GDPR data controller for the
+// likeness (productionCast.dataControllerOrgId / dataControllerSince). When the
+// talent claims the row those columns are cleared (by the caller, in the same
+// update) and this records the handover in the compliance ledger / chain of
+// custody. Defensive + null-safe: a no-op when there was no prior controller.
+async function recordControllerHandover(
+  db: ReturnType<typeof getDb>,
+  args: {
+    castRow: typeof productionCast.$inferSelect;
+    productionId: string;
+    newControllerUserId: string;
+    now: number;
+  }
+): Promise<void> {
+  const { castRow, productionId, newControllerUserId, now } = args;
+  const previousControllerOrgId = castRow.dataControllerOrgId;
+  // Only a row that actually had a controller attribution needs a handover event.
+  if (!previousControllerOrgId) return;
+
+  try {
+    // TODO(39J): final union liability-transfer wording pending union confirmation
+    await appendEvent(db, {
+      chainKey: talentChain(newControllerUserId),
+      eventType: "data_controller.handover",
+      regime: "gdpr",
+      clauseRef: "39J",
+      talentId: newControllerUserId,
+      organisationId: previousControllerOrgId,
+      actorId: newControllerUserId,
+      payload: {
+        productionId,
+        castId: castRow.id,
+        previousControllerOrgId,
+        // The talent is now the controller of their own likeness on claim.
+        newControllerUserId,
+        dataControllerSince: castRow.dataControllerSince ?? null,
+        handoverAt: now,
+      },
+    });
+  } catch {
+    // Best-effort: never block signup if the ledger append fails. The columns
+    // are already cleared in the cast update, so attribution is correct even if
+    // the audit event is missing; an admin can backfill from the cast row.
+  }
+}
 
 export async function POST(req: NextRequest) {
   let body: { email?: string; password?: string; role?: string; inviteToken?: string };
@@ -389,7 +437,9 @@ export async function POST(req: NextRequest) {
           });
           await mintLicenceCode(db, licenceId);
 
-          // Update cast row: link talent, clear terms, set status = linked
+          // Update cast row: link talent, clear terms, set status = linked.
+          // Claiming the row also clears the production company's GDPR
+          // data-controller attribution (39J) — see recordControllerHandover.
           await db
             .update(productionCast)
             .set({
@@ -398,22 +448,41 @@ export async function POST(req: NextRequest) {
               linkedAt: now,
               status: "linked",
               licenceTermsJson: null,
+              dataControllerOrgId: null,
+              dataControllerSince: null,
             })
             .where(eq(productionCast.id, castRow.id));
+
+          await recordControllerHandover(db, {
+            castRow,
+            productionId: inviteRow.productionId,
+            newControllerUserId: userId,
+            now,
+          });
         } catch {
           // If something goes wrong, still allow signup to complete
           // The cast row will remain 'invited' and coordinator can retry
         }
       } else if (castRow) {
-        // Cast row exists but no licence terms — just link the talent
+        // Cast row exists but no licence terms — just link the talent.
+        // Clearing the GDPR data-controller attribution (39J) happens here too.
         await db
           .update(productionCast)
           .set({
             talentId: userId,
             linkedAt: now,
             status: "linked",
+            dataControllerOrgId: null,
+            dataControllerSince: null,
           })
           .where(eq(productionCast.id, castRow.id));
+
+        await recordControllerHandover(db, {
+          castRow,
+          productionId: inviteRow.productionId,
+          newControllerUserId: userId,
+          now,
+        });
       }
 
       // Auto-link the talent to the rep who resolved their placeholder slot,

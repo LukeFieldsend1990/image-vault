@@ -61,6 +61,26 @@ export async function GET(req: NextRequest) {
       const validFrom = stored.validFrom ?? defaults.validFrom;
       const validTo = stored.validTo ?? defaults.validTo;
       const hasTerms = Boolean(intendedUse) && typeof validFrom === "number" && typeof validTo === "number";
+
+      // Resolved view: stored row terms merged over production defaults (stored
+      // takes precedence), the same precedence used for hasTerms / promotion.
+      const licenceTypes =
+        (stored.licenceTypes && stored.licenceTypes.length ? stored.licenceTypes : undefined)
+        ?? (defaults.licenceTypes && defaults.licenceTypes.length ? defaults.licenceTypes : undefined)
+        ?? null;
+      const terms = {
+        intendedUse: intendedUse || null,
+        licenceType: stored.licenceType ?? defaults.licenceType ?? null,
+        licenceTypes,
+        validFrom: validFrom ?? null,
+        validTo: validTo ?? null,
+        territory: stored.territory ?? defaults.territory ?? null,
+        exclusivity: stored.exclusivity ?? defaults.exclusivity ?? null,
+        proposedFee: stored.proposedFee ?? defaults.proposedFee ?? null,
+        isRelicense: stored.isRelicense ?? defaults.isRelicense ?? null,
+        permitAiTraining: stored.permitAiTraining ?? defaults.permitAiTraining ?? null,
+      };
+
       return {
         castId: r.castId,
         productionId: r.productionId,
@@ -69,6 +89,7 @@ export async function GET(req: NextRequest) {
         productionName: r.productionName,
         companyName: r.companyName,
         hasTerms,
+        terms,
         coordinatorEmail: r.coordinatorEmail ?? null,
       };
     }),
