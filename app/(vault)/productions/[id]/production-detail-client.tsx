@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
+import CountriesPanel from "./countries-panel";
 import InsurersPanel from "./insurers-panel";
 import VendorsPanel from "./vendors-panel";
 import VendorAuthorisedScans from "./vendor-authorised-scans";
@@ -1233,6 +1234,11 @@ export default function ProductionDetailClient() {
 
       {/* Vendors */}
       <VendorsPanel productionId={id} />
+
+      {/* Countries in scope — owner/admin only; vendors/reps don't manage scope */}
+      {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
+        <CountriesPanel productionId={production.id} />
+      )}
 
       {/* Insurers */}
       <InsurersPanel productionId={id} />
