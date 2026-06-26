@@ -146,10 +146,12 @@ export default function SetupClient() {
   const [tmdbResults, setTmdbResults] = useState<TmdbTitle[]>([]);
   const [tmdbSearching, setTmdbSearching] = useState(false);
   const tmdbTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const [manualMode, setManualMode] = useState(false);
+  const [showOtherUnion, setShowOtherUnion] = useState(false);
   const [prodForm, setProdForm] = useState({
     name: "", type: "film", year: new Date().getFullYear(),
-    tmdbId: null as number | null, sagProjectNumber: "", isSag: false, isEquity: false,
+    tmdbId: null as number | null, isSag: false, isEquity: false, otherUnion: "",
   });
   const [productionId, setProductionId] = useState("");
 
@@ -187,6 +189,19 @@ export default function SetupClient() {
       })
       .catch(() => {});
   }, []);
+
+  // Clicking anywhere outside the production search closes the results dropdown so
+  // it never sits on top of the buttons below and traps the user.
+  useEffect(() => {
+    if (tmdbResults.length === 0) return;
+    function onDown(e: MouseEvent) {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setTmdbResults([]);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [tmdbResults.length]);
 
   // ── Step 1: company ──
   async function submitCompany() {
@@ -265,27 +280,50 @@ export default function SetupClient() {
     if (!jurTopLevel || !jurSub) { setError("Pick a country to continue."); return; }
     setBusy(true);
     try {
-      const r = await fetch("/api/productions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: prodForm.name.trim(),
-          organisationId: orgId,
-          type: prodForm.type,
-          year: prodForm.year || undefined,
-          tmdbId: prodForm.tmdbId ?? undefined,
-          sagProjectNumber: prodForm.sagProjectNumber.trim() || undefined,
-          isSag: prodForm.isSag || undefined,
-          isEquity: prodForm.isEquity || undefined,
-          status: "pre_production",
-          homeCountry: { name: jurSub, topLevelId: jurTopLevel },
-        }),
-      });
-      const d = await r.json() as { id?: string; error?: string };
-      if (!r.ok || !d.id) { setError(d.error ?? "Failed to create production."); return; }
-      setProductionId(d.id);
-      setStep(4);
-      void loadCast(d.id);
+      const details = {
+        name: prodForm.name.trim(),
+        type: prodForm.type,
+        year: prodForm.year || undefined,
+        tmdbId: prodForm.tmdbId ?? undefined,
+        isSag: prodForm.isSag,
+        isEquity: prodForm.isEquity,
+        otherUnion: showOtherUnion ? prodForm.otherUnion.trim() : "",
+        homeCountry: { name: jurSub, topLevelId: jurTopLevel },
+      };
+
+      let pid = productionId;
+      if (pid) {
+        // Already created on an earlier pass — update in place so going back and
+        // forward through the wizard never creates duplicate productions.
+        const r = await fetch(`/api/productions/${pid}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(details),
+        });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({})) as { error?: string };
+          setError(d.error ?? "Failed to save production."); return;
+        }
+      } else {
+        const r = await fetch("/api/productions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...details, organisationId: orgId, status: "pre_production" }),
+        });
+        const d = await r.json() as { id?: string; error?: string };
+        if (!r.ok || !d.id) { setError(d.error ?? "Failed to create production."); return; }
+        pid = d.id;
+        setProductionId(pid);
+      }
+
+      // Skip the cast step entirely when there's no linked title to import from —
+      // there'd be nothing to show but an empty "skip" screen.
+      if (prodForm.tmdbId) {
+        setStep(4);
+        void loadCast(pid);
+      } else {
+        setStep(5);
+      }
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -296,7 +334,7 @@ export default function SetupClient() {
   // ── Step 3: cast ──
   async function loadCast(pid: string) {
     if (!prodForm.tmdbId) {
-      setCastNote("This production isn't linked to TMDB, so there's no cast to auto-import. You can add cast by name or CSV from the production page after setup.");
+      setCastNote("This production isn't linked to our production database, so there's no cast to auto-import. You can add cast by name or CSV from the production page after setup.");
       return;
     }
     setCastLoading(true);
@@ -304,12 +342,12 @@ export default function SetupClient() {
     try {
       const r = await fetch(`/api/productions/${pid}/cast/tmdb`);
       const d = await r.json() as { cast?: MatchedCastMember[]; error?: string };
-      if (!r.ok) { setCastNote(d.error ?? "Couldn't load the TMDB cast list."); return; }
+      if (!r.ok) { setCastNote(d.error ?? "Couldn't load the cast list."); return; }
       const cast = d.cast ?? [];
       setTmdbCast(cast);
       setSelected(new Set(cast.map((c) => c.tmdbId))); // all selected by default
     } catch {
-      setCastNote("Couldn't reach TMDB. You can import cast later from the production page.");
+      setCastNote("Couldn't reach our production database. You can import cast later from the production page.");
     } finally {
       setCastLoading(false);
     }
@@ -345,8 +383,24 @@ export default function SetupClient() {
   }
 
   // ── Step 4: default terms ──
+  // Whether the producer has actually entered anything. The pre-filled licence
+  // type / territory don't count — an untouched form is treated as a skip.
+  const termsHaveContent = Boolean(
+    terms.intendedUse.trim() || terms.validFrom || terms.validTo || terms.feePounds.trim() || terms.permitAiTraining
+  );
+
+  function clearTerms() {
+    setTerms({
+      intendedUse: "", licenceType: "film_double", territory: "Worldwide",
+      exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
+    });
+    setError("");
+  }
+
   async function submitTerms() {
     setError("");
+    // Nothing entered → treat Continue as a skip and move on without saving.
+    if (!termsHaveContent) { setStep(7); return; }
     const validFrom = toUnix(terms.validFrom);
     const validTo = toUnix(terms.validTo);
     if (validFrom && validTo && validTo <= validFrom) { setError("End date must be after start date."); return; }
@@ -514,7 +568,7 @@ export default function SetupClient() {
 
           {!manualMode && (
             <div className="rounded p-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-              <div className="relative">
+              <div className="relative" ref={searchBoxRef}>
                 <input type="text" placeholder="What are you working on?" value={tmdbQuery} onChange={(e) => handleTmdbSearch(e.target.value)} style={{ ...inputStyle, paddingRight: 36 }} />
                 {tmdbSearching && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--color-muted)" }}>…</span>}
                 {tmdbResults.length > 0 && (
@@ -529,7 +583,12 @@ export default function SetupClient() {
                   </div>
                 )}
               </div>
-              <button type="button" onClick={() => { setManualMode(true); setProdForm((f) => ({ ...f, tmdbId: null })); }} className="text-xs mt-3" style={{ color: "var(--color-accent)" }}>
+              <button
+                type="button"
+                onClick={() => { setManualMode(true); setTmdbResults([]); setProdForm((f) => ({ ...f, tmdbId: null })); }}
+                className="mt-4 rounded px-3 py-2 text-sm font-medium"
+                style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+              >
                 It&apos;s not listed / it&apos;s unannounced →
               </button>
             </div>
@@ -539,7 +598,7 @@ export default function SetupClient() {
             <div className="space-y-4">
               {prodForm.tmdbId && (
                 <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                  Linked to TMDB #{prodForm.tmdbId} — we&apos;ll pull the cast next.{" "}
+                  Linked to our production database — we&apos;ll pull the cast next.{" "}
                   <button type="button" onClick={() => { setManualMode(false); setProdForm((f) => ({ ...f, tmdbId: null, name: "" })); }} style={{ color: "var(--color-accent)" }}>Change</button>
                 </p>
               )}
@@ -556,21 +615,38 @@ export default function SetupClient() {
                   <input type="number" value={prodForm.year} onChange={(e) => setProdForm((f) => ({ ...f, year: parseInt(e.target.value) || new Date().getFullYear() }))} min={1900} max={2100} style={inputStyle} />
                 </Field>
               </div>
-              <Field label="Union project number" hint="Optional — we'll stamp it on every consent record for your Article 39 filings.">
-                <input type="text" value={prodForm.sagProjectNumber} onChange={(e) => setProdForm((f) => ({ ...f, sagProjectNumber: e.target.value }))} placeholder="e.g. 24-FS-0123" style={inputStyle} />
-              </Field>
               <div className="rounded p-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
                 <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>Union affiliation</p>
-                <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input type="checkbox" checked={prodForm.isSag} onChange={(e) => setProdForm((f) => ({ ...f, isSag: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
-                    <span className="text-sm" style={{ color: "var(--color-text)" }}>SAG-AFTRA</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input type="checkbox" checked={prodForm.isEquity} onChange={(e) => setProdForm((f) => ({ ...f, isEquity: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
-                    <span className="text-sm" style={{ color: "var(--color-text)" }}>Equity</span>
-                  </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: "sag", label: "SAG-AFTRA", active: prodForm.isSag, toggle: () => setProdForm((f) => ({ ...f, isSag: !f.isSag })) },
+                    { key: "equity", label: "Equity", active: prodForm.isEquity, toggle: () => setProdForm((f) => ({ ...f, isEquity: !f.isEquity })) },
+                    { key: "other", label: "Other", active: showOtherUnion, toggle: () => setShowOtherUnion((v) => { if (v) setProdForm((f) => ({ ...f, otherUnion: "" })); return !v; }) },
+                  ].map((u) => (
+                    <button
+                      key={u.key}
+                      type="button"
+                      onClick={u.toggle}
+                      className="px-4 py-2 rounded text-sm font-medium border transition"
+                      style={{
+                        borderColor: u.active ? "var(--color-accent)" : "var(--color-border)",
+                        background: u.active ? "var(--color-accent)" : "transparent",
+                        color: u.active ? "white" : "var(--color-muted)",
+                      }}
+                    >
+                      {u.label}
+                    </button>
+                  ))}
                 </div>
+                {showOtherUnion && (
+                  <input
+                    type="text"
+                    value={prodForm.otherUnion}
+                    onChange={(e) => setProdForm((f) => ({ ...f, otherUnion: e.target.value }))}
+                    placeholder="Union name"
+                    style={{ ...inputStyle, marginTop: 12 }}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -732,7 +808,7 @@ export default function SetupClient() {
 
           <div className="flex items-center gap-3 pt-2">
             <PrimaryButton onClick={importCast} disabled={busy}>
-              {busy ? "Reserving…" : selected.size > 0 ? `Reserve ${selected.size} role${selected.size === 1 ? "" : "s"}` : "Skip for now"}
+              {busy ? "Reserving…" : selected.size > 0 ? `Reserve ${selected.size} role${selected.size === 1 ? "" : "s"}` : "Continue"}
             </PrimaryButton>
             <GhostButton onClick={() => setStep(3)}>Back</GhostButton>
           </div>
@@ -753,7 +829,7 @@ export default function SetupClient() {
 
           <div className="flex items-center gap-3 pt-2">
             <PrimaryButton onClick={() => setStep(6)}>Continue</PrimaryButton>
-            <GhostButton onClick={() => setStep(4)}>Back</GhostButton>
+            <GhostButton onClick={() => setStep(prodForm.tmdbId ? 4 : 3)}>Back</GhostButton>
           </div>
         </div>
       )}
@@ -794,7 +870,12 @@ export default function SetupClient() {
 
           <div className="flex items-center gap-3 pt-2">
             <PrimaryButton onClick={submitTerms} disabled={busy}>{busy ? "Saving…" : "Continue"}</PrimaryButton>
-            <GhostButton onClick={() => setStep(7)}>Skip</GhostButton>
+            <GhostButton onClick={() => setStep(5)}>Back</GhostButton>
+            {termsHaveContent && (
+              <button type="button" onClick={clearTerms} className="text-xs ml-auto" style={{ color: "var(--color-muted)" }}>
+                Clear all
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -810,7 +891,7 @@ export default function SetupClient() {
                   {importResult.matched > 0 && <> — <strong style={{ color: "var(--color-text)" }}>{importResult.matched}</strong> {importResult.matched === 1 ? "is" : "are"} already on Image Vault and ready to license</>}.
                   {" "}We&apos;ll let you know the moment a reserved performer joins.</>
               ) : (
-                <>Your production is ready. Add cast any time from the production page — by name, CSV, or TMDB.</>
+                <>Your production is ready. Add cast any time from the production page — by name, CSV, or our production database.</>
               )}
             </p>
           </div>

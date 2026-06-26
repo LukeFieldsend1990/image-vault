@@ -36,6 +36,7 @@ export default function InsurersPanel({ productionId }: { productionId: string }
   const [forbidden, setForbidden] = useState(false);
 
   const [email, setEmail] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -112,35 +113,52 @@ export default function InsurersPanel({ productionId }: { productionId: string }
 
   return (
     <div className="mt-8">
-      <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>
-        Insurers{total > 0 ? ` · ${total}` : ""}
-      </p>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
+          Insurers{total > 0 ? ` · ${total}` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowAdd((v) => !v)}
+          className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white"
+          style={{ background: "var(--color-accent)" }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Insurer
+        </button>
+      </div>
       <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
         Read-only oversight of this production&apos;s consent &amp; custody evidence. Scoped to this production only.
       </p>
 
       {/* Add insurer */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-3">
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void handleAdd();
-          }}
-          placeholder="insurer@example.com"
-          className="flex-1 px-3 py-2 text-sm rounded"
-          style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
-        />
-        <button
-          onClick={() => void handleAdd()}
-          disabled={adding}
-          className="px-4 py-2 text-sm rounded font-medium"
-          style={{ background: "var(--color-accent)", color: "#fff", opacity: adding ? 0.6 : 1 }}
-        >
-          {adding ? "Adding…" : "Add insurer"}
-        </button>
-      </div>
+      {showAdd && (
+        <div className="rounded p-4 mb-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleAdd();
+              }}
+              placeholder="insurer@example.com"
+              className="flex-1 px-3 py-2 text-sm rounded"
+              style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+            />
+            <button
+              onClick={() => void handleAdd()}
+              disabled={adding}
+              className="px-4 py-2 text-sm rounded font-medium"
+              style={{ background: "var(--color-accent)", color: "#fff", opacity: adding ? 0.6 : 1 }}
+            >
+              {adding ? "Adding…" : "Add insurer"}
+            </button>
+          </div>
+        </div>
+      )}
       {error && <p className="text-xs mb-3" style={{ color: "#991b1b" }}>{error}</p>}
       {notice && <p className="text-xs mb-3" style={{ color: "#166534" }}>{notice}</p>}
 

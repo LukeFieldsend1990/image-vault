@@ -50,6 +50,11 @@ export default function VendorsPanel({ productionId, embedded = false }: { produ
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invite, setInvite] = useState({ email: "", orgName: "", vendorType: "vfx_vendor" });
 
+  // Add panel toggle. Embedded (guided setup) keeps the form open inline; on the
+  // production page it sits behind an "Add Vendor" button, mirroring the cast section.
+  const [showAdd, setShowAdd] = useState(false);
+  const addOpen = embedded || showAdd;
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -148,54 +153,76 @@ export default function VendorsPanel({ productionId, embedded = false }: { produ
     <div className={embedded ? "" : "mt-8"}>
       {!embedded && (
         <>
-          <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>
-            Vendors{vendors.length > 0 ? ` · ${vendors.length}` : ""}
-          </p>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
+              Vendors{vendors.length > 0 ? ` · ${vendors.length}` : ""}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowAdd((v) => !v)}
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white"
+              style={{ background: "var(--color-accent)" }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Vendor
+            </button>
+          </div>
           <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
             VFX, dubbing and scan vendors working on this production. Attaching a vendor doesn&apos;t grant scan access — that&apos;s granted per licence and requires their environment audit to pass.
           </p>
         </>
       )}
 
-      {/* Attach existing */}
-      <div className="relative mb-2">
-        <input type="text" value={query} onChange={(e) => handleSearch(e.target.value)} placeholder="Search vendors already on Image Vault…" style={inputStyle} />
-        {matches.length > 0 && (
-          <div className="absolute z-10 left-0 right-0 top-full mt-1 rounded shadow-lg overflow-hidden" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-            {matches.map((m) => (
-              <button key={m.id} type="button" disabled={busy} onClick={() => attachExisting(m)}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-black/5 flex items-center justify-between gap-2" style={{ color: "var(--color-text)" }}>
-                <span className="flex items-center gap-2">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}>{typeLabel(m.orgType)}</span>
-                  {m.name}
-                </span>
-                <span className="text-[10px]" style={{ color: m.vendorAuditPassed ? "#166534" : "#b45309" }}>{m.vendorAuditPassed ? "Audit passed" : "Audit pending"}</span>
-              </button>
-            ))}
+      {addOpen && (
+        <div className={embedded ? "mb-3" : "rounded p-4 mb-4"} style={embedded ? undefined : { border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          {/* Attach existing */}
+          <div className="relative mb-2">
+            <input type="text" value={query} onChange={(e) => handleSearch(e.target.value)} placeholder="Search vendors already on Image Vault…" style={inputStyle} />
+            {matches.length > 0 && (
+              <div className="absolute z-10 left-0 right-0 top-full mt-1 rounded shadow-lg overflow-hidden" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+                {matches.map((m) => (
+                  <button key={m.id} type="button" disabled={busy} onClick={() => attachExisting(m)}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-black/5 flex items-center justify-between gap-2" style={{ color: "var(--color-text)" }}>
+                    <span className="flex items-center gap-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}>{typeLabel(m.orgType)}</span>
+                      {m.name}
+                    </span>
+                    <span className="text-[10px]" style={{ color: m.vendorAuditPassed ? "#166534" : "#b45309" }}>{m.vendorAuditPassed ? "Audit passed" : "Audit pending"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Invite new */}
-      {!inviteOpen ? (
-        <button type="button" onClick={() => setInviteOpen(true)} className="text-xs mb-3" style={{ color: "var(--color-accent)" }}>
-          + Invite a new vendor by email
-        </button>
-      ) : (
-        <div className="rounded p-3 mb-3 space-y-2" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input type="email" value={invite.email} onChange={(e) => setInvite((v) => ({ ...v, email: e.target.value }))} placeholder="vendor@example.com" style={inputStyle} />
-            <input type="text" value={invite.orgName} onChange={(e) => setInvite((v) => ({ ...v, orgName: e.target.value }))} placeholder="Vendor company name" style={inputStyle} />
-          </div>
-          <div className="flex items-center gap-2">
-            <select value={invite.vendorType} onChange={(e) => setInvite((v) => ({ ...v, vendorType: e.target.value }))} style={{ ...inputStyle, width: "auto", flex: 1 }}>
-              {VENDOR_ORG_TYPES.map((t) => <option key={t} value={t}>{ORG_TYPE_LABELS[t]}</option>)}
-            </select>
-            <button type="button" onClick={sendInvite} disabled={busy} className="px-4 py-2 text-sm rounded font-medium text-white shrink-0" style={{ background: "var(--color-accent)", opacity: busy ? 0.6 : 1 }}>
-              {busy ? "Sending…" : "Send invite"}
+          {/* Invite new */}
+          {!inviteOpen ? (
+            <button
+              type="button"
+              onClick={() => setInviteOpen(true)}
+              className="rounded px-3 py-1.5 text-xs font-medium"
+              style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+            >
+              + Invite a new vendor by email
             </button>
-            <button type="button" onClick={() => { setInviteOpen(false); setError(""); }} className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>Cancel</button>
-          </div>
+          ) : (
+            <div className="rounded p-3 space-y-2" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input type="email" value={invite.email} onChange={(e) => setInvite((v) => ({ ...v, email: e.target.value }))} placeholder="vendor@example.com" style={inputStyle} />
+                <input type="text" value={invite.orgName} onChange={(e) => setInvite((v) => ({ ...v, orgName: e.target.value }))} placeholder="Vendor company name" style={inputStyle} />
+              </div>
+              <div className="flex items-center gap-2">
+                <select value={invite.vendorType} onChange={(e) => setInvite((v) => ({ ...v, vendorType: e.target.value }))} style={{ ...inputStyle, width: "auto", flex: 1 }}>
+                  {VENDOR_ORG_TYPES.map((t) => <option key={t} value={t}>{ORG_TYPE_LABELS[t]}</option>)}
+                </select>
+                <button type="button" onClick={sendInvite} disabled={busy} className="px-4 py-2 text-sm rounded font-medium text-white shrink-0" style={{ background: "var(--color-accent)", opacity: busy ? 0.6 : 1 }}>
+                  {busy ? "Sending…" : "Send invite"}
+                </button>
+                <button type="button" onClick={() => { setInviteOpen(false); setError(""); }} className="text-xs shrink-0" style={{ color: "var(--color-muted)" }}>Cancel</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

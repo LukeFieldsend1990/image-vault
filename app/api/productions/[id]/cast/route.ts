@@ -193,6 +193,7 @@ interface CastMemberInput {
   characterName?: string;
   department?: string;
   sagMember?: boolean;
+  unionAffiliation?: string;
   intendedUse?: string;
   validFrom?: number;
   validTo?: number;
@@ -273,6 +274,19 @@ export async function POST(
     const member = m as Record<string, unknown>;
     const email = typeof member.email === "string" ? member.email.toLowerCase().trim() : "";
     const actorName = typeof member.actorName === "string" ? member.actorName.trim() : "";
+    // Union affiliation drives the SAG flag. Prefer the explicit union string sent
+    // by the UI; fall back to the legacy sagMember boolean from older callers.
+    const unionAffiliation =
+      typeof member.unionAffiliation === "string" && member.unionAffiliation.trim()
+        ? member.unionAffiliation.trim()
+        : typeof member.sagMember === "boolean" && member.sagMember
+          ? "SAG-AFTRA"
+          : undefined;
+    const sagMember = unionAffiliation
+      ? unionAffiliation === "SAG-AFTRA"
+      : typeof member.sagMember === "boolean"
+        ? member.sagMember
+        : false;
     if (!email && !actorName) {
       return NextResponse.json({ error: "each member needs an email or an actorName" }, { status: 400 });
     }
@@ -293,7 +307,8 @@ export async function POST(
       sourceNote: typeof member.sourceNote === "string" ? member.sourceNote : undefined,
       characterName: typeof member.characterName === "string" ? member.characterName : undefined,
       department: typeof member.department === "string" ? member.department : undefined,
-      sagMember: typeof member.sagMember === "boolean" ? member.sagMember : false,
+      sagMember,
+      unionAffiliation,
       intendedUse: typeof member.intendedUse === "string" ? member.intendedUse : undefined,
       validFrom: typeof member.validFrom === "number" ? member.validFrom : undefined,
       validTo: typeof member.validTo === "number" ? member.validTo : undefined,
@@ -362,6 +377,7 @@ export async function POST(
           characterName: member.characterName ?? null,
           department: member.department ?? null,
           sagMember: member.sagMember ?? false,
+          unionAffiliation: member.unionAffiliation ?? null,
           status: "placeholder",
           licenceTermsJson: JSON.stringify(termsBlob(member)),
           addedBy: session.sub,
@@ -420,6 +436,7 @@ export async function POST(
           characterName: member.characterName ?? null,
           department: member.department ?? null,
           sagMember: member.sagMember ?? false,
+          unionAffiliation: member.unionAffiliation ?? null,
           status: "linked",
           licenceTermsJson: null,
           addedBy: session.sub,
@@ -484,6 +501,7 @@ export async function POST(
           characterName: member.characterName ?? null,
           department: member.department ?? null,
           sagMember: member.sagMember ?? false,
+          unionAffiliation: member.unionAffiliation ?? null,
           status: "invited",
           licenceTermsJson: JSON.stringify(licenceTerms),
           addedBy: session.sub,
