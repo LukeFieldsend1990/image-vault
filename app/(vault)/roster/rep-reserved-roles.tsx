@@ -9,6 +9,8 @@ interface Assignment {
   characterName: string | null;
   productionName: string;
   companyName: string;
+  hasTerms: boolean;
+  coordinatorEmail: string | null;
 }
 
 // Path C rep surface: reserved roles a production assigned to this agent. The rep
@@ -66,25 +68,44 @@ export default function RepReservedRoles() {
                 {" in "}<span className="font-medium">{a.productionName}</span>
               </p>
               <p className="text-xs mb-2" style={{ color: "var(--color-muted)" }}>Reserved by {a.companyName}</p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="email"
-                  value={emails[a.castId] ?? ""}
-                  onChange={(e) => setEmails((m) => ({ ...m, [a.castId]: e.target.value }))}
-                  placeholder="Your client's email"
-                  className="flex-1"
-                  style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "6px 10px", fontSize: 13, color: "var(--color-text)", outline: "none" }}
-                />
-                <button
-                  onClick={() => connect(a)}
-                  disabled={busyId === a.castId}
-                  className="text-xs font-medium px-3 py-2 rounded text-white shrink-0"
-                  style={{ background: "var(--color-accent)", opacity: busyId === a.castId ? 0.6 : 1 }}
-                >
-                  {busyId === a.castId ? "Connecting…" : "Connect client"}
-                </button>
-              </div>
-              {errors[a.castId] && <p className="text-xs mt-1" style={{ color: "var(--color-accent)" }}>{errors[a.castId]}</p>}
+              {a.hasTerms ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={emails[a.castId] ?? ""}
+                      onChange={(e) => setEmails((m) => ({ ...m, [a.castId]: e.target.value }))}
+                      placeholder="Your client's email"
+                      className="flex-1"
+                      style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "6px 10px", fontSize: 13, color: "var(--color-text)", outline: "none" }}
+                    />
+                    <button
+                      onClick={() => connect(a)}
+                      disabled={busyId === a.castId}
+                      className="text-xs font-medium px-3 py-2 rounded text-white shrink-0"
+                      style={{ background: "var(--color-accent)", opacity: busyId === a.castId ? 0.6 : 1 }}
+                    >
+                      {busyId === a.castId ? "Connecting…" : "Connect client"}
+                    </button>
+                  </div>
+                  {errors[a.castId] && <p className="text-xs mt-1" style={{ color: "var(--color-accent)" }}>{errors[a.castId]}</p>}
+                </>
+              ) : (
+                <div className="flex items-start justify-between gap-3 rounded px-3 py-2" style={{ background: "var(--color-bg)", border: "1px dashed var(--color-border)" }}>
+                  <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                    {a.companyName} hasn&rsquo;t shared intended use or licence dates for this role yet. Ask them to add the terms before you connect your client.
+                  </p>
+                  {a.coordinatorEmail && (
+                    <a
+                      href={`mailto:${a.coordinatorEmail}?subject=${encodeURIComponent(`Licence terms needed for ${a.characterName ?? a.actorName ?? "reserved role"} in ${a.productionName}`)}&body=${encodeURIComponent(`Hi,\n\nBefore I can connect my client to ${a.characterName ?? a.actorName ?? "the reserved role"} on ${a.productionName}, could you add the intended use and licence dates to the role on Image Vault?\n\nThanks.`)}`}
+                      className="text-xs font-medium px-3 py-2 rounded text-white shrink-0 no-underline"
+                      style={{ background: "var(--color-accent)" }}
+                    >
+                      Email {a.companyName}
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
