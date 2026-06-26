@@ -4,6 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import VendorsPanel from "@/app/(vault)/productions/[id]/vendors-panel";
+import {
+  COUNTRY_TOP_LEVEL,
+  complianceStatement,
+  hasSubPick,
+  subPickList,
+  subPickLabel,
+} from "@/lib/jurisdictions/countries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -69,7 +76,7 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-const STEPS = ["Welcome", "Company", "Production", "Cast", "Vendors", "Terms", "Done"];
+const STEPS = ["Welcome", "Company", "Production", "Jurisdiction", "Cast", "Vendors", "Terms", "Done"];
 
 // ── Small UI helpers ───────────────────────────────────────────────────────────
 
@@ -146,20 +153,27 @@ export default function SetupClient() {
   });
   const [productionId, setProductionId] = useState("");
 
-  // Step 3 — cast
+  // Step 3 — jurisdiction (home country). Two-level pick mirrors the design
+  // prototype: top-level regime, then EU country or US state if applicable.
+  const [jurStep, setJurStep] = useState<"pick" | "sub" | "confirm">("pick");
+  const [jurTopLevel, setJurTopLevel] = useState<string | null>(null);
+  const [jurSub, setJurSub] = useState<string | null>(null);
+  const [jurSearch, setJurSearch] = useState("");
+
+  // Step 4 — cast
   const [tmdbCast, setTmdbCast] = useState<MatchedCastMember[]>([]);
   const [castLoading, setCastLoading] = useState(false);
   const [castNote, setCastNote] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [importResult, setImportResult] = useState<{ imported: number; matched: number } | null>(null);
 
-  // Step 4 — default terms
+  // Step 6 — default terms
   const [terms, setTerms] = useState({
     intendedUse: "", licenceType: "film_double", territory: "Worldwide",
     exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
   });
 
-  // Step 5 — done
+  // Step 7 — done
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null);
 
   // Load eligible orgs once (owner/admin → can create productions).
@@ -235,10 +249,20 @@ export default function SetupClient() {
     setManualMode(true); // reveal the editable detail fields
   }
 
-  async function submitProduction() {
+  // Production details are captured at step 2 but the production isn't created
+  // until home jurisdiction has been confirmed at step 3 — homeCountry has to
+  // be set when the row is inserted so production_countries gets seeded with
+  // is_home=1 in one transactional step.
+  function continueFromProduction() {
     setError("");
     if (!prodForm.name.trim()) { setError("Production name is required."); return; }
     if (!orgId) { setError("Missing company — go back a step."); return; }
+    setStep(3);
+  }
+
+  async function confirmJurisdiction() {
+    setError("");
+    if (!jurTopLevel || !jurSub) { setError("Pick a country to continue."); return; }
     setBusy(true);
     try {
       const r = await fetch("/api/productions", {
@@ -254,12 +278,13 @@ export default function SetupClient() {
           isSag: prodForm.isSag || undefined,
           isEquity: prodForm.isEquity || undefined,
           status: "pre_production",
+          homeCountry: { name: jurSub, topLevelId: jurTopLevel },
         }),
       });
       const d = await r.json() as { id?: string; error?: string };
       if (!r.ok || !d.id) { setError(d.error ?? "Failed to create production."); return; }
       setProductionId(d.id);
-      setStep(3);
+      setStep(4);
       void loadCast(d.id);
     } catch {
       setError("Network error. Please try again.");
@@ -300,7 +325,7 @@ export default function SetupClient() {
 
   async function importCast() {
     setError("");
-    if (selected.size === 0) { setStep(4); return; } // nothing to import — skip ahead
+    if (selected.size === 0) { setStep(5); return; } // nothing to import — skip ahead
     setBusy(true);
     try {
       const r = await fetch(`/api/productions/${productionId}/cast/tmdb/import`, {
@@ -311,7 +336,7 @@ export default function SetupClient() {
       const d = await r.json() as { imported?: number; matched?: number; error?: string };
       if (!r.ok) { setError(d.error ?? "Failed to import cast."); return; }
       setImportResult({ imported: d.imported ?? 0, matched: d.matched ?? 0 });
-      setStep(4);
+      setStep(5);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -343,7 +368,7 @@ export default function SetupClient() {
       });
       const d = await r.json() as { ok?: boolean; error?: string };
       if (!r.ok) { setError(d.error ?? "Failed to save terms."); return; }
-      setStep(6);
+      setStep(7);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -551,14 +576,114 @@ export default function SetupClient() {
           )}
 
           <div className="flex items-center gap-3 pt-2">
-            <PrimaryButton onClick={submitProduction} disabled={busy || !prodForm.name.trim()}>{busy ? "Creating…" : "Continue"}</PrimaryButton>
+            <PrimaryButton onClick={continueFromProduction} disabled={!prodForm.name.trim()}>Continue</PrimaryButton>
             <GhostButton onClick={() => setStep(1)}>Back</GhostButton>
           </div>
         </div>
       )}
 
-      {/* Step 3 — Cast */}
+      {/* Step 3 — Jurisdiction (home country) */}
       {step === 3 && (
+        <div className="space-y-5">
+          {jurStep === "pick" && (
+            <>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Where is the production registered?</h1>
+                <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
+                  The country your production company is registered in, not where the shoot happens. Shoot locations come later. This sets the home jurisdiction for performer data.
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {COUNTRY_TOP_LEVEL.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setJurTopLevel(c.id);
+                      if (hasSubPick(c.id)) {
+                        setJurSub(null);
+                        setJurSearch("");
+                        setJurStep("sub");
+                      } else {
+                        setJurSub(c.label);
+                        setJurStep("confirm");
+                      }
+                    }}
+                    className="text-left rounded p-4"
+                    style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+                  >
+                    <div className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{c.label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{c.sub}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <GhostButton onClick={() => setStep(2)}>Back</GhostButton>
+              </div>
+            </>
+          )}
+
+          {jurStep === "sub" && jurTopLevel && (
+            <>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Which {subPickLabel(jurTopLevel)}?</h1>
+                <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>Pick one — you can add more from the production page later.</p>
+              </div>
+              <input
+                type="text"
+                placeholder="Search"
+                value={jurSearch}
+                onChange={(e) => setJurSearch(e.target.value)}
+                style={{ ...inputStyle, maxWidth: 360 }}
+                autoComplete="off"
+              />
+              <div className="grid sm:grid-cols-2 gap-2">
+                {subPickList(jurTopLevel)
+                  .filter((c) => !jurSearch.trim() || c.toLowerCase().includes(jurSearch.toLowerCase().trim()))
+                  .map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { setJurSub(c); setJurStep("confirm"); }}
+                      className="text-left rounded px-4 py-3"
+                      style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+                    >
+                      <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{c}</span>
+                    </button>
+                  ))}
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <GhostButton onClick={() => { setJurStep("pick"); setJurSearch(""); }}>Back</GhostButton>
+              </div>
+            </>
+          )}
+
+          {jurStep === "confirm" && jurTopLevel && jurSub && (
+            <>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Confirm {jurSub} as the home country</h1>
+                <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>Please read this before confirming.</p>
+              </div>
+              <div className="rounded p-4" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
+                <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>Home country</p>
+                <p className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>{jurSub}</p>
+              </div>
+              <div className="rounded p-4" style={{ background: "rgba(192,57,43,0.04)", border: "1px solid rgba(192,57,43,0.15)" }}>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
+                  {complianceStatement(jurTopLevel, jurSub)}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <PrimaryButton onClick={confirmJurisdiction} disabled={busy}>{busy ? "Creating…" : `Confirm and add ${jurSub}`}</PrimaryButton>
+                <GhostButton onClick={() => setJurStep(hasSubPick(jurTopLevel) ? "sub" : "pick")}>Back</GhostButton>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Step 4 — Cast */}
+      {step === 4 && (
         <div className="space-y-5">
           <div>
             <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Your cast</h1>
@@ -609,13 +734,13 @@ export default function SetupClient() {
             <PrimaryButton onClick={importCast} disabled={busy}>
               {busy ? "Reserving…" : selected.size > 0 ? `Reserve ${selected.size} role${selected.size === 1 ? "" : "s"}` : "Skip for now"}
             </PrimaryButton>
-            <GhostButton onClick={() => setStep(2)}>Back</GhostButton>
+            <GhostButton onClick={() => setStep(3)}>Back</GhostButton>
           </div>
         </div>
       )}
 
-      {/* Step 4 — Vendors */}
-      {step === 4 && (
+      {/* Step 5 — Vendors */}
+      {step === 5 && (
         <div className="space-y-5">
           <div>
             <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Vendors on this production</h1>
@@ -627,14 +752,14 @@ export default function SetupClient() {
           {productionId && <VendorsPanel productionId={productionId} embedded />}
 
           <div className="flex items-center gap-3 pt-2">
-            <PrimaryButton onClick={() => setStep(5)}>Continue</PrimaryButton>
-            <GhostButton onClick={() => setStep(3)}>Back</GhostButton>
+            <PrimaryButton onClick={() => setStep(6)}>Continue</PrimaryButton>
+            <GhostButton onClick={() => setStep(4)}>Back</GhostButton>
           </div>
         </div>
       )}
 
-      {/* Step 5 — Default terms */}
-      {step === 5 && (
+      {/* Step 6 — Default terms */}
+      {step === 6 && (
         <div className="space-y-5">
           <div>
             <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>Set your default terms</h1>
@@ -669,13 +794,13 @@ export default function SetupClient() {
 
           <div className="flex items-center gap-3 pt-2">
             <PrimaryButton onClick={submitTerms} disabled={busy}>{busy ? "Saving…" : "Continue"}</PrimaryButton>
-            <GhostButton onClick={() => setStep(6)}>Skip</GhostButton>
+            <GhostButton onClick={() => setStep(7)}>Skip</GhostButton>
           </div>
         </div>
       )}
 
-      {/* Step 6 — Done */}
-      {step === 6 && (
+      {/* Step 7 — Done */}
+      {step === 7 && (
         <div className="space-y-6">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>{prodForm.name || "Your production"} is set up 🎬</h1>

@@ -48,6 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       orgShortCode: organisations.shortCode,
       shortCode: productions.shortCode,
       sagProjectNumber: productions.sagProjectNumber,
+      homeCountry: productions.homeCountry,
       createdAt: productions.createdAt,
       updatedAt: productions.updatedAt,
     })
