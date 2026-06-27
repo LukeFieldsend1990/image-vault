@@ -770,6 +770,10 @@ export const organisations = sqliteTable("organisations", {
   // "California"). Collected at onboarding; existing rows backfilled to UK.
   country: text("country"),
   countryTopLevelId: text("country_top_level_id"),
+  // Owner-only toggle. When true, every org owner gets implicit full access to
+  // every production the org owns (legacy behaviour). When false (default), only
+  // a production's owner reaches it unless colleagues are explicitly added.
+  ownerImplicitAccess: integer("owner_implicit_access", { mode: "boolean" }).notNull().default(false),
 });
 
 export const organisationMembers = sqliteTable("organisation_members", {

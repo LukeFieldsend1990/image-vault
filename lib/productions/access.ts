@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
-import { productions, organisations, productionMembers } from "@/lib/db/schema";
+import { productions, organisations, organisationMembers, productionMembers } from "@/lib/db/schema";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -72,14 +72,31 @@ export async function resolveOwnerAccess(
   const ownerIds = await getProductionOwnerIds(db, productionId);
   if (ownerIds.has(userId)) return FULL;
 
-  // Anyone else only reaches a production they've been explicitly added to —
-  // org role is irrelevant.
+  // Explicitly added to this production's team — viewer or editor.
   const team = await db
     .select({ role: productionMembers.role })
     .from(productionMembers)
     .where(and(eq(productionMembers.productionId, productionId), eq(productionMembers.userId, userId)))
     .get();
-  if (!team) return NO_ACCESS;
+  if (team) {
+    return { isMember: true, canWrite: team.role === "editor", canManageTeam: false, isOwner: false };
+  }
 
-  return { isMember: true, canWrite: team.role === "editor", canManageTeam: false, isOwner: false };
+  // Otherwise the only way in is the org-level toggle: when an org opts in, every
+  // org owner gets implicit full access to all its productions (legacy behaviour).
+  const org = await db
+    .select({ implicit: organisations.ownerImplicitAccess })
+    .from(organisations)
+    .where(eq(organisations.id, organisationId))
+    .get();
+  if (org?.implicit) {
+    const membership = await db
+      .select({ r: organisationMembers.memberRole })
+      .from(organisationMembers)
+      .where(and(eq(organisationMembers.organisationId, organisationId), eq(organisationMembers.userId, userId)))
+      .get();
+    if (membership?.r === "owner") return FULL;
+  }
+
+  return NO_ACCESS;
 }

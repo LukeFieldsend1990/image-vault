@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { productions, productionMembers, organisationMembers, users } from "@/lib/db/schema";
+import { productions, productionMembers, organisationMembers, organisations, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
@@ -54,21 +54,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // The production owner (coordinator / org founder) runs the production
   // implicitly — surface them, and exclude them from the "addable" list.
-  // Everyone else in the org, regardless of org role, is a candidate to add.
+  // When the org's owner-implicit-access toggle is on, every org owner is an
+  // implicit owner too. Everyone else is a candidate to add.
   let owners: { userId: string; email: string }[] = [];
   let candidates: { userId: string; email: string }[] = [];
   if (production.organisationId) {
     const ownerIds = await getProductionOwnerIds(db, id);
+    const org = await db
+      .select({ implicit: organisations.ownerImplicitAccess })
+      .from(organisations)
+      .where(eq(organisations.id, production.organisationId))
+      .get();
     const orgMembers = await db
-      .select({ userId: organisationMembers.userId, email: users.email })
+      .select({ userId: organisationMembers.userId, email: users.email, memberRole: organisationMembers.memberRole })
       .from(organisationMembers)
       .innerJoin(users, eq(users.id, organisationMembers.userId))
       .where(eq(organisationMembers.organisationId, production.organisationId))
       .all();
-    owners = orgMembers.filter((m) => ownerIds.has(m.userId)).map((m) => ({ userId: m.userId, email: m.email }));
+    const isImplicitOwner = (m: { userId: string; memberRole: string }) =>
+      ownerIds.has(m.userId) || (Boolean(org?.implicit) && m.memberRole === "owner");
+    owners = orgMembers.filter(isImplicitOwner).map((m) => ({ userId: m.userId, email: m.email }));
     const teamIds = new Set(team.map((t) => t.userId));
     candidates = orgMembers
-      .filter((m) => !ownerIds.has(m.userId) && !teamIds.has(m.userId))
+      .filter((m) => !isImplicitOwner(m) && !teamIds.has(m.userId))
       .map((m) => ({ userId: m.userId, email: m.email }));
   }
 
@@ -111,10 +119,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!userId) return NextResponse.json({ error: "userId is required" }, { status: 400 });
 
   // The target must be a member of the owning org — we never grant access to
-  // anyone outside it. Org role is irrelevant; what matters is that they're not
-  // already the production owner (who has full access implicitly).
+  // anyone outside it. What matters beyond that is that they don't already have
+  // full access implicitly (as the production owner, or as an org owner while
+  // the org's owner-implicit-access toggle is on).
   const membership = await db
-    .select({ userId: organisationMembers.userId })
+    .select({ memberRole: organisationMembers.memberRole })
     .from(organisationMembers)
     .where(and(
       eq(organisationMembers.organisationId, production.organisationId),
@@ -125,8 +134,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "That person isn't a member of your organisation." }, { status: 400 });
   }
   const ownerIds = await getProductionOwnerIds(db, id);
-  if (ownerIds.has(userId)) {
-    return NextResponse.json({ error: "That person is the production owner and already has full access." }, { status: 400 });
+  const org = await db
+    .select({ implicit: organisations.ownerImplicitAccess })
+    .from(organisations)
+    .where(eq(organisations.id, production.organisationId))
+    .get();
+  if (ownerIds.has(userId) || (org?.implicit && membership.memberRole === "owner")) {
+    return NextResponse.json({ error: "That person already has full access to this production." }, { status: 400 });
   }
 
   const now = Math.floor(Date.now() / 1000);
