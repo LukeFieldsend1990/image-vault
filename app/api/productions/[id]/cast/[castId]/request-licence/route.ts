@@ -66,7 +66,13 @@ export async function POST(
     .get();
   if (!row) return NextResponse.json({ error: "Cast member not found" }, { status: 404 });
   if (!row.talentId) return NextResponse.json({ error: "This role has no linked talent yet" }, { status: 409 });
-  if (row.licenceId) return NextResponse.json({ error: "This role already has a licence" }, { status: 409 });
+  // Re-request is allowed when the existing licence is terminal (declined/revoked/
+  // expired) — a producer can re-engage after a decline. An active licence blocks it.
+  if (row.licenceId) {
+    const existing = await db.select({ status: licences.status }).from(licences).where(eq(licences.id, row.licenceId)).get();
+    const terminal = existing && ["DENIED", "REVOKED", "EXPIRED"].includes(existing.status);
+    if (!terminal) return NextResponse.json({ error: "This role already has an active licence" }, { status: 409 });
+  }
 
   // Terms: production defaults, overridable by the request body.
   let body: Partial<CastLicenceTerms> = {};
@@ -124,7 +130,8 @@ export async function POST(
   });
   await mintLicenceCode(db, licenceId);
 
-  await db.update(productionCast).set({ licenceId }).where(eq(productionCast.id, castId));
+  // Point the cast row at the new licence and clear any prior `declined` state.
+  await db.update(productionCast).set({ licenceId, status: "linked" }).where(eq(productionCast.id, castId));
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
   const reviewUrl = `${baseUrl}/licences/${licenceId}`;
