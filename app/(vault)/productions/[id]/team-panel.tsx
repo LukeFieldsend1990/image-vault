@@ -9,12 +9,6 @@ interface TeamMember {
   addedAt: number;
 }
 
-interface OrgManager {
-  userId: string;
-  email: string;
-  memberRole: string;
-}
-
 interface Candidate {
   userId: string;
   email: string;
@@ -22,7 +16,7 @@ interface Candidate {
 
 interface TeamData {
   team: TeamMember[];
-  orgManagers: OrgManager[];
+  owners: Candidate[];
   candidates: Candidate[];
   canManage: boolean;
 }
@@ -139,7 +133,7 @@ export default function TeamPanel({ productionId }: { productionId: string }) {
               <p className="text-xs font-medium mb-3" style={{ color: "var(--color-text)" }}>Add a team member</p>
               {data.candidates.length === 0 ? (
                 <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                  Everyone in your organisation is already an owner, admin, or on this team. Invite more colleagues to your organisation from Settings to add them here.
+                  Everyone in your organisation is already the production owner or on this team. Invite more colleagues to your organisation from Settings to add them here.
                 </p>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -170,19 +164,19 @@ export default function TeamPanel({ productionId }: { productionId: string }) {
           {error && <p className="text-xs mb-2" style={{ color: "#991b1b" }}>{error}</p>}
           {notice && <p className="text-xs mb-2" style={{ color: "#166534" }}>{notice}</p>}
 
-          {/* Owners & admins — implicit full access */}
-          {data.orgManagers.length > 0 && (
+          {/* Production owner — implicit full access */}
+          {data.owners.length > 0 && (
             <div className="mb-6">
               <p className="text-[11px] font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>
-                Owners &amp; admins
+                Production owner
               </p>
               <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
-                {data.orgManagers.map((m, i) => (
+                {data.owners.map((m, i) => (
                   <div key={m.userId} className="flex items-center justify-between px-4 py-3"
-                    style={{ borderBottom: i < data.orgManagers.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
+                    style={{ borderBottom: i < data.owners.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
                     <span className="text-sm" style={{ color: "var(--color-text)" }}>{m.email}</span>
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(124,58,237,0.1)", color: "#7c3aed" }}>
-                      Full access · {m.memberRole === "owner" ? "Owner" : "Admin"}
+                      Full access · Owner
                     </span>
                   </div>
                 ))}
