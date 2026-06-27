@@ -167,6 +167,15 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Mask a talent email for the pending-add queue so it isn't displayed back in
+// plain text (privacy — we don't dox performers). Shows first char + domain.
+function maskEmail(email?: string): string {
+  if (!email) return "Reserved performer";
+  const [local, domain] = email.split("@");
+  if (!domain) return "Pending invite";
+  return `${local.slice(0, 1)}•••@${domain}`;
+}
+
 const EXCLUSIVITY_OPTIONS = [
   { value: "non_exclusive", label: "Non-exclusive" },
   { value: "sole", label: "Sole" },
@@ -191,7 +200,9 @@ function makeDefaultTerms(): LicenceTerms {
     intendedUse: "",
     validFrom: from,
     validTo: addMonthsISO(from, 18),
-    useCategoryIds: [],
+    // VFX work on this production is the baseline ask — pre-ticked by default; the
+    // rest are additional uses the producer opts into.
+    useCategoryIds: ["vfx-this"],
     territory: "",
     exclusivity: "non_exclusive",
     permitAiTraining: false,
@@ -254,14 +265,17 @@ export default function ProductionDetailClient() {
   const [manualEmail, setManualEmail] = useState("");
   const [manualCharacter, setManualCharacter] = useState("");
   const [manualTmdbId, setManualTmdbId] = useState<number | null>(null);
+  // Set when an existing Image Vault talent is picked from the matcher — we link
+  // by id without ever exposing their email to the producer.
+  const [manualTalentId, setManualTalentId] = useState<string | null>(null);
   // Union affiliation: "SAG-AFTRA" | "Equity" | free text. manualUnionOther flags the
   // free-text "Other" mode so the input binds to manualUnion.
   const [manualUnion, setManualUnion] = useState("");
   const [manualUnionOther, setManualUnionOther] = useState(false);
-  const [manualQueue, setManualQueue] = useState<{ email?: string; actorName?: string; tmdbId?: number; characterName?: string; unionAffiliation?: string }[]>([]);
+  const [manualQueue, setManualQueue] = useState<{ email?: string; actorName?: string; talentId?: string; tmdbId?: number; characterName?: string; unionAffiliation?: string }[]>([]);
 
   // Name-matching (item 5): live lookup of platform talent + TMDB typo suggestions.
-  const [nameMatches, setNameMatches] = useState<{ type: "platform" | "tmdb"; name: string; talentId?: string; email?: string | null; tmdbId?: number | null; profilePath?: string | null }[]>([]);
+  const [nameMatches, setNameMatches] = useState<{ type: "platform" | "tmdb"; name: string; talentId?: string; tmdbId?: number | null; profilePath?: string | null }[]>([]);
   const [showMatches, setShowMatches] = useState(false);
   const matchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -414,8 +428,8 @@ export default function ProductionDetailClient() {
     const actorName = manualActorName.trim();
     if (!email && !actorName) return;
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
-    setManualQueue((q) => [...q, { email: email || undefined, actorName: actorName || undefined, tmdbId: manualTmdbId ?? undefined, characterName: manualCharacter || undefined, unionAffiliation: manualUnion.trim() || undefined }]);
-    setManualActorName(""); setManualEmail(""); setManualCharacter(""); setManualTmdbId(null); setManualUnion(""); setManualUnionOther(false);
+    setManualQueue((q) => [...q, { email: email || undefined, actorName: actorName || undefined, talentId: manualTalentId ?? undefined, tmdbId: manualTmdbId ?? undefined, characterName: manualCharacter || undefined, unionAffiliation: manualUnion.trim() || undefined }]);
+    setManualActorName(""); setManualEmail(""); setManualCharacter(""); setManualTmdbId(null); setManualTalentId(null); setManualUnion(""); setManualUnionOther(false);
     setNameMatches([]); setShowMatches(false);
     // Copy terms forward (already in state, no action needed)
   }
@@ -425,6 +439,7 @@ export default function ProductionDetailClient() {
   function onActorNameChange(value: string) {
     setManualActorName(value);
     setManualTmdbId(null);
+    setManualTalentId(null); // typing a new name drops any picked-talent link
     if (matchTimer.current) clearTimeout(matchTimer.current);
     const q = value.trim();
     if (q.length < 2) { setNameMatches([]); setShowMatches(false); return; }
@@ -443,7 +458,13 @@ export default function ProductionDetailClient() {
   // than create a placeholder); a TMDB hit pre-fills the canonical name + tmdbId.
   function pickMatch(m: typeof nameMatches[number]) {
     setManualActorName(m.name);
-    if (m.type === "platform" && m.email) setManualEmail(m.email);
+    // Existing Image Vault talent → link by id, never surface their email.
+    if (m.type === "platform" && m.talentId) {
+      setManualTalentId(m.talentId);
+      setManualEmail("");
+    } else {
+      setManualTalentId(null);
+    }
     setManualTmdbId(m.tmdbId ?? null);
     setShowMatches(false);
     setNameMatches([]);
@@ -1225,7 +1246,14 @@ export default function ProductionDetailClient() {
                 </div>
                 <div>
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Email</label>
-                  <input type="email" value={manualEmail} onChange={(e) => setManualEmail(e.target.value)} style={inputStyle} placeholder="actor@example.com (optional)" />
+                  {manualTalentId ? (
+                    <div className="flex items-center gap-2 rounded px-3" style={{ ...inputStyle, display: "flex" }}>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On Image Vault</span>
+                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>Linked — no email needed</span>
+                    </div>
+                  ) : (
+                    <input type="email" value={manualEmail} onChange={(e) => setManualEmail(e.target.value)} style={inputStyle} placeholder="actor@example.com (optional)" />
+                  )}
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Character Name</label>
@@ -1271,7 +1299,7 @@ export default function ProductionDetailClient() {
                 <div className="rounded p-3 space-y-1.5" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
                   {manualQueue.map((m, i) => (
                     <div key={i} className="flex items-center justify-between text-xs" style={{ color: "var(--color-text)" }}>
-                      <span>{m.email ?? m.actorName}{m.characterName ? ` — ${m.characterName}` : ""}{!m.email ? " · reserved" : ""}</span>
+                      <span>{m.actorName ?? maskEmail(m.email)}{m.characterName ? ` — ${m.characterName}` : ""}{m.talentId ? " · on Image Vault" : !m.email ? " · reserved" : ""}</span>
                       <button onClick={() => setManualQueue((q) => q.filter((_, j) => j !== i))} style={{ color: "var(--color-muted)" }}>×</button>
                     </div>
                   ))}
