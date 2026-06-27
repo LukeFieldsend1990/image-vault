@@ -167,16 +167,22 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uses: [...consents], attested: true }),
       });
-      const d = (await r.json()) as { ok?: boolean; error?: string };
+      const d = (await r.json()) as { ok?: boolean; error?: string; countered?: boolean };
       if (!r.ok || !d.ok) { setSubmitError(d.error ?? "Could not record your consent."); return; }
-      setDone(true);
+      if (d.countered) {
+        // Scope differed from the request → sent to the production as a proposal.
+        setAttested(false);
+        await refreshNego();
+      } else {
+        setDone(true);
+      }
       if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       setSubmitError("Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
-  }, [acceptEndpoint, attested, consents]);
+  }, [acceptEndpoint, attested, consents, refreshNego]);
 
   if (loadError) {
     return (
@@ -265,6 +271,14 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const canAct = data.canAct;
   const isProducer = nego?.party === "producer";
   const canEditScope = canAct || (isProducer && counterMode);
+  // The performer's ticked set differs from what the production requested → confirming
+  // becomes a proposal the production must agree to (licence mode only; guests have
+  // no negotiation pre-account).
+  const requestedScope = vm.requestedScope ?? [];
+  const scopeChanged =
+    source.kind === "licence" &&
+    requestedScope.length > 0 &&
+    !(consents.size === requestedScope.length && requestedScope.every((r) => consents.has(r)));
 
   // Counter form (shared by talent and producer). Scope comes from the toggles above.
   const counterForm = (
@@ -451,9 +465,14 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
                 <span className="mt-0.5 flex items-center justify-center rounded shrink-0" style={{ width: 18, height: 18, border: `1px solid ${attested ? ACCENT : "var(--color-border)"}`, background: attested ? ACCENT : "transparent", color: "white", fontSize: 12 }}>{attested ? "✓" : ""}</span>
                 <span className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.55 }}>{vm.copy.attestation}</span>
               </button>
+              {scopeChanged && (
+                <p className="text-xs mb-2" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
+                  Your selection differs from what was requested — confirming sends it to the production to agree before it&apos;s recorded.
+                </p>
+              )}
               {submitError && <ErrLine msg={submitError} />}
               <button type="button" onClick={submit} disabled={!attested || submitting} className="w-full rounded px-4 py-2.5 text-sm font-medium text-white transition" style={{ background: !attested || submitting ? "var(--color-muted)" : ACCENT, cursor: !attested || submitting ? "not-allowed" : "pointer" }}>
-                {submitting ? "Confirming…" : "Confirm consent"}
+                {submitting ? "Working…" : scopeChanged ? "Propose these terms" : "Confirm consent"}
               </button>
               <div className="flex items-center justify-between mt-3">
                 <button type="button" onClick={() => { setCounterFee(""); setCounterComment(""); setCounterMode(true); }} className="text-xs font-medium" style={{ color: ACCENT }}>Propose different terms</button>
