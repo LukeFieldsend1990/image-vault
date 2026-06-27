@@ -1,9 +1,20 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 
 export const metadata = {
   title: "ImageVault for performers",
   description: "What ImageVault is, and what changes if you register and take control of your biometric data.",
 };
+
+// True if the visitor has a session cookie (already a registered user).
+async function isLoggedIn(): Promise<boolean> {
+  try {
+    const c = await cookies();
+    return Boolean(c.get("session")?.value || c.get("refresh")?.value);
+  } catch {
+    return false;
+  }
+}
 
 function Section({ num, heading, children }: { num: string; heading: string; children: React.ReactNode }) {
   return (
@@ -15,7 +26,8 @@ function Section({ num, heading, children }: { num: string; heading: string; chi
   );
 }
 
-export default function PerformerExplainerPage() {
+export default async function PerformerExplainerPage() {
+  const loggedIn = await isLoggedIn();
   return (
     <div style={{ background: "var(--color-bg)", minHeight: "100vh" }}>
       <div className="mx-auto px-5 py-10" style={{ maxWidth: 720 }}>
@@ -85,15 +97,18 @@ export default function PerformerExplainerPage() {
           <p>If a production holds your vault, there&apos;s no cost to you — the production pays for the platform. If you want to claim the vault and take direct control — so you can relicense your likeness independently or manage access separately from the production — a platform fee applies. We don&apos;t sell your data, we don&apos;t train AI models on it, and we don&apos;t take a percentage of any work you do.</p>
         </Section>
 
-        <div className="rounded-xl p-6" style={{ border: "2px solid var(--color-text)", background: "var(--color-bg)" }}>
-          <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Want to register?</h2>
-          <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-            Registration takes about three minutes. You&apos;ll set up an account, see any vaults that already exist for you, and decide your standing instructions.
-          </p>
-          <Link href="/signup" className="inline-block rounded px-4 py-2 text-sm font-medium text-white" style={{ background: "var(--color-accent)" }}>
-            Register on ImageVault
-          </Link>
-        </div>
+        {/* Register CTA — only for logged-out visitors; registered users are already in. */}
+        {!loggedIn && (
+          <div className="rounded-xl p-6" style={{ border: "2px solid var(--color-text)", background: "var(--color-bg)" }}>
+            <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Want to register?</h2>
+            <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+              Registration takes about three minutes. You&apos;ll set up an account, see any vaults that already exist for you, and decide your standing instructions.
+            </p>
+            <Link href="/signup" className="inline-block rounded px-4 py-2 text-sm font-medium text-white" style={{ background: "var(--color-accent)" }}>
+              Register on ImageVault
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

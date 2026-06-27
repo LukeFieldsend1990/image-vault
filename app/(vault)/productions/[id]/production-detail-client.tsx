@@ -1667,6 +1667,18 @@ export default function ProductionDetailClient() {
                           {requestingId === row.id ? "Sending…" : "Send licence request"}
                         </button>
                       )}
+                      {/* Re-engage a declined performer with a fresh request. */}
+                      {canWrite && row.status === "declined" && row.talentId && (
+                        <button
+                          onClick={() => handleRequestLicence(row.id)}
+                          disabled={requestingId === row.id}
+                          className="text-xs font-medium"
+                          style={{ color: "var(--color-accent)" }}
+                          title="Send a fresh licence request to this performer"
+                        >
+                          {requestingId === row.id ? "Sending…" : "Re-request"}
+                        </button>
+                      )}
                       {canWrite && (row.status === "placeholder" || row.status === "invited" || row.status === "linked") && (
                         <button
                           onClick={() => handleRemove(row.id)}
