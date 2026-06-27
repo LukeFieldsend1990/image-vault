@@ -462,6 +462,15 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
                       </svg>
                     </button>
 
+                    <Link
+                      href={`/consent/${l.id}`}
+                      className="rounded border px-3 py-1.5 text-xs font-medium transition"
+                      style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}
+                      title="Open the consent document for this licence"
+                    >
+                      Consent doc
+                    </Link>
+
                     {l.status === "APPROVED" && (
                       <a
                         href={`/api/licences/${l.id}/contract`}
