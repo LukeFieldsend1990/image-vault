@@ -169,7 +169,7 @@ export default function SetupClient() {
 
   // Step 5 — default terms
   const [terms, setTerms] = useState({
-    intendedUse: "", useCategoryIds: [] as string[], territory: "Worldwide",
+    intendedUse: "", useCategoryIds: ["vfx-this"] as string[], territory: "Worldwide",
     exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
     feeNA: false, isRelicense: false,
   });
@@ -400,7 +400,7 @@ export default function SetupClient() {
 
   function clearTerms() {
     setTerms({
-      intendedUse: "", useCategoryIds: [], territory: "Worldwide",
+      intendedUse: "", useCategoryIds: ["vfx-this"], territory: "Worldwide",
       exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
       feeNA: false, isRelicense: false,
     });

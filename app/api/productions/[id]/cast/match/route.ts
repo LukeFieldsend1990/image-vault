@@ -5,13 +5,14 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { canonicalCode } from "@/lib/codes/codes";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 interface PlatformMatch {
   type: "platform";
   name: string;
   talentId: string;
-  email: string | null;
+  // Privacy: an existing talent's email is never returned to the producer — they
+  // link by talentId. Doxxing a performer who hasn't engaged is not allowed.
   profilePath: string | null;
   tmdbId: number | null;
 }
@@ -129,23 +130,10 @@ export async function GET(
     .sort((a, b) => a.score - b.score)
     .slice(0, 5);
 
-  // Resolve emails for the matched users.
-  const matchedUserIds = scored.map((s) => s.profile.userId);
-  const emailMap = new Map<string, string>();
-  if (matchedUserIds.length > 0) {
-    const userRows = await db
-      .select({ id: users.id, email: users.email })
-      .from(users)
-      .where(inArray(users.id, matchedUserIds))
-      .all();
-    for (const u of userRows) emailMap.set(u.id, u.email);
-  }
-
   const platformMatches: PlatformMatch[] = scored.map(({ profile }) => ({
     type: "platform",
     name: profile.fullName,
     talentId: profile.userId,
-    email: emailMap.get(profile.userId) ?? null,
     profilePath: profile.profileImageUrl ?? null,
     tmdbId: profile.tmdbId ?? null,
   }));
@@ -155,7 +143,7 @@ export async function GET(
   const code = canonicalCode(q);
   if (code) {
     const u = await db
-      .select({ id: users.id, email: users.email })
+      .select({ id: users.id })
       .from(users)
       .where(and(eq(users.shortCode, code), eq(users.role, "talent")))
       .get();
@@ -172,9 +160,8 @@ export async function GET(
       } else {
         platformMatches.unshift({
           type: "platform",
-          name: prof?.fullName ?? u.email,
+          name: prof?.fullName ?? "Performer",
           talentId: u.id,
-          email: u.email,
           profilePath: prof?.profileImageUrl ?? null,
           tmdbId: prof?.tmdbId ?? null,
         });

@@ -209,6 +209,7 @@ export async function GET(
 
 interface CastMemberInput {
   email?: string;       // contactable member — onboarded now
+  talentId?: string;    // existing Image Vault talent picked from the matcher (link by id, no email exposed)
   actorName?: string;   // placeholder — recorded by name only, resolve later
   tmdbId?: number;
   sourceNote?: string;
@@ -300,6 +301,9 @@ export async function POST(
     const member = m as Record<string, unknown>;
     const email = typeof member.email === "string" ? member.email.toLowerCase().trim() : "";
     const actorName = typeof member.actorName === "string" ? member.actorName.trim() : "";
+    // talentId: an existing Image Vault talent picked from the matcher. Lets the
+    // producer link by id without ever handling the performer's email.
+    const talentId = typeof member.talentId === "string" && member.talentId.trim() ? member.talentId.trim() : "";
     // Union affiliation drives the SAG flag. Prefer the explicit union string sent
     // by the UI; fall back to the legacy sagMember boolean from older callers.
     const unionAffiliation =
@@ -313,12 +317,13 @@ export async function POST(
       : typeof member.sagMember === "boolean"
         ? member.sagMember
         : false;
-    if (!email && !actorName) {
-      return NextResponse.json({ error: "each member needs an email or an actorName" }, { status: 400 });
+    if (!email && !actorName && !talentId) {
+      return NextResponse.json({ error: "each member needs an email, a talentId, or an actorName" }, { status: 400 });
     }
-    // Contactable members are onboarded immediately, so full terms are required.
-    // Placeholders (actorName only) carry whatever terms are known, no email sent.
-    if (email) {
+    // Contactable members (email) and linked talent (talentId) are onboarded
+    // immediately, so full terms are required. Placeholders (name only) carry
+    // whatever terms are known, no email sent.
+    if (email || talentId) {
       if (typeof member.intendedUse !== "string" || !member.intendedUse) {
         return NextResponse.json({ error: "intendedUse is required for contactable members" }, { status: 400 });
       }
@@ -328,6 +333,7 @@ export async function POST(
     }
     members.push({
       email: email || undefined,
+      talentId: talentId || undefined,
       actorName: actorName || undefined,
       tmdbId: typeof member.tmdbId === "number" ? Math.floor(member.tmdbId) : undefined,
       sourceNote: typeof member.sourceNote === "string" ? member.sourceNote : undefined,
@@ -407,8 +413,8 @@ export async function POST(
 
   for (const member of members) {
     try {
-      // Placeholder: recorded by name only, no email/invite yet.
-      if (!member.email) {
+      // Placeholder: recorded by name only, no email/talentId/invite yet.
+      if (!member.email && !member.talentId) {
         await db.insert(productionCast).values({
           id: crypto.randomUUID(),
           productionId: id,
@@ -437,18 +443,24 @@ export async function POST(
         continue;
       }
 
-      // Contactable member — email + full terms validated above.
-      const email = member.email;
+      // Contactable member (email) or linked talent (talentId) — terms validated above.
       const intendedUse = member.intendedUse as string;
       const validFrom = member.validFrom as number;
       const validTo = member.validTo as number;
 
-      // Look up user by email
-      const existingUser = await db
-        .select({ id: users.id, role: users.role })
-        .from(users)
-        .where(eq(users.email, email))
-        .get();
+      // Resolve the talent — by explicit talentId (from the matcher; no email
+      // exposed to the producer) or by email lookup. The server uses the talent's
+      // own email only to notify them.
+      const existingUser = member.talentId
+        ? await db.select({ id: users.id, role: users.role, email: users.email }).from(users).where(eq(users.id, member.talentId)).get()
+        : await db.select({ id: users.id, role: users.role, email: users.email }).from(users).where(eq(users.email, member.email!)).get();
+
+      // A matcher-linked talentId that no longer resolves — skip rather than mis-invite.
+      if (member.talentId && !existingUser) {
+        errors.push(`Linked performer not found (${member.talentId}).`);
+        continue;
+      }
+      const email = existingUser?.email ?? member.email ?? "";
 
       if (existingUser && existingUser.role === "talent") {
         // Talent exists — create cast row + licence
