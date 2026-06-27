@@ -1289,3 +1289,18 @@ export const standingInstructions = sqliteTable("standing_instructions", {
 }, (t) => ({
   uniqTalentCategory: unique().on(t.talentId, t.useCategoryId),
 }));
+
+// Licence negotiation thread — one row per round of the back-and-forth over
+// consent terms (scope + fee) between a production and a performer/agent.
+export const licenceNegotiations = sqliteTable("licence_negotiations", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  round: integer("round").notNull(),
+  party: text("party", { enum: ["producer", "talent", "rep"] }).notNull(),
+  action: text("action", { enum: ["counter", "accepted", "declined"] }).notNull().default("counter"),
+  proposedScopeJson: text("proposed_scope_json"), // array of useCategoryId
+  proposedFee: integer("proposed_fee"), // pence; null = N/A
+  comment: text("comment"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+});

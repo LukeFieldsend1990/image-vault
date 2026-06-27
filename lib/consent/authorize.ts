@@ -21,6 +21,10 @@ export interface ConsentAuth {
   canAct: boolean;
   /** "talent" | "rep" when the actor can act on the talent's behalf. */
   actingRole: "talent" | "rep" | null;
+  /** True when the caller is the production (licensee) on this licence. */
+  isLicensee: boolean;
+  /** Which side of the negotiation the caller sits on. */
+  party: "producer" | "talent" | "rep" | "admin" | null;
 }
 
 export async function authorizeLicenceConsent(
@@ -52,6 +56,7 @@ export async function authorizeLicenceConsent(
   const canAct = admin || isOwnerTalent || isRep;
   const canView = canAct || isLicensee;
   const actingRole: ConsentAuth["actingRole"] = isOwnerTalent ? "talent" : isRep ? "rep" : admin ? "talent" : null;
+  const party: ConsentAuth["party"] = isOwnerTalent ? "talent" : isRep ? "rep" : isLicensee ? "producer" : admin ? "admin" : null;
 
-  return { licence: lic, canView, canAct, actingRole };
+  return { licence: lic, canView, canAct, actingRole, isLicensee, party };
 }

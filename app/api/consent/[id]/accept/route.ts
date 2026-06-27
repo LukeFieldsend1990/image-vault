@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { authorizeLicenceConsent } from "@/lib/consent/authorize";
 import { acceptConsentForLicence } from "@/lib/consent/acceptance";
+import { listNegotiationRounds, addNegotiationRound } from "@/lib/consent/negotiation";
 import { loadConsentDocByLicence } from "@/lib/consent/load";
 import { createNotification } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
@@ -42,6 +43,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ip,
     ua,
   });
+
+  // If a negotiation was open, confirming accepts the production's current offer —
+  // close the thread so the producer's view reflects agreement.
+  const rounds = await listNegotiationRounds(db, id);
+  if (rounds.length > 0 && rounds[rounds.length - 1].action === "counter") {
+    await addNegotiationRound(db, {
+      licenceId: id,
+      party: auth.actingRole === "rep" ? "rep" : "talent",
+      action: "accepted",
+      scope: uses,
+      fee: rounds[rounds.length - 1].fee,
+      comment: null,
+      createdBy: session.sub,
+    });
+  }
 
   // Notify + email the production (licensee), best-effort.
   void (async () => {
