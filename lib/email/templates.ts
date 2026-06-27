@@ -1033,3 +1033,56 @@ export function scanTransferDecisionEmail(p: ScanTransferDecisionParams): { subj
     `),
   };
 }
+
+export interface ConsentRequestEmailParams {
+  performerName: string;
+  productionName: string;
+  companyName: string;
+  /** Tokenised public link to the consent document — no account required to read. */
+  consentUrl: string;
+}
+
+export function consentRequestEmail(p: ConsentRequestEmailParams): { subject: string; html: string } {
+  return {
+    subject: `Your consent is needed for ${p.productionName}`,
+    html: layout(`
+      <p>Hi ${p.performerName},</p>
+      <p><strong>${p.companyName}</strong> would like to scan your likeness for the production <strong>${p.productionName}</strong>, and needs your consent first.</p>
+      <p>We've prepared a short, plain-English consent document. It explains exactly what's being captured, what each use means, and lets you consent only to the uses you're comfortable with — you decide.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Awaiting your consent</span></span></div>
+      </div>
+      <a class="btn" href="${p.consentUrl}">Read &amp; confirm consent</a>
+      <p class="muted" style="margin-top: 24px;">No account needed to read it. You can confirm now, and later create a free Image Vault account to take direct control of your data.</p>
+    `),
+  };
+}
+
+export interface ConsentConfirmedEmailParams {
+  recipientEmail: string;
+  performerName: string;
+  productionName: string;
+  /** Number of use categories consented to, and the total offered. */
+  consentedCount: number;
+  totalCount: number;
+  reviewUrl: string;
+}
+
+export function consentConfirmedEmail(p: ConsentConfirmedEmailParams): { subject: string; html: string } {
+  return {
+    subject: `${p.performerName} confirmed consent for ${p.productionName}`,
+    html: layout(`
+      <p><strong>${p.performerName}</strong> has confirmed consent for <strong>${p.productionName}</strong>.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Performer</span><span class="kv-val">${p.performerName}</span></div>
+        <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+        <div class="kv-row"><span class="kv-key">Consented uses</span><span class="kv-val">${p.consentedCount} of ${p.totalCount}</span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-approved">Consent recorded</span></span></div>
+      </div>
+      <p>The consent is recorded with an audit trail. You can proceed within the scope they've consented to.</p>
+      <a class="btn" href="${p.reviewUrl}">View in Image Vault</a>
+    `),
+  };
+}

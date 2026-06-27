@@ -8,6 +8,8 @@ import { appendEvent, talentChain } from "@/lib/compliance/ledger";
 import { mintLicenceCode, mintOrgCode } from "@/lib/codes/codes";
 import { isVendorOrgType } from "@/lib/organisations/orgTypes";
 import { createNotification } from "@/lib/notifications/create";
+import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/use-categories";
+import { replayCastAcceptance } from "@/lib/consent/acceptance";
 import { eq, and, isNull, gt } from "drizzle-orm";
 
 const VALID_ROLES = ["talent", "rep", "industry", "licensee", "compliance"] as const;
@@ -399,6 +401,7 @@ export async function POST(req: NextRequest) {
             proposedFee?: number;
             projectName?: string;
             productionCompany?: string;
+            useCategoryIds?: string[];
           };
 
           // Get production name for licence fields
@@ -418,6 +421,10 @@ export async function POST(req: NextRequest) {
             if (org) companyName = org.name;
           }
 
+          const reconciled = reconcileTrainingFlag({
+            useCategoryIds: terms.useCategoryIds,
+            permitAiTraining: terms.permitAiTraining ?? false,
+          });
           const licenceId = crypto.randomUUID();
           await db.insert(licences).values({
             id: licenceId,
@@ -432,14 +439,26 @@ export async function POST(req: NextRequest) {
             licenceType: (terms.licenceType as typeof licences.$inferInsert["licenceType"]) ?? null,
             territory: terms.territory ?? null,
             exclusivity: (terms.exclusivity as typeof licences.$inferInsert["exclusivity"]) ?? "non_exclusive",
-            permitAiTraining: terms.permitAiTraining ?? false,
+            permitAiTraining: reconciled.permitAiTraining,
+            useCategoriesJson: serializeUseCategoryIds(reconciled.useCategoryIds),
             proposedFee: terms.proposedFee ?? null,
             productionId: inviteRow.productionId,
             createdAt: now,
           });
           await mintLicenceCode(db, licenceId);
 
-          // Update cast row: link talent, clear terms, set status = linked.
+          // Replay any consent the performer confirmed via the tokenised public
+          // link (before they had an account) into the consent ledger now that a
+          // talent + licence exist. If they consented, the row reflects that.
+          const replayed = await replayCastAcceptance(db, {
+            castId: castRow.id,
+            licenceId,
+            talentId: userId,
+            actorId: userId,
+          }).catch(() => 0);
+
+          // Update cast row: link talent, clear terms. If they already consented
+          // via the public link, preserve `consented`; otherwise `linked`.
           // Claiming the row also clears the production company's GDPR
           // data-controller attribution (39J) — see recordControllerHandover.
           await db
@@ -448,7 +467,7 @@ export async function POST(req: NextRequest) {
               talentId: userId,
               licenceId,
               linkedAt: now,
-              status: "linked",
+              status: replayed > 0 ? "consented" : "linked",
               licenceTermsJson: null,
               dataControllerOrgId: null,
               dataControllerSince: null,
