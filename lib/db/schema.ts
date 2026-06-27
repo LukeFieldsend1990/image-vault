@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, unique } from "drizzle-orm/sqlite-core";
 import { ORG_TYPES } from "@/lib/organisations/orgTypes";
 
 export const users = sqliteTable("users", {
@@ -1255,3 +1255,37 @@ export const insurerPolicies = sqliteTable("insurer_policies", {
   createdAt: integer("created_at").notNull(),
   archivedAt: integer("archived_at"),
 });
+
+// Document-acceptance artifact for the performer consent flow. licenceId/talentId
+// are nullable so an unregistered production-held performer can accept via a
+// tokenised public link before they have an account; the consent ledger
+// (consentRecords / complianceEvents) is populated by replaying the acceptance
+// once an identity + licence exist (at registration).
+export const consentAcceptances = sqliteTable("consent_acceptances", {
+  id: text("id").primaryKey(),
+  licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }),
+  castId: text("cast_id").references(() => productionCast.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").references(() => users.id, { onDelete: "set null" }),
+  acceptedByEmail: text("accepted_by_email"),
+  acceptedByRole: text("accepted_by_role").notNull().default("talent"), // talent | rep | guest
+  usesConsentedJson: text("uses_consented_json").notNull().default("[]"), // array of useCategoryId
+  documentVersion: text("document_version").notNull(),
+  ipHash: text("ip_hash"),
+  userAgentHash: text("user_agent_hash"),
+  attestedAt: integer("attested_at").notNull(),
+  replayedAt: integer("replayed_at"), // when written into the consent ledger
+});
+
+// Per-use-category disposition a registered performer (or their agent) sets once,
+// so future requests auto-resolve. Resolver auto-acts only on unanimous
+// all-'always' (grant) or all-'never' (refuse); anything mixed routes to a human.
+export const standingInstructions = sqliteTable("standing_instructions", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  useCategoryId: text("use_category_id").notNull(),
+  disposition: text("disposition", { enum: ["always", "case_by_case", "never"] }).notNull().default("case_by_case"),
+  setBy: text("set_by").references(() => users.id),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => ({
+  uniqTalentCategory: unique().on(t.talentId, t.useCategoryId),
+}));

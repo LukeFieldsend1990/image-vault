@@ -10,6 +10,7 @@ import MonitorClient from "../../vault/monitor/monitor-client";
 import type { TalentIdentityForMonitor } from "../../vault/monitor/page";
 import ComplianceClient from "../../compliance/compliance-client";
 import TalentProductionsClient from "../../vault/productions/talent-productions-client";
+import StandingInstructions from "../../settings/standing-instructions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -810,6 +811,12 @@ function PermissionsTab({ talentId }: { talentId: string }) {
 
   return (
     <div className="px-4 sm:px-8 py-6">
+      {/* §39 standing instructions — drive auto-resolution of incoming requests. */}
+      <StandingInstructions
+        talentId={talentId}
+        subtitle="As their agent, set a rule per use category. Requests auto-resolve when every requested use is Always (granted) or Never (refused); anything else routes to you. Talent can override these in their own settings."
+      />
+
       <p className="text-xs mb-5" style={{ color: "var(--color-muted)" }}>
         Control which licence types can be used for this talent. Reps can set defaults on their behalf — talent can always override in their own settings.
       </p>

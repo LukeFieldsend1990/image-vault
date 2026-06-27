@@ -9,6 +9,9 @@ import { isIndustryRole } from "@/lib/auth/roles";
 import { mintLicenceCode } from "@/lib/codes/codes";
 import { loadProductionDefaultTerms, type CastLicenceTerms } from "@/lib/productions/cast";
 import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/use-categories";
+import { loadStandingInstructions } from "@/lib/consent/standing-instructions";
+import { resolveRequest } from "@/lib/consent/resolve";
+import { acceptConsentForLicence } from "@/lib/consent/acceptance";
 import { createNotification } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import { productionCastLinkedEmail } from "@/lib/email/templates";
@@ -125,17 +128,54 @@ export async function POST(
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
   const reviewUrl = `${baseUrl}/licences/${licenceId}`;
+  const talent = await db.select({ email: users.email }).from(users).where(eq(users.id, row.talentId)).get();
 
-  // Notify the talent (in-app + email).
+  // Standing-instruction auto-routing: if the performer has unanimous always/never
+  // rules for every requested use, resolve the request immediately without them.
+  const instructions = await loadStandingInstructions(db, row.talentId);
+  const resolution = resolveRequest(reconciled.useCategoryIds, instructions);
+
+  if (resolution.auto && resolution.action === "granted") {
+    await acceptConsentForLicence(db, {
+      licenceId,
+      talentId: row.talentId,
+      actorId: row.talentId, // authorised by the performer's standing instruction
+      acceptedByEmail: talent?.email ?? "",
+      acceptedByRole: "talent",
+      uses: reconciled.useCategoryIds,
+    });
+    void createNotification(db, {
+      userId: row.talentId,
+      type: "consent_auto_granted",
+      title: `Consent auto-granted for ${production.name}`,
+      body: resolution.reason,
+      href: `/licences/${licenceId}`,
+    });
+    return NextResponse.json({ ok: true, licenceId, resolution: "auto_granted", reason: resolution.reason }, { status: 201 });
+  }
+
+  if (resolution.auto && resolution.action === "refused") {
+    await db.update(licences).set({ status: "DENIED" }).where(eq(licences.id, licenceId));
+    await db.update(productionCast).set({ status: "declined" }).where(eq(productionCast.id, castId));
+    void createNotification(db, {
+      userId: row.talentId,
+      type: "consent_auto_refused",
+      title: `Request auto-declined for ${production.name}`,
+      body: resolution.reason,
+      href: `/licences/${licenceId}`,
+    });
+    return NextResponse.json({ ok: true, licenceId, resolution: "auto_refused", reason: resolution.reason }, { status: 201 });
+  }
+
+  // No auto-resolution — route to the performer (and their agent) for a decision.
   void createNotification(db, {
     userId: row.talentId,
     type: "licence_request",
     title: `Licence request from ${production.name}`,
     body: `${companyName} sent you a licence request for ${production.name}.`,
-    href: `/licences/${licenceId}`,
+    href: `/consent/${licenceId}`,
   });
   void (async () => {
-    const talent = await db.select({ email: users.email }).from(users).where(eq(users.id, row.talentId!)).get();
     if (!talent?.email) return;
     const { subject, html } = productionCastLinkedEmail({
       recipientEmail: talent.email,
@@ -150,5 +190,5 @@ export async function POST(
     await sendEmail({ to: talent.email, subject, html }).catch(() => {});
   })();
 
-  return NextResponse.json({ ok: true, licenceId }, { status: 201 });
+  return NextResponse.json({ ok: true, licenceId, resolution: "pending" }, { status: 201 });
 }

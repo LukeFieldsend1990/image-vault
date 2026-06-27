@@ -16,6 +16,12 @@ import { isIndustryRole } from "@/lib/auth/roles";
 import { getRepAgencyContext } from "@/lib/agency/rep-visibility";
 import { mintLicenceCode } from "@/lib/codes/codes";
 import { normaliseLicenceTypes, serializeLicenceTypes } from "@/lib/productions/cast";
+import {
+  normaliseUseCategoryIds,
+  serializeUseCategoryIds,
+  reconcileTrainingFlag,
+  type UseCategoryId,
+} from "@/lib/consent/use-categories";
 import { eq, and, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import {
@@ -207,6 +213,7 @@ interface CastMemberInput {
   validTo?: number;
   licenceType?: string;          // legacy primary use type
   licenceTypes?: string[];       // multi-select use types (item 7)
+  useCategoryIds?: UseCategoryId[]; // canonical consent scope (§39 taxonomy)
   territory?: string;
   exclusivity?: string;
   permitAiTraining?: boolean;
@@ -326,7 +333,15 @@ export async function POST(
       licenceType: typeof member.licenceType === "string" ? member.licenceType : undefined,
       territory: typeof member.territory === "string" ? member.territory : undefined,
       exclusivity: typeof member.exclusivity === "string" ? member.exclusivity : undefined,
-      permitAiTraining: typeof member.permitAiTraining === "boolean" ? member.permitAiTraining : false,
+      // Consent scope (§39 taxonomy) reconciled with the legacy permitAiTraining
+      // boolean so picking `training` implies AI-training permitted, and vice versa.
+      ...(() => {
+        const { useCategoryIds, permitAiTraining } = reconcileTrainingFlag({
+          useCategoryIds: normaliseUseCategoryIds(member.useCategoryIds),
+          permitAiTraining: typeof member.permitAiTraining === "boolean" ? member.permitAiTraining : false,
+        });
+        return { useCategoryIds, permitAiTraining };
+      })(),
       // null is a deliberate "N/A" signal (item 9); only a real number is a fee.
       proposedFee: typeof member.proposedFee === "number" ? member.proposedFee : (member.proposedFee === null ? null : undefined),
       isRelicense: typeof member.isRelicense === "boolean" ? member.isRelicense : undefined,
@@ -371,6 +386,7 @@ export async function POST(
     validTo: member.validTo,
     licenceType: primaryType(member),
     licenceTypes: member.licenceTypes ?? [],
+    useCategoryIds: member.useCategoryIds ?? [],
     territory: member.territory ?? null,
     exclusivity: member.exclusivity ?? "non_exclusive",
     permitAiTraining: member.permitAiTraining ?? false,
@@ -446,6 +462,7 @@ export async function POST(
           territory: member.territory ?? null,
           exclusivity: (member.exclusivity as typeof licences.$inferInsert["exclusivity"]) ?? "non_exclusive",
           permitAiTraining: member.permitAiTraining ?? false,
+          useCategoriesJson: serializeUseCategoryIds(member.useCategoryIds),
           proposedFee: member.proposedFee ?? null,
           productionId: id,
           createdAt: now,
@@ -496,6 +513,7 @@ export async function POST(
           validTo,
           licenceType: primaryType(member),
           licenceTypes: member.licenceTypes ?? [],
+          useCategoryIds: member.useCategoryIds ?? [],
           territory: member.territory ?? null,
           exclusivity: member.exclusivity ?? "non_exclusive",
           permitAiTraining: member.permitAiTraining ?? false,

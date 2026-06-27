@@ -13,6 +13,7 @@ import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
 import DemoToggleCard from "./demo-toggle-card";
 import BillingFees from "./billing-fees";
 import ShowCodesToggle from "./show-codes-toggle";
+import StandingInstructions from "./standing-instructions";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -396,6 +397,9 @@ export default async function SettingsPage({
           <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>Grant your agency or manager access to upload and manage your vault.</p>
         </div>
       )}
+
+      {/* Standing instructions (talent only) */}
+      {user?.role === "talent" && <StandingInstructions />}
 
 
       {/* CAS Bridge (licensee + rep + talent) */}

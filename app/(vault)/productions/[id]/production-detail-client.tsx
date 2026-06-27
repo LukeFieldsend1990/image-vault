@@ -12,6 +12,7 @@ import TeamPanel from "./team-panel";
 import VendorAuthorisedScans from "./vendor-authorised-scans";
 import InviteRepModal from "./invite-rep-modal";
 import { formatScan } from "@/lib/codes/codes";
+import { USE_CATEGORIES } from "@/lib/consent/use-categories";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ interface LicenceTerms {
   validFrom: string;
   validTo: string;
   licenceTypes: string[];     // multi-select use types (item 7)
+  useCategoryIds: string[];   // consent scope — §39 use-category taxonomy
   territory: string;
   exclusivity: string;
   permitAiTraining: boolean;
@@ -189,6 +191,7 @@ function makeDefaultTerms(): LicenceTerms {
     validFrom: from,
     validTo: addMonthsISO(from, 18),
     licenceTypes: ["film_double"],
+    useCategoryIds: [],
     territory: "",
     exclusivity: "non_exclusive",
     permitAiTraining: false,
@@ -278,6 +281,7 @@ export default function ProductionDetailClient() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [consentLinkId, setConsentLinkId] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [markingIncludedId, setMarkingIncludedId] = useState<string | null>(null);
   const [inviteRepFor, setInviteRepFor] = useState<{ castId: string; label: string } | null>(null);
@@ -455,6 +459,8 @@ export default function ProductionDetailClient() {
       // Item 7 — send the full array; the primary single type keeps legacy readers happy.
       licenceTypes: licenceTypes.length ? licenceTypes : undefined,
       licenceType: licenceTypes[0] || undefined,
+      // Consent scope — the §39 use categories the production is asking permission for.
+      useCategoryIds: terms.useCategoryIds.length ? terms.useCategoryIds : undefined,
       territory: terms.territory || undefined,
       exclusivity: terms.exclusivity || "non_exclusive",
       permitAiTraining: terms.permitAiTraining,
@@ -551,14 +557,35 @@ export default function ProductionDetailClient() {
     setRequestingId(castId);
     try {
       const r = await fetch(`/api/productions/${id}/cast/${castId}/request-licence`, { method: "POST" });
+      const d = await r.json().catch(() => ({})) as { error?: string; resolution?: string; reason?: string };
       if (r.ok) {
+        // Surface standing-instruction auto-resolution so the producer sees the outcome.
+        if (d.resolution === "auto_granted") {
+          alert(`Granted immediately.\n\n${d.reason ?? "The performer's standing instructions auto-granted this request."}`);
+        } else if (d.resolution === "auto_refused") {
+          alert(`Auto-declined.\n\n${d.reason ?? "The performer's standing instructions decline these uses. Discuss a narrower scope with their representation."}`);
+        }
         await fetchData();
       } else {
-        const d = await r.json().catch(() => ({})) as { error?: string };
         alert(d.error ?? "Couldn't send the licence request.");
       }
     } finally {
       setRequestingId(null);
+    }
+  }
+
+  async function handleSendConsentLink(castId: string) {
+    setConsentLinkId(castId);
+    try {
+      const r = await fetch(`/api/productions/${id}/cast/${castId}/consent-link`, { method: "POST" });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; consentUrl?: string; email?: string; error?: string };
+      if (r.ok && d.ok) {
+        alert(`Consent document sent${d.email ? ` to ${d.email}` : ""}.\n\nThey can read and confirm without creating an account. Preview link:\n${d.consentUrl}`);
+      } else {
+        alert(d.error ?? "Couldn't send the consent document.");
+      }
+    } finally {
+      setConsentLinkId(null);
     }
   }
 
@@ -1329,6 +1356,65 @@ export default function ProductionDetailClient() {
                 <p className="text-[11px] mt-1.5" style={{ color: "var(--color-muted)" }}>One licence covers all selected use types — no separate contract per type.</p>
               </div>
 
+              {/* Consent scope — the §39 use categories the production is requesting
+                  permission for. These pre-tick the performer's consent document; the
+                  performer can untick or add others. */}
+              <div className="col-span-2">
+                <label className="text-xs mb-1.5 block" style={{ color: "var(--color-muted)" }}>What access are you requesting?</label>
+                <div className="space-y-2">
+                  {USE_CATEGORIES.map((cat) => {
+                    const active = terms.useCategoryIds.includes(cat.id);
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setTerms((t) => {
+                          const on = t.useCategoryIds.includes(cat.id);
+                          const useCategoryIds = on
+                            ? t.useCategoryIds.filter((v) => v !== cat.id)
+                            : [...t.useCategoryIds, cat.id];
+                          // Keep the legacy AI-training boolean in lockstep with §39G.
+                          const permitAiTraining = cat.id === "training" ? !on : t.permitAiTraining;
+                          return { ...t, useCategoryIds, permitAiTraining };
+                        })}
+                        className="w-full flex items-start gap-3 rounded p-3 text-left transition"
+                        style={{
+                          border: `1px solid ${active ? "var(--color-accent)" : "var(--color-border)"}`,
+                          background: active ? "rgba(192,57,43,0.05)" : "var(--color-bg)",
+                        }}
+                      >
+                        <span
+                          className="mt-0.5 flex items-center justify-center rounded shrink-0"
+                          style={{
+                            width: 16, height: 16,
+                            border: `1px solid ${active ? "var(--color-accent)" : "var(--color-border)"}`,
+                            background: active ? "var(--color-accent)" : "transparent",
+                            color: "white", fontSize: 11, lineHeight: 1,
+                          }}
+                        >
+                          {active ? "✓" : ""}
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{cat.name}</span>
+                            {cat.regimeTag && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>{cat.regimeTag}</span>
+                            )}
+                            {cat.sensitive && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(180,83,9,0.1)", color: "#b45309" }}>sensitive</span>
+                            )}
+                          </span>
+                          <span className="block text-xs mt-1" style={{ color: "var(--color-muted)" }}>{cat.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] mt-1.5" style={{ color: "var(--color-muted)" }}>
+                  These pre-tick the performer&apos;s consent document. They can untick anything they don&apos;t agree to, or add more.
+                </p>
+              </div>
+
               <div>
                 <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Exclusivity</label>
                 <select value={terms.exclusivity} onChange={(e) => setTerms((t) => ({ ...t, exclusivity: e.target.value }))} style={{ ...inputStyle }}>
@@ -1382,7 +1468,18 @@ export default function ProductionDetailClient() {
                   This is a re-licence of an existing scan (a fee is expected)
                 </label>
                 <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--color-muted)" }}>
-                  <input type="checkbox" checked={terms.permitAiTraining} onChange={(e) => setTerms((t) => ({ ...t, permitAiTraining: e.target.checked }))} />
+                  <input
+                    type="checkbox"
+                    checked={terms.permitAiTraining}
+                    onChange={(e) => setTerms((t) => {
+                      const on = e.target.checked;
+                      const has = t.useCategoryIds.includes("training");
+                      const useCategoryIds = on
+                        ? (has ? t.useCategoryIds : [...t.useCategoryIds, "training"])
+                        : t.useCategoryIds.filter((v) => v !== "training");
+                      return { ...t, permitAiTraining: on, useCategoryIds };
+                    })}
+                  />
                   Permit AI training use
                 </label>
               </div>
@@ -1539,6 +1636,30 @@ export default function ProductionDetailClient() {
                         >
                           {resendingId === row.id ? "…" : "Resend"}
                         </button>
+                      )}
+                      {/* Consent document — for unregistered cast, send the tokenised link
+                          they can read & confirm without an account. */}
+                      {canWrite && !row.talentId && (row.status === "invited" || row.status === "placeholder") && (
+                        <button
+                          onClick={() => handleSendConsentLink(row.id)}
+                          disabled={consentLinkId === row.id}
+                          className="text-xs font-medium"
+                          style={{ color: "var(--color-accent)" }}
+                          title="Send the plain-English consent document — no account needed to confirm"
+                        >
+                          {consentLinkId === row.id ? "Sending…" : "Send consent doc"}
+                        </button>
+                      )}
+                      {/* Registered cast with a licence — view the consent document directly. */}
+                      {row.licence && (
+                        <Link
+                          href={`/consent/${row.licence.id}`}
+                          className="text-xs font-medium"
+                          style={{ color: "var(--color-accent)" }}
+                          title="View the consent document for this performer"
+                        >
+                          Consent doc
+                        </Link>
                       )}
                       {canWrite && row.status === "linked" && row.talentId && !row.licence && (
                         <button
