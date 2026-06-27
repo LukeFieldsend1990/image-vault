@@ -19,6 +19,7 @@ interface Organisation {
   billingEmail: string | null;
   orgType?: string | null;
   shortCode?: string | null;
+  ownerImplicitAccess?: boolean;
   memberRole: "owner" | "admin" | "member";
   joinedAt: number;
 }
@@ -196,6 +197,25 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
       setSaveMsg("Network error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  const [implicitSaving, setImplicitSaving] = useState(false);
+
+  async function toggleImplicitAccess(next: boolean) {
+    if (!selected) return;
+    setImplicitSaving(true);
+    // Optimistic — reflect the new state immediately, then reconcile from the server.
+    setSelected((prev) => (prev ? { ...prev, ownerImplicitAccess: next } : prev));
+    try {
+      await fetch(`/api/organisations/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerImplicitAccess: next }),
+      });
+      await loadDetail(selected.id);
+    } finally {
+      setImplicitSaving(false);
     }
   }
 
@@ -456,6 +476,30 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
                             </div>
                           )}
                         </div>
+
+                        {/* Production access — owner-only governance toggle */}
+                        {isOwner && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
+                              Production access
+                            </p>
+                            <label className="flex items-start gap-3 cursor-pointer rounded p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
+                              <input
+                                type="checkbox"
+                                checked={Boolean(selected.ownerImplicitAccess)}
+                                disabled={implicitSaving}
+                                onChange={(e) => void toggleImplicitAccess(e.target.checked)}
+                                className="mt-0.5"
+                              />
+                              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
+                                Give organisation owners access to every production
+                                <span className="block text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+                                  When on, all owners can see and manage every production this organisation owns. When off, each production is private to its owner unless colleagues are explicitly added to its team.
+                                </span>
+                              </span>
+                            </label>
+                          </div>
+                        )}
 
                         {/* Members */}
                         <div>

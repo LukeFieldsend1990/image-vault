@@ -81,7 +81,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { name?: string; website?: string; billingEmail?: string; country?: string; countryTopLevelId?: string };
+  let body: { name?: string; website?: string; billingEmail?: string; country?: string; countryTopLevelId?: string; ownerImplicitAccess?: boolean };
   try {
     body = JSON.parse(await req.text());
   } catch {
@@ -92,6 +92,14 @@ export async function PATCH(
   if (body.name?.trim()) updates.name = body.name.trim();
   if ("website" in body) updates.website = body.website?.trim() ?? null;
   if ("billingEmail" in body) updates.billingEmail = body.billingEmail?.trim() ?? null;
+  // Owner-only governance toggle — admins can edit other org details but not this.
+  if ("ownerImplicitAccess" in body) {
+    const isOwner = membership?.memberRole === "owner" || session.role === "admin";
+    if (!isOwner) {
+      return NextResponse.json({ error: "Only an organisation owner can change implicit production access." }, { status: 403 });
+    }
+    updates.ownerImplicitAccess = Boolean(body.ownerImplicitAccess);
+  }
   if (body.country !== undefined || body.countryTopLevelId !== undefined) {
     const v = validateCountry(body.country, body.countryTopLevelId);
     if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
