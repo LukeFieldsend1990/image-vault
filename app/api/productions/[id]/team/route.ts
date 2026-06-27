@@ -4,7 +4,7 @@ import { productions, productionMembers, organisationMembers, users } from "@/li
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
-import { resolveOwnerAccess } from "@/lib/productions/access";
+import { resolveOwnerAccess, getProductionOwnerIds } from "@/lib/productions/access";
 import { eq, and } from "drizzle-orm";
 
 type Db = ReturnType<typeof getDb>;
@@ -52,31 +52,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .where(eq(productionMembers.productionId, id))
     .all();
 
-  // Org owners/admins run the production implicitly; surface them so the team
-  // view is complete, and so we can exclude them from the "addable" list.
-  let orgManagers: { userId: string; email: string; memberRole: string }[] = [];
+  // The production owner (coordinator / org founder) runs the production
+  // implicitly — surface them, and exclude them from the "addable" list.
+  // Everyone else in the org, regardless of org role, is a candidate to add.
+  let owners: { userId: string; email: string }[] = [];
   let candidates: { userId: string; email: string }[] = [];
   if (production.organisationId) {
+    const ownerIds = await getProductionOwnerIds(db, id);
     const orgMembers = await db
-      .select({
-        userId: organisationMembers.userId,
-        email: users.email,
-        memberRole: organisationMembers.memberRole,
-      })
+      .select({ userId: organisationMembers.userId, email: users.email })
       .from(organisationMembers)
       .innerJoin(users, eq(users.id, organisationMembers.userId))
       .where(eq(organisationMembers.organisationId, production.organisationId))
       .all();
-    orgManagers = orgMembers.filter((m) => m.memberRole === "owner" || m.memberRole === "admin");
+    owners = orgMembers.filter((m) => ownerIds.has(m.userId)).map((m) => ({ userId: m.userId, email: m.email }));
     const teamIds = new Set(team.map((t) => t.userId));
-    // Addable: plain members not already on the team. Owners/admins already have
-    // full access, so they're never candidates.
     candidates = orgMembers
-      .filter((m) => m.memberRole === "member" && !teamIds.has(m.userId))
+      .filter((m) => !ownerIds.has(m.userId) && !teamIds.has(m.userId))
       .map((m) => ({ userId: m.userId, email: m.email }));
   }
 
-  return NextResponse.json({ team, orgManagers, candidates, canManage });
+  return NextResponse.json({ team, owners, candidates, canManage });
 }
 
 // POST /api/productions/[id]/team — add (or re-tier) an org member on the team.
@@ -114,10 +110,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const role = body.role === "editor" ? "editor" : "viewer";
   if (!userId) return NextResponse.json({ error: "userId is required" }, { status: 400 });
 
-  // The target must be a plain member of the owning org — owners/admins already
-  // have full access, and we never grant access to anyone outside the org.
+  // The target must be a member of the owning org — we never grant access to
+  // anyone outside it. Org role is irrelevant; what matters is that they're not
+  // already the production owner (who has full access implicitly).
   const membership = await db
-    .select({ memberRole: organisationMembers.memberRole })
+    .select({ userId: organisationMembers.userId })
     .from(organisationMembers)
     .where(and(
       eq(organisationMembers.organisationId, production.organisationId),
@@ -127,8 +124,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!membership) {
     return NextResponse.json({ error: "That person isn't a member of your organisation." }, { status: 400 });
   }
-  if (membership.memberRole === "owner" || membership.memberRole === "admin") {
-    return NextResponse.json({ error: "Org owners and admins already have full access to every production." }, { status: 400 });
+  const ownerIds = await getProductionOwnerIds(db, id);
+  if (ownerIds.has(userId)) {
+    return NextResponse.json({ error: "That person is the production owner and already has full access." }, { status: 400 });
   }
 
   const now = Math.floor(Date.now() / 1000);
