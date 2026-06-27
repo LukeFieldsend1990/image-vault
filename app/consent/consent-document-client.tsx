@@ -278,7 +278,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
           <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
             Whenever you&apos;re ready — now or any time later — you can register on ImageVault and take ownership of the vault yourself.
             You&apos;d then decide who else can access your data, withdraw consent instantly, and set standing instructions that apply to every
-            future request. Registration is free and takes about three minutes.
+            future request. Creating an account is free; claiming the vault so you can relicense independently is a paid option.
           </p>
           <div className="flex flex-wrap gap-2.5">
             {isGuest && (
