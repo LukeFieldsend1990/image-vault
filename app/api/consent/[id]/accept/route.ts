@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { users, licences } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { authorizeLicenceConsent } from "@/lib/consent/authorize";
@@ -10,10 +10,20 @@ import { loadConsentDocByLicence } from "@/lib/consent/load";
 import { createNotification } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import { consentConfirmedEmail } from "@/lib/email/templates";
-import { listUseCategories } from "@/lib/consent/use-categories";
+import { listUseCategories, parseUseCategoryIds, normaliseUseCategoryIds } from "@/lib/consent/use-categories";
+
+function sameSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sb = new Set(b);
+  return a.every((x) => sb.has(x));
+}
 
 // POST /api/consent/[id]/accept
-// Record a registered performer's (or their agent's) consent for a licence.
+// The performer (or their agent) responds to the production's offer. If their
+// ticked uses MATCH what was requested, consent is finalised immediately. If
+// they tick a DIFFERENT set, that's a counter-offer — it routes to the producer
+// for agreement (same as "Propose different terms"), and consent is not recorded
+// until the producer accepts.
 // Body: { uses: string[], attested: true }
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,17 +38,55 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let body: { uses?: unknown; attested?: unknown } = {};
   try { body = JSON.parse(await req.text()); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (body.attested !== true) return NextResponse.json({ error: "You must confirm the attestation." }, { status: 400 });
-  const uses = Array.isArray(body.uses) ? body.uses.filter((u): u is string => typeof u === "string") : [];
+  const uses = normaliseUseCategoryIds(Array.isArray(body.uses) ? body.uses : []);
 
   const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for");
   const ua = req.headers.get("user-agent");
 
+  const party = auth.actingRole === "rep" ? "rep" : "talent";
+  const lic = await db
+    .select({ useCategoriesJson: licences.useCategoriesJson, proposedFee: licences.proposedFee })
+    .from(licences)
+    .where(eq(licences.id, id))
+    .get();
+  const requested = parseUseCategoryIds(lic?.useCategoriesJson);
+
+  // Deviating from the requested scope = proposing different terms → producer must
+  // agree. (Only when there *was* a specific ask to deviate from.)
+  const isCounter = requested.length > 0 && !sameSet(requested, uses);
+
+  if (isCounter) {
+    const round = await addNegotiationRound(db, {
+      licenceId: id,
+      party,
+      action: "counter",
+      scope: uses,
+      fee: lic?.proposedFee ?? null,
+      comment: null,
+      createdBy: session.sub,
+    });
+    void (async () => {
+      try {
+        const vm = await loadConsentDocByLicence(db, id);
+        await createNotification(db, {
+          userId: auth.licence.licenseeId,
+          type: "consent_counter",
+          title: `${vm?.performerName ?? "The performer"} proposed different terms`,
+          body: `Different consent scope on ${vm?.productionName ?? "your production"} — review and respond.`,
+          href: `/consent/${id}`,
+        });
+      } catch { /* best-effort */ }
+    })();
+    return NextResponse.json({ ok: true, countered: true, round });
+  }
+
+  // Scope matches the request → finalise consent now.
   const result = await acceptConsentForLicence(db, {
     licenceId: id,
     talentId: auth.licence.talentId,
     actorId: session.sub,
     acceptedByEmail: session.email,
-    acceptedByRole: auth.actingRole === "rep" ? "rep" : "talent",
+    acceptedByRole: party,
     uses,
     ip,
     ua,
@@ -50,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (rounds.length > 0 && rounds[rounds.length - 1].action === "counter") {
     await addNegotiationRound(db, {
       licenceId: id,
-      party: auth.actingRole === "rep" ? "rep" : "talent",
+      party,
       action: "accepted",
       scope: uses,
       fee: rounds[rounds.length - 1].fee,
