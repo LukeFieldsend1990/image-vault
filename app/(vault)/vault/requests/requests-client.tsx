@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import FeeGuidanceCard from "./fee-guidance-card";
 
 interface Licence {
@@ -93,13 +94,6 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
       await load();
     }
     setAttachingId(null);
-  }
-
-  async function acceptInvite(licenceId: string) {
-    setActionId(licenceId);
-    await fetch(`/api/licences/${licenceId}/accept-invite`, { method: "POST" });
-    await load();
-    setActionId(null);
   }
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -270,17 +264,17 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                   </div>
                 )}
 
-                {/* Accept / Decline */}
+                {/* Review & consent — the talent reviews the plain-English consent
+                    document, chooses which §39 uses to grant (or negotiates terms),
+                    and confirms. This is the acceptance step. */}
                 <div className="mt-3 flex items-center gap-4">
-                  <button
-                    type="button"
-                    onClick={() => void acceptInvite(r.id)}
-                    disabled={actionId === r.id}
-                    className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                  <Link
+                    href={`/consent/${r.id}`}
+                    className="rounded px-4 py-2 text-xs font-medium text-white transition"
                     style={{ background: "var(--color-accent)" }}
                   >
-                    {actionId === r.id ? "Accepting…" : "Accept — get scanned later"}
-                  </button>
+                    Review &amp; give consent
+                  </Link>
                   <button
                     type="button"
                     onClick={() => void deny(r.id)}

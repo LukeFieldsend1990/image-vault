@@ -12,7 +12,7 @@
  * ledger is written later at registration replay.
  */
 
-import { consentAcceptances, productionCast } from "@/lib/db/schema";
+import { consentAcceptances, productionCast, licences } from "@/lib/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 import { grantConsent, revokeConsent, listConsentRecords } from "@/lib/compliance/consent";
@@ -108,6 +108,23 @@ export async function acceptConsentForLicence(db: Db, input: AcceptForLicenceInp
     .update(productionCast)
     .set({ status: "consented" })
     .where(eq(productionCast.licenceId, input.licenceId));
+
+  // Confirming consent also moves the licence forward (mirrors accept-invite):
+  // a PENDING / AWAITING_PACKAGE licence becomes APPROVED, with the proposed fee
+  // taken as agreed. The scan can still be attached later.
+  const lic = await db
+    .select({ status: licences.status, proposedFee: licences.proposedFee })
+    .from(licences)
+    .where(eq(licences.id, input.licenceId))
+    .get();
+  if (lic && (lic.status === "PENDING" || lic.status === "AWAITING_PACKAGE")) {
+    const agreedFee = lic.proposedFee ?? null;
+    const platformFee = agreedFee !== null ? Math.round(agreedFee * 0.15) : null;
+    await db
+      .update(licences)
+      .set({ status: "APPROVED", approvedBy: input.actorId, approvedAt: now, agreedFee, platformFee })
+      .where(eq(licences.id, input.licenceId));
+  }
 
   return { acceptanceId, granted, revoked };
 }
