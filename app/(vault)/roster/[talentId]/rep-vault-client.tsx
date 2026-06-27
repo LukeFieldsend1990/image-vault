@@ -622,7 +622,6 @@ function LicencesTab({ talentId }: { talentId: string }) {
   const [allLicences, setAllLicences] = useState<LicenceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<LicenceStatus | "ALL">("ALL");
-  const [acting, setActing] = useState<string | null>(null);
 
   const fetchLicences = useCallback(() => {
     setLoading(true);
@@ -633,17 +632,8 @@ function LicencesTab({ talentId }: { talentId: string }) {
       .finally(() => setLoading(false));
   }, [talentId]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchLicences(); }, [fetchLicences]);
-
-  async function handleAction(licenceId: string, action: "approve" | "deny") {
-    setActing(licenceId);
-    try {
-      const res = await fetch(`/api/licences/${licenceId}/${action}`, { method: "POST" });
-      if (res.ok) fetchLicences();
-    } finally {
-      setActing(null);
-    }
-  }
 
   const filtered = filter === "ALL" ? allLicences : allLicences.filter((l) => l.status === filter);
   const pendingCount = allLicences.filter((l) => l.status === "PENDING").length;
@@ -732,25 +722,24 @@ function LicencesTab({ talentId }: { talentId: string }) {
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {l.status === "PENDING" && (
-                  <>
-                    <button
-                      onClick={() => handleAction(l.id, "approve")}
-                      disabled={acting === l.id}
-                      className="rounded px-3 py-1.5 text-xs font-medium text-white transition"
-                      style={{ background: "#166534", opacity: acting === l.id ? 0.5 : 1 }}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleAction(l.id, "deny")}
-                      disabled={acting === l.id}
-                      className="rounded border px-3 py-1.5 text-xs font-medium transition"
-                      style={{ borderColor: "var(--color-border)", color: "#991b1b", opacity: acting === l.id ? 0.5 : 1 }}
-                    >
-                      Deny
-                    </button>
-                  </>
+                {/* Act on the consent document (review §39 uses, accept / propose / decline)
+                    on the performer's behalf — the canonical path for every status. */}
+                {(l.status === "PENDING" || l.status === "AWAITING_PACKAGE") ? (
+                  <Link
+                    href={`/consent/${l.id}`}
+                    className="rounded px-3 py-1.5 text-xs font-medium text-white transition"
+                    style={{ background: "var(--color-accent)" }}
+                  >
+                    Review consent
+                  </Link>
+                ) : (
+                  <Link
+                    href={`/consent/${l.id}`}
+                    className="rounded border px-3 py-1.5 text-xs font-medium transition"
+                    style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+                  >
+                    Consent doc
+                  </Link>
                 )}
                 {l.status === "APPROVED" && l.downloadCount > 0 && (
                   <span className="text-xs" style={{ color: "var(--color-muted)" }}>

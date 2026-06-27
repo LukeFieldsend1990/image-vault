@@ -31,6 +31,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .where(eq(productionCast.id, data.castId))
     .get();
   if (!cast) return NextResponse.json({ error: "This consent request no longer exists." }, { status: 404 });
+  // Idempotency — a re-opened token / stale tab must not double-record consent.
+  if (cast.status === "consented") return NextResponse.json({ ok: true, alreadyAccepted: true });
 
   const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for");
   const ua = req.headers.get("user-agent");

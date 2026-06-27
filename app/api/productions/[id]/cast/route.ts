@@ -25,7 +25,7 @@ import {
 } from "@/lib/consent/use-categories";
 import { eq, and, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
-import { createNotification } from "@/lib/notifications/create";
+import { notifyTalentAndReps } from "@/lib/notifications/create";
 import {
   productionCastInviteEmail,
   productionCastLinkedEmail,
@@ -532,9 +532,8 @@ export async function POST(
           linkedAt: now,
         });
 
-        // In-app notification → the talent's consent document.
-        void createNotification(db, {
-          userId: existingUser.id,
+        // In-app notification → the talent's consent document (and their agent).
+        void notifyTalentAndReps(db, existingUser.id, {
           type: "licence_request",
           title: `Consent requested for ${production.name}`,
           body: `${companyName} would like your consent on ${production.name}. Review and respond.`,
