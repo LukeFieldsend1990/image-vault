@@ -3,6 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FeeGuidanceCard from "./fee-guidance-card";
+import { parseUseCategoryIds, getUseCategory } from "@/lib/consent/use-categories";
+
+// Human-readable §39 use categories requested on a licence.
+function requestedUses(useCategoriesJson: string | null): string {
+  return parseUseCategoryIds(useCategoriesJson)
+    .map((id) => getUseCategory(id)?.name ?? id)
+    .join(", ");
+}
 
 interface Licence {
   id: string;
@@ -17,6 +25,7 @@ interface Licence {
   licenseeId: string;
   talentEmail: string | null;
   licenceType: string | null;
+  useCategoriesJson: string | null;
   territory: string | null;
   exclusivity: string | null;
   permitAiTraining: boolean;
@@ -209,18 +218,14 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                       ["Licence period", `${formatDate(r.validFrom)} – ${formatDate(r.validTo)}`],
                       r.exclusivity ? ["Exclusivity", EXCLUSIVITY_LABELS[r.exclusivity] ?? r.exclusivity] : null,
                       r.intendedUse ? ["Intended use", r.intendedUse] : null,
-                      ["AI processing", r.permitAiTraining ? "⚠ Requested" : "Not requested"],
+                      // §39 consent scope — what the production is actually requesting.
+                      requestedUses(r.useCategoriesJson) ? ["Requested access", requestedUses(r.useCategoriesJson)] : null,
                     ]
                       .filter((row): row is [string, string] => row !== null)
                       .map(([key, value]) => (
                         <div key={key} className="flex justify-between gap-4 px-3 py-2">
                           <span style={{ color: "var(--color-muted)" }}>{key}</span>
-                          <span
-                            className="font-medium text-right"
-                            style={{
-                              color: key === "AI processing" && r.permitAiTraining ? "#dc2626" : "var(--color-ink)",
-                            }}
-                          >
+                          <span className="font-medium text-right" style={{ color: "var(--color-ink)" }}>
                             {value}
                           </span>
                         </div>
@@ -379,18 +384,14 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                       r.licenceType ? ["Usage type", LICENCE_TYPE_LABELS[r.licenceType] ?? r.licenceType] : null,
                       r.territory ? ["Territory", r.territory] : null,
                       r.exclusivity ? ["Exclusivity", EXCLUSIVITY_LABELS[r.exclusivity] ?? r.exclusivity] : null,
-                      ["AI processing", r.permitAiTraining ? "Requested" : "Not requested"],
+                      // §39 consent scope — what the production is actually requesting.
+                      requestedUses(r.useCategoriesJson) ? ["Requested access", requestedUses(r.useCategoriesJson)] : null,
                     ]
                       .filter((row): row is [string, string] => row !== null)
                       .map(([key, value]) => (
                         <div key={key} className="flex justify-between gap-4 px-3 py-2">
                           <span style={{ color: "var(--color-muted)" }}>{key}</span>
-                          <span
-                            className="font-medium text-right"
-                            style={{
-                              color: key === "AI processing" && r.permitAiTraining ? "#dc2626" : "var(--color-ink)",
-                            }}
-                          >
+                          <span className="font-medium text-right" style={{ color: "var(--color-ink)" }}>
                             {value}
                           </span>
                         </div>

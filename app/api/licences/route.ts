@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
       talentId: licences.talentId,
       licenceType: licences.licenceType,
       licenceTypesJson: licences.licenceTypesJson,
+      useCategoriesJson: licences.useCategoriesJson,
       isRelicense: licences.isRelicense,
       territory: licences.territory,
       exclusivity: licences.exclusivity,
