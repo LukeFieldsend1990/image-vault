@@ -8,6 +8,7 @@ import {
   users,
   invites,
   licences,
+  licenceNegotiations,
   talentProfiles,
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
@@ -176,6 +177,29 @@ export async function GET(
   const repUserMap = new Map(repUsers.map((u) => [u.id, u]));
   const repInviteMap = new Map(repInviteRows.map((i) => [i.id, i]));
 
+  // Pending negotiation: a performer/agent counter-offer awaiting the producer's
+  // agreement (latest round is an open talent/rep counter). Surfaced on the cast
+  // list so the producer knows terms changed and need their sign-off.
+  const negoPendingByLicence = new Map<string, boolean>();
+  if (licenceIds.length > 0) {
+    const negoRows = await db
+      .select({ licenceId: licenceNegotiations.licenceId, round: licenceNegotiations.round, party: licenceNegotiations.party, action: licenceNegotiations.action })
+      .from(licenceNegotiations)
+      .where(inArray(licenceNegotiations.licenceId, licenceIds))
+      .all();
+    const byLic = new Map<string, { round: number; party: string; action: string }[]>();
+    for (const n of negoRows) {
+      const arr = byLic.get(n.licenceId) ?? [];
+      arr.push(n);
+      byLic.set(n.licenceId, arr);
+    }
+    for (const [lid, rounds] of byLic) {
+      rounds.sort((a, b) => a.round - b.round);
+      const last = rounds[rounds.length - 1];
+      negoPendingByLicence.set(lid, Boolean(last && last.action === "counter" && (last.party === "talent" || last.party === "rep")));
+    }
+  }
+
   const enriched = castRows.map((row) => ({
     ...row,
     talentProfile: row.talentId ? profileMap.get(row.talentId) ?? null : null,
@@ -189,6 +213,7 @@ export async function GET(
         })()
       : null,
     licence: row.licenceId ? licenceMap.get(row.licenceId) ?? null : null,
+    negotiationPending: row.licenceId ? (negoPendingByLicence.get(row.licenceId) ?? false) : false,
     repEmail: row.repId ? (repUserMap.get(row.repId)?.email ?? null) : null,
     repInvite: row.repInviteId
       ? (() => {
