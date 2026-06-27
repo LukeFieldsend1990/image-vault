@@ -100,8 +100,7 @@ interface LicenceTerms {
   intendedUse: string;
   validFrom: string;
   validTo: string;
-  licenceTypes: string[];     // multi-select use types (item 7)
-  useCategoryIds: string[];   // consent scope — §39 use-category taxonomy
+  useCategoryIds: string[];   // consent scope — §39 use-category taxonomy (the single access selector)
   territory: string;
   exclusivity: string;
   permitAiTraining: boolean;
@@ -192,7 +191,6 @@ function makeDefaultTerms(): LicenceTerms {
     intendedUse: "",
     validFrom: from,
     validTo: addMonthsISO(from, 18),
-    licenceTypes: ["film_double"],
     useCategoryIds: [],
     territory: "",
     exclusivity: "non_exclusive",
@@ -453,15 +451,12 @@ export default function ProductionDetailClient() {
 
   // Build members array from the active tab
   function buildMembers() {
-    const licenceTypes = terms.licenceTypes.filter(Boolean);
     const termsPayload = {
       intendedUse: terms.intendedUse,
       validFrom: terms.validFrom ? Math.floor(new Date(terms.validFrom).getTime() / 1000) : 0,
       validTo: terms.validTo ? Math.floor(new Date(terms.validTo).getTime() / 1000) : 0,
-      // Item 7 — send the full array; the primary single type keeps legacy readers happy.
-      licenceTypes: licenceTypes.length ? licenceTypes : undefined,
-      licenceType: licenceTypes[0] || undefined,
-      // Consent scope — the §39 use categories the production is asking permission for.
+      // Consent scope — the §39 use categories are now the single access selector
+      // (the legacy flat "use types" list has been removed as overlapping).
       useCategoryIds: terms.useCategoryIds.length ? terms.useCategoryIds : undefined,
       territory: terms.territory || undefined,
       exclusivity: terms.exclusivity || "non_exclusive",
@@ -1329,35 +1324,6 @@ export default function ProductionDetailClient() {
                 <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>Suggested 18-month term — adjust as needed.</p>
               </div>
 
-              {/* Use type — multi-select (item 7). One licence carries every ticked type. */}
-              <div className="col-span-2">
-                <label className="text-xs mb-1.5 block" style={{ color: "var(--color-muted)" }}>Use type(s)</label>
-                <div className="flex flex-wrap gap-2">
-                  {LICENCE_TYPE_OPTIONS.map((o) => {
-                    const active = terms.licenceTypes.includes(o.value);
-                    return (
-                      <button
-                        key={o.value}
-                        type="button"
-                        onClick={() => setTerms((t) => ({
-                          ...t,
-                          licenceTypes: active ? t.licenceTypes.filter((v) => v !== o.value) : [...t.licenceTypes, o.value],
-                        }))}
-                        className="px-3 py-1.5 rounded text-xs font-medium border transition"
-                        style={{
-                          borderColor: active ? "var(--color-accent)" : "var(--color-border)",
-                          background: active ? "var(--color-accent)" : "transparent",
-                          color: active ? "white" : "var(--color-muted)",
-                        }}
-                      >
-                        {o.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] mt-1.5" style={{ color: "var(--color-muted)" }}>One licence covers all selected use types — no separate contract per type.</p>
-              </div>
-
               {/* Consent scope — the §39 use categories the production is requesting
                   permission for. These pre-tick the performer's consent document; the
                   performer can untick or add others. */}
@@ -1469,21 +1435,8 @@ export default function ProductionDetailClient() {
                   <input type="checkbox" checked={terms.isRelicense} onChange={(e) => setTerms((t) => ({ ...t, isRelicense: e.target.checked, feeNA: e.target.checked ? false : t.feeNA }))} />
                   This is a re-licence of an existing scan (a fee is expected)
                 </label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--color-muted)" }}>
-                  <input
-                    type="checkbox"
-                    checked={terms.permitAiTraining}
-                    onChange={(e) => setTerms((t) => {
-                      const on = e.target.checked;
-                      const has = t.useCategoryIds.includes("training");
-                      const useCategoryIds = on
-                        ? (has ? t.useCategoryIds : [...t.useCategoryIds, "training"])
-                        : t.useCategoryIds.filter((v) => v !== "training");
-                      return { ...t, permitAiTraining: on, useCategoryIds };
-                    })}
-                  />
-                  Permit AI training use
-                </label>
+                {/* AI training is captured solely by the "Training data for generative AI"
+                    (§39G) card under "What access are you requesting?" — no separate toggle. */}
               </div>
             </div>
           </div>

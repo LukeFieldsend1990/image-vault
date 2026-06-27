@@ -10,6 +10,7 @@ import {
   subPickList,
   subPickLabel,
 } from "@/lib/jurisdictions/countries";
+import { USE_CATEGORIES } from "@/lib/consent/use-categories";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,14 +56,6 @@ const PRODUCTION_TYPES = [
   { value: "other", label: "Other" },
 ];
 
-const LICENCE_TYPES = [
-  { value: "film_double", label: "Digital double · Film" },
-  { value: "game_character", label: "Game character" },
-  { value: "commercial", label: "Commercial" },
-  { value: "ai_avatar", label: "AI avatar" },
-  { value: "training_data", label: "Training data" },
-  { value: "monitoring_reference", label: "Monitoring reference" },
-];
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -176,7 +169,7 @@ export default function SetupClient() {
 
   // Step 5 — default terms
   const [terms, setTerms] = useState({
-    intendedUse: "", licenceTypes: ["film_double"] as string[], territory: "Worldwide",
+    intendedUse: "", useCategoryIds: [] as string[], territory: "Worldwide",
     exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
     feeNA: false, isRelicense: false,
   });
@@ -407,7 +400,7 @@ export default function SetupClient() {
 
   function clearTerms() {
     setTerms({
-      intendedUse: "", licenceTypes: ["film_double"], territory: "Worldwide",
+      intendedUse: "", useCategoryIds: [], territory: "Worldwide",
       exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
       feeNA: false, isRelicense: false,
     });
@@ -430,7 +423,7 @@ export default function SetupClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           intendedUse: terms.intendedUse.trim() || undefined,
-          licenceTypes: terms.licenceTypes,
+          useCategoryIds: terms.useCategoryIds,
           territory: terms.territory.trim() || undefined,
           exclusivity: terms.exclusivity,
           permitAiTraining: terms.permitAiTraining,
@@ -866,20 +859,34 @@ export default function SetupClient() {
           <Field label="Intended use">
             <input type="text" value={terms.intendedUse} onChange={(e) => setTerms((t) => ({ ...t, intendedUse: e.target.value }))} placeholder="e.g. Digital double for VFX" style={inputStyle} />
           </Field>
-          {/* Use type(s) — multi-select (item 7). One licence covers every ticked type. */}
-          <Field label="Use type(s)" hint="One licence covers all selected use types — no separate contract per type.">
-            <div className="flex flex-wrap gap-2">
-              {LICENCE_TYPES.map((l) => {
-                const active = terms.licenceTypes.includes(l.value);
+          {/* What access are you requesting? — the §39 use categories are the single
+              access selector (pre-tick the cast's consent documents). */}
+          <Field label="What access are you requesting?" hint="These pre-tick each performer's consent document. They can untick or add more.">
+            <div className="space-y-2">
+              {USE_CATEGORIES.map((cat) => {
+                const active = terms.useCategoryIds.includes(cat.id);
                 return (
                   <button
-                    key={l.value}
+                    key={cat.id}
                     type="button"
-                    onClick={() => setTerms((t) => ({ ...t, licenceTypes: active ? t.licenceTypes.filter((v) => v !== l.value) : [...t.licenceTypes, l.value] }))}
-                    className="px-3 py-1.5 rounded text-xs font-medium border transition"
-                    style={{ borderColor: active ? "var(--color-accent)" : "var(--color-border)", background: active ? "var(--color-accent)" : "transparent", color: active ? "white" : "var(--color-muted)" }}
+                    onClick={() => setTerms((t) => {
+                      const on = t.useCategoryIds.includes(cat.id);
+                      const useCategoryIds = on ? t.useCategoryIds.filter((v) => v !== cat.id) : [...t.useCategoryIds, cat.id];
+                      const permitAiTraining = cat.id === "training" ? !on : t.permitAiTraining;
+                      return { ...t, useCategoryIds, permitAiTraining };
+                    })}
+                    className="w-full flex items-start gap-3 rounded p-3 text-left transition"
+                    style={{ border: `1px solid ${active ? "var(--color-accent)" : "var(--color-border)"}`, background: active ? "rgba(192,57,43,0.05)" : "var(--color-bg)" }}
                   >
-                    {l.label}
+                    <span className="mt-0.5 flex items-center justify-center rounded shrink-0" style={{ width: 16, height: 16, border: `1px solid ${active ? "var(--color-accent)" : "var(--color-border)"}`, background: active ? "var(--color-accent)" : "transparent", color: "white", fontSize: 11, lineHeight: 1 }}>{active ? "✓" : ""}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{cat.name}</span>
+                        {cat.regimeTag && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>{cat.regimeTag}</span>}
+                        {cat.sensitive && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(180,83,9,0.1)", color: "#b45309" }}>sensitive</span>}
+                      </span>
+                      <span className="block text-xs mt-1" style={{ color: "var(--color-muted)" }}>{cat.description}</span>
+                    </span>
                   </button>
                 );
               })}
@@ -920,10 +927,6 @@ export default function SetupClient() {
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={terms.isRelicense} onChange={(e) => setTerms((t) => ({ ...t, isRelicense: e.target.checked, feeNA: e.target.checked ? false : t.feeNA }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
             <span className="text-sm" style={{ color: "var(--color-text)" }}>This is a re-licence of an existing scan (a fee is expected)</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={terms.permitAiTraining} onChange={(e) => setTerms((t) => ({ ...t, permitAiTraining: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
-            <span className="text-sm" style={{ color: "var(--color-text)" }}>Permit AI training on this likeness</span>
           </label>
 
           <div className="flex items-center gap-3 pt-2">
