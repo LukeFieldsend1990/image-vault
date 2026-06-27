@@ -262,7 +262,8 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
           <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Your consent is recorded. You can leave it there.</h2>
           <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
             Whenever you&apos;re ready, you can register on ImageVault and take ownership of your vault — decide who else can access your data,
-            withdraw consent instantly, and set standing instructions for every future request. Registration is free and takes about three minutes.
+            withdraw consent instantly, and set standing instructions for every future request. Creating an account is free; claiming the vault
+            so you can relicense independently is a paid option.
           </p>
           <div className="flex flex-wrap gap-2.5">
             <Link href="/signup" className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: ACCENT }}>Set up my account</Link>

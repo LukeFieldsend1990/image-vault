@@ -45,7 +45,7 @@ export default async function PerformerExplainerPage() {
           <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>The short version</p>
           <p className="text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
             ImageVault is a platform where <strong>you</strong>, not the production, control who can use your biometric data. Registration is
-            free, optional, and gives you direct visibility and control over every production that holds your data.
+            optional and gives you direct visibility and control over every production that holds your data. Claiming a vault to manage relicensing independently is a paid option.
           </p>
         </div>
 
@@ -94,7 +94,7 @@ export default async function PerformerExplainerPage() {
         </Section>
 
         <Section num="5" heading="What it costs">
-          <p>Registration is free for performers. Productions and agencies pay for the platform. We don&apos;t sell your data, we don&apos;t train AI models on it, and we don&apos;t take a percentage of any work you do.</p>
+          <p>If a production holds your vault, there&apos;s no cost to you — the production pays for the platform. If you want to claim the vault and take direct control — so you can relicense your likeness independently or manage access separately from the production — a platform fee applies. We don&apos;t sell your data, we don&apos;t train AI models on it, and we don&apos;t take a percentage of any work you do.</p>
         </Section>
 
         {/* Register CTA — only for logged-out visitors; registered users are already in. */}
