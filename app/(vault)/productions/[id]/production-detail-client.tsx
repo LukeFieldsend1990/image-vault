@@ -60,7 +60,9 @@ interface CastRow {
   repEmail: string | null;
   repInvite: { email: string; expiresAt: number; accepted: boolean } | null;
   talentProfile: { userId: string; fullName: string; profileImageUrl: string | null } | null;
-  invite: { id: string; email: string; usedAt: number | null; expiresAt: number } | null;
+  // Talent email is intentionally NOT exposed here — we don't dox a performer who
+  // hasn't accepted. Only invite status (sent/used/expiry) is surfaced.
+  invite: { id: string; usedAt: number | null; expiresAt: number } | null;
   licence: { id: string; status: string; projectName: string } | null;
 }
 
@@ -788,7 +790,7 @@ export default function ProductionDetailClient() {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>
-                      {row.talentProfile?.fullName ?? row.invite?.email ?? row.actorName ?? "—"}
+                      {row.talentProfile?.fullName ?? row.actorName ?? "Stored on system"}
                     </p>
                     {row.characterName && (
                       <p className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
@@ -1531,7 +1533,7 @@ export default function ProductionDetailClient() {
                         <span className="font-medium" style={{ color: "var(--color-text)" }}>{row.talentProfile.fullName}</span>
                       </div>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.invite?.email ?? row.actorName ?? "—"}</span>
+                      <span className="text-xs" style={{ color: "var(--color-muted)" }}>{row.actorName ?? "Stored on system"}</span>
                     )}
                     {/* Item 11 — production is GDPR data controller while the slot is unclaimed. */}
                     {!row.talentId && row.dataControllerOrgId && (

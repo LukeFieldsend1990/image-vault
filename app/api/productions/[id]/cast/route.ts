@@ -178,7 +178,15 @@ export async function GET(
   const enriched = castRows.map((row) => ({
     ...row,
     talentProfile: row.talentId ? profileMap.get(row.talentId) ?? null : null,
-    invite: row.inviteId ? inviteMap.get(row.inviteId) ?? null : null,
+    // Privacy: never expose an invited talent's email to the cast list — a
+    // production-held performer hasn't accepted, so we don't dox them. Only the
+    // invite status (sent/used/expiry) is surfaced.
+    invite: row.inviteId
+      ? (() => {
+          const i = inviteMap.get(row.inviteId!);
+          return i ? { id: i.id, usedAt: i.usedAt, expiresAt: i.expiresAt } : null;
+        })()
+      : null,
     licence: row.licenceId ? licenceMap.get(row.licenceId) ?? null : null,
     repEmail: row.repId ? (repUserMap.get(row.repId)?.email ?? null) : null,
     repInvite: row.repInviteId
