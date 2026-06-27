@@ -108,13 +108,6 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, []);
 
-  async function approve(id: string) {
-    setActionId(id);
-    await fetch(`/api/licences/${id}/approve`, { method: "POST" });
-    await load();
-    setActionId(null);
-  }
-
   async function deny(id: string) {
     setActionId(id);
     await fetch(`/api/licences/${id}/deny`, {
@@ -240,7 +233,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                     style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
                   >
                     <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                      Attach an existing scan package, or accept and get scanned as part of the production.
+                      Attach an existing scan package, or give consent now and get scanned as part of the production.
                     </p>
                     <div className="flex gap-2 items-center flex-wrap">
                       <select
@@ -462,7 +455,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                     style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
                   >
                     <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                      Attach a scan package to this production licence (optional — you can approve now and attach later).
+                      Attach a scan package to this production licence (optional — you can give consent now and attach the scan later).
                     </p>
                     <div className="flex gap-2 items-center flex-wrap">
                       <select
@@ -522,14 +515,13 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                   </div>
                 ) : (
                   <div className="mt-4 flex gap-2">
-                    <button
-                      onClick={() => approve(r.id)}
-                      disabled={actionId === r.id}
-                      className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                    <Link
+                      href={`/consent/${r.id}`}
+                      className="rounded px-4 py-2 text-xs font-medium text-white transition"
                       style={{ background: "var(--color-accent)" }}
                     >
-                      {actionId === r.id ? "Processing…" : "Approve"}
-                    </button>
+                      Review &amp; give consent
+                    </Link>
                     <button
                       onClick={() => setDenyingId(r.id)}
                       disabled={actionId === r.id}
