@@ -390,7 +390,7 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
                       )}
                     </div>
                     <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
-                      {l.talentName ?? l.talentEmail ?? "—"} · {l.productionCompany} · {l.packageName ?? "Unknown package"}
+                      {l.talentName ?? "Performer"} · {l.productionCompany} · {l.packageName ?? "Unknown package"}
                     </p>
                     {/* Package metadata chips */}
                     {(() => {
