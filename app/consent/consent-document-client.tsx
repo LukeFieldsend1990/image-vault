@@ -233,85 +233,53 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
     );
   }
 
-  // ── Signed / done state ─────────────────────────────────────────────────────
-  if (done) {
-    return (
-      <Frame>
-        <div className="rounded-xl p-6 mb-5" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.04)" }}>
-          <div className="flex items-start gap-3">
-            <CheckCircle />
-            <div>
-              <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>
-                Thank you, {firstName(vm.performerName)}.
-              </h2>
-              <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-                You&apos;ve consented to <strong style={{ color: "var(--color-text)" }}>{consentedList.length}</strong> of{" "}
-                <strong style={{ color: "var(--color-text)" }}>{total}</strong> uses of your biometric data on {vm.productionName}.
-                {" "}The production has been notified.
-              </p>
-            </div>
+  // ── Document state ──────────────────────────────────────────────────────────
+  // The accepted ("done") state renders the full document read-only with a banner
+  // + conversion/withdraw, so the performer always sees the full detail.
+  const canAct = data.canAct;
+  const isProducer = nego?.party === "producer";
+  const canEditScope = (canAct && !done) || (isProducer && counterMode);
+
+  // Done-state footer: a recorded banner, conversion (unregistered guests only),
+  // and withdraw (registered performer/agent). No "register" pitch for registered users.
+  const doneActions = (
+    <>
+      <div className="rounded-xl p-6 mb-4" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.04)" }}>
+        <div className="flex items-start gap-3">
+          <CheckCircle />
+          <div>
+            <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Consent recorded</h2>
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+              {firstName(vm.performerName)} consented to <strong style={{ color: "var(--color-text)" }}>{consentedList.length}</strong> of{" "}
+              <strong style={{ color: "var(--color-text)" }}>{total}</strong> uses on {vm.productionName}. The production has been notified.
+            </p>
           </div>
         </div>
-
-        <SectionLabel>What you consented to</SectionLabel>
-        <div className="rounded-lg p-4 mb-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-          {USE_CATEGORIES.map((c) => {
-            const on = consents.has(c.id);
-            return (
-              <div key={c.id} className="flex items-center gap-2.5 py-1.5 text-sm" style={{ color: on ? "var(--color-text)" : "var(--color-muted)" }}>
-                <span style={{ color: on ? "#166534" : "var(--color-border)" }}>{on ? "✓" : "—"}</span>
-                <span>{c.name}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Gentle conversion */}
+      </div>
+      {isGuest ? (
         <div className="rounded-xl p-6" style={{ border: "2px solid var(--color-text)", background: "var(--color-bg)" }}>
           <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>You&apos;re done</p>
-          <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>
-            Your consent is recorded. You can leave it there.
-          </h2>
-          <p className="text-sm mb-3" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-            {vm.companyName} holds your vault for {vm.productionName} with exactly the access you consented to, and nothing more.
-          </p>
+          <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Your consent is recorded. You can leave it there.</h2>
           <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-            Whenever you&apos;re ready — now or any time later — you can register on ImageVault and take ownership of the vault yourself.
-            You&apos;d then decide who else can access your data, withdraw consent instantly, and set standing instructions that apply to every
-            future request. Registration is free and takes about three minutes.
+            Whenever you&apos;re ready, you can register on ImageVault and take ownership of your vault — decide who else can access your data,
+            withdraw consent instantly, and set standing instructions for every future request. Registration is free and takes about three minutes.
           </p>
           <div className="flex flex-wrap gap-2.5">
-            {isGuest && (
-              <Link href="/signup" className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: ACCENT }}>
-                Set up my account
-              </Link>
-            )}
-            <Link
-              href="/imagevault-for-performers"
-              className="rounded px-4 py-2 text-sm font-medium"
-              style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-            >
-              {isGuest ? "Tell me more first" : "What is ImageVault for performers?"}
-            </Link>
+            <Link href="/signup" className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: ACCENT }}>Set up my account</Link>
+            <Link href="/imagevault-for-performers" className="rounded px-4 py-2 text-sm font-medium" style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}>Tell me more first</Link>
           </div>
         </div>
-
-        {/* Withdraw — registered performer/agent only (guests have no licence yet). */}
-        {!isGuest && data?.canAct && consentedList.length > 0 && (
-          <div className="mt-4 text-center">
+      ) : (
+        data.canAct && consentedList.length > 0 && (
+          <div className="text-center">
             <button type="button" onClick={withdraw} disabled={negoBusy} className="text-xs" style={{ color: "var(--color-muted)", textDecoration: "underline" }}>
               {negoBusy ? "Withdrawing…" : "Withdraw consent"}
             </button>
           </div>
-        )}
-      </Frame>
-    );
-  }
-
-  // ── Document state ──────────────────────────────────────────────────────────
-  const canAct = data.canAct;
-  const isProducer = nego?.party === "producer";
-  const canEditScope = canAct || (isProducer && counterMode);
+        )
+      )}
+    </>
+  );
   // The performer's ticked set differs from what the production requested → confirming
   // becomes a proposal the production must agree to (licence mode only; guests have
   // no negotiation pre-account).
@@ -446,8 +414,10 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         </div>
       )}
 
-      {/* Actions — vary by party */}
-      {isProducer ? (
+      {/* Actions — vary by party (or the recorded footer when consent is done) */}
+      {done ? (
+        doneActions
+      ) : isProducer ? (
         <div className="rounded-xl p-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
           <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>Negotiation</p>
           {nego?.closed ? (
@@ -568,9 +538,6 @@ function Meta({ k, v }: { k: string; v: string }) {
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>{children}</p>;
-}
 
 function Pill({ children, bg, color, border }: { children: React.ReactNode; bg: string; color: string; border?: boolean }) {
   return (
