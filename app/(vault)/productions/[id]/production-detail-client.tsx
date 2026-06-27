@@ -64,6 +64,7 @@ interface CastRow {
   // hasn't accepted. Only invite status (sent/used/expiry) is surfaced.
   invite: { id: string; usedAt: number | null; expiresAt: number } | null;
   licence: { id: string; status: string; projectName: string } | null;
+  negotiationPending?: boolean; // performer proposed new terms — awaiting the producer's agreement
 }
 
 interface TmdbCastMember {
@@ -1633,8 +1634,19 @@ export default function ProductionDetailClient() {
                           {consentLinkId === row.id ? "Sending…" : "Send consent doc"}
                         </button>
                       )}
+                      {/* Performer proposed new terms — the producer must review & agree. */}
+                      {row.licence && row.negotiationPending && (
+                        <Link
+                          href={`/consent/${row.licence.id}`}
+                          className="text-xs font-medium px-2 py-0.5 rounded inline-flex items-center gap-1"
+                          style={{ background: "var(--color-accent)", color: "white" }}
+                          title="The performer proposed different terms — review and accept, counter, or decline"
+                        >
+                          ⤺ New terms — review
+                        </Link>
+                      )}
                       {/* Registered cast with a licence — view the consent document directly. */}
-                      {row.licence && (
+                      {row.licence && !row.negotiationPending && (
                         <Link
                           href={`/consent/${row.licence.id}`}
                           className="text-xs font-medium"

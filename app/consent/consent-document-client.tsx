@@ -442,6 +442,11 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
             </>
           ) : (
             <>
+              {nego?.pendingTalentCounter && (
+                <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.05)", color: "var(--color-text)" }}>
+                  You&apos;ve proposed new terms — <strong>awaiting the production&apos;s response.</strong> You can revise your proposal, or confirm their current terms instead.
+                </div>
+              )}
               <button type="button" onClick={() => setAttested((a) => !a)} className="w-full flex items-start gap-3 text-left mb-4">
                 <span className="mt-0.5 flex items-center justify-center rounded shrink-0" style={{ width: 18, height: 18, border: `1px solid ${attested ? ACCENT : "var(--color-border)"}`, background: attested ? ACCENT : "transparent", color: "white", fontSize: 12 }}>{attested ? "✓" : ""}</span>
                 <span className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.55 }}>{vm.copy.attestation}</span>
