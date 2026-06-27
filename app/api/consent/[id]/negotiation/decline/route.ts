@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, productionCast, users } from "@/lib/db/schema";
+import { licences, productionCast } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { authorizeLicenceConsent } from "@/lib/consent/authorize";
 import { addNegotiationRound } from "@/lib/consent/negotiation";
 import { loadConsentDocByLicence } from "@/lib/consent/load";
-import { createNotification } from "@/lib/notifications/create";
+import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
 
 // POST /api/consent/[id]/negotiation/decline
 // Either party ends the negotiation without agreement. Marks the licence DENIED
@@ -35,17 +35,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const vm = await loadConsentDocByLicence(db, id);
       const productionName = vm?.productionName ?? "the production";
       const performerName = vm?.performerName ?? "the performer";
-      // Notify the *other* side.
-      const recipientId = party === "producer" ? auth.licence.talentId : auth.licence.licenseeId;
-      const recipient = await db.select({ id: users.id }).from(users).where(eq(users.id, recipientId)).get();
-      if (recipient) {
-        await createNotification(db, {
-          userId: recipient.id,
-          type: "consent_declined",
-          title: party === "producer" ? `${productionName} ended the negotiation` : `${performerName} declined`,
-          body: comment ? `"${comment}"` : `The negotiation on ${productionName} ended without agreement.`,
-          href: `/consent/${id}`,
-        });
+      // Notify the *other* side. If that's the performer, fan out to their agent too.
+      const note = {
+        type: "consent_declined",
+        title: party === "producer" ? `${productionName} ended the negotiation` : `${performerName} declined`,
+        body: comment ? `"${comment}"` : `The negotiation on ${productionName} ended without agreement.`,
+        href: `/consent/${id}`,
+      };
+      if (party === "producer") {
+        await notifyTalentAndReps(db, auth.licence.talentId, note);
+      } else {
+        await createNotification(db, { userId: auth.licence.licenseeId, ...note });
       }
     } catch { /* best-effort */ }
   })();

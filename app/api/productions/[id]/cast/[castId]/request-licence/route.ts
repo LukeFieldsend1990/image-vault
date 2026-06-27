@@ -12,7 +12,7 @@ import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/us
 import { loadStandingInstructions } from "@/lib/consent/standing-instructions";
 import { resolveRequest } from "@/lib/consent/resolve";
 import { acceptConsentForLicence } from "@/lib/consent/acceptance";
-import { createNotification } from "@/lib/notifications/create";
+import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import { productionCastLinkedEmail } from "@/lib/email/templates";
 import { eq, and } from "drizzle-orm";
@@ -144,8 +144,7 @@ export async function POST(
       acceptedByRole: "talent",
       uses: reconciled.useCategoryIds,
     });
-    void createNotification(db, {
-      userId: row.talentId,
+    void notifyTalentAndReps(db, row.talentId, {
       type: "consent_auto_granted",
       title: `Consent auto-granted for ${production.name}`,
       body: resolution.reason,
@@ -157,8 +156,7 @@ export async function POST(
   if (resolution.auto && resolution.action === "refused") {
     await db.update(licences).set({ status: "DENIED" }).where(eq(licences.id, licenceId));
     await db.update(productionCast).set({ status: "declined" }).where(eq(productionCast.id, castId));
-    void createNotification(db, {
-      userId: row.talentId,
+    void notifyTalentAndReps(db, row.talentId, {
       type: "consent_auto_refused",
       title: `Request auto-declined for ${production.name}`,
       body: resolution.reason,
@@ -168,8 +166,7 @@ export async function POST(
   }
 
   // No auto-resolution — route to the performer (and their agent) for a decision.
-  void createNotification(db, {
-    userId: row.talentId,
+  void notifyTalentAndReps(db, row.talentId, {
     type: "licence_request",
     title: `Licence request from ${production.name}`,
     body: `${companyName} sent you a licence request for ${production.name}.`,

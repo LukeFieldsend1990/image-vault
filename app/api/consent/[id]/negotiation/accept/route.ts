@@ -8,7 +8,7 @@ import { listNegotiationRounds, latestTalentCounter, addNegotiationRound } from 
 import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/use-categories";
 import { acceptConsentForLicence } from "@/lib/consent/acceptance";
 import { loadConsentDocByLicence } from "@/lib/consent/load";
-import { createNotification } from "@/lib/notifications/create";
+import { notifyTalentAndReps } from "@/lib/notifications/create";
 
 // POST /api/consent/[id]/negotiation/accept
 // The production accepts the performer's latest counter: apply the countered
@@ -64,8 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   void (async () => {
     try {
       const vm = await loadConsentDocByLicence(db, id);
-      await createNotification(db, {
-        userId: auth.licence.talentId,
+      await notifyTalentAndReps(db, auth.licence.talentId, {
         type: "consent_agreed",
         title: `Terms agreed on ${vm?.productionName ?? "the production"}`,
         body: `The production accepted your terms. Consent is recorded.`,

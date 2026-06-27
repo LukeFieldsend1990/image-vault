@@ -643,6 +643,12 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                             <polyline points="6 9 12 15 18 9" />
                           </svg>
                         </button>
+                        <Link href={`/consent/${l.id}`}
+                          className="rounded border px-2.5 py-1.5 text-xs font-medium transition"
+                          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}
+                          title="Open the consent document for this licence">
+                          Consent doc
+                        </Link>
                         <a href={`/api/licences/${l.id}/contract`} target="_blank" rel="noopener noreferrer"
                           className="rounded border px-2.5 py-1.5 text-xs transition"
                           style={{ borderColor: "var(--color-border)", color: "var(--color-muted)", background: "var(--color-bg)" }}>

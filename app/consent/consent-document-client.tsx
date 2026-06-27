@@ -55,6 +55,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [withdrawn, setWithdrawn] = useState(false);
 
   // Negotiation (registered/licence mode only — guests can't negotiate pre-account)
   const [nego, setNego] = useState<NegotiationState | null>(null);
@@ -101,6 +102,23 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
       if (!r.ok || !d.ok) { setSubmitError(d.error ?? "Could not accept the counter-offer."); return; }
       await refreshNego();
       if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    } finally { setNegoBusy(false); }
+  }
+
+  async function withdraw() {
+    if (!licenceId) return;
+    const reason = typeof window !== "undefined"
+      ? window.prompt("Withdraw your consent for this production? This stops new uses going forward. Optionally add a reason:")
+      : "";
+    if (reason === null) return; // cancelled
+    setNegoBusy(true);
+    try {
+      const r = await fetch(`/api/consent/${licenceId}/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      if (r.ok) setWithdrawn(true);
     } finally { setNegoBusy(false); }
   }
 
@@ -201,6 +219,20 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const total = USE_CATEGORIES.length;
   const isGuest = source.kind === "token";
 
+  // ── Withdrawn state ─────────────────────────────────────────────────────────
+  if (withdrawn) {
+    return (
+      <Frame>
+        <div className="rounded-xl p-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Consent withdrawn</h2>
+          <p className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+            Your consent for {vm.productionName} has been withdrawn. This stops new uses going forward; it does not undo lawful past uses. The production has been notified.
+          </p>
+        </div>
+      </Frame>
+    );
+  }
+
   // ── Signed / done state ─────────────────────────────────────────────────────
   if (done) {
     return (
@@ -263,6 +295,15 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
             </Link>
           </div>
         </div>
+
+        {/* Withdraw — registered performer/agent only (guests have no licence yet). */}
+        {!isGuest && data?.canAct && consentedList.length > 0 && (
+          <div className="mt-4 text-center">
+            <button type="button" onClick={withdraw} disabled={negoBusy} className="text-xs" style={{ color: "var(--color-muted)", textDecoration: "underline" }}>
+              {negoBusy ? "Withdrawing…" : "Withdraw consent"}
+            </button>
+          </div>
+        )}
       </Frame>
     );
   }

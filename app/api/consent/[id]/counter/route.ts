@@ -7,7 +7,7 @@ import { authorizeLicenceConsent } from "@/lib/consent/authorize";
 import { addNegotiationRound } from "@/lib/consent/negotiation";
 import { reconcileTrainingFlag, serializeUseCategoryIds, normaliseUseCategoryIds } from "@/lib/consent/use-categories";
 import { loadConsentDocByLicence } from "@/lib/consent/load";
-import { createNotification } from "@/lib/notifications/create";
+import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
 
 // POST /api/consent/[id]/counter
 // Propose different terms in the negotiation. Body: { scope: string[], fee?: number|null, comment?: string }.
@@ -64,8 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const productionName = vm?.productionName ?? "the production";
       const performerName = vm?.performerName ?? "the performer";
       if (party === "producer") {
-        await createNotification(db, {
-          userId: auth.licence.talentId,
+        await notifyTalentAndReps(db, auth.licence.talentId, {
           type: "consent_counter",
           title: `${productionName} revised the terms`,
           body: comment ? `"${comment}"` : `Updated terms for ${productionName}. Review and respond.`,
