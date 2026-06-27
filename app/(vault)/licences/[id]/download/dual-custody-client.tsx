@@ -190,7 +190,11 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
             Both verifications complete — download links are valid for 48 hours.
           </div>
 
+<<<<<<< Updated upstream
           {/* Bundle download — POST with licenceId so URL length never overflows for large packages */}
+=======
+          {/* Bundle download — POST with licenceId so the URL stays short regardless of file count */}
+>>>>>>> Stashed changes
           {tokens.length > 1 && (
             <form method="POST" action="/api/download/bundle" className="mb-4">
               <input type="hidden" name="licenceId" value={licenceId} />
