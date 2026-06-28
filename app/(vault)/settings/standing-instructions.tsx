@@ -74,8 +74,11 @@ export default function StandingInstructions({ talentId, subtitle }: { talentId?
   return (
     <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
       <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-muted)" }}>Standing Instructions</h2>
-      <p className="text-xs mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
+      <p className="text-xs mb-3" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
         {subtitle ?? "Set a rule per use category. New requests resolve automatically when every requested use is set to Always (granted) or Never (refused) — anything else comes to you."}
+      </p>
+      <p className="text-xs mb-4 rounded px-3 py-2" style={{ color: "var(--color-muted)", lineHeight: 1.5, background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
+        Your choices for the AI uses — <strong>Digital replica (§39E)</strong> and <strong>Training data for generative AI (§39G)</strong> — also set your public AI-consent posture (red / amber / green) if you publish a consent profile below. Never = Prohibited, Ask me = Permitted with terms, Always = Permitted.
       </p>
 
       {loading ? (

@@ -14,6 +14,7 @@ import DemoToggleCard from "./demo-toggle-card";
 import BillingFees from "./billing-fees";
 import ShowCodesToggle from "./show-codes-toggle";
 import StandingInstructions from "./standing-instructions";
+import RslConsentProfile from "./rsl-consent-profile";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -36,6 +37,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/compliance", label: "Compliance", description: "Art. 39 strikes, transfers and certificates" },
   { href: "/admin/compliance-roles", label: "Compliance Roles", description: "Union presets, insurer cover, watcher grants and access control" },
   { href: "/admin/mcp", label: "MCP Integration", description: "Claude tokens, tools and audit log" },
+  { href: "/admin/rsl", label: "RSL Profiles", description: "Approve public consent profiles (RSL / Human Consent Registry)" },
 ];
 
 type Role = "talent" | "rep" | "industry" | "licensee" | "admin";
@@ -400,6 +402,9 @@ export default async function SettingsPage({
 
       {/* Standing instructions (talent only) */}
       {user?.role === "talent" && <StandingInstructions />}
+
+      {/* Public consent profile / RSL (talent only) */}
+      {user?.role === "talent" && <RslConsentProfile />}
 
 
       {/* CAS Bridge (licensee + rep + talent) */}

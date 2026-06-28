@@ -1304,3 +1304,72 @@ export const licenceNegotiations = sqliteTable("licence_negotiations", {
   createdBy: text("created_by").references(() => users.id),
   createdAt: integer("created_at").notNull(),
 });
+
+// RSL (Really Simple Licensing) public consent profile — Phase 1 of the RSL /
+// Human Consent Registry integration (specs/RSL-CONSENT-REGISTRY-SPEC.md).
+//
+// Holds ONLY the exposure controls + minimal public-card fields. The consent
+// *posture* itself is never stored here — it is derived at read time from the
+// talent's standing_instructions on the AI use-categories (training §39G,
+// replica §39E) via lib/rsl/posture.ts, so the two can never drift.
+//
+// A public surface (the /c/<slug> page + license.xml) is served only when BOTH
+// publishOptIn (the talent's key) AND adminApproved (the admin master switch)
+// are true and a slug exists — see lib/rsl/visibility.ts. Default-deny: both
+// keys default off, posture defaults to prohibited.
+export const rslProfiles = sqliteTable("rsl_profiles", {
+  id: text("id").primaryKey(), // UUID
+  talentId: text("talent_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  // key 1 — talent opts in to publish a public consent profile
+  publishOptIn: integer("publish_opt_in", { mode: "boolean" }).notNull().default(false),
+  // key 2 — admin master switch; default OFF even when publishOptIn is true
+  adminApproved: integer("admin_approved", { mode: "boolean" }).notNull().default(false),
+  approvedBy: text("approved_by").references(() => users.id),
+  approvedAt: integer("approved_at"), // unix seconds
+  // Unlisted, unguessable public address (NOT the enumerable AH-/LC- codes).
+  publicSlug: text("public_slug").unique(),
+  // Minimal talent-curated public-card fields. NEVER any biometric/scan data.
+  displayName: text("display_name"),
+  profession: text("profession"),
+  linksJson: text("links_json"), // JSON array of { label, url }
+  // Phase 2/3 — reserved (license server + Human Consent Registry federation).
+  licenseServerEnabled: integer("license_server_enabled", { mode: "boolean" }).notNull().default(false),
+  humanConsentId: text("human_consent_id"),
+  registryStatus: text("registry_status", { enum: ["not_linked", "pending", "linked", "error"] }).notNull().default("not_linked"),
+  createdAt: integer("created_at").notNull(), // unix seconds
+  updatedAt: integer("updated_at").notNull(), // unix seconds
+});
+
+// RSL Open License Protocol (OLP) request — Phase 2 of the RSL integration
+// (specs/RSL-CONSENT-REGISTRY-SPEC.md). One row per machine-initiated request to
+// license a talent's likeness for an AI usage, captured by the OLP token
+// endpoint and resolved through the talent's consent posture:
+//   red   → rejected before insert (access_denied)
+//   green → auto-granted (standing instruction = always); token minted at once
+//   amber → pending_review; routed to the talent/agent, granted on approval
+// The license token attests CONSENT for the usage; metered billing still runs
+// through royalty_sources / usage_events (wired to a formal licence separately).
+export const rslLicenseRequests = sqliteTable("rsl_license_requests", {
+  id: text("id").primaryKey(), // UUID — also the public request_id the client polls
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  usage: text("usage").notNull(), // RSL usage token: ai-train | ai-use
+  useCategoryId: text("use_category_id").notNull(), // mapped category: training | replica
+  postureLight: text("posture_light").notNull(), // amber | green at request time
+  // Requesting machine client — self-declared, UNTRUSTED.
+  clientId: text("client_id"),
+  clientName: text("client_name"),
+  contactEmail: text("contact_email"),
+  intendedUse: text("intended_use"),
+  status: text("status", {
+    enum: ["pending_review", "granted", "denied", "expired"],
+  }).notNull().default("pending_review"),
+  decidedBy: text("decided_by").references(() => users.id),
+  decidedAt: integer("decided_at"), // unix seconds
+  // License credential, issued on grant. SHA-256 of the raw `rsl_` token.
+  licenseTokenHash: text("license_token_hash").unique(),
+  licenseExpiresAt: integer("license_expires_at"), // unix seconds
+  // Link to a formal licence once one is created through the normal flow.
+  licenceId: text("licence_id").references(() => licences.id, { onDelete: "set null" }),
+  createdAt: integer("created_at").notNull(), // unix seconds
+  updatedAt: integer("updated_at").notNull(), // unix seconds
+});
