@@ -250,7 +250,7 @@ Each phase is independently valuable and shippable. Phase 1 alone delivers the m
 
 ## Open questions
 
-1. ✅ **Resolved — External Registry API.** No public write API today; partner-request stage, identity-verified, US/EU-only, draft standard. Phase 3 = manual claim-and-paste bridge now + feature-flagged adapter later + submit the partner request. (See revised Phase 3.) *Remaining business action: who submits the RSL Media partner request?*
+1. ✅ **Resolved — External Registry API.** No public write API today; partner-request stage, identity-verified, US/EU-only, draft standard. Phase 3 = manual claim-and-paste bridge now + feature-flagged adapter later + submit the partner request. (See revised Phase 3.) **Business action owner: Martin** (business partner) will submit the RSL Media partner request. Supporting brief + draft email + source links captured in Notion → [Image Vault concepts › RSL Media partner request (Human Consent Registry)](https://app.notion.com/p/38d9ff52f91c8193a5cef3c8a9ef4dc3).
 2. ✅ **Resolved — Posture category set.** Start with `training` (§39G) + `replica` (§39E); other categories carried as stubs in `RSL_USAGE_MAP`, rendered as detail, no standalone RSL term yet. (See Core principle.)
 3. **Slug style.** Unguessable random slug (max privacy, recommended) vs a talent-chosen vanity handle (nicer to share, slightly more enumerable). Default: random, with optional vanity later.
 4. **`robots.txt`/`noindex`.** Keep all public RSL `noindex` + rely on talent sharing the link (recommended, matches "unlisted"), or allow indexing for talent who explicitly want maximum discoverability?
