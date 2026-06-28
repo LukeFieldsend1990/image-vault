@@ -1,6 +1,9 @@
-// POST /api/pitch/webhook — Higgsfield job completion webhook
-// Higgsfield signs requests with X-Higgsfield-Signature (HMAC-SHA256).
-// TODO: Confirm exact signature header name and HMAC format from Higgsfield docs.
+// POST /api/pitch/webhook — Higgsfield job completion webhook.
+// Higgsfield is told about this URL via the `?hf_webhook=<url>` query param on
+// submit and is configured with a shared secret. The exact signature header /
+// HMAC encoding isn't in the public docs, so we verify an HMAC-SHA256 of the
+// raw body against the common header names when HIGGSFIELD_WEBHOOK_SECRET is set.
+// This is a secondary completion path — the worker also polls to completion.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
@@ -9,9 +12,11 @@ import { eq } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 interface HiggsWebhookPayload {
+  request_id?: string;
   jobId?: string;
   job_id?: string;
   status?: string;
+  video?: { url?: string };
   video_url?: string;
   videoUrl?: string;
   output?: { url?: string };
@@ -46,7 +51,7 @@ function hexToBytes(hex: string): Uint8Array {
 function normaliseStatus(raw: string): string {
   const s = raw.toLowerCase();
   if (s === "complete" || s === "completed" || s === "succeeded" || s === "success") return "complete";
-  if (s === "failed" || s === "error") return "failed";
+  if (s === "failed" || s === "error" || s === "nsfw") return "failed";
   return "generating";
 }
 
@@ -66,8 +71,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const jobId = payload.jobId ?? payload.job_id;
-  if (!jobId) return NextResponse.json({ error: "Missing jobId" }, { status: 400 });
+  const jobId = payload.request_id ?? payload.jobId ?? payload.job_id;
+  if (!jobId) return NextResponse.json({ error: "Missing request_id" }, { status: 400 });
 
   const db = getDb();
   const pitch = await db.select({ id: pitchVignettes.id, status: pitchVignettes.status })
@@ -79,7 +84,7 @@ export async function POST(req: NextRequest) {
   if (pitch.status === "complete" || pitch.status === "failed") return NextResponse.json({ ok: true });
 
   const status = normaliseStatus(payload.status ?? "");
-  const videoUrl = payload.video_url ?? payload.videoUrl ?? payload.output?.url;
+  const videoUrl = payload.video?.url ?? payload.video_url ?? payload.videoUrl ?? payload.output?.url;
 
   if (status === "complete" && videoUrl) {
     // Fetch video and store in R2

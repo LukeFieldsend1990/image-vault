@@ -171,19 +171,21 @@ async function processPitchJob(pitchId: string, env: Env): Promise<void> {
   let sourceKeys: string[] = [];
   try { sourceKeys = JSON.parse(pitch.sourceImageKeys ?? "[]"); } catch { /* empty */ }
 
-  // Upload source images to Higgsfield image store, collect returned URLs
-  // TODO: if R2 bucket is public, skip upload and pass direct bucket URLs instead
+  // Higgsfield pulls images from URLs (input_images[].image_url). Our R2 bucket
+  // is private, so we hand the bytes to Higgsfield's image store and pass back
+  // the hosted URL it returns.
+  // UNCONFIRMED: the image-upload endpoint isn't in the public docs. We POST to
+  // the documented platform host and fall back to an inline data URI if that
+  // 404s/errors. Revisit once a key is provisioned and the upload path confirmed.
   const imageUrls: string[] = [];
   for (const key of sourceKeys.slice(0, 4)) {
     const img = await fetchImageAsBase64(env.SCANS_BUCKET, key);
     if (!img) continue;
 
-    // Upload image to Higgsfield via their image upload endpoint
-    // TODO: Confirm exact upload endpoint from Higgsfield API docs
-    const uploadRes = await fetch(`https://api.higgsfield.ai/v1/images/upload`, {
+    const uploadRes = await fetch(`https://platform.higgsfield.ai/v1/images`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Key ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ image: `data:${img.contentType};base64,${img.base64}` }),
@@ -210,7 +212,7 @@ async function processPitchJob(pitchId: string, env: Env): Promise<void> {
     imageUrls,
     prompt: generatedPrompt,
     durationSeconds: 10,
-    model: env.HIGGSFIELD_MODEL ?? "kling-3.0",
+    model: env.HIGGSFIELD_MODEL ?? "dop-turbo",
     includeAudio: pitch.includeAudio,
   });
 
