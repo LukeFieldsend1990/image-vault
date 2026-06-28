@@ -9,6 +9,12 @@ import { baseUrl } from "@/lib/rsl/profile";
  * Public status poll for an OLP request (by opaque request_id). A client that
  * received `authorization_pending` polls here; once a human approves, the minted
  * license token is delivered ONCE (then removed from the one-time store).
+ *
+ * Security model: the request_id (a UUIDv4) is the bearer capability for the
+ * one-time token pickup. It is returned only to the client that created the
+ * request and is unguessable; the minted token lives in KV for ~1h and is
+ * deleted on first read. Treat the request_id like a secret — anyone holding it
+ * within that window can collect the token once.
  */
 export async function GET(
   _req: NextRequest,

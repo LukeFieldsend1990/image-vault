@@ -44,7 +44,9 @@ export default async function ConsentProfilePage({
   if (!data) notFound();
   const { row, posture } = data;
   const p = row.profile;
-  const name = p.displayName || row.fullName || "This person";
+  // Only the talent's chosen display name is ever shown — never fall back to the
+  // legal name held in talentProfiles.
+  const name = p.displayName || "This person";
   const links = parseLinks(p.linksJson);
   const overall = LIGHT[posture.overall];
   const liveCategories = posture.categories.filter((c) => c.rslUsage !== null);

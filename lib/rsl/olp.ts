@@ -12,11 +12,12 @@
  */
 
 import { eq, and, desc } from "drizzle-orm";
-import { rslLicenseRequests } from "@/lib/db/schema";
+import { rslLicenseRequests, rslProfiles, users } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 import { getKv } from "@/lib/db";
 import { sha256Hex } from "@/lib/auth/requireRoyaltySource";
-import { RSL_USAGE_MAP, RSL_PAYMENT_TYPE, type Posture } from "./posture";
+import { RSL_USAGE_MAP, RSL_PAYMENT_TYPE, derivePosture, type Posture } from "./posture";
+import { isPublic } from "./visibility";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -119,6 +120,27 @@ export async function findOpenRequest(
     .get();
 }
 
+/**
+ * True if ANY pending request already exists for this talent+usage (regardless
+ * of client). Used to debounce notifications so a flood of anonymous requests
+ * can't spam the rights-holder — the row is still created, but only the first
+ * outstanding request for a usage notifies.
+ */
+export async function hasPendingForUsage(db: Db, talentId: string, usage: string): Promise<boolean> {
+  const row = await db
+    .select({ id: rslLicenseRequests.id })
+    .from(rslLicenseRequests)
+    .where(
+      and(
+        eq(rslLicenseRequests.talentId, talentId),
+        eq(rslLicenseRequests.usage, usage),
+        eq(rslLicenseRequests.status, "pending_review"),
+      ),
+    )
+    .get();
+  return !!row;
+}
+
 export async function createRequest(db: Db, input: CreateRequestInput): Promise<RslLicenseRequest> {
   const now = Math.floor(Date.now() / 1000);
   const id = crypto.randomUUID();
@@ -204,12 +226,19 @@ export async function collectDelivery(requestId: string): Promise<string | null>
 export interface Introspection {
   active: boolean;
   usage?: string;
-  content?: string; // slug
-  talentId?: string;
+  content?: string; // public slug — never the internal user id
   exp?: number;
 }
 
-/** OAuth2-style token introspection for a license token. */
+/**
+ * OAuth2-style token introspection for a license token.
+ *
+ * Beyond "granted + unexpired", this HONORS CONSENT WITHDRAWAL: a token goes
+ * inactive the moment the talent's profile is no longer public (unpublished,
+ * admin-revoked or vault-locked) or the usage is no longer permitted (posture
+ * flipped to red). So a rights-holder revoking consent is reflected immediately,
+ * not only when the 1-year token expires.
+ */
 export async function introspect(db: Db, rawToken: string): Promise<Introspection> {
   if (!rawToken || !rawToken.startsWith("rsl_")) return { active: false };
   const hash = await sha256Hex(rawToken);
@@ -221,10 +250,38 @@ export async function introspect(db: Db, rawToken: string): Promise<Introspectio
   if (!row || row.status !== "granted") return { active: false };
   const now = Math.floor(Date.now() / 1000);
   if (row.licenseExpiresAt && row.licenseExpiresAt < now) return { active: false };
+
+  // Re-check the talent's CURRENT public state + posture (consent withdrawal).
+  const prof = await db
+    .select({
+      publishOptIn: rslProfiles.publishOptIn,
+      adminApproved: rslProfiles.adminApproved,
+      publicSlug: rslProfiles.publicSlug,
+      vaultLocked: users.vaultLocked,
+    })
+    .from(rslProfiles)
+    .innerJoin(users, eq(users.id, rslProfiles.talentId))
+    .where(eq(rslProfiles.talentId, row.talentId))
+    .get();
+  if (
+    !prof ||
+    !isPublic({
+      publishOptIn: prof.publishOptIn,
+      adminApproved: prof.adminApproved,
+      publicSlug: prof.publicSlug,
+      vaultLocked: !!prof.vaultLocked,
+    })
+  ) {
+    return { active: false };
+  }
+  const posture = await derivePosture(db, row.talentId);
+  const cat = posture.categories.find((c) => c.id === row.useCategoryId);
+  if (!cat || cat.light === "red") return { active: false };
+
   return {
     active: true,
     usage: row.usage,
-    talentId: row.talentId,
+    content: prof.publicSlug ?? undefined,
     exp: row.licenseExpiresAt ?? undefined,
   };
 }

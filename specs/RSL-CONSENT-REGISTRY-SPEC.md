@@ -236,6 +236,15 @@ This is the monetization answer made real: **an AI company that wants a likeness
 - **Admin actions audited** (`complianceEvents`); approval is per-talent, revocable, and re-reviewed if the talent materially changes identity fields.
 - **OLP creates intent, never access** — it can mint a PENDING licence; it cannot grant download/consent. Dual-custody and standing instructions still govern.
 
+### Security hardening (post-merge-review, implemented)
+
+- **Rate-limited public write.** `POST /api/rsl/olp/token` (the only anonymous write) is throttled per IP (`checkRateLimit`, 20 / 10 min → `429 + Retry-After`), and amber notifications are debounced (only the first outstanding request per talent+usage pings the rights-holder) so a flood of varied `client_id`s can't spam them or balloon the table.
+- **Consent withdrawal is honored on issued tokens.** `introspect` re-checks the talent's *current* public state (`isPublic`) and posture: a token goes inactive the instant the profile is unpublished, admin-revoked, vault-locked, or the usage flips to red — not only at the 1-year expiry.
+- **No legal-name leakage.** The public `/c/<slug>` page renders only the talent's chosen display name (never the `talentProfiles` legal name) — plus admin previews each profile before approving.
+- **Introspection returns the public slug, never the internal user id.**
+- **request_id is a documented bearer capability** for the one-time token pickup (UUIDv4, KV ~1h TTL, deleted on first read).
+- Residual/deferred (low): the one-time pickup trusts `request_id`; metered billing/settlement remains Phase 2.5.
+
 ---
 
 ## Phasing / deliverables

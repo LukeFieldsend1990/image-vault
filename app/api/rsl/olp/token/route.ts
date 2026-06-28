@@ -10,10 +10,12 @@ import {
   parseResourceToSlug,
   createRequest,
   findOpenRequest,
+  hasPendingForUsage,
   grantRequest,
 } from "@/lib/rsl/olp";
 import { capHeaders } from "@/lib/rsl/cap";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
+import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 
 /**
  * OLP token endpoint (OAuth 2.0 extension, grant_type=rsl). A machine client
@@ -67,6 +69,20 @@ function oauthError(error: string, description: string, status: number, headers?
 }
 
 export async function POST(req: NextRequest) {
+  // Public, unauthenticated write — throttle per IP to stop request/notification
+  // floods against a rights-holder.
+  const rl = await checkRateLimit(getClientIp(req), {
+    action: "rsl_olp_token",
+    maxAttempts: 20,
+    windowSeconds: 600,
+  });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate_limited", error_description: "Too many licence requests. Try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } },
+    );
+  }
+
   const params = await parseBody(req);
 
   if (params.grant_type !== OLP_GRANT_TYPE) {
@@ -148,6 +164,9 @@ export async function POST(req: NextRequest) {
 
   // ── amber: permitted with terms → route to the rights-holder for review ──
   const existing = await findOpenRequest(db, row.profile.talentId, usage, clientId);
+  // Debounce notifications: only the first outstanding request per usage pings
+  // the rights-holder, so varying client_id can't be used to spam them.
+  const hadPending = existing ? true : await hasPendingForUsage(db, row.profile.talentId, usage);
   const reqRow = existing ?? (await createRequest(db, {
     talentId: row.profile.talentId,
     usage,
@@ -158,7 +177,7 @@ export async function POST(req: NextRequest) {
     contactEmail,
     intendedUse,
   }));
-  if (!existing) {
+  if (!hadPending) {
     void notifyTalentAndReps(db, row.profile.talentId, {
       type: "rsl_license_request",
       title: "AI licence request",
