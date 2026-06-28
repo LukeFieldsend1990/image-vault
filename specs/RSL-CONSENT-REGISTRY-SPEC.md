@@ -1,6 +1,6 @@
 # Spec — RSL (Really Simple Licensing) + Human Consent Registry
 
-**Status:** proposed · **Author:** Luke + Claude · **Date:** 2026-06-28
+**Status:** Phase 1 implemented · Phases 2–3 proposed · **Author:** Luke + Claude · **Date:** 2026-06-28
 **Origin:** Cate Blanchett / RSL Media's [Human Consent Registry](https://gizmodo.com/cate-blanchett-launches-human-consent-registry-to-help-protect-your-likeness-from-ai-industry-scraping-2000776268) (free public registry; red/amber/green AI-use consent; "Human Consent ID") + the [RSL 1.0 standard](https://rslstandard.org/rsl) (machine-readable licensing for the AI web; RSS co-creator). Both push the same mission as Image Vault: **people keep custody of their likeness, and machines can read the terms.**
 
 ---
@@ -240,7 +240,7 @@ This is the monetization answer made real: **an AI company that wants a likeness
 
 | Phase | Ships | Effort |
 |---|---|---|
-| **1 — Publish + Declare** | `rslProfiles` table + migration, `derivePosture`/`isPublic`/`renderTalentRsl` libs, settings toggle + copy, admin console, public `/c/<slug>` + `license.xml`, robots/`.well-known` baseline | Medium |
+| **1 — Publish + Declare** ✅ | `rslProfiles` table (`0090_rsl_profiles.sql`), `lib/rsl/{posture,visibility,profile,xml}.ts`, settings toggle + standing-instructions copy, admin console (`/admin/rsl`), public `/c/<slug>` + `/api/rsl/<slug>/license.xml`, `robots.txt` + `.well-known/rsl.xml` baseline | Medium — **done** |
 | **2 — License Server** | `POST /api/rsl/olp`, CAP pointers, RSL offer/token issuance over existing licence + royalty flow, `usageEvents` accrual | Medium–High |
 | **3 — Federate** | `registry.ts` client, Human Consent ID storage + badge, settings action, feature flag | Small–Medium (gated on external API) |
 
