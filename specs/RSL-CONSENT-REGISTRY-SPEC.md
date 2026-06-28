@@ -36,6 +36,8 @@ This spec adopts RSL in **three escalating, independently-shippable layers**:
 2. **Default posture = Prohibited (red).** A talent only shows amber/green where their **existing AI-use standing instruction** says so. Unset = red. The standing-instructions setting copy must be updated to make clear it now *also* drives the public RSL/consent posture.
 3. **Two-key publication gate — be very careful with the public internet.** Even when a talent opts in, **nothing is served publicly until an admin approves it per-talent.** Default **off**; admin holds the master switch over all public exposure. **Unlisted per-talent URLs only — no enumerable public directory.**
 4. **Monetization:** RSL `<payment>` terms route AI use through our **existing fee + `royaltySources`** machinery. Image Vault is the paid rail.
+5. **Posture scope (Q2):** start with the **two AI/biometric categories the Registry maps cleanly** — `training` (§39G) and `replica` (§39E). These drive the headline stoplight + RSL `<permits>`/`<prohibits>`. Other categories (`dub` §39D, `vfx-this`, `reuse`, `marketing`) are carried as **stubs** in the model and rendered as detail rows, but don't yet emit standalone RSL usage terms — wired in later behind the same derivation.
+6. **Registry federation reality (Q1 — researched):** RSL Media has **no public self-serve write API today**. It's a *"request to partner… to help shape the next phase"* programme; registration requires **identity verification** on rslmedia.org, is **US/EU only**, and the "Human Consent Standard 1.0" is a **draft**. So Phase 3 is **deferred to a feature-flagged adapter + a manual "claim & paste your Human Consent ID" bridge**, plus a business action to join the partner programme — *not* programmatic minting. See revised Phase 3.
 
 ---
 
@@ -80,7 +82,22 @@ always           → PERMITTED (green)   → <permits>…</permits> (+ payment i
 unset / missing  → PROHIBITED (red)    → prohibit (default-deny)
 ```
 
-"AI use-categories" for posture = the `sensitive` AI ones: **`training` (§39G)** and **`replica` (§39E)**. (Open question Q2 on whether `dub`/others count.) A new helper `lib/rsl/posture.ts#derivePosture(talentId)` returns the per-category stoplight + an overall worst-case light for the badge.
+"AI use-categories" for posture = the two the Registry maps cleanly: **`training` (§39G)** and **`replica` (§39E)** (Q2). A new helper `lib/rsl/posture.ts#derivePosture(talentId)` returns the per-category stoplight + an overall worst-case light for the badge.
+
+**Stubs for the rest (Q2).** The derivation is written over a category list, not hard-coded to two: `RSL_USAGE_MAP` in `lib/rsl/posture.ts` maps each `useCategoryId` → an RSL usage token, but only `training`/`replica` have non-null tokens for now:
+
+```ts
+// lib/rsl/posture.ts
+export const RSL_USAGE_MAP: Record<string, string | null> = {
+  training: "ai-train",   // §39G — live
+  replica:  "ai-use",     // §39E — live
+  dub:      null,         // §39D — stub: rendered as detail, no standalone RSL term yet
+  "vfx-this": null,       // stub
+  reuse:    null,         // stub
+  marketing: null,        // stub
+};
+```
+`derivePosture` skips `null`-mapped categories when emitting `<permits>`/`<prohibits>`, but still returns their stoplight for the human-readable detail rows. Adding a category later is a one-line map change — no schema or route change.
 
 ---
 
@@ -180,26 +197,30 @@ New `app/(vault)/admin/rsl/` + `app/api/admin/rsl/route.ts`:
 
 ### Phase 2 — Be the License Server (Open License Protocol)
 
-Wrap, don't replace, the existing licence engine.
+Wrap, don't replace, the existing licence engine. **OLP is concretely implementable today**: per the [OLP spec](https://rslstandard.org/api) it's an **OAuth 2.0 extension** — clients hit a token endpoint with `grant_type=rsl`, and RSL License Servers (explicitly intended to be run by "licensing agencies" — i.e. us) issue licenses as OAuth-style credentials. This maps neatly onto our existing token/`rsk_`-key issuance.
 
-- **`POST /api/rsl/olp`** (`lib/rsl/olp.ts`) — RSL Open License Protocol endpoint:
+- **`POST /api/rsl/olp/token`** — OAuth2 token endpoint, `grant_type=rsl`. Client presents the content ref (slug) + requested usage; we return either a license-acquisition challenge (payment/consent required) or, once granted, a bearer license token.
+- **`POST /api/rsl/olp`** (`lib/rsl/olp.ts`) — license-acquisition flow behind the token endpoint:
   1. Machine agent posts an offer/request referencing `content` (slug) + intended `usage` (`ai-train` / `ai-use`) + requesting org.
   2. If the talent posture is **red** for that usage → `403` + RSL `<prohibits>` body. **Amber/green** → create a **PENDING licence** by calling the existing `POST /api/licences` internals (server-side, no cookie forwarding — same pattern as skills), with `permitAiTraining` / `useCategoriesJson` derived from the request.
   3. Return an **RSL license offer**: the `royaltySources` unit pricing as `<payment>`, plus a status URL. Approval still flows through the human dual-custody/standing-instruction path — `always` can auto-grant, `case_by_case` notifies the talent. **No bypass of consent.**
   4. On approval + payment, issue a **license token** (mirror `royaltySources` `rsk_` key issuance / download-token TTL pattern) the agent presents for metered use; usage accrues via `usageEvents`.
-- **Crawler Authorization Protocol (CAP):** unauthenticated AI crawler hitting a gated resource gets `402`/`403` + a `Link: rel="license"` pointer to the OLP endpoint. (Lightweight; full CAP/EMS are later.)
+- **Crawler Authentication Protocol (CAP):** unauthenticated AI crawler hitting a gated resource gets `402`/`403` + a `Link: rel="license"` pointer to the OLP token endpoint. (Lightweight pointer first; full CAP verification later.)
+- **Encrypted Media Standard (EMS) — later.** RSL's EMS lets a licensed client retrieve a symmetric **JWK** to decrypt an asset. This aligns with our existing `lib/crypto` + R2 encryption-at-rest, and is a natural future enhancement to gate *actual scan delivery* through a licensed key handoff — but it is **out of scope for Phase 2** (we keep delivery on the existing dual-custody/bridge path).
 - Everything is logged to `complianceEvents` for a clean provenance chain (machine licence → grant → metered use).
 
 This is the monetization answer made real: **an AI company that wants a likeness is routed into our paid fee + royalty rails**, with consent enforced by the talent's existing dispositions.
 
 ---
 
-### Phase 3 — Federate to the Human Consent Registry
+### Phase 3 — Federate to the Human Consent Registry (deferred / manual-bridge first)
 
-- **`lib/rsl/registry.ts`** — adapter/client for RSL Media's Human Consent Registry: push the talent's posture + minimal identity, receive a **Human Consent ID**, store on `rslProfiles.humanConsentId`, track `registryStatus`.
-- Talent action in settings: *"Register with the Human Consent Registry"* → on success, show the **verified badge** on their public profile and (optionally) in-app.
-- Behind a feature flag (`aiSettings`-style) — the external Registry launched June 2026 and a public write API may not exist yet. Build the adapter against the documented model (stoplight + Human Consent ID); ship Publish/OLP first regardless. **Open question Q1.**
-- Keep direction one-way for now (Image Vault → Registry). Two-way sync (Registry as source of truth) is out of scope.
+**Researched constraint (Q1):** RSL Media's registry (`registry.rslmedia.org`) launched June 2026 with **no public self-serve write API**. It's a *"request to partner to help shape the next phase"* programme; registration requires **identity verification** on rslmedia.org, is **US/EU only**, and the **Human Consent Standard 1.0 is a draft**. So we cannot programmatically mint Human Consent IDs today. Plan:
+
+- **Business action (now):** submit the RSL Media **partner request** (entertainment / rights-management track) to get on the roadmap and early API access. This is the gating dependency, not code.
+- **Interim — manual claim bridge (shippable now):** in settings, a *"Claim your Human Consent ID"* card that **deep-links the talent to rslmedia.org** pre-filled where possible (name, profession, links, and their derived stoplight so the two systems agree), then lets them **paste the returned Human Consent ID back**. We store it on `rslProfiles.humanConsentId`, set `registryStatus = "linked"`, and render the **verified badge**. No API dependency.
+- **Future — adapter (`lib/rsl/registry.ts`), feature-flagged:** when the partner/API path opens, swap the manual bridge for programmatic push (posture + minimal identity → Human Consent ID) against the then-published spec. Keep the same storage/badge so the UI doesn't change.
+- One-way only (Image Vault → Registry); Registry-as-source-of-truth is out of scope. Surface the **US/EU-only** limitation in the UI so non-eligible talent aren't misled.
 
 ---
 
@@ -229,8 +250,8 @@ Each phase is independently valuable and shippable. Phase 1 alone delivers the m
 
 ## Open questions
 
-1. **External Registry API.** Does RSL Media expose a public write API / partner programme to obtain Human Consent IDs programmatically yet (June 2026 launch)? If not, Phase 3 ships as "export your posture / manual claim" until it does. Want me to confirm via their docs/contact?
-2. **Posture category set.** Should the public stoplight reflect **only** `training` (§39G) + `replica` (§39E), or also `dub` (§39D) and the non-AI categories? My default: the two AI/biometric ones drive the headline light; others listed as detail.
+1. ✅ **Resolved — External Registry API.** No public write API today; partner-request stage, identity-verified, US/EU-only, draft standard. Phase 3 = manual claim-and-paste bridge now + feature-flagged adapter later + submit the partner request. (See revised Phase 3.) *Remaining business action: who submits the RSL Media partner request?*
+2. ✅ **Resolved — Posture category set.** Start with `training` (§39G) + `replica` (§39E); other categories carried as stubs in `RSL_USAGE_MAP`, rendered as detail, no standalone RSL term yet. (See Core principle.)
 3. **Slug style.** Unguessable random slug (max privacy, recommended) vs a talent-chosen vanity handle (nicer to share, slightly more enumerable). Default: random, with optional vanity later.
 4. **`robots.txt`/`noindex`.** Keep all public RSL `noindex` + rely on talent sharing the link (recommended, matches "unlisted"), or allow indexing for talent who explicitly want maximum discoverability?
 5. **Domain.** Confirm public surfaces live on `changling.io` (per the MCP connect example in `CLAUDE.md`) and not a separate apex.
