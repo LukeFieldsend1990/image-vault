@@ -241,10 +241,11 @@ function CastRequestCard({ group }: { group: ProductionGroup }) {
           </p>
         )}
 
-        {/* CTA */}
+        {/* CTA — go straight to the consent document for this request, where the
+            talent reviews terms, picks §39 uses, and gives (or declines) consent. */}
         <div className="flex items-center justify-end pt-2" style={{ borderTop: "1px solid rgba(180,83,9,0.15)" }}>
           <Link
-            href={`/vault/licences?highlight=${primary.id}`}
+            href={`/consent/${primary.id}`}
             className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide hover:opacity-80 transition-opacity"
             style={{ color: "#b45309" }}
           >
