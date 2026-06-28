@@ -14,7 +14,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { pitchVignettes, talentProfiles, users } from "./schema";
 import { submitVignetteJob, pollVignetteJob, HiggsfieldError } from "./higgs-client";
-import { presignR2GetUrl, r2PresignConfigFromEnv } from "../../lib/r2/presign";
+import { signImageToken } from "../../lib/pitch/imageToken";
 
 interface Env {
   DB: D1Database;
@@ -23,16 +23,13 @@ interface Env {
   HIGGSFIELD_API_KEY?: string;
   HIGGSFIELD_MODEL?: string;
   APP_URL: string;
-  // R2 S3 credentials — used to presign short-lived GET URLs that Higgsfield
-  // fetches directly (no need to relay image bytes through this worker).
-  CF_ACCOUNT_ID?: string;
-  R2_ACCESS_KEY_ID?: string;
-  R2_SECRET_ACCESS_KEY?: string;
-  R2_BUCKET_NAME?: string;
+  // Shared HMAC secret for minting gated image-proxy tokens that Higgsfield
+  // uses to fetch source frames via the main app (GET /api/pitch/image).
+  PITCH_IMAGE_TOKEN_SECRET?: string;
 }
 
-// Presigned source-image URLs live long enough to cover queue delay + the
-// generation poll window, with margin.
+// Image-proxy tokens live long enough to cover queue delay + the generation
+// poll window, with margin.
 const SOURCE_URL_TTL_SECS = 2 * 60 * 60;  // 2 hours
 
 interface PitchMessage {
@@ -168,22 +165,25 @@ async function processPitchJob(pitchId: string, env: Env): Promise<void> {
   try { sourceKeys = JSON.parse(pitch.sourceImageKeys ?? "[]"); } catch { /* empty */ }
 
   // Higgsfield pulls images from URLs (input_images[].image_url). Our R2 bucket
-  // is private, so we presign short-lived GET URLs Higgsfield can fetch directly
-  // — no relaying image bytes through this worker, no public bucket.
-  const presignCfg = r2PresignConfigFromEnv(env as unknown as Record<string, string | undefined>);
-  if (!presignCfg) {
+  // is private, so we hand it short-lived, HMAC-signed proxy URLs on our own
+  // domain (GET /api/pitch/image). No public bucket, no presigned S3 link, no
+  // account id in the URL — just a token that authorises one specific object.
+  const tokenSecret = env.PITCH_IMAGE_TOKEN_SECRET;
+  if (!tokenSecret) {
     await updateStatus(db, pitchId, "failed", {
-      error_text: "Pitch vignette generation isn't available yet — R2 image signing isn't configured.",
+      error_text: "Pitch vignette generation isn't available yet — image proxy signing isn't configured.",
     });
     return;
   }
 
+  const appUrl = env.APP_URL.replace(/\/$/, "");
   const imageUrls: string[] = [];
   for (const key of sourceKeys.slice(0, 4)) {
     // Skip keys that no longer exist in R2 rather than handing Higgsfield a dead link.
     const head = await env.SCANS_BUCKET.head(key);
     if (!head) continue;
-    imageUrls.push(await presignR2GetUrl(presignCfg, key, SOURCE_URL_TTL_SECS));
+    const token = await signImageToken(tokenSecret, key, SOURCE_URL_TTL_SECS);
+    imageUrls.push(`${appUrl}/api/pitch/image?token=${encodeURIComponent(token)}`);
   }
 
   if (imageUrls.length === 0) {

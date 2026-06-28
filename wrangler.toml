@@ -110,3 +110,5 @@ service = "image-vault-ai-cron"
 #                              Generate: openssl rand -hex 32
 # HIGGSFIELD_API_KEY          - Higgsfield AI video generation API key (https://higgsfield.ai)
 # HIGGSFIELD_WEBHOOK_SECRET   - HMAC secret for verifying Higgsfield webhook callbacks (optional)
+# PITCH_IMAGE_TOKEN_SECRET    - HMAC-SHA256 key for gated pitch image-proxy URLs (shared with higgs-worker)
+#                              Generate: openssl rand -hex 32
