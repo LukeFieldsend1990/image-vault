@@ -14,7 +14,7 @@ import {
   grantRequest,
 } from "@/lib/rsl/olp";
 import { capHeaders } from "@/lib/rsl/cap";
-import { notifyTalentAndReps } from "@/lib/notifications/create";
+import { notifyTalentAndReps, notifyAdmins } from "@/lib/notifications/create";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
 
 /**
@@ -178,11 +178,19 @@ export async function POST(req: NextRequest) {
     intendedUse,
   }));
   if (!hadPending) {
+    const who = clientName || clientId || "A machine client";
     void notifyTalentAndReps(db, row.profile.talentId, {
       type: "rsl_license_request",
       title: "AI licence request",
-      body: `${clientName || clientId || "A machine client"} requested to license your likeness for ${usage}.`,
+      body: `${who} requested to license your likeness for ${usage}.`,
       href: "/settings",
+    });
+    // Admins action OLP requests, so notify them too (debounced like the talent's).
+    void notifyAdmins(db, {
+      type: "rsl_license_request_admin",
+      title: "AI licence request to review",
+      body: `${who} requested to license a talent's likeness for ${usage}.`,
+      href: "/admin/rsl",
     });
   }
   return NextResponse.json(
