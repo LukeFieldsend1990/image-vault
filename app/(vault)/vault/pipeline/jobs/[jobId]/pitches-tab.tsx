@@ -18,6 +18,14 @@ interface Vignette {
   output_r2_key: string | null;
 }
 
+interface SourceImage {
+  id: string;
+  filename: string;
+  r2Key: string;
+  sizeBytes: number;
+  contentType: string | null;
+}
+
 interface PitchesTabProps {
   packageId: string;
   sessionRole: string;
@@ -63,6 +71,12 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
   const [tone, setTone] = useState<Tone>("dramatic");
   const [includeAudio, setIncludeAudio] = useState(false);
 
+  const [sourceImages, setSourceImages] = useState<SourceImage[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+
+  const MAX_SOURCES = 4;
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isRep = sessionRole === "rep" || sessionRole === "admin";
@@ -92,15 +106,47 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [packageId]);
 
+  async function loadSourceImages() {
+    setImagesLoading(true);
+    try {
+      const res = await fetch(`/api/pitch/source-images?packageId=${packageId}`);
+      if (!res.ok) return;
+      const data = await res.json() as { images: SourceImage[] };
+      setSourceImages(data.images);
+    } catch {
+      /* leave empty — form shows the no-images state */
+    } finally {
+      setImagesLoading(false);
+    }
+  }
+
+  function openForm() {
+    setShowForm(true);
+    setError(null);
+    if (sourceImages.length === 0) loadSourceImages();
+  }
+
+  function toggleKey(key: string) {
+    setSelectedKeys((keys) => {
+      if (keys.includes(key)) return keys.filter((k) => k !== key);
+      if (keys.length >= MAX_SOURCES) return keys;  // cap at MAX_SOURCES
+      return [...keys, key];
+    });
+  }
+
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
+    if (selectedKeys.length === 0) {
+      setError("Select at least one source image.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const res = await fetch("/api/pitch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId, productionName, characterDescription, tone, includeAudio, sourceImageKeys: [] }),
+        body: JSON.stringify({ packageId, productionName, characterDescription, tone, includeAudio, sourceImageKeys: selectedKeys }),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) {
@@ -111,6 +157,7 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
       setProductionName("");
       setCharacterDescription("");
       setTone("dramatic");
+      setSelectedKeys([]);
       await loadVignettes();
       // Restart polling
       if (!intervalRef.current) {
@@ -139,7 +186,7 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
         </h2>
         {isRep && !showForm && (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={openForm}
             className="text-xs px-3 py-1.5 rounded font-medium text-white transition hover:opacity-90"
             style={{ background: "var(--color-accent)" }}
           >
@@ -184,6 +231,62 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
             />
           </div>
 
+          {/* Source image picker */}
+          <div>
+            <label className="block text-xs mb-1" style={{ color: "var(--color-muted)" }}>
+              Source images
+              <span className="ml-1" style={{ color: "var(--color-muted)", opacity: 0.7 }}>
+                ({selectedKeys.length}/{MAX_SOURCES} selected)
+              </span>
+            </label>
+            {imagesLoading ? (
+              <p className="text-xs py-2" style={{ color: "var(--color-muted)" }}>Loading images…</p>
+            ) : sourceImages.length === 0 ? (
+              <p className="text-xs py-2" style={{ color: "var(--color-muted)" }}>
+                No images found in this package. Upload image frames to generate a vignette.
+              </p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                {sourceImages.map((img) => {
+                  const selected = selectedKeys.includes(img.r2Key);
+                  const idx = selectedKeys.indexOf(img.r2Key);
+                  const atCap = !selected && selectedKeys.length >= MAX_SOURCES;
+                  return (
+                    <button
+                      type="button"
+                      key={img.id}
+                      onClick={() => toggleKey(img.r2Key)}
+                      disabled={atCap}
+                      title={img.filename}
+                      className="relative aspect-square rounded overflow-hidden border transition disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        borderColor: selected ? "var(--color-accent)" : "var(--color-border)",
+                        borderWidth: selected ? 2 : 1,
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/pitch/source-images/${img.id}/thumb`}
+                        alt={img.filename}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                        style={{ background: "var(--color-bg)" }}
+                      />
+                      {selected && (
+                        <span
+                          className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                          style={{ background: "var(--color-accent)" }}
+                        >
+                          {idx + 1}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-4 flex-wrap">
             <div className="flex-1 min-w-32">
               <label className="block text-xs mb-1" style={{ color: "var(--color-muted)" }}>Tone</label>
@@ -221,7 +324,7 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
           <div className="flex gap-2 justify-end">
             <button
               type="button"
-              onClick={() => { setShowForm(false); setError(null); }}
+              onClick={() => { setShowForm(false); setError(null); setSelectedKeys([]); }}
               className="text-xs px-3 py-1.5 rounded border"
               style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
             >
@@ -229,7 +332,7 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || selectedKeys.length === 0}
               className="text-xs px-4 py-1.5 rounded font-medium text-white transition hover:opacity-90 disabled:opacity-50"
               style={{ background: "var(--color-accent)" }}
             >
