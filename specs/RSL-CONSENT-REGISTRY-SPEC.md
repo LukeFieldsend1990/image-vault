@@ -1,6 +1,6 @@
 # Spec — RSL (Really Simple Licensing) + Human Consent Registry
 
-**Status:** Phase 1 implemented · Phases 2–3 proposed · **Author:** Luke + Claude · **Date:** 2026-06-28
+**Status:** Phases 1–2 implemented · Phase 3 proposed · **Author:** Luke + Claude · **Date:** 2026-06-28
 **Origin:** Cate Blanchett / RSL Media's [Human Consent Registry](https://gizmodo.com/cate-blanchett-launches-human-consent-registry-to-help-protect-your-likeness-from-ai-industry-scraping-2000776268) (free public registry; red/amber/green AI-use consent; "Human Consent ID") + the [RSL 1.0 standard](https://rslstandard.org/rsl) (machine-readable licensing for the AI web; RSS co-creator). Both push the same mission as Image Vault: **people keep custody of their likeness, and machines can read the terms.**
 
 ---
@@ -209,6 +209,8 @@ Wrap, don't replace, the existing licence engine. **OLP is concretely implementa
 - **Encrypted Media Standard (EMS) — later.** RSL's EMS lets a licensed client retrieve a symmetric **JWK** to decrypt an asset. This aligns with our existing `lib/crypto` + R2 encryption-at-rest, and is a natural future enhancement to gate *actual scan delivery* through a licensed key handoff — but it is **out of scope for Phase 2** (we keep delivery on the existing dual-custody/bridge path).
 - Everything is logged to `complianceEvents` for a clean provenance chain (machine licence → grant → metered use).
 
+> **Built vs deferred (Phase 2 as shipped).** Built: the full OLP request/consent/credential state machine — discovery, `grant_type=rsl` token endpoint, posture-enforced decision (deny/auto-grant/route-to-human), license-token mint + one-time delivery + introspection, CAP `Link`/`WWW-Authenticate` helpers, and an admin review console. The license token attests **granted consent** for a usage. Deferred (Phase 2.5): wiring a granted OLP request into a *formal* `licences` row + `royaltySources` so metered **billing/settlement** actually moves money (needs a licensee identity + payment integration — a product decision); appending OLP events into the hash-chained `complianceEvents` ledger (kept in `rsl_license_requests` for now to avoid corrupting the chain); a talent-facing requests UI (the grant/deny **API** already authorises talent + rep, so it's surfaced in the admin console first); and full CAP enforcement on the data-plane download/bridge paths + EMS key handoff.
+
 This is the monetization answer made real: **an AI company that wants a likeness is routed into our paid fee + royalty rails**, with consent enforced by the talent's existing dispositions.
 
 ---
@@ -241,7 +243,7 @@ This is the monetization answer made real: **an AI company that wants a likeness
 | Phase | Ships | Effort |
 |---|---|---|
 | **1 — Publish + Declare** ✅ | `rslProfiles` table (`0090_rsl_profiles.sql`), `lib/rsl/{posture,visibility,profile,xml}.ts`, settings toggle + standing-instructions copy, admin console (`/admin/rsl`), public `/c/<slug>` + `/api/rsl/<slug>/license.xml`, `robots.txt` + `.well-known/rsl.xml` baseline | Medium — **done** |
-| **2 — License Server** | `POST /api/rsl/olp`, CAP pointers, RSL offer/token issuance over existing licence + royalty flow, `usageEvents` accrual | Medium–High |
+| **2 — License Server** ✅ | OLP discovery (`GET /api/rsl/olp`) + token endpoint (`POST /api/rsl/olp/token`, grant_type=rsl) + poll + introspect; `rsl_license_requests` table (`0091`); posture-enforced grant/deny (red denies, green auto-grants, amber → human review); license-token mint/introspect; CAP helpers; admin review console | Medium–High — **done** |
 | **3 — Federate** | `registry.ts` client, Human Consent ID storage + badge, settings action, feature flag | Small–Medium (gated on external API) |
 
 Each phase is independently valuable and shippable. Phase 1 alone delivers the mission-aligned, press-ready story ("Image Vault speaks RSL; your talent get a public consent posture and can carry a Human Consent ID").
