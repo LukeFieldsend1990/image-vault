@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
-import { notifications, talentReps } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { notifications, talentReps, users } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
+import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -28,6 +29,20 @@ export async function createNotification(db: Db, n: NewNotification): Promise<vo
       read: false,
       createdAt: Math.floor(Date.now() / 1000),
     });
+  } catch {
+    // best-effort
+  }
+}
+
+/** Notify every platform admin (whitelist in lib/auth/adminEmails). Best-effort. */
+export async function notifyAdmins(db: Db, n: Omit<NewNotification, "userId">): Promise<void> {
+  try {
+    const admins = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(inArray(users.email, ADMIN_EMAILS as string[]))
+      .all();
+    await Promise.all(admins.map((a) => createNotification(db, { ...n, userId: a.id })));
   } catch {
     // best-effort
   }

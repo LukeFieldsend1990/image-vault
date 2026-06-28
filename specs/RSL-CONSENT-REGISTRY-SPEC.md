@@ -1,7 +1,19 @@
 # Spec — RSL (Really Simple Licensing) + Human Consent Registry
 
-**Status:** Phases 1–2 implemented · Phase 3 manual bridge implemented (programmatic adapter pending RSL Media partner API) · **Author:** Luke + Claude · **Date:** 2026-06-28
+**Status:** Phases 1–3 **merged to `main`** (PR #410) · D1 migrations `0090`/`0091` **applied to production** · admin notifications on new requests **added** · **Author:** Luke + Claude · **Date:** 2026-06-28
 **Origin:** Cate Blanchett / RSL Media's [Human Consent Registry](https://gizmodo.com/cate-blanchett-launches-human-consent-registry-to-help-protect-your-likeness-from-ai-industry-scraping-2000776268) (free public registry; red/amber/green AI-use consent; "Human Consent ID") + the [RSL 1.0 standard](https://rslstandard.org/rsl) (machine-readable licensing for the AI web; RSS co-creator). Both push the same mission as Image Vault: **people keep custody of their likeness, and machines can read the terms.**
+
+---
+
+## Outstanding follow-ups (post-merge)
+
+The feature is live, but two threads remain open by design:
+
+1. **RSL Media partner request (Phase 3 programmatic adapter).** The Human Consent Registry has no public self-serve write API yet — it's a partner-request programme, identity-verified, US/EU-only, on a draft standard. Today we bridge **manually** (talent claims a Human Consent ID on rslmedia.org and pastes it back). The programmatic push/lookup adapter (`lib/rsl/registry.ts` → real API) is blocked on RSL Media opening partner access. **Owner: Martin** — submit the partner request (brief + draft email in Notion → "Image Vault concepts › RSL Media partner request"). When the API opens, only `lib/rsl/registry.ts` changes; the stored `humanConsentId` field + badge UI stay as-is.
+
+2. **Phase 2.5 — OLP → real licence + payment settlement.** A granted OLP request currently mints a license token that attests **consent** for a usage; it does **not** yet move money. Wiring a grant into a formal `licences` row + `royaltySources` so AI use is **metered and billed** needs (a) a licensee identity for the machine client and (b) a payment-capture integration — both product decisions. Until then the consent rail and the billing rail are connected only by the existing `royaltySources`/`usageEvents` machinery, not auto-provisioned from OLP. Also deferred with it: folding OLP events into the hash-chained `complianceEvents` ledger; full data-plane CAP enforcement + EMS key handoff.
+
+> **Done since merge:** admins are now notified (alongside talent + reps) on a new amber OLP request, since admins action them (`notifyAdmins` → `/admin/rsl`, debounced).
 
 ---
 
