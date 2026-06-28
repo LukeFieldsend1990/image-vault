@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, users, scanPackages, talentReps } from "@/lib/db/schema";
+import { licences, users, scanPackages, talentReps, productionCast } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -55,8 +55,11 @@ export async function POST(
   } else if (session.role !== "admin" && licence.talentId !== session.sub) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (licence.status !== "PENDING") {
-    return NextResponse.json({ error: "Licence is not in PENDING state" }, { status: 409 });
+  // Both states represent a request the talent has not yet agreed to:
+  // PENDING (licensee asked for an existing package) and AWAITING_PACKAGE
+  // (production cast invitation, scan not yet attached). Either can be declined.
+  if (licence.status !== "PENDING" && licence.status !== "AWAITING_PACKAGE") {
+    return NextResponse.json({ error: "Licence is not awaiting your review" }, { status: 409 });
   }
   const licencePackageId = licence.packageId;
 
@@ -64,6 +67,24 @@ export async function POST(
     .update(licences)
     .set({ status: "DENIED", deniedAt: now, deniedReason: body.reason ?? null })
     .where(eq(licences.id, id));
+
+  // Mirror the accept-invite flow: if this licence is backed by a production
+  // cast row, mark it declined so the production sees the response.
+  void (async () => {
+    try {
+      const castRow = await db
+        .select({ id: productionCast.id })
+        .from(productionCast)
+        .where(eq(productionCast.licenceId, id))
+        .get();
+      if (castRow) {
+        await db
+          .update(productionCast)
+          .set({ status: "declined" })
+          .where(eq(productionCast.id, castRow.id));
+      }
+    } catch { /* non-fatal */ }
+  })();
 
   // Notify licensee (fire-and-forget)
   void (async () => {
