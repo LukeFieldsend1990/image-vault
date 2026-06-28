@@ -16,13 +16,47 @@ export interface SubmitVignetteParams {
   prompt: string;
   durationSeconds?: number;
   model?: string;
+  includeAudio?: boolean;
+}
+
+// Distinguishes transient failures (network blips, 5xx, rate limits) worth
+// retrying from terminal ones (missing/invalid key, bad request) that never
+// will. The worker uses `retryable` to decide between msg.retry() and a
+// graceful "failed" state.
+export class HiggsfieldError extends Error {
+  readonly retryable: boolean;
+  readonly status?: number;
+
+  constructor(message: string, opts: { retryable: boolean; status?: number }) {
+    super(message);
+    this.name = "HiggsfieldError";
+    this.retryable = opts.retryable;
+    this.status = opts.status;
+  }
+}
+
+// 5xx and 429 are transient; everything else (esp. 401/403/400) is terminal.
+function isRetryableStatus(status: number): boolean {
+  return status >= 500 || status === 429;
+}
+
+async function higgsFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    // Network-level failure (DNS, TLS, timeout) — worth a retry.
+    throw new HiggsfieldError(
+      `Higgsfield request failed: ${err instanceof Error ? err.message : String(err)}`,
+      { retryable: true }
+    );
+  }
 }
 
 export async function submitVignetteJob(
   apiKey: string,
   params: SubmitVignetteParams
 ): Promise<{ jobId: string }> {
-  const res = await fetch(`${HIGGS_BASE}/video/image-to-video`, {
+  const res = await higgsFetch(`${HIGGS_BASE}/video/image-to-video`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -33,18 +67,22 @@ export async function submitVignetteJob(
       prompt: params.prompt,
       duration: params.durationSeconds ?? 10,
       model: params.model ?? "kling-3.0",
+      audio: params.includeAudio ?? false,
       training: false,
     }),
   });
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Higgsfield submit failed ${res.status}: ${body}`);
+    throw new HiggsfieldError(`Higgsfield submit failed ${res.status}: ${body}`, {
+      retryable: isRetryableStatus(res.status),
+      status: res.status,
+    });
   }
 
   const data = await res.json() as { jobId?: string; job_id?: string; id?: string };
   const jobId = data.jobId ?? data.job_id ?? data.id;
-  if (!jobId) throw new Error("Higgsfield response missing jobId");
+  if (!jobId) throw new HiggsfieldError("Higgsfield response missing jobId", { retryable: false });
   return { jobId };
 }
 
@@ -52,12 +90,15 @@ export async function pollVignetteJob(
   apiKey: string,
   jobId: string
 ): Promise<HiggsJobResult> {
-  const res = await fetch(`${HIGGS_BASE}/video/${jobId}`, {
+  const res = await higgsFetch(`${HIGGS_BASE}/video/${jobId}`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
 
   if (!res.ok) {
-    throw new Error(`Higgsfield poll failed ${res.status}`);
+    throw new HiggsfieldError(`Higgsfield poll failed ${res.status}`, {
+      retryable: isRetryableStatus(res.status),
+      status: res.status,
+    });
   }
 
   const data = await res.json() as {

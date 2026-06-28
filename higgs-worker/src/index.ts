@@ -13,7 +13,7 @@
 import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { pitchVignettes, talentProfiles, users } from "./schema";
-import { submitVignetteJob, pollVignetteJob } from "./higgs-client";
+import { submitVignetteJob, pollVignetteJob, HiggsfieldError } from "./higgs-client";
 
 interface Env {
   DB: D1Database;
@@ -121,8 +121,16 @@ async function processPitchJob(pitchId: string, env: Env): Promise<void> {
   if (!pitch) throw new Error(`Pitch ${pitchId} not found`);
   if (pitch.status === "complete" || pitch.status === "failed") return;
 
+  // Graceful degradation: no API key provisioned yet. Mark the pitch failed
+  // with a clear, user-facing message rather than throwing (which would retry
+  // and eventually dead-letter, leaving the UI stuck on "Queued…" forever).
   const apiKey = env.HIGGSFIELD_API_KEY;
-  if (!apiKey) throw new Error("HIGGSFIELD_API_KEY not set");
+  if (!apiKey) {
+    await updateStatus(db, pitchId, "failed", {
+      error_text: "Pitch vignette generation isn't available yet — the Higgsfield integration hasn't been configured.",
+    });
+    return;
+  }
 
   // ── 1. Craft prompt ──────────────────────────────────────────────
 
@@ -203,6 +211,7 @@ async function processPitchJob(pitchId: string, env: Env): Promise<void> {
     prompt: generatedPrompt,
     durationSeconds: 10,
     model: env.HIGGSFIELD_MODEL ?? "kling-3.0",
+    includeAudio: pitch.includeAudio,
   });
 
   await updateStatus(db, pitchId, "generating", { higgsfield_job_id: jobId });
@@ -249,15 +258,42 @@ function sleep(ms: number): Promise<void> {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
+const MAX_RETRIES = 2;  // mirrors max_retries in higgs-worker/wrangler.toml
+
+async function markPitchFailed(env: Env, pitchId: string, message: string): Promise<void> {
+  try {
+    await updateStatus(getDb(env), pitchId, "failed", { error_text: message });
+  } catch (e) {
+    console.error(`[higgs-worker] could not mark pitch ${pitchId} failed:`, e);
+  }
+}
+
 export default {
   async queue(batch: MessageBatch<PitchMessage>, env: Env): Promise<void> {
     for (const msg of batch.messages) {
+      const pitchId = msg.body.pitchId;
       try {
-        await processPitchJob(msg.body.pitchId, env);
+        await processPitchJob(pitchId, env);
         msg.ack();
       } catch (err) {
-        console.error(`[higgs-worker] pitch ${msg.body.pitchId} failed:`, err);
-        msg.retry();
+        // Transient failures (network, 5xx, rate limit) are retried until the
+        // queue's retry budget is spent; terminal ones (bad key, 4xx, bad
+        // response) fail fast. Either way, once we stop retrying we surface a
+        // "failed" status so the pitch never sits stuck mid-generation.
+        const retryable = err instanceof HiggsfieldError ? err.retryable : true;
+        const exhausted = msg.attempts > MAX_RETRIES;
+        console.error(
+          `[higgs-worker] pitch ${pitchId} failed (attempt ${msg.attempts}, retryable=${retryable}):`,
+          err
+        );
+
+        if (retryable && !exhausted) {
+          msg.retry();
+        } else {
+          const message = err instanceof Error ? err.message : "Pitch vignette generation failed.";
+          await markPitchFailed(env, pitchId, message);
+          msg.ack();
+        }
       }
     }
   },

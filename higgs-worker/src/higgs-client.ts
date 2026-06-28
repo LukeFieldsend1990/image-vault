@@ -1,2 +1,2 @@
 // Higgsfield API client — re-exported in worker context
-export { submitVignetteJob, pollVignetteJob } from "../../lib/higgs/client";
+export { submitVignetteJob, pollVignetteJob, HiggsfieldError } from "../../lib/higgs/client";
