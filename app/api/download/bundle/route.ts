@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
 import { licences, scanFiles, downloadEvents, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-<<<<<<< Updated upstream
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-=======
-import { getRequestContext } from "@cloudflare/next-on-pages";
->>>>>>> Stashed changes
 import { eq, inArray, and } from "drizzle-orm";
 import type { DualCustodySession } from "@/app/api/licences/[id]/download/initiate/route";
 
