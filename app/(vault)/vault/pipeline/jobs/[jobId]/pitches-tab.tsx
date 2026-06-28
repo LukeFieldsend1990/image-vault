@@ -65,6 +65,7 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const [productionName, setProductionName] = useState("");
   const [characterDescription, setCharacterDescription] = useState("");
@@ -165,6 +166,27 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleRetry(id: string) {
+    setRetryingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/pitch/${id}/retry`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        setError(d.error ?? "Retry failed");
+        return;
+      }
+      // Optimistically flip to queued, then resume polling.
+      setVignettes((vs) => vs.map((x) => x.id === id ? { ...x, status: "pending", error_text: null } : x));
+      if (!intervalRef.current) {
+        intervalRef.current = setInterval(loadVignettes, 6000);
+      }
+      await loadVignettes();
+    } finally {
+      setRetryingId(null);
     }
   }
 
@@ -423,9 +445,23 @@ export default function PitchesTab({ packageId, sessionRole }: PitchesTabProps) 
                 </div>
               )}
 
-              {/* Error */}
-              {v.status === "failed" && v.error_text && (
-                <p className="mt-2 text-xs" style={{ color: "#991b1b" }}>{v.error_text}</p>
+              {/* Error + retry */}
+              {v.status === "failed" && (
+                <div className="mt-2 flex items-start justify-between gap-3">
+                  <p className="flex-1 text-xs" style={{ color: "#991b1b" }}>
+                    {v.error_text ?? "Generation failed."}
+                  </p>
+                  {isRep && (
+                    <button
+                      onClick={() => handleRetry(v.id)}
+                      disabled={retryingId === v.id}
+                      className="shrink-0 text-xs px-3 py-1.5 rounded border font-medium transition hover:opacity-80 disabled:opacity-50"
+                      style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}
+                    >
+                      {retryingId === v.id ? "Retrying…" : "Retry"}
+                    </button>
+                  )}
+                </div>
               )}
 
               {/* Video player */}
