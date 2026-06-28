@@ -1,6 +1,6 @@
 # Spec — RSL (Really Simple Licensing) + Human Consent Registry
 
-**Status:** Phases 1–2 implemented · Phase 3 proposed · **Author:** Luke + Claude · **Date:** 2026-06-28
+**Status:** Phases 1–2 implemented · Phase 3 manual bridge implemented (programmatic adapter pending RSL Media partner API) · **Author:** Luke + Claude · **Date:** 2026-06-28
 **Origin:** Cate Blanchett / RSL Media's [Human Consent Registry](https://gizmodo.com/cate-blanchett-launches-human-consent-registry-to-help-protect-your-likeness-from-ai-industry-scraping-2000776268) (free public registry; red/amber/green AI-use consent; "Human Consent ID") + the [RSL 1.0 standard](https://rslstandard.org/rsl) (machine-readable licensing for the AI web; RSS co-creator). Both push the same mission as Image Vault: **people keep custody of their likeness, and machines can read the terms.**
 
 ---
@@ -244,7 +244,7 @@ This is the monetization answer made real: **an AI company that wants a likeness
 |---|---|---|
 | **1 — Publish + Declare** ✅ | `rslProfiles` table (`0090_rsl_profiles.sql`), `lib/rsl/{posture,visibility,profile,xml}.ts`, settings toggle + standing-instructions copy, admin console (`/admin/rsl`), public `/c/<slug>` + `/api/rsl/<slug>/license.xml`, `robots.txt` + `.well-known/rsl.xml` baseline | Medium — **done** |
 | **2 — License Server** ✅ | OLP discovery (`GET /api/rsl/olp`) + token endpoint (`POST /api/rsl/olp/token`, grant_type=rsl) + poll + introspect; `rsl_license_requests` table (`0091`); posture-enforced grant/deny (red denies, green auto-grants, amber → human review); license-token mint/introspect; CAP helpers; admin review console | Medium–High — **done** |
-| **3 — Federate** | `registry.ts` client, Human Consent ID storage + badge, settings action, feature flag | Small–Medium (gated on external API) |
+| **3 — Federate (manual bridge)** ✅ | `lib/rsl/registry.ts` (registry URL + ID normaliser), `humanConsentId` on `PATCH /api/rsl/profile`, settings claim-and-paste card (deep-link + paste + US/EU note), verified badge on `/c/<slug>` | Small — **done**. Programmatic adapter still pending the partner API (Martin's request) |
 
 Each phase is independently valuable and shippable. Phase 1 alone delivers the mission-aligned, press-ready story ("Image Vault speaks RSL; your talent get a public consent posture and can carry a Human Consent ID").
 

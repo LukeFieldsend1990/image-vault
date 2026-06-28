@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HUMAN_CONSENT_REGISTRY_URL, REGISTRY_ELIGIBILITY_NOTE } from "@/lib/rsl/registry";
 
 type Light = "red" | "amber" | "green";
 type Status = "not_published" | "awaiting_approval" | "live" | "blocked_vault_locked";
@@ -44,6 +45,7 @@ export default function RslConsentProfile() {
   const [error, setError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [profession, setProfession] = useState("");
+  const [hcid, setHcid] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -194,6 +196,69 @@ export default function RslConsentProfile() {
       <p className="text-[11px] mt-2" style={{ color: "var(--color-muted)" }}>
         Only a name, profession and links are ever shown publicly — never any scan or biometric data.
       </p>
+
+      {/* Human Consent Registry bridge */}
+      <div className="mt-5 pt-4" style={{ borderTop: "1px solid var(--color-border)" }}>
+        <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-muted)" }}>
+          Human Consent Registry
+        </p>
+        {vm.humanConsentId ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-medium px-2 py-1 rounded" style={{ background: "rgba(1,180,228,0.12)", color: "#0e7490" }}>
+              Linked · {vm.humanConsentId}
+            </span>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => { patch({ humanConsentId: null }); }}
+              className="text-[11px] underline"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Remove
+            </button>
+            <span className="w-full text-xs mt-1" style={{ color: "var(--color-muted)" }}>
+              Your Human Consent ID is shown as a verified badge on your public consent profile.
+            </span>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs mb-2" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
+              Get a portable <strong>Human Consent ID</strong> from RSL Media&apos;s registry and show it on your
+              profile. Register there, set the same stoplight (<strong>AI use: {overall.label}</strong>), then paste
+              your ID back here.
+            </p>
+            <a
+              href={HUMAN_CONSENT_REGISTRY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium mb-2"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Open the Human Consent Registry ↗
+            </a>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={hcid}
+                placeholder="Paste your Human Consent ID"
+                onChange={(e) => setHcid(e.target.value)}
+                className="flex-1 rounded px-2.5 py-1.5 text-sm"
+                style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+              />
+              <button
+                type="button"
+                disabled={saving || !hcid.trim()}
+                onClick={() => { patch({ humanConsentId: hcid.trim() }); setHcid(""); }}
+                className="rounded px-3 py-1.5 text-xs font-medium text-white"
+                style={{ background: "var(--color-accent)", opacity: hcid.trim() ? 1 : 0.5 }}
+              >
+                Link
+              </button>
+            </div>
+            <p className="text-[11px] mt-2" style={{ color: "var(--color-muted)" }}>{REGISTRY_ELIGIBILITY_NOTE}</p>
+          </>
+        )}
+      </div>
 
       {error && <p className="text-xs mt-3" style={{ color: "var(--color-accent)" }}>{error}</p>}
     </div>

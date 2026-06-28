@@ -12,6 +12,7 @@ import {
 } from "@/lib/rsl/profile";
 import { derivePosture } from "@/lib/rsl/posture";
 import { isPublic } from "@/lib/rsl/visibility";
+import { normalizeHumanConsentId } from "@/lib/rsl/registry";
 
 /**
  * The talent's own RSL consent-profile controls. A talent manages only their
@@ -77,6 +78,7 @@ export async function PATCH(req: NextRequest) {
     displayName?: unknown;
     profession?: unknown;
     links?: unknown;
+    humanConsentId?: unknown;
   } = {};
   try {
     body = JSON.parse(await req.text());
@@ -106,6 +108,19 @@ export async function PATCH(req: NextRequest) {
       if (links.length >= 8) break;
     }
     updates.linksJson = links.length ? JSON.stringify(links) : null;
+  }
+  // Human Consent Registry link (manual claim-and-paste bridge, Phase 3).
+  if ("humanConsentId" in body) {
+    const raw = body.humanConsentId;
+    if (raw === null || raw === "") {
+      updates.humanConsentId = null;
+      updates.registryStatus = "not_linked";
+    } else {
+      const hcid = normalizeHumanConsentId(raw);
+      if (!hcid) return NextResponse.json({ error: "Invalid Human Consent ID" }, { status: 400 });
+      updates.humanConsentId = hcid;
+      updates.registryStatus = "linked";
+    }
   }
 
   await db.update(rslProfiles).set(updates).where(eq(rslProfiles.talentId, session.sub));
