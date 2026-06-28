@@ -39,6 +39,9 @@ preview_bucket_name = "image-vault-scans-dev"
 APP_URL = "https://changling.io"
 # Higgsfield image2video model: dop-lite | dop-turbo | dop-preview
 HIGGSFIELD_MODEL = "dop-turbo"
+# R2 account + bucket for presigning source-image URLs (same values as the main app).
+CF_ACCOUNT_ID = "2db6ad770fad71b79fa3249b202c6c37"
+R2_BUCKET_NAME = "image-vault-scans"
 
 # -------------------------------------------------------------------
 # Secrets (set via: wrangler secret put SECRET_NAME --config higgs-worker/wrangler.toml)
@@ -47,3 +50,5 @@ HIGGSFIELD_MODEL = "dop-turbo"
 # HIGGSFIELD_API_KEY        - Higgsfield credentials as "KEY_ID:KEY_SECRET"
 #                             (sent as "Authorization: Key KEY_ID:KEY_SECRET")
 # HIGGSFIELD_WEBHOOK_SECRET - optional; verifies completion webhook (app/api/pitch/webhook)
+# R2_ACCESS_KEY_ID          - R2 API token access key (presigns source-image GET URLs)
+# R2_SECRET_ACCESS_KEY      - R2 API token secret access key (presigns source-image GET URLs)

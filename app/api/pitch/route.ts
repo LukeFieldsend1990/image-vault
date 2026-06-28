@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { pitchVignettes, scanPackages, talentReps, talentProfiles } from "@/lib/db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { pitchVignettes, scanPackages, talentReps, talentProfiles, scanFiles } from "@/lib/db/schema";
+import { eq, and, isNull, desc, inArray, like } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // GET /api/pitch?packageId=<uuid>  — list vignettes for a package
@@ -101,6 +101,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Talent has disabled pitch vignette generation" }, { status: 403 });
   }
 
+  // Validate the chosen source images actually belong to this package and are
+  // images. The worker presigns these keys into publicly-fetchable URLs, so we
+  // must never store a key the caller doesn't own.
+  const requestedKeys = Array.from(new Set((sourceImageKeys ?? []).filter((k): k is string => typeof k === "string")));
+  if (requestedKeys.length === 0) {
+    return NextResponse.json({ error: "At least one source image is required" }, { status: 400 });
+  }
+
+  const ownedRows = await db.select({ r2Key: scanFiles.r2Key })
+    .from(scanFiles)
+    .where(and(
+      eq(scanFiles.packageId, packageId),
+      inArray(scanFiles.r2Key, requestedKeys),
+      like(scanFiles.contentType, "image/%"),
+    ))
+    .all();
+
+  const validKeys = ownedRows.map((r) => r.r2Key);
+  if (validKeys.length === 0) {
+    return NextResponse.json({ error: "No valid source images for this package" }, { status: 400 });
+  }
+
   const id = crypto.randomUUID();
   const now = Math.floor(Date.now() / 1000);
 
@@ -113,7 +135,7 @@ export async function POST(req: NextRequest) {
     characterDescription,
     tone: tone ?? "dramatic",
     includeAudio: includeAudio ?? false,
-    sourceImageKeys: JSON.stringify(sourceImageKeys ?? []),
+    sourceImageKeys: JSON.stringify(validKeys),
     status: "pending",
     createdAt: now,
   });

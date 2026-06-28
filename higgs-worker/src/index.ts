@@ -14,6 +14,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import { pitchVignettes, talentProfiles, users } from "./schema";
 import { submitVignetteJob, pollVignetteJob, HiggsfieldError } from "./higgs-client";
+import { presignR2GetUrl, r2PresignConfigFromEnv } from "../../lib/r2/presign";
 
 interface Env {
   DB: D1Database;
@@ -22,7 +23,17 @@ interface Env {
   HIGGSFIELD_API_KEY?: string;
   HIGGSFIELD_MODEL?: string;
   APP_URL: string;
+  // R2 S3 credentials — used to presign short-lived GET URLs that Higgsfield
+  // fetches directly (no need to relay image bytes through this worker).
+  CF_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET_NAME?: string;
 }
+
+// Presigned source-image URLs live long enough to cover queue delay + the
+// generation poll window, with margin.
+const SOURCE_URL_TTL_SECS = 2 * 60 * 60;  // 2 hours
 
 interface PitchMessage {
   pitchId: string;
@@ -81,21 +92,6 @@ Tone: ${params.tone}`,
   return data.content.find((b) => b.type === "text")?.text?.trim() ?? "";
 }
 
-// ── R2 image fetch helper ─────────────────────────────────────────────────────
-// Higgsfield accepts image URLs. Since R2 Workers bindings can't generate
-// presigned URLs directly, we read the image bytes and re-upload them to
-// Higgsfield's image upload endpoint first, then pass the returned URL.
-// TODO: if your R2 bucket is public or behind a CDN, replace this with a direct URL.
-
-async function fetchImageAsBase64(bucket: R2Bucket, key: string): Promise<{ base64: string; contentType: string } | null> {
-  const obj = await bucket.get(key);
-  if (!obj) return null;
-
-  const bytes = await obj.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
-  const contentType = obj.httpMetadata?.contentType ?? "image/jpeg";
-  return { base64, contentType };
-}
 
 // ── Status update helper ──────────────────────────────────────────────────────
 
@@ -172,33 +168,22 @@ async function processPitchJob(pitchId: string, env: Env): Promise<void> {
   try { sourceKeys = JSON.parse(pitch.sourceImageKeys ?? "[]"); } catch { /* empty */ }
 
   // Higgsfield pulls images from URLs (input_images[].image_url). Our R2 bucket
-  // is private, so we hand the bytes to Higgsfield's image store and pass back
-  // the hosted URL it returns.
-  // UNCONFIRMED: the image-upload endpoint isn't in the public docs. We POST to
-  // the documented platform host and fall back to an inline data URI if that
-  // 404s/errors. Revisit once a key is provisioned and the upload path confirmed.
+  // is private, so we presign short-lived GET URLs Higgsfield can fetch directly
+  // — no relaying image bytes through this worker, no public bucket.
+  const presignCfg = r2PresignConfigFromEnv(env as unknown as Record<string, string | undefined>);
+  if (!presignCfg) {
+    await updateStatus(db, pitchId, "failed", {
+      error_text: "Pitch vignette generation isn't available yet — R2 image signing isn't configured.",
+    });
+    return;
+  }
+
   const imageUrls: string[] = [];
   for (const key of sourceKeys.slice(0, 4)) {
-    const img = await fetchImageAsBase64(env.SCANS_BUCKET, key);
-    if (!img) continue;
-
-    const uploadRes = await fetch(`https://platform.higgsfield.ai/v1/images`, {
-      method: "POST",
-      headers: {
-        Authorization: `Key ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ image: `data:${img.contentType};base64,${img.base64}` }),
-    });
-
-    if (uploadRes.ok) {
-      const uploadData = await uploadRes.json() as { url?: string; image_url?: string; id?: string };
-      const imageUrl = uploadData.url ?? uploadData.image_url;
-      if (imageUrl) imageUrls.push(imageUrl);
-    } else {
-      // Fallback: some Higgsfield models accept base64 data URIs directly in the prompt
-      imageUrls.push(`data:${img.contentType};base64,${img.base64}`);
-    }
+    // Skip keys that no longer exist in R2 rather than handing Higgsfield a dead link.
+    const head = await env.SCANS_BUCKET.head(key);
+    if (!head) continue;
+    imageUrls.push(await presignR2GetUrl(presignCfg, key, SOURCE_URL_TTL_SECS));
   }
 
   if (imageUrls.length === 0) {
