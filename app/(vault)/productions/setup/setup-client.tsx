@@ -458,18 +458,27 @@ export default function SetupClient() {
       const cr = await fetch(`/api/productions/${productionId}/cast`);
       const cd = await cr.json() as { cast?: CastRow[] };
       const rows = cd.cast ?? [];
-      let sent = 0, failed = 0;
-      for (const row of rows) {
-        if (row.status !== "placeholder" || row.tmdbId === null) continue;
-        const email = emailByTmdb.get(row.tmdbId);
-        if (!email) continue;
-        const rr = await fetch(`/api/productions/${productionId}/cast/${row.id}/resolve`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-        if (rr.ok) sent++; else failed++;
-      }
+      // Resolve the matched placeholders concurrently rather than one request at
+      // a time — each is an independent POST.
+      const targets = rows.filter(
+        (row) => row.status === "placeholder" && row.tmdbId !== null && emailByTmdb.has(row.tmdbId),
+      );
+      const outcomes = await Promise.all(
+        targets.map(async (row) => {
+          try {
+            const rr = await fetch(`/api/productions/${productionId}/cast/${row.id}/resolve`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: emailByTmdb.get(row.tmdbId!) }),
+            });
+            return rr.ok;
+          } catch {
+            return false;
+          }
+        }),
+      );
+      const sent = outcomes.filter(Boolean).length;
+      const failed = outcomes.length - sent;
       setSendResult({ sent, failed });
     } catch {
       setError("Network error sending requests.");
