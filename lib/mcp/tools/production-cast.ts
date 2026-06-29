@@ -343,7 +343,7 @@ registerMcpTool({
     }
 
     const production = await db
-      .select({ id: productions.id, name: productions.name, company: companyNameSql })
+      .select({ id: productions.id, name: productions.name, company: companyNameSql, organisationId: productions.organisationId })
       .from(productions)
       .where(eq(productions.id, productionId))
       .get();
@@ -470,6 +470,7 @@ registerMcpTool({
             permitAiTraining: member.permitAiTraining,
             proposedFee: member.proposedFee,
             productionId,
+            organisationId: production.organisationId ?? null,
             createdAt: now,
           });
           await mintLicenceCode(db, licenceId);

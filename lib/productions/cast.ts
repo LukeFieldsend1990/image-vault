@@ -179,7 +179,7 @@ export async function promoteCastMember(
   }
 
   const production = await db
-    .select({ id: productions.id, name: productions.name, company: companyNameSql })
+    .select({ id: productions.id, name: productions.name, company: companyNameSql, organisationId: productions.organisationId })
     .from(productions)
     .where(eq(productions.id, opts.productionId))
     .get();
@@ -259,6 +259,7 @@ export async function promoteCastMember(
       useCategoriesJson,
       proposedFee,
       productionId: opts.productionId,
+      organisationId: production.organisationId ?? null,
       createdAt: now,
     });
     await mintLicenceCode(db, licenceId);
