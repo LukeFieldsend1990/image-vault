@@ -509,13 +509,11 @@ export default function ProductionDetailClient() {
   async function handleSubmit() {
     const members = buildMembers();
     if (members.length === 0) { setSubmitError("No cast members to add."); return; }
-    // Licence terms are only required when at least one member is being invited
-    // by email. Name-only rows are reserved as placeholders with no licence yet.
-    const hasContactable = members.some((m) => Boolean((m as { email?: string }).email));
-    if (hasContactable) {
-      if (!terms.intendedUse.trim()) { setSubmitError("Intended use is required when inviting cast by email."); return; }
-      if (!terms.validFrom || !terms.validTo) { setSubmitError("Licence dates are required when inviting cast by email."); return; }
-    }
+    // Intended use + dates are required for every batch. Even name-only
+    // placeholders need them stored on the row, otherwise the rep-invite
+    // flow rejects the slot until terms exist.
+    if (!terms.intendedUse.trim()) { setSubmitError("Intended use is required."); return; }
+    if (!terms.validFrom || !terms.validTo) { setSubmitError("Licence dates are required."); return; }
 
     setSubmitting(true);
     setSubmitError("");
