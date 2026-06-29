@@ -33,6 +33,7 @@ type ConnectState =
 
 function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (castId: string) => void }) {
   const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
   const [state, setState] = useState<ConnectState>({ kind: "idle" });
 
   async function connect() {
@@ -46,7 +47,7 @@ function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (cas
       const r = await fetch(`/api/productions/${p.productionId}/cast/${p.castId}/rep-resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
+        body: JSON.stringify({ email: trimmed, message: message.trim() || undefined }),
       });
       const d = await r.json() as { ok?: boolean; status?: string; error?: string };
       if (!r.ok || !d.ok) {
@@ -124,7 +125,7 @@ function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (cas
               {p.companyName} reserved the role of <span className="font-medium" style={{ color: "var(--color-text)" }}>{role}</span> for your client.
               Enter their email to connect them — if they&apos;re not on Image Vault yet, we&apos;ll send them a signup link.
             </p>
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <input
                 type="email"
                 value={email}
@@ -132,7 +133,7 @@ function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (cas
                 onKeyDown={(e) => { if (e.key === "Enter") connect(); }}
                 placeholder="Your client's email address"
                 disabled={state.kind === "busy"}
-                className="flex-1 min-w-0"
+                className="w-full"
                 style={{
                   background: "var(--color-bg)",
                   border: `1px solid ${state.kind === "error" ? "var(--color-accent)" : "var(--color-border)"}`,
@@ -143,10 +144,29 @@ function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (cas
                   outline: "none",
                 }}
               />
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Add a personal note to your client (optional)"
+                disabled={state.kind === "busy"}
+                rows={3}
+                style={{
+                  width: "100%",
+                  background: "var(--color-bg)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 6,
+                  padding: "7px 11px",
+                  fontSize: 13,
+                  color: "var(--color-text)",
+                  outline: "none",
+                  resize: "none",
+                  display: "block",
+                }}
+              />
               <button
                 onClick={connect}
                 disabled={state.kind === "busy"}
-                className="shrink-0 rounded px-4 py-2 text-sm font-medium text-white"
+                className="rounded px-4 py-2 text-sm font-medium text-white"
                 style={{ background: "var(--color-accent)", opacity: state.kind === "busy" ? 0.6 : 1, cursor: state.kind === "busy" ? "not-allowed" : "pointer" }}
               >
                 {state.kind === "busy" ? "Connecting…" : "Connect client"}

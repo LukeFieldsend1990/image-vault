@@ -22,6 +22,7 @@ interface Assignment {
 export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: { className?: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
+  const [messages, setMessages] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -42,7 +43,7 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
       const r = await fetch(`/api/productions/${a.productionId}/cast/${a.castId}/rep-resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, message: (messages[a.castId] ?? "").trim() || undefined }),
       });
       const d = await r.json() as { ok?: boolean; error?: string };
       if (!r.ok || !d.ok) { setErrors((e) => ({ ...e, [a.castId]: d.error ?? "Couldn't connect your client." })); return; }
@@ -105,13 +106,21 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
                     <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>
                       Connect your client to send them this consent document.
                     </label>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="space-y-2">
                       <input
                         type="email"
                         value={emails[a.castId] ?? ""}
                         onChange={(e) => setEmails((m) => ({ ...m, [a.castId]: e.target.value }))}
                         placeholder="Your client's email"
-                        className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                        className="w-full rounded border px-3 py-2 text-sm outline-none"
+                        style={{ background: "var(--color-bg)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
+                      />
+                      <textarea
+                        value={messages[a.castId] ?? ""}
+                        onChange={(e) => setMessages((m) => ({ ...m, [a.castId]: e.target.value }))}
+                        placeholder="Add a personal note to your client (optional)"
+                        rows={3}
+                        className="w-full rounded border px-3 py-2 text-sm outline-none resize-none"
                         style={{ background: "var(--color-bg)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
                       />
                       <button

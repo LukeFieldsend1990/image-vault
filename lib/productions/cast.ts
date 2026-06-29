@@ -157,6 +157,7 @@ export async function promoteCastMember(
     baseUrl: string;
     overrides?: CastLicenceTerms;
     defaults?: CastLicenceTerms;  // lowest precedence: production-level default terms
+    repMessage?: string;  // optional personal note from the rep to their client
   }
 ): Promise<PromoteResult> {
   const email = opts.email.trim().toLowerCase();
@@ -282,6 +283,7 @@ export async function promoteCastMember(
       intendedUse,
       proposedFee: proposedFee ?? undefined,
       reviewUrl: `${opts.baseUrl}/licences/${licenceId}`,
+      repMessage: opts.repMessage,
     });
     await sendEmail({ to: email, subject, html }).catch(() => {});
 
@@ -339,6 +341,7 @@ export async function promoteCastMember(
     validFrom,
     validTo,
     signupUrl: `${opts.baseUrl}/signup?invite=${inviteId}`,
+    repMessage: opts.repMessage,
   });
   await sendEmail({ to: email, subject, html }).catch(() => {});
 
