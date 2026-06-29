@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { USE_CATEGORIES } from "@/lib/consent/use-categories";
 import type { ConsentDocViewModel } from "@/lib/consent/load";
@@ -91,6 +91,23 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
     } catch { /* non-fatal */ }
   }, [licenceId]);
   useEffect(() => { void refreshNego(); }, [refreshNego]);
+
+  // Once both the document and the negotiation thread have loaded, reflect the
+  // performer's latest open proposal in the document body — not just the
+  // negotiation-history panel. Without this the use-category checklist and the
+  // "In summary" block stay anchored to the licence's stored scope, so a use the
+  // performer has just proposed (e.g. AI training) appears in the history but is
+  // missing from the agreement itself. One-shot on load so it never clobbers the
+  // viewer's own edits or a post-action refresh.
+  const negoSeededRef = useRef(false);
+  useEffect(() => {
+    if (negoSeededRef.current) return;
+    if (!data || !nego) return; // wait for both before deciding the seed
+    negoSeededRef.current = true;
+    if (nego.pendingTalentCounter && !data.document.alreadyAccepted) {
+      setConsents(new Set(nego.pendingTalentCounter.scope));
+    }
+  }, [data, nego]);
 
   async function sendCounter() {
     if (!licenceId) return;
