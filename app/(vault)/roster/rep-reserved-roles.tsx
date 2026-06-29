@@ -59,62 +59,85 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
 
   return (
     <div className={className}>
-      <div className="rounded border px-5 py-4" style={{ borderColor: "var(--color-accent)", background: "color-mix(in srgb, var(--color-accent) 5%, var(--color-bg))" }}>
-        <p className="text-xs font-semibold mb-3" style={{ color: "var(--color-accent)" }}>
-          {visible.length === 1 ? "A production reserved a role for your client" : `${visible.length} reserved roles for your clients`}
-        </p>
-        <div className="space-y-2">
-          {visible.map((a) => (
-            <div key={a.castId} className="rounded px-3 py-3" style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
-              <p className="text-sm" style={{ color: "var(--color-ink)" }}>
-                <span className="font-medium">{a.actorName ?? a.characterName ?? "A role"}</span>
+      <div className="space-y-4">
+        {visible.map((a) => (
+          <div
+            key={a.castId}
+            className="rounded border"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+          >
+            <div className="p-5">
+              {/* Reserved-role badge — parallel to the "Cast Invitation" badge on
+                  the other request cards, so the requests page reads as one family. */}
+              <div className="mb-3">
+                <span
+                  className="rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-widest"
+                  style={{ background: "var(--color-accent)", color: "#fff" }}
+                >
+                  Reserved Role
+                </span>
+              </div>
+
+              <p className="font-medium text-sm" style={{ color: "var(--color-ink)" }}>
+                {a.actorName ?? a.characterName ?? "A role"}
                 {a.characterName && a.actorName ? ` · ${a.characterName}` : ""}
-                {" in "}<span className="font-medium">{a.productionName}</span>
+                {" in "}{a.productionName}
               </p>
-              <p className="text-xs mb-2" style={{ color: "var(--color-muted)" }}>Reserved by {a.companyName}</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+                Reserved by {a.companyName}
+              </p>
+
               {a.hasTerms ? (
                 <>
-                  <div className="mb-3">
+                  <div className="mt-4">
                     <LicenceTermsSummary terms={a.terms} />
                   </div>
                   <a
                     href={`/consent/preview/${a.castId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-block text-xs font-medium mb-3 no-underline"
+                    className="inline-block text-xs font-medium mt-3 no-underline"
                     style={{ color: "var(--color-accent)" }}
                   >
                     Preview the consent document your client will see →
                   </a>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="email"
-                      value={emails[a.castId] ?? ""}
-                      onChange={(e) => setEmails((m) => ({ ...m, [a.castId]: e.target.value }))}
-                      placeholder="Your client's email"
-                      className="flex-1"
-                      style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "6px 10px", fontSize: 13, color: "var(--color-text)", outline: "none" }}
-                    />
-                    <button
-                      onClick={() => connect(a)}
-                      disabled={busyId === a.castId}
-                      className="text-xs font-medium px-3 py-2 rounded text-white shrink-0"
-                      style={{ background: "var(--color-accent)", opacity: busyId === a.castId ? 0.6 : 1 }}
-                    >
-                      {busyId === a.castId ? "Connecting…" : "Connect client"}
-                    </button>
+                  <div className="mt-4">
+                    <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>
+                      Connect your client to send them this consent document.
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="email"
+                        value={emails[a.castId] ?? ""}
+                        onChange={(e) => setEmails((m) => ({ ...m, [a.castId]: e.target.value }))}
+                        placeholder="Your client's email"
+                        className="flex-1 min-w-0 rounded border px-3 py-2 text-sm outline-none"
+                        style={{ background: "var(--color-bg)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
+                      />
+                      <button
+                        onClick={() => connect(a)}
+                        disabled={busyId === a.castId}
+                        className="rounded px-4 py-2 text-xs font-medium text-white transition disabled:opacity-60"
+                        style={{ background: "var(--color-accent)" }}
+                      >
+                        {busyId === a.castId ? "Connecting…" : "Connect client"}
+                      </button>
+                    </div>
+                    {errors[a.castId] && <p className="text-xs mt-1.5" style={{ color: "var(--color-accent)" }}>{errors[a.castId]}</p>}
                   </div>
-                  {errors[a.castId] && <p className="text-xs mt-1" style={{ color: "var(--color-accent)" }}>{errors[a.castId]}</p>}
                 </>
               ) : (
-                <div className="flex items-start justify-between gap-3 rounded px-3 py-2" style={{ background: "var(--color-bg)", border: "1px dashed var(--color-border)" }}>
+                <div
+                  className="mt-4 flex items-start justify-between gap-3 rounded border p-3"
+                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                >
                   <p className="text-xs" style={{ color: "var(--color-muted)" }}>
                     {a.companyName} hasn&rsquo;t shared intended use or licence dates for this role yet. Ask them to add the terms before you connect your client.
                   </p>
                   {a.coordinatorEmail && (
                     <a
                       href={`mailto:${a.coordinatorEmail}?subject=${encodeURIComponent(`Licence terms needed for ${a.characterName ?? a.actorName ?? "reserved role"} in ${a.productionName}`)}&body=${encodeURIComponent(`Hi,\n\nBefore I can connect my client to ${a.characterName ?? a.actorName ?? "the reserved role"} on ${a.productionName}, could you add the intended use and licence dates to the role on Image Vault?\n\nThanks.`)}`}
-                      className="text-xs font-medium px-3 py-2 rounded text-white shrink-0 no-underline"
+                      className="rounded px-4 py-2 text-xs font-medium text-white shrink-0 no-underline"
                       style={{ background: "var(--color-accent)" }}
                     >
                       Email {a.companyName}
@@ -123,8 +146,8 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
                 </div>
               )}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );
