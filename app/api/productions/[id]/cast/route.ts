@@ -191,7 +191,7 @@ export async function GET(
   // ordered by round ascending, so the last row seen per licence is the latest.
   const latestNegoByLicence = new Map<string, { party: string; action: string }>();
   for (const n of negoRows) {
-    latestNegoByLicence.set(n.licenceId, { party: n.party, action: n.action });
+    if (n.licenceId) latestNegoByLicence.set(n.licenceId, { party: n.party, action: n.action });
   }
   const negoPendingByLicence = new Map<string, boolean>();
   for (const [lid, last] of latestNegoByLicence) {

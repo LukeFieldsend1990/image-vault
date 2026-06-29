@@ -36,7 +36,22 @@ export async function listNegotiationRounds(db: Db, licenceId: string): Promise<
     .where(eq(licenceNegotiations.licenceId, licenceId))
     .orderBy(asc(licenceNegotiations.round))
     .all();
-  return rows.map((r) => ({
+  return rows.map(mapRound);
+}
+
+/** The negotiation thread for a production-held cast row (rep pre-negotiation). */
+export async function listCastNegotiationRounds(db: Db, castId: string): Promise<NegotiationRound[]> {
+  const rows = await db
+    .select()
+    .from(licenceNegotiations)
+    .where(eq(licenceNegotiations.castId, castId))
+    .orderBy(asc(licenceNegotiations.round))
+    .all();
+  return rows.map(mapRound);
+}
+
+function mapRound(r: typeof licenceNegotiations.$inferSelect): NegotiationRound {
+  return {
     id: r.id,
     round: r.round,
     party: r.party,
@@ -45,13 +60,15 @@ export async function listNegotiationRounds(db: Db, licenceId: string): Promise<
     fee: r.proposedFee ?? null,
     comment: r.comment ?? null,
     createdAt: r.createdAt,
-  }));
+  };
 }
 
 export async function addNegotiationRound(
   db: Db,
   input: {
-    licenceId: string;
+    /** Exactly one of licenceId / castId identifies the thread. */
+    licenceId?: string;
+    castId?: string;
     party: NegotiationParty;
     action: NegotiationAction;
     scope?: string[];
@@ -60,13 +77,17 @@ export async function addNegotiationRound(
     createdBy: string;
   },
 ): Promise<NegotiationRound> {
-  const existing = await listNegotiationRounds(db, input.licenceId);
+  if (!input.licenceId && !input.castId) throw new Error("addNegotiationRound: licenceId or castId required");
+  const existing = input.castId
+    ? await listCastNegotiationRounds(db, input.castId)
+    : await listNegotiationRounds(db, input.licenceId!);
   const round = existing.length + 1;
   const now = Math.floor(Date.now() / 1000);
   const id = crypto.randomUUID();
   await db.insert(licenceNegotiations).values({
     id,
-    licenceId: input.licenceId,
+    licenceId: input.licenceId ?? null,
+    castId: input.castId ?? null,
     round,
     party: input.party,
     action: input.action,

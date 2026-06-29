@@ -41,6 +41,10 @@ export interface ConsentDocViewModel {
   /** Whether the performer has already confirmed this document. */
   alreadyAccepted: boolean;
   status: string;
+  /** Cast mode: name of the reserved rep/agent, if one is managing this placeholder. */
+  repName: string | null;
+  /** Cast mode: the performer's recorded custody election, once made. */
+  custodyChoice: "self" | "rep_managed" | null;
   copy: ConsentDocCopy;
 }
 
@@ -97,6 +101,8 @@ export async function loadConsentDocByLicence(db: Db, licenceId: string): Promis
     currentConsents: currentConsents.length ? currentConsents : requestedScope,
     alreadyAccepted,
     status: lic.status,
+    repName: null,
+    custodyChoice: null,
     copy: buildConsentDocCopy({ productionName: lic.projectName, companyName: lic.productionCompany, performerName }),
   };
 }
@@ -110,11 +116,24 @@ export async function loadConsentDocByCast(db: Db, castId: string): Promise<Cons
       actorName: productionCast.actorName,
       status: productionCast.status,
       licenceTermsJson: productionCast.licenceTermsJson,
+      repId: productionCast.repId,
+      custodyChoice: productionCast.custodyChoice,
     })
     .from(productionCast)
     .where(eq(productionCast.id, castId))
     .get();
   if (!cast) return null;
+
+  let repName: string | null = null;
+  if (cast.repId) {
+    const rep = await db
+      .select({ fullName: talentProfiles.fullName, email: users.email })
+      .from(users)
+      .leftJoin(talentProfiles, eq(talentProfiles.userId, users.id))
+      .where(eq(users.id, cast.repId))
+      .get();
+    repName = rep?.fullName || rep?.email || null;
+  }
 
   const prod = await db
     .select({ name: productions.name, organisationId: productions.organisationId })
@@ -172,6 +191,8 @@ export async function loadConsentDocByCast(db: Db, castId: string): Promise<Cons
     currentConsents: requestedScope,
     alreadyAccepted,
     status: cast.status,
+    repName,
+    custodyChoice: (cast.custodyChoice as "self" | "rep_managed" | null) ?? null,
     copy: buildConsentDocCopy({ productionName: projectName, companyName, performerName }),
   };
 }

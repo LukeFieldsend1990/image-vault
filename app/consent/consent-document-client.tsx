@@ -8,7 +8,11 @@ import type { ConsentDocViewModel } from "@/lib/consent/load";
 type Source =
   | { kind: "licence"; id: string }
   | { kind: "token"; token: string }
-  | { kind: "preview"; castId: string };
+  | { kind: "preview"; castId: string }
+  // Actionable cast surface: the reserved rep (and the production) pre-negotiate
+  // the §39 scope on a production-held placeholder, then the rep sends it for
+  // final consent. No final acceptance happens here.
+  | { kind: "cast"; castId: string };
 
 interface DocResponse {
   document: ConsentDocViewModel;
@@ -71,25 +75,43 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // automatically, so this is only needed for the "same scope, different terms" case.
   const [proposeIntent, setProposeIntent] = useState(false);
 
+  // Cast mode: rep sends the negotiated document to their client for final consent.
+  const [sendMode, setSendMode] = useState(false);
+  const [sendEmailVal, setSendEmailVal] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+
+  // Token mode: the performer's custody election after confirming consent.
+  const [custodyChoice, setCustodyChoice] = useState<"self" | "rep_managed" | null>(null);
+  const [custodyBusy, setCustodyBusy] = useState(false);
+
   // Preview mode: a reserved-role agent reads the document before connecting their
   // client. Read-only — no acceptance, no negotiation, no account exists yet.
   const isPreview = source.kind === "preview";
+  const isCast = source.kind === "cast";
+  const token = source.kind === "token" ? source.token : null;
   const licenceId = source.kind === "licence" ? source.id : null;
   const docEndpoint =
     source.kind === "licence"
       ? `/api/consent/${source.id}/document`
       : source.kind === "preview"
         ? `/api/consent/preview/${source.castId}`
-        : `/api/consent/access/${source.token}`;
+        : source.kind === "cast"
+          ? `/api/consent/cast/${source.castId}/document`
+          : `/api/consent/access/${source.token}`;
   const acceptEndpoint = source.kind === "licence" ? `/api/consent/${source.id}/accept` : source.kind === "token" ? `/api/consent/access/${source.token}/accept` : "";
+  // Negotiation thread base — shared by licence mode and the actionable cast mode.
+  const negoBase =
+    source.kind === "licence" ? `/api/consent/${source.id}`
+      : source.kind === "cast" ? `/api/consent/cast/${source.castId}`
+        : null;
 
   const refreshNego = useCallback(async () => {
-    if (!licenceId) return;
+    if (!negoBase) return;
     try {
-      const r = await fetch(`/api/consent/${licenceId}/negotiation`);
+      const r = await fetch(`${negoBase}/negotiation`);
       if (r.ok) setNego((await r.json()) as NegotiationState);
     } catch { /* non-fatal */ }
-  }, [licenceId]);
+  }, [negoBase]);
   useEffect(() => { void refreshNego(); }, [refreshNego]);
 
   // Once both the document and the negotiation thread have loaded, reflect the
@@ -110,10 +132,10 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   }, [data, nego]);
 
   async function sendCounter() {
-    if (!licenceId) return;
+    if (!negoBase) return;
     setNegoBusy(true); setSubmitError(null);
     try {
-      const r = await fetch(`/api/consent/${licenceId}/counter`, {
+      const r = await fetch(`${negoBase}/counter`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope: [...consents], fee: parseFeeInput(counterFee), comment: counterComment }),
@@ -126,10 +148,10 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   }
 
   async function acceptCounter() {
-    if (!licenceId) return;
+    if (!negoBase) return;
     setNegoBusy(true); setSubmitError(null);
     try {
-      const r = await fetch(`/api/consent/${licenceId}/negotiation/accept`, { method: "POST" });
+      const r = await fetch(`${negoBase}/negotiation/accept`, { method: "POST" });
       const d = (await r.json()) as { ok?: boolean; error?: string };
       if (!r.ok || !d.ok) { setSubmitError(d.error ?? "Could not accept the counter-offer."); return; }
       await refreshNego();
@@ -154,6 +176,41 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
     } finally { setNegoBusy(false); }
   }
 
+  // Cast mode: rep sends the negotiated consent document to their client by email.
+  async function sendForConsent() {
+    if (source.kind !== "cast" || !vm?.productionId) return;
+    const email = sendEmailVal.trim();
+    if (!email) { setSubmitError("Enter your client's email."); return; }
+    setNegoBusy(true); setSubmitError(null);
+    try {
+      const r = await fetch(`/api/productions/${vm.productionId}/cast/${source.castId}/consent-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, send: true }),
+      });
+      const d = (await r.json()) as { ok?: boolean; error?: string; email?: string };
+      if (!r.ok || !d.ok) { setSubmitError(d.error ?? "Could not send the consent document."); return; }
+      setSentTo(d.email ?? email);
+      setSendMode(false);
+    } finally { setNegoBusy(false); }
+  }
+
+  // Token mode: record the performer's custody election. "self" → register & take
+  // custody; "rep_managed" → leave production-held, managed by their rep.
+  async function chooseCustody(choice: "self" | "rep_managed") {
+    if (!token) return;
+    setCustodyBusy(true);
+    try {
+      await fetch(`/api/consent/access/${token}/custody`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ choice }),
+      }).catch(() => {});
+      setCustodyChoice(choice);
+      if (choice === "self" && typeof window !== "undefined") window.location.href = "/signup";
+    } finally { setCustodyBusy(false); }
+  }
+
   // Open counter mode seeded from a base offer (producer revises from a base scope/fee).
   function openCounter(baseScope?: string[], baseFee?: number | null) {
     if (baseScope) setConsents(new Set(baseScope));
@@ -163,11 +220,11 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   }
 
   async function declineNego() {
-    if (!licenceId) return;
+    if (!negoBase) return;
     if (typeof window !== "undefined" && !window.confirm("End this negotiation without agreement?")) return;
     setNegoBusy(true); setSubmitError(null);
     try {
-      const r = await fetch(`/api/consent/${licenceId}/negotiation/decline`, {
+      const r = await fetch(`${negoBase}/negotiation/decline`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ comment: counterComment }),
@@ -289,21 +346,65 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         </div>
       </div>
       {isGuest ? (
-        <div className="rounded-xl p-6" style={{ border: "2px solid var(--color-text)", background: "var(--color-bg)" }}>
-          <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>You&apos;re done</p>
-          <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Your consent is recorded. You can leave it there.</h2>
-          <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-            Whenever you&apos;re ready, you can register on ImageVault and take ownership of your vault — decide who else can access your data,
-            withdraw consent instantly, and set standing instructions for every future request. Creating an account is free; claiming the vault
-            so you can relicense independently is a paid option.
-          </p>
-          <div className="flex flex-wrap gap-2.5">
-            <Link href="/signup" className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: ACCENT }}>Set up my account</Link>
-            <Link href="/imagevault-for-performers" className="rounded px-4 py-2 text-sm font-medium" style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}>Tell me more first</Link>
+        custodyChoice === "rep_managed" ? (
+          // Performer elected to leave the role production-held, managed by their rep.
+          <div className="rounded-xl p-6" style={{ border: "2px solid var(--color-text)", background: "var(--color-bg)" }}>
+            <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>You&apos;re done</p>
+            <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>
+              {vm.repName ? `${firstName(vm.repName)} will keep managing this for you.` : "Your agent will keep managing this for you."}
+            </h2>
+            <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+              {vm.companyName} holds your vault for {vm.productionName}, with the access you just consented to and nothing more.
+              {vm.repName ? ` ${firstName(vm.repName)}` : " Your agent"} continues to manage requests on your behalf.
+              You can register and take ownership yourself at any time — there&apos;s no rush.
+            </p>
+            <div className="flex flex-wrap gap-2.5">
+              <Link href="/signup" className="rounded px-4 py-2 text-sm font-medium" style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}>Set up my account anyway</Link>
+            </div>
           </div>
-        </div>
+        ) : vm.repName ? (
+          // Two-way custody fork — take ownership now, or leave it with the agent.
+          <div className="space-y-3">
+            <div className="rounded-xl p-6" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.04)" }}>
+              <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Option 1 — take custody</p>
+              <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Set up your account and own your vault.</h2>
+              <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+                Register on ImageVault and take ownership — decide who else can access your data, withdraw consent instantly, and set standing
+                instructions for every future request. Creating an account is free.
+              </p>
+              <button type="button" onClick={() => chooseCustody("self")} disabled={custodyBusy} className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: ACCENT }}>
+                {custodyBusy ? "Working…" : "Set up my account & take custody"}
+              </button>
+            </div>
+            <div className="rounded-xl p-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
+              <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Option 2 — leave it with your agent</p>
+              <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>You can leave it there.</h2>
+              <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+                {vm.companyName} holds your vault for {vm.productionName}, with the access you just consented to and nothing more, and
+                {vm.repName ? ` ${firstName(vm.repName)}` : " your agent"} continues to manage it on your behalf. No account needed right now.
+              </p>
+              <button type="button" onClick={() => chooseCustody("rep_managed")} disabled={custodyBusy} className="rounded px-4 py-2 text-sm font-medium" style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}>
+                {custodyBusy ? "Working…" : `Leave it with ${vm.repName ? firstName(vm.repName) : "my agent"}`}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl p-6" style={{ border: "2px solid var(--color-text)", background: "var(--color-bg)" }}>
+            <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>You&apos;re done</p>
+            <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Your consent is recorded. You can leave it there.</h2>
+            <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+              Whenever you&apos;re ready, you can register on ImageVault and take ownership of your vault — decide who else can access your data,
+              withdraw consent instantly, and set standing instructions for every future request. Creating an account is free; claiming the vault
+              so you can relicense independently is a paid option.
+            </p>
+            <div className="flex flex-wrap gap-2.5">
+              <Link href="/signup" className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: ACCENT }}>Set up my account</Link>
+              <Link href="/imagevault-for-performers" className="rounded px-4 py-2 text-sm font-medium" style={{ border: "1px solid var(--color-border)", color: "var(--color-text)" }}>Tell me more first</Link>
+            </div>
+          </div>
+        )
       ) : (
-        data.canAct && consentedList.length > 0 && (
+        data.canAct && consentedList.length > 0 && !isCast && (
           <div className="text-center">
             <button type="button" onClick={withdraw} disabled={negoBusy} className="text-xs" style={{ color: "var(--color-muted)", textDecoration: "underline" }}>
               {negoBusy ? "Withdrawing…" : "Withdraw consent"}
@@ -318,7 +419,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // no negotiation pre-account).
   const requestedScope = vm.requestedScope ?? [];
   const scopeChanged =
-    source.kind === "licence" &&
+    (source.kind === "licence" || source.kind === "cast") &&
     requestedScope.length > 0 &&
     !(consents.size === requestedScope.length && requestedScope.every((r) => consents.has(r)));
 
@@ -492,7 +593,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
           {nego?.closed ? (
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
               {nego.rounds[nego.rounds.length - 1]?.action === "accepted"
-                ? "Terms agreed — consent is recorded."
+                ? (isCast ? "Terms agreed — awaiting final consent from the performer." : "Terms agreed — consent is recorded.")
                 : "This negotiation ended without agreement."}
             </p>
           ) : nego?.pendingTalentCounter ? (
@@ -524,6 +625,65 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
                   <button type="button" onClick={declineNego} className="text-xs" style={{ color: "var(--color-muted)" }}>Decline</button>
                 </div>
               )}
+            </>
+          )}
+        </div>
+      ) : isCast && canAct ? (
+        // Reserved rep managing a placeholder: pre-negotiate scope with the
+        // production, then send the agreed document to the client for final consent.
+        <div className="rounded-xl p-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
+          {sentTo ? (
+            <>
+              <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Sent for consent</p>
+              <p className="text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
+                The consent document was emailed to <strong>{sentTo}</strong>. {firstName(vm.performerName)} will review the agreed terms and give final consent — they can take custody of their vault, or leave it with you to manage.
+              </p>
+            </>
+          ) : nego?.closed && nego.rounds[nego.rounds.length - 1]?.action === "declined" ? (
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>This negotiation ended without agreement.</p>
+          ) : proposing ? (
+            <>
+              <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Propose different terms to the production</p>
+              {counterForm(cancelPropose)}
+            </>
+          ) : sendMode ? (
+            <>
+              <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Send for final consent</p>
+              <p className="text-sm mb-3" style={{ color: "var(--color-muted)", lineHeight: 1.55 }}>
+                Email the agreed consent document to {firstName(vm.performerName)} for final sign-off. They decide whether to take custody of their vault or leave it with you to manage.
+              </p>
+              <label className="text-xs block mb-1" style={{ color: "var(--color-muted)" }}>Your client&apos;s email</label>
+              <input
+                type="email" value={sendEmailVal} onChange={(e) => setSendEmailVal(e.target.value)} placeholder="client@example.com"
+                className="w-full mb-3 rounded px-3 py-2 text-sm" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+              />
+              {submitError && <ErrLine msg={submitError} />}
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={sendForConsent} disabled={negoBusy} className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: negoBusy ? "var(--color-muted)" : ACCENT }}>
+                  {negoBusy ? "Sending…" : "Send consent document"}
+                </button>
+                <button type="button" onClick={() => { setSendMode(false); setSubmitError(null); }} className="text-sm" style={{ color: "var(--color-muted)" }}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Manage on behalf of {firstName(vm.performerName)}</p>
+              {nego?.pendingTalentCounter ? (
+                <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.05)", color: "var(--color-text)" }}>
+                  You&apos;ve proposed new terms — <strong>awaiting the production&apos;s response.</strong> You can still send for consent on the current terms, or revise your proposal.
+                </div>
+              ) : (
+                <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.55 }}>
+                  Adjust the uses above to pre-negotiate the scope with the production, then send the document to your client for final consent.
+                </p>
+              )}
+              <button type="button" onClick={() => { setSubmitError(null); setSendMode(true); }} className="w-full rounded px-4 py-2.5 text-sm font-medium text-white" style={{ background: ACCENT }}>
+                Send for final consent
+              </button>
+              <div className="flex items-center justify-between mt-3">
+                <button type="button" onClick={() => setProposeIntent(true)} className="text-xs font-medium" style={{ color: ACCENT }}>Propose different terms</button>
+                {nego && nego.rounds.length > 0 && <button type="button" onClick={declineNego} className="text-xs" style={{ color: "var(--color-muted)" }}>Decline</button>}
+              </div>
             </>
           )}
         </div>

@@ -26,20 +26,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .get();
   if (!production) return NextResponse.json({ error: "Production not found" }, { status: 404 });
 
-  if (!isAdmin(session.email)) {
-    if (!isIndustryRole(session.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    if (production.organisationId) {
-      const membership = await db
-        .select({ memberRole: organisationMembers.memberRole })
-        .from(organisationMembers)
-        .where(and(eq(organisationMembers.organisationId, production.organisationId), eq(organisationMembers.userId, session.sub)))
-        .get();
-      if (!membership || (membership.memberRole !== "owner" && membership.memberRole !== "admin")) {
-        return NextResponse.json({ error: "Forbidden — org owner or admin required" }, { status: 403 });
-      }
-    }
-  }
-
   const cast = await db
     .select({
       id: productionCast.id,
@@ -53,6 +39,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .where(and(eq(productionCast.id, castId), eq(productionCast.productionId, id)))
     .get();
   if (!cast) return NextResponse.json({ error: "Cast member not found" }, { status: 404 });
+
+  // Auth: an admin, an owner/admin of the production's org, OR the reserved rep
+  // assigned to this slot (the rep sends the negotiated document to their client
+  // for final consent — the Path C agent-mediated flow).
+  const isAssignedRep = cast.repId === session.sub;
+  if (!isAdmin(session.email) && !isAssignedRep) {
+    if (!isIndustryRole(session.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (production.organisationId) {
+      const membership = await db
+        .select({ memberRole: organisationMembers.memberRole })
+        .from(organisationMembers)
+        .where(and(eq(organisationMembers.organisationId, production.organisationId), eq(organisationMembers.userId, session.sub)))
+        .get();
+      if (!membership || (membership.memberRole !== "owner" && membership.memberRole !== "admin")) {
+        return NextResponse.json({ error: "Forbidden — org owner or admin required" }, { status: 403 });
+      }
+    }
+  }
   if (cast.talentId) return NextResponse.json({ error: "This performer is already registered — they review consent in their account." }, { status: 409 });
 
   // Resolve a contact email. Priority:
