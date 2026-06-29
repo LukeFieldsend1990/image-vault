@@ -66,6 +66,10 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const [counterFee, setCounterFee] = useState("");
   const [counterComment, setCounterComment] = useState("");
   const [negoBusy, setNegoBusy] = useState(false);
+  // Performer explicitly chose to propose new terms without changing the ticked
+  // uses (e.g. proposing only a fee/note). Changing the uses opens the same form
+  // automatically, so this is only needed for the "same scope, different terms" case.
+  const [proposeIntent, setProposeIntent] = useState(false);
 
   // Preview mode: a reserved-role agent reads the document before connecting their
   // client. Read-only — no acceptance, no negotiation, no account exists yet.
@@ -99,7 +103,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
       });
       const d = (await r.json()) as { ok?: boolean; error?: string };
       if (!r.ok || !d.ok) { setSubmitError(d.error ?? "Could not send the counter-offer."); return; }
-      setCounterMode(false); setCounterComment("");
+      setCounterMode(false); setCounterComment(""); setCounterFee(""); setProposeIntent(false);
       await refreshNego();
     } finally { setNegoBusy(false); }
   }
@@ -301,8 +305,25 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
     requestedScope.length > 0 &&
     !(consents.size === requestedScope.length && requestedScope.every((r) => consents.has(r)));
 
+  // The performer is proposing different terms when they've changed the ticked uses,
+  // typed a fee, added a note, or explicitly opened the form. Reverting the uses to
+  // what was requested with an empty fee and note drops straight back to plain confirm.
+  // Suppressed once a proposal is already outstanding (unless they reopen the form to
+  // revise) so the panel can show the "awaiting response" state instead.
+  const proposing =
+    proposeIntent ||
+    (!nego?.pendingTalentCounter &&
+      (scopeChanged || counterFee.trim() !== "" || counterComment.trim() !== ""));
+
+  const cancelPropose = () => {
+    setProposeIntent(false);
+    setCounterFee("");
+    setCounterComment("");
+    setConsents(new Set(requestedScope));
+  };
+
   // Counter form (shared by talent and producer). Scope comes from the toggles above.
-  const counterForm = (
+  const counterForm = (onCancel: () => void = () => setCounterMode(false)) => (
     <div>
       <p className="text-xs mb-3" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
         Adjust the use categories above, set your fee, and add a note. {isProducer ? "The performer will review and respond." : "The production will review and accept or counter."}
@@ -321,7 +342,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         <button type="button" onClick={sendCounter} disabled={negoBusy} className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: negoBusy ? "var(--color-muted)" : ACCENT }}>
           {negoBusy ? "Sending…" : isProducer ? "Send counter" : "Send counter-offer"}
         </button>
-        <button type="button" onClick={() => setCounterMode(false)} className="text-sm" style={{ color: "var(--color-muted)" }}>Cancel</button>
+        <button type="button" onClick={onCancel} className="text-sm" style={{ color: "var(--color-muted)" }}>Cancel</button>
       </div>
     </div>
   );
@@ -463,7 +484,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
                 <strong>{firstName(vm.performerName)}</strong> proposed different terms:
               </p>
               <OfferBox scope={nego.pendingTalentCounter.scope} fee={nego.pendingTalentCounter.fee} comment={nego.pendingTalentCounter.comment} />
-              {counterMode ? counterForm : (
+              {counterMode ? counterForm() : (
                 <>
                   {submitError && <ErrLine msg={submitError} />}
                   <button type="button" onClick={acceptCounter} disabled={negoBusy} className="w-full rounded px-4 py-2.5 text-sm font-medium text-white" style={{ background: negoBusy ? "var(--color-muted)" : ACCENT }}>
@@ -480,7 +501,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
             <>
               <p className="text-sm mb-2" style={{ color: "var(--color-muted)" }}>Waiting for {firstName(vm.performerName)} to respond to your current offer.</p>
               <OfferBox scope={nego?.currentOffer.scope ?? []} fee={nego?.currentOffer.fee ?? null} />
-              {counterMode ? counterForm : (
+              {counterMode ? counterForm() : (
                 <div className="flex items-center justify-between mt-1">
                   <button type="button" onClick={() => openCounter(nego?.currentOffer.scope ?? [], nego?.currentOffer.fee ?? null)} className="text-xs font-medium" style={{ color: ACCENT }}>Revise offer</button>
                   <button type="button" onClick={declineNego} className="text-xs" style={{ color: "var(--color-muted)" }}>Decline</button>
@@ -491,10 +512,10 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         </div>
       ) : canAct ? (
         <div className="rounded-xl p-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
-          {counterMode ? (
+          {proposing ? (
             <>
               <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Propose different terms</p>
-              {counterForm}
+              {counterForm(cancelPropose)}
             </>
           ) : (
             <>
@@ -507,17 +528,12 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
                 <span className="mt-0.5 flex items-center justify-center rounded shrink-0" style={{ width: 18, height: 18, border: `1px solid ${attested ? ACCENT : "var(--color-border)"}`, background: attested ? ACCENT : "transparent", color: "white", fontSize: 12 }}>{attested ? "✓" : ""}</span>
                 <span className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.55 }}>{vm.copy.attestation}</span>
               </button>
-              {scopeChanged && (
-                <p className="text-xs mb-2" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
-                  Your selection differs from what was requested — confirming sends it to the production to agree before it&apos;s recorded.
-                </p>
-              )}
               {submitError && <ErrLine msg={submitError} />}
               <button type="button" onClick={submit} disabled={!attested || submitting} className="w-full rounded px-4 py-2.5 text-sm font-medium text-white transition" style={{ background: !attested || submitting ? "var(--color-muted)" : ACCENT, cursor: !attested || submitting ? "not-allowed" : "pointer" }}>
-                {submitting ? "Working…" : scopeChanged ? "Propose these terms" : "Confirm consent"}
+                {submitting ? "Working…" : "Confirm consent"}
               </button>
               <div className="flex items-center justify-between mt-3">
-                <button type="button" onClick={() => { setCounterFee(""); setCounterComment(""); setCounterMode(true); }} className="text-xs font-medium" style={{ color: ACCENT }}>Propose different terms</button>
+                <button type="button" onClick={() => setProposeIntent(true)} className="text-xs font-medium" style={{ color: ACCENT }}>Propose different terms</button>
                 {nego && nego.rounds.length > 0 && <button type="button" onClick={declineNego} className="text-xs" style={{ color: "var(--color-muted)" }}>Decline</button>}
               </div>
               <p className="text-[11px] text-center mt-2" style={{ color: "var(--color-muted)" }}>Recorded with timestamp and document version. No signature required.</p>
