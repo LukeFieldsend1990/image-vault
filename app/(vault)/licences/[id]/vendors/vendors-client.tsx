@@ -27,6 +27,7 @@ interface LicenceSummary {
   validFrom: number;
   validTo: number;
   productionId: string | null;
+  package: { id: string; name: string; scanType: string | null; fileScope: string } | null;
 }
 
 interface ProdVendor {
@@ -221,6 +222,23 @@ export default function VendorsClient({ licenceId }: { licenceId: string }) {
       </div>
 
       {err && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{err}</p>}
+
+      {licence?.package && (
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--color-muted)" }}>Packages covered</h2>
+          <div className="rounded border px-4 py-3 flex items-start gap-3" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{licence.package.name}</p>
+              {licence.package.scanType && (
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--color-muted)" }}>{licence.package.scanType.replace(/_/g, " ")}</p>
+              )}
+            </div>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(0,0,0,0.06)", color: "var(--color-muted)" }}>
+              {licence.package.fileScope === "all" ? "All files" : `${(JSON.parse(licence.package.fileScope) as string[]).length} file(s)`}
+            </span>
+          </div>
+        </section>
+      )}
 
       {canManage && (
         <div>

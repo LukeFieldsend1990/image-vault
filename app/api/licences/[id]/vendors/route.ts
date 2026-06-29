@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, organisations, vendorAuthorisations } from "@/lib/db/schema";
+import { licences, organisations, vendorAuthorisations, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isProductionSideOfLicence, isOrgMember } from "@/lib/licences/vendorAccess";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
@@ -25,6 +25,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       validFrom: licences.validFrom,
       validTo: licences.validTo,
       productionId: licences.productionId,
+      packageId: licences.packageId,
+      fileScope: licences.fileScope,
     })
     .from(licences)
     .where(eq(licences.id, id))
@@ -63,6 +65,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  // Fetch the package associated with this licence so the vendor page can show it.
+  let pkg: { id: string; name: string; scanType: string | null; status: string } | null = null;
+  if (licence.packageId) {
+    pkg = await db
+      .select({ id: scanPackages.id, name: scanPackages.name, scanType: scanPackages.scanType, status: scanPackages.status })
+      .from(scanPackages)
+      .where(eq(scanPackages.id, licence.packageId))
+      .get() ?? null;
+  }
+
   const licenceSummary = {
     id: licence.id,
     projectName: licence.projectName,
@@ -71,6 +83,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     validFrom: licence.validFrom,
     validTo: licence.validTo,
     productionId: licence.productionId ?? null,
+    package: pkg ? { id: pkg.id, name: pkg.name, scanType: pkg.scanType, fileScope: licence.fileScope ?? "all" } : null,
   };
 
   return NextResponse.json({ canManage: isProd, memberOrgIds: Array.from(memberOrgIds), authorisations: rows, licence: licenceSummary });
