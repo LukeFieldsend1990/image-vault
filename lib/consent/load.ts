@@ -22,6 +22,7 @@ import { eq } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 import { buildConsentDocCopy, type ConsentDocCopy } from "./document";
 import { parseUseCategoryIds, type UseCategoryId } from "./use-categories";
+import { loadProductionDefaultTerms } from "@/lib/productions/cast";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -138,6 +139,14 @@ export async function loadConsentDocByCast(db: Db, castId: string): Promise<Cons
     } catch {
       /* fall through to org lookup */
     }
+  }
+  // A reserved placeholder may carry no row-level scope — the §39 ask lives in the
+  // production's default terms. Fall back to those so the document shows the same
+  // requested uses the eventual licence will carry (promoteCastMember uses the same
+  // row-over-defaults precedence).
+  if (requestedScope.length === 0) {
+    const defaults = await loadProductionDefaultTerms(db, cast.productionId);
+    if (defaults.useCategoryIds?.length) requestedScope = defaults.useCategoryIds;
   }
   if (companyName === "the production company" && prod?.organisationId) {
     const org = await db
