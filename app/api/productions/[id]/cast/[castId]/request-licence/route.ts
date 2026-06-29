@@ -126,6 +126,7 @@ export async function POST(
     useCategoriesJson,
     proposedFee,
     productionId: id,
+    organisationId: production.organisationId ?? null,
     createdAt: now,
   });
   await mintLicenceCode(db, licenceId);

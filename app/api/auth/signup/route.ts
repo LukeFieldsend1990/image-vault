@@ -443,6 +443,7 @@ export async function POST(req: NextRequest) {
             useCategoriesJson: serializeUseCategoryIds(reconciled.useCategoryIds),
             proposedFee: terms.proposedFee ?? null,
             productionId: inviteRow.productionId,
+            organisationId: prod?.organisationId ?? null,
             createdAt: now,
           });
           await mintLicenceCode(db, licenceId);
