@@ -83,6 +83,9 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // Token mode: the performer's custody election after confirming consent.
   const [custodyChoice, setCustodyChoice] = useState<"self" | "rep_managed" | null>(null);
   const [custodyBusy, setCustodyBusy] = useState(false);
+  // Token mode: the unregistered performer ticked a different set than requested,
+  // so confirming proposed different terms instead of finalising consent.
+  const [guestProposed, setGuestProposed] = useState(false);
 
   // Preview mode: a reserved-role agent reads the document before connecting their
   // client. Read-only — no acceptance, no negotiation, no account exists yet.
@@ -278,8 +281,12 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
       if (!r.ok || !d.ok) { setSubmitError(d.error ?? "Could not record your consent."); return; }
       if (d.countered) {
         // Scope differed from the request → sent to the production as a proposal.
-        setAttested(false);
-        await refreshNego();
+        if (source.kind === "token") {
+          setGuestProposed(true);
+        } else {
+          setAttested(false);
+          await refreshNego();
+        }
       } else {
         setDone(true);
       }
@@ -289,7 +296,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
     } finally {
       setSubmitting(false);
     }
-  }, [acceptEndpoint, attested, consents, refreshNego]);
+  }, [acceptEndpoint, attested, consents, refreshNego, source.kind]);
 
   if (loadError) {
     return (
@@ -316,6 +323,22 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
           <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Consent withdrawn</h2>
           <p className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
             Your consent for {vm.productionName} has been withdrawn. This stops new uses going forward; it does not undo lawful past uses. The production has been notified.
+          </p>
+        </div>
+      </Frame>
+    );
+  }
+
+  // ── Proposed-different-terms state (unregistered performer) ─────────────────
+  if (guestProposed) {
+    return (
+      <Frame>
+        <div className="rounded-xl p-6" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.04)" }}>
+          <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Your proposal has been sent</h2>
+          <p className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+            You changed the uses {vm.companyName} requested, so this is a proposal of different terms rather than consent. {vm.companyName}
+            {vm.repName ? ` and your agent ${firstName(vm.repName)}` : ""} will review it and respond — consent isn&apos;t recorded until the terms match.
+            You can reopen this link any time to see where things stand.
           </p>
         </div>
       </Frame>
@@ -419,7 +442,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // no negotiation pre-account).
   const requestedScope = vm.requestedScope ?? [];
   const scopeChanged =
-    (source.kind === "licence" || source.kind === "cast") &&
+    (source.kind === "licence" || source.kind === "cast" || source.kind === "token") &&
     requestedScope.length > 0 &&
     !(consents.size === requestedScope.length && requestedScope.every((r) => consents.has(r)));
 
@@ -686,6 +709,28 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
               </div>
             </>
           )}
+        </div>
+      ) : isGuest && canAct ? (
+        // Unregistered performer: changing the requested uses turns "Confirm" into
+        // "Propose different terms" (same rule as the registered surface). The
+        // accept endpoint records it as a counter on the cast negotiation thread.
+        <div className="rounded-xl p-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
+          {scopeChanged && (
+            <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.05)", color: "var(--color-text)" }}>
+              You&apos;ve changed the uses {vm.companyName} requested. Confirming now <strong>proposes these different terms</strong> — {vm.companyName}
+              {vm.repName ? ` and your agent ${firstName(vm.repName)}` : ""} must agree before consent is recorded.{" "}
+              <button type="button" onClick={() => setConsents(new Set(requestedScope))} className="font-medium underline" style={{ color: ACCENT }}>Reset to requested</button>
+            </div>
+          )}
+          <button type="button" onClick={() => setAttested((a) => !a)} className="w-full flex items-start gap-3 text-left mb-4">
+            <span className="mt-0.5 flex items-center justify-center rounded shrink-0" style={{ width: 18, height: 18, border: `1px solid ${attested ? ACCENT : "var(--color-border)"}`, background: attested ? ACCENT : "transparent", color: "white", fontSize: 12 }}>{attested ? "✓" : ""}</span>
+            <span className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.55 }}>{vm.copy.attestation}</span>
+          </button>
+          {submitError && <ErrLine msg={submitError} />}
+          <button type="button" onClick={submit} disabled={!attested || submitting} className="w-full rounded px-4 py-2.5 text-sm font-medium text-white transition" style={{ background: !attested || submitting ? "var(--color-muted)" : ACCENT, cursor: !attested || submitting ? "not-allowed" : "pointer" }}>
+            {submitting ? "Working…" : scopeChanged ? "Propose different terms" : "Confirm consent"}
+          </button>
+          <p className="text-[11px] text-center mt-2" style={{ color: "var(--color-muted)" }}>Recorded with timestamp and document version. No signature required.</p>
         </div>
       ) : canAct ? (
         <div className="rounded-xl p-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
