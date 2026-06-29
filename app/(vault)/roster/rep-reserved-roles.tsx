@@ -17,7 +17,9 @@ interface Assignment {
 
 // Path C rep surface: reserved roles a production assigned to this agent. The rep
 // supplies their client's email to connect them — the producer remains the licensee.
-export default function RepReservedRoles() {
+// Rendered on both /roster and /vault/requests; `className` tunes the outer padding
+// so it sits flush with each page's content gutter.
+export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: { className?: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export default function RepReservedRoles() {
   if (visible.length === 0) return null;
 
   return (
-    <div className="px-8 lg:px-12 pt-6">
+    <div className={className}>
       <div className="rounded border px-5 py-4" style={{ borderColor: "var(--color-accent)", background: "color-mix(in srgb, var(--color-accent) 5%, var(--color-bg))" }}>
         <p className="text-xs font-semibold mb-3" style={{ color: "var(--color-accent)" }}>
           {visible.length === 1 ? "A production reserved a role for your client" : `${visible.length} reserved roles for your clients`}
@@ -75,6 +77,15 @@ export default function RepReservedRoles() {
                   <div className="mb-3">
                     <LicenceTermsSummary terms={a.terms} />
                   </div>
+                  <a
+                    href={`/consent/preview/${a.castId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-xs font-medium mb-3 no-underline"
+                    style={{ color: "var(--color-accent)" }}
+                  >
+                    Preview the consent document your client will see →
+                  </a>
                   <div className="flex items-center gap-2">
                     <input
                       type="email"

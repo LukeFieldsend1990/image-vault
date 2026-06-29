@@ -5,7 +5,10 @@ import Link from "next/link";
 import { USE_CATEGORIES } from "@/lib/consent/use-categories";
 import type { ConsentDocViewModel } from "@/lib/consent/load";
 
-type Source = { kind: "licence"; id: string } | { kind: "token"; token: string };
+type Source =
+  | { kind: "licence"; id: string }
+  | { kind: "token"; token: string }
+  | { kind: "preview"; castId: string };
 
 interface DocResponse {
   document: ConsentDocViewModel;
@@ -64,9 +67,17 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const [counterComment, setCounterComment] = useState("");
   const [negoBusy, setNegoBusy] = useState(false);
 
+  // Preview mode: a reserved-role agent reads the document before connecting their
+  // client. Read-only — no acceptance, no negotiation, no account exists yet.
+  const isPreview = source.kind === "preview";
   const licenceId = source.kind === "licence" ? source.id : null;
-  const docEndpoint = source.kind === "licence" ? `/api/consent/${source.id}/document` : `/api/consent/access/${source.token}`;
-  const acceptEndpoint = source.kind === "licence" ? `/api/consent/${source.id}/accept` : `/api/consent/access/${source.token}/accept`;
+  const docEndpoint =
+    source.kind === "licence"
+      ? `/api/consent/${source.id}/document`
+      : source.kind === "preview"
+        ? `/api/consent/preview/${source.castId}`
+        : `/api/consent/access/${source.token}`;
+  const acceptEndpoint = source.kind === "licence" ? `/api/consent/${source.id}/accept` : source.kind === "token" ? `/api/consent/access/${source.token}/accept` : "";
 
   const refreshNego = useCallback(async () => {
     if (!licenceId) return;
@@ -317,6 +328,15 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
 
   return (
     <Frame>
+      {isPreview && (
+        <div className="rounded-lg p-3.5 mb-5 flex items-start gap-2.5" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.05)" }}>
+          <span style={{ color: ACCENT }}>◆</span>
+          <p className="text-xs" style={{ color: "var(--color-text)", lineHeight: 1.55 }}>
+            <strong>Preview.</strong> This is the consent document <strong>{firstName(vm.performerName)}</strong> will receive once you connect them — including the production detail and the uses being requested. Nothing has been sent yet. To send it, add your client&apos;s email on the reserved role and connect them.
+          </p>
+        </div>
+      )}
+
       {data.actingRole === "rep" && (
         <div className="rounded-lg p-3 mb-5 flex items-start gap-2.5" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
           <span style={{ color: ACCENT }}>◆</span>
@@ -416,7 +436,17 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
       )}
 
       {/* Actions — vary by party (or the recorded footer when consent is done) */}
-      {done ? (
+      {isPreview ? (
+        <div className="rounded-xl p-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Preview only</p>
+          <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+            This document can&apos;t be confirmed here — only {firstName(vm.performerName)} (or you, acting on their behalf once connected) can give consent. Connect your client from your requests to send it.
+          </p>
+          <Link href="/vault/requests" className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: ACCENT }}>
+            Back to requests
+          </Link>
+        </div>
+      ) : done ? (
         doneActions
       ) : isProducer ? (
         <div className="rounded-xl p-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
