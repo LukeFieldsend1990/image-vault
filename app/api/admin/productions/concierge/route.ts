@@ -7,7 +7,8 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { mintProductionCode, mintOrgCode } from "@/lib/codes/codes";
 import { importTmdbPlaceholders } from "@/lib/productions/tmdb-cast";
-import { CAST_LICENCE_TYPES, CAST_EXCLUSIVITIES } from "@/lib/productions/cast";
+import { CAST_EXCLUSIVITIES } from "@/lib/productions/cast";
+import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/use-categories";
 import { conciergeProductionInviteEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { eq } from "drizzle-orm";
@@ -35,8 +36,9 @@ export async function POST(req: NextRequest) {
     };
     importCast?: unknown;
     defaultTerms?: {
-      intendedUse?: unknown; licenceType?: unknown; territory?: unknown;
-      exclusivity?: unknown; permitAiTraining?: unknown; validFrom?: unknown; validTo?: unknown; proposedFee?: unknown;
+      intendedUse?: unknown; territory?: unknown;
+      exclusivity?: unknown; permitAiTraining?: unknown; useCategoryIds?: unknown;
+      isRelicense?: unknown; validFrom?: unknown; validTo?: unknown; proposedFee?: unknown;
     };
   };
   try {
@@ -116,21 +118,42 @@ export async function POST(req: NextRequest) {
     if (!("error" in res)) castCount = res.imported;
   }
 
-  // 4. Default terms (optional).
+  // 4. Default terms (optional). Mirrors PUT /api/productions/[id]/default-terms:
+  // use-category taxonomy is the consent-aligned access selector; reconcile with
+  // the legacy permitAiTraining flag so the two can't drift.
   const dt = body.defaultTerms;
   if (dt) {
     const intendedUse = typeof dt.intendedUse === "string" && dt.intendedUse.trim() ? dt.intendedUse.trim() : null;
-    const licenceType = typeof dt.licenceType === "string" && (CAST_LICENCE_TYPES as readonly string[]).includes(dt.licenceType) ? dt.licenceType : null;
     const territory = typeof dt.territory === "string" && dt.territory.trim() ? dt.territory.trim() : null;
     const exclusivity = typeof dt.exclusivity === "string" && (CAST_EXCLUSIVITIES as readonly string[]).includes(dt.exclusivity) ? dt.exclusivity : null;
-    const permitAiTraining = dt.permitAiTraining === true;
+    const reconciled = reconcileTrainingFlag({
+      useCategoryIds: Array.isArray(dt.useCategoryIds) ? (dt.useCategoryIds as unknown[]).filter((v): v is string => typeof v === "string") : null,
+      permitAiTraining: dt.permitAiTraining === true,
+    });
+    const useCategoriesJson = serializeUseCategoryIds(reconciled.useCategoryIds);
+    const permitAiTraining = reconciled.permitAiTraining;
+    const isRelicense = typeof dt.isRelicense === "boolean" ? dt.isRelicense : null;
     const validFrom = typeof dt.validFrom === "number" ? Math.floor(dt.validFrom) : null;
     const validTo = typeof dt.validTo === "number" ? Math.floor(dt.validTo) : null;
     const proposedFee = typeof dt.proposedFee === "number" ? Math.floor(dt.proposedFee) : null;
-    if (intendedUse || licenceType || territory || validFrom || validTo || proposedFee) {
+    if (validFrom !== null && validTo !== null && validTo <= validFrom) {
+      return NextResponse.json({ error: "validTo must be after validFrom" }, { status: 400 });
+    }
+    if (intendedUse || useCategoriesJson || territory || validFrom || validTo || proposedFee !== null || isRelicense !== null) {
       await db.insert(productionDefaultTerms).values({
-        productionId, intendedUse, licenceType, territory, exclusivity, permitAiTraining,
-        validFrom, validTo, proposedFee, updatedBy: session.sub, updatedAt: now,
+        productionId,
+        intendedUse,
+        licenceType: null,
+        territory,
+        exclusivity,
+        permitAiTraining,
+        useCategoriesJson,
+        isRelicense,
+        validFrom,
+        validTo,
+        proposedFee,
+        updatedBy: session.sub,
+        updatedAt: now,
       });
     }
   }
