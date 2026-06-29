@@ -17,6 +17,7 @@ interface ClaimableRole {
 export default function ReservedRolesCard() {
   const [roles, setRoles] = useState<ClaimableRole[]>([]);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [claimed, setClaimed] = useState<Set<string>>(new Set());
 
@@ -26,6 +27,20 @@ export default function ReservedRolesCard() {
       .then((d) => setRoles(d.roles ?? []))
       .catch(() => {});
   }, []);
+
+  async function dismiss(castId: string) {
+    setDismissed((prev) => new Set(prev).add(castId));
+    setDismissingId(castId);
+    try {
+      await fetch("/api/cast/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ castId }),
+      });
+    } finally {
+      setDismissingId(null);
+    }
+  }
 
   async function claim(role: ClaimableRole) {
     setClaimingId(role.castId);
@@ -83,9 +98,10 @@ export default function ReservedRolesCard() {
                     {claimingId === role.castId ? "Claiming…" : "This is me"}
                   </button>
                   <button
-                    onClick={() => setDismissed((prev) => new Set(prev).add(role.castId))}
+                    onClick={() => dismiss(role.castId)}
+                    disabled={dismissingId === role.castId}
                     className="text-xs px-2 py-1.5 shrink-0"
-                    style={{ color: "var(--color-muted)" }}
+                    style={{ color: "var(--color-muted)", opacity: dismissingId === role.castId ? 0.5 : 1 }}
                   >
                     Not me
                   </button>

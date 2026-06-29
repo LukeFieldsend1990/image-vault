@@ -1374,6 +1374,13 @@ export const rslLicenseRequests = sqliteTable("rsl_license_requests", {
   updatedAt: integer("updated_at").notNull(), // unix seconds
 });
 
+export const castClaimDismissals = sqliteTable("cast_claim_dismissals", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  castId: text("cast_id").notNull().references(() => productionCast.id, { onDelete: "cascade" }),
+  dismissedAt: integer("dismissed_at").notNull(),
+});
+
 export const emailLog = sqliteTable("email_log", {
   id: text("id").primaryKey(), // UUID
   toAddress: text("to_address").notNull(), // comma-separated if multiple recipients

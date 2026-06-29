@@ -14,7 +14,7 @@
  * confirmation (the claim action itself).
  */
 
-import { eq, and, or, isNull, sql } from "drizzle-orm";
+import { eq, and, or, isNull, notExists, sql } from "drizzle-orm";
 import {
   productionCast,
   productions,
@@ -23,6 +23,7 @@ import {
   talentProfiles,
   organisationMembers,
   users,
+  castClaimDismissals,
 } from "@/lib/db/schema";
 import { createNotification } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
@@ -80,6 +81,14 @@ export async function findClaimableRoles(db: Db, talentUserId: string): Promise<
       eq(productionCast.status, "placeholder"),
       isNull(productionCast.talentId),
       or(...matchers),
+      notExists(
+        db.select({ x: sql`1` }).from(castClaimDismissals).where(
+          and(
+            eq(castClaimDismissals.castId, productionCast.id),
+            eq(castClaimDismissals.talentId, talentUserId),
+          ),
+        ),
+      ),
     ))
     .all();
 
@@ -158,6 +167,19 @@ export async function claimRole(
   });
 
   return { ok: true, message: "Role claimed.", productionId: opts.productionId };
+}
+
+/**
+ * Record that a talent has said "Not me" for a cast placeholder. Idempotent.
+ * Excluded from findClaimableRoles for this talent on all future calls.
+ */
+export async function dismissCast(db: Db, talentUserId: string, castId: string): Promise<void> {
+  await db.insert(castClaimDismissals).values({
+    id: crypto.randomUUID(),
+    talentId: talentUserId,
+    castId,
+    dismissedAt: Math.floor(Date.now() / 1000),
+  }).onConflictDoNothing();
 }
 
 async function notifyProductionOfClaim(
