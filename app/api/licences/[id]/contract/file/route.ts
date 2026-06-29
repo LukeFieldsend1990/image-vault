@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { AwsClient } from "aws4fetch";
 import { getDb } from "@/lib/db";
 import { licences, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
@@ -8,15 +7,6 @@ import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, and } from "drizzle-orm";
 
 const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
-const PRESIGN_TTL_SECONDS = 3600; // 1h
-
-function cfEnv(key: string): string | undefined {
-  try {
-    return (getCloudflareContext().env as unknown as Record<string, string | undefined>)[key];
-  } catch {
-    return process.env[key];
-  }
-}
 
 function sanitizeFilename(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? "contract.pdf";
@@ -101,7 +91,7 @@ export async function POST(
   return NextResponse.json({ contractUrl: key, filename, uploadedAt: now });
 }
 
-// GET /api/licences/[id]/contract/file — presigned GET URL (1h) or 302 redirect
+// GET /api/licences/[id]/contract/file — stream signed contract PDF from R2
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -119,28 +109,20 @@ export async function GET(
     return NextResponse.json({ error: "No contract uploaded" }, { status: 404 });
   }
 
-  const accountId = cfEnv("CF_ACCOUNT_ID");
-  const accessKeyId = cfEnv("R2_ACCESS_KEY_ID");
-  const secretAccessKey = cfEnv("R2_SECRET_ACCESS_KEY");
-  const bucketName = cfEnv("R2_BUCKET_NAME") ?? "image-vault-scans";
-  if (!accountId || !accessKeyId || !secretAccessKey) {
-    return NextResponse.json({ error: "R2 credentials not configured" }, { status: 500 });
+  const { env } = getCloudflareContext();
+  const obj = await env.SCANS_BUCKET.get(lic.contractUrl);
+  if (!obj) {
+    return NextResponse.json({ error: "File not found in storage" }, { status: 404 });
   }
 
-  const r2 = new AwsClient({ accessKeyId, secretAccessKey, region: "auto", service: "s3" });
   const filename = lic.contractUrl.split("/").pop() ?? "contract.pdf";
-  const url = new URL(`https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${lic.contractUrl}`);
-  url.searchParams.set("X-Amz-Expires", String(PRESIGN_TTL_SECONDS));
-  url.searchParams.set("response-content-disposition", `attachment; filename="${filename}"`);
+  const encoded = encodeURIComponent(filename);
 
-  const signed = await r2.sign(new Request(url.toString(), { method: "GET" }), {
-    aws: { signQuery: true },
+  return new Response(obj.body, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encoded}`,
+      "Cache-Control": "private, no-store",
+    },
   });
-
-  const wantsJson = req.headers.get("accept")?.includes("application/json")
-    || new URL(req.url).searchParams.get("format") === "json";
-  if (wantsJson) {
-    return NextResponse.json({ url: signed.url, expiresIn: PRESIGN_TTL_SECONDS, filename });
-  }
-  return NextResponse.redirect(signed.url, { status: 302 });
 }
