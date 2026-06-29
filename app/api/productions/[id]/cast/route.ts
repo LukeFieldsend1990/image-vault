@@ -120,7 +120,9 @@ export async function GET(
     .map((r) => r.repInviteId)
     .filter((t): t is string => t !== null);
 
-  const [profiles, inviteRows, licenceRows, repUsers, repInviteRows, negoRows] = await Promise.all([
+  const castIds = castRows.map((r) => r.id);
+
+  const [profiles, inviteRows, licenceRows, repUsers, repInviteRows, negoRows, negoCastRows] = await Promise.all([
     talentIds.length > 0
       ? db
           .select({
@@ -177,6 +179,14 @@ export async function GET(
           .orderBy(asc(licenceNegotiations.round))
           .all()
       : Promise.resolve([]),
+    castIds.length > 0
+      ? db
+          .select({ castId: licenceNegotiations.castId, round: licenceNegotiations.round, party: licenceNegotiations.party, action: licenceNegotiations.action })
+          .from(licenceNegotiations)
+          .where(inArray(licenceNegotiations.castId, castIds))
+          .orderBy(asc(licenceNegotiations.round))
+          .all()
+      : Promise.resolve([]),
   ]);
 
   const profileMap = new Map(profiles.map((p) => [p.userId, p]));
@@ -198,6 +208,18 @@ export async function GET(
     negoPendingByLicence.set(lid, last.action === "counter" && (last.party === "talent" || last.party === "rep"));
   }
 
+  // Same, for cast-level (pre-licence) rep pre-negotiation on placeholders: the
+  // rep's open counter awaits the producer. Surfaced so the producer can respond
+  // at /consent/cast/[castId] without relying on the notification alone.
+  const latestNegoByCast = new Map<string, { party: string; action: string }>();
+  for (const n of negoCastRows) {
+    if (n.castId) latestNegoByCast.set(n.castId, { party: n.party, action: n.action });
+  }
+  const negoPendingByCast = new Map<string, boolean>();
+  for (const [cid, last] of latestNegoByCast) {
+    negoPendingByCast.set(cid, last.action === "counter" && (last.party === "talent" || last.party === "rep"));
+  }
+
   const enriched = castRows.map((row) => ({
     ...row,
     talentProfile: row.talentId ? profileMap.get(row.talentId) ?? null : null,
@@ -212,6 +234,8 @@ export async function GET(
       : null,
     licence: row.licenceId ? licenceMap.get(row.licenceId) ?? null : null,
     negotiationPending: row.licenceId ? (negoPendingByLicence.get(row.licenceId) ?? false) : false,
+    // Cast-level (pre-licence) rep pre-negotiation awaiting the producer.
+    castNegotiationPending: !row.licenceId && (negoPendingByCast.get(row.id) ?? false),
     repEmail: row.repId ? (repUserMap.get(row.repId)?.email ?? null) : null,
     repInvite: row.repInviteId
       ? (() => {

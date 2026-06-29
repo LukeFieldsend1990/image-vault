@@ -65,6 +65,7 @@ interface CastRow {
   invite: { id: string; usedAt: number | null; expiresAt: number } | null;
   licence: { id: string; status: string; projectName: string } | null;
   negotiationPending?: boolean; // performer proposed new terms — awaiting the producer's agreement
+  castNegotiationPending?: boolean; // rep pre-negotiating a placeholder proposed new terms (pre-licence)
 }
 
 interface TmdbCastMember {
@@ -1632,6 +1633,17 @@ export default function ProductionDetailClient() {
                         >
                           {consentLinkId === row.id ? "Sending…" : "Send consent doc"}
                         </button>
+                      )}
+                      {/* Rep pre-negotiating a placeholder proposed new terms (pre-licence). */}
+                      {row.castNegotiationPending && (
+                        <Link
+                          href={`/consent/cast/${row.id}`}
+                          className="text-xs font-medium px-2 py-0.5 rounded inline-flex items-center gap-1"
+                          style={{ background: "var(--color-accent)", color: "white" }}
+                          title="The performer's agent proposed different terms — review and accept, counter, or decline"
+                        >
+                          ⤺ New terms — review
+                        </Link>
                       )}
                       {/* Performer proposed new terms — the producer must review & agree. */}
                       {row.licence && row.negotiationPending && (
