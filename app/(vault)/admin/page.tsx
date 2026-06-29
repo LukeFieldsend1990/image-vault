@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails, productionInclusionRecords, organisations } from "@/lib/db/schema";
+import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails, productionInclusionRecords, organisations, emailLog } from "@/lib/db/schema";
 import { sql, inArray, eq } from "drizzle-orm";
 import { getAllSkills } from "@/lib/skills/registry";
 import "@/lib/skills/definitions";
@@ -53,6 +53,7 @@ export default async function AdminOverviewPage() {
     fpCount,
     inboundFailedCount,
     inclusionFlaggedCount,
+    emailFailedCount,
   ] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(users).get(),
     db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'talent'`).get(),
@@ -79,6 +80,7 @@ export default async function AdminOverviewPage() {
     db.select({ n: sql<number>`count(*)` }).from(geometryFingerprints).where(sql`status = 'ready'`).get(),
     db.select({ n: sql<number>`count(*)` }).from(receivedEmails).where(sql`processing_status IN ('failed', 'processing')`).get(),
     db.select({ n: sql<number>`count(*)` }).from(productionInclusionRecords).where(sql`flagged = 1 AND reviewed_at IS NULL`).get(),
+    db.select({ n: sql<number>`count(*)` }).from(emailLog).where(sql`status = 'failed' AND sent_at >= ${Math.floor(Date.now() / 1000) - 7 * 86400}`).get(),
   ]);
 
   // Resolve emails and filenames for recent downloads
@@ -156,6 +158,12 @@ export default async function AdminOverviewPage() {
       value: String(inboundFailedCount?.n ?? 0),
       sub: "stuck or failed emails",
       href: "/admin/inbound",
+    },
+    {
+      label: "Outbound Emails",
+      value: String(emailFailedCount?.n ?? 0),
+      sub: "failed sends (7d)",
+      href: "/admin/emails",
     },
     {
       label: "Inclusion Claims",

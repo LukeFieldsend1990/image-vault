@@ -7,7 +7,7 @@
  * same skip-and-warn behaviour when the key is missing.
  */
 
-import { users } from "@/lib/db/schema";
+import { users, emailLog } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 
@@ -46,6 +46,26 @@ export async function sendEmailDirect(
     }
   }
 
+  const db = opts?.db;
+  const toAddress = to.join(", ");
+
+  const logFailure = async (errorCode: number | null, errorBody: string) => {
+    if (!db) return;
+    try {
+      await db.insert(emailLog).values({
+        id: crypto.randomUUID(),
+        toAddress,
+        subject: payload.subject,
+        status: "failed",
+        errorCode,
+        errorBody: errorBody.slice(0, 2000),
+        sentAt: Math.floor(Date.now() / 1000),
+      });
+    } catch {
+      // Don't let logging failure propagate
+    }
+  };
+
   const doSend = async () => {
     try {
       const res = await fetch("https://api.resend.com/emails", {
@@ -59,9 +79,11 @@ export async function sendEmailDirect(
       if (!res.ok) {
         const body = await res.text();
         console.error("[email] Resend error", res.status, body);
+        await logFailure(res.status, body);
       }
     } catch (err) {
       console.error("[email] Fetch failed", err);
+      await logFailure(null, String(err));
     }
   };
 
