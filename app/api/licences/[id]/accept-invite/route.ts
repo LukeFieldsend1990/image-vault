@@ -5,7 +5,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceApprovedEmail } from "@/lib/email/templates";
-import { appendEvent, licenceChain } from "@/lib/compliance/ledger";
+import { backfillApprovalEvents } from "@/lib/compliance/backfill";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // POST /api/licences/[id]/accept-invite
@@ -34,6 +34,8 @@ export async function POST(
       licenseeId: licences.licenseeId,
       status: licences.status,
       projectName: licences.projectName,
+      productionCompany: licences.productionCompany,
+      intendedUse: licences.intendedUse,
       proposedFee: licences.proposedFee,
       validFrom: licences.validFrom,
       validTo: licences.validTo,
@@ -87,23 +89,26 @@ export async function POST(
     } catch { /* non-fatal */ }
   })();
 
-  // Record consent in compliance ledger. Run under ctx.waitUntil so the ledger
-  // writes survive past the response — a bare fire-and-forget can be dropped on
-  // the edge, leaving an accepted licence with no consent events (false gaps).
+  // Record consent + the platform-guaranteed obligations (39.B/E/H/J) in the
+  // compliance ledger. Run under ctx.waitUntil so the writes survive past the
+  // response — a bare fire-and-forget can be dropped on the edge, leaving an
+  // accepted licence with no events (false gaps). backfillApprovalEvents is
+  // idempotent and emits the same four events as the approve route.
   const recordConsentEvents = (async () => {
     try {
-      const chain = licenceChain(id);
-      const useType = licence.licenceType ?? "commercial";
-      const scope = licence.territory ? { useType, territory: licence.territory } : { useType };
-      await appendEvent(db, {
-        chainKey: chain, eventType: "consent.granted", clauseRef: "39.B",
-        licenceId: id, talentId: licence.talentId, actorId: session.sub, scope,
-      });
-      await appendEvent(db, {
-        chainKey: chain, eventType: "biometric.isolation_attested", clauseRef: "39.E",
-        licenceId: id, talentId: licence.talentId, actorId: null,
-        payload: { note: "Image Vault platform guarantee — biometric data never leaves R2 custody" },
-      });
+      await backfillApprovalEvents(
+        db,
+        {
+          id,
+          talentId: licence.talentId,
+          licenceType: licence.licenceType,
+          territory: licence.territory,
+          projectName: licence.projectName,
+          productionCompany: licence.productionCompany,
+          intendedUse: licence.intendedUse,
+        },
+        { actorId: session.sub },
+      );
     } catch { /* non-fatal */ }
   })();
   try {

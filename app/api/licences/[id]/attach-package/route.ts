@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { packageAttachedEmail } from "@/lib/email/templates";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 // PATCH /api/licences/[id]/attach-package
 // Attaches a scan package to a placeholder licence (status AWAITING_PACKAGE)
@@ -115,6 +116,13 @@ export async function PATCH(
       ...(licence.status === "AWAITING_PACKAGE" ? { status: "PENDING" as const } : {}),
     })
     .where(eq(licences.id, id));
+
+  // Record the scan attachment in the compliance ledger (chain of custody).
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "package.attached",
+    licenceId: id, talentId: licence.talentId, actorId: session.sub,
+    payload: { packageId, packageName: pkg.name, byRole: session.role },
+  });
 
   // Update production_cast status if a cast row references this licence
   void (async () => {

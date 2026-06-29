@@ -5,6 +5,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceEndedAttestationEmail } from "@/lib/email/templates";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 // Licensee gets this many days to attest deletion after licence ends.
 const SCRUB_WINDOW_DAYS = 14;
@@ -65,6 +66,13 @@ export async function POST(
     .update(licences)
     .set({ status: "SCRUB_PERIOD", revokedAt: now, scrubDeadline })
     .where(eq(licences.id, id));
+
+  // Record the revocation in the compliance ledger (chain of custody).
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "licence.revoked", clauseRef: "39.B",
+    licenceId: id, talentId: licence.talentId, organisationId: licence.organisationId,
+    actorId: session.sub, payload: { scrubDeadline, byRole: session.role },
+  });
 
   // Signal every live bridge grant to purge its local cache.
   await db

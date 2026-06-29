@@ -8,6 +8,7 @@ import { addNegotiationRound } from "@/lib/consent/negotiation";
 import { reconcileTrainingFlag, serializeUseCategoryIds, normaliseUseCategoryIds } from "@/lib/consent/use-categories";
 import { loadConsentDocByLicence } from "@/lib/consent/load";
 import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 // POST /api/consent/[id]/counter
 // Propose different terms in the negotiation. Body: { scope: string[], fee?: number|null, comment?: string }.
@@ -56,6 +57,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })
       .where(eq(licences.id, id));
   }
+
+  // Record the counter-offer in the compliance ledger (negotiation history).
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "consent.counter_proposed", clauseRef: "39.B",
+    licenceId: id, talentId: auth.licence.talentId, actorId: session.sub,
+    payload: { byParty: party, scope, fee: fee ?? null, comment },
+  });
 
   // Notify the other side.
   void (async () => {
