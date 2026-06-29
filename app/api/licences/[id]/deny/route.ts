@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { licenceDeniedEmail } from "@/lib/email/templates";
 import { createNotification } from "@/lib/notifications/create";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 // POST /api/licences/[id]/deny — talent/rep denies a pending licence request
 export async function POST(
@@ -67,6 +68,13 @@ export async function POST(
     .update(licences)
     .set({ status: "DENIED", deniedAt: now, deniedReason: body.reason ?? null })
     .where(eq(licences.id, id));
+
+  // Record the refusal in the compliance ledger (chain of custody).
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "licence.denied", clauseRef: "39.B",
+    licenceId: id, talentId: licence.talentId, actorId: session.sub,
+    payload: { reason: body.reason ?? null, byRole: session.role },
+  });
 
   // Mirror the accept-invite flow: if this licence is backed by a production
   // cast row, mark it declined so the production sees the response.

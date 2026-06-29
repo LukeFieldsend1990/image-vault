@@ -232,6 +232,7 @@ const skill: SkillDefinition = {
         permitAiTraining: false,
         proposedFee: null,
         productionId: production.id,
+        organisationId: production.organisationId,
         createdAt: now,
       });
       await mintLicenceCode(db, licenceId);

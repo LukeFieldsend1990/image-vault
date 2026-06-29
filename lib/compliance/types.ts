@@ -19,7 +19,14 @@ export type ComplianceEventType =
   | "transfer.denied"
   | "business_reason.recorded"
   | "training.notice_filed"
-  | "use.metered";
+  | "use.metered"
+  // Lifecycle / audit events — recorded for the chain of custody, not tied to an
+  // obligation's satisfiedBy (so they never affect the health score).
+  | "licence.denied"
+  | "licence.revoked"
+  | "replica.scrub_attested"
+  | "package.attached"
+  | "consent.counter_proposed";
 
 // Scope dimensions carried on consent + use events.
 export interface ComplianceScope {

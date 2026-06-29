@@ -12,6 +12,7 @@ import { reconcileTrainingFlag, serializeUseCategoryIds } from "@/lib/consent/us
 import { loadStandingInstructions } from "@/lib/consent/standing-instructions";
 import { resolveRequest } from "@/lib/consent/resolve";
 import { acceptConsentForLicence } from "@/lib/consent/acceptance";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import { productionCastLinkedEmail } from "@/lib/email/templates";
@@ -126,6 +127,7 @@ export async function POST(
     useCategoriesJson,
     proposedFee,
     productionId: id,
+    organisationId: production.organisationId,
     createdAt: now,
   });
   await mintLicenceCode(db, licenceId);
@@ -163,6 +165,12 @@ export async function POST(
   if (resolution.auto && resolution.action === "refused") {
     await db.update(licences).set({ status: "DENIED" }).where(eq(licences.id, licenceId));
     await db.update(productionCast).set({ status: "declined" }).where(eq(productionCast.id, castId));
+    // Record the standing-instruction auto-refusal in the compliance ledger.
+    appendEventBg(db, {
+      chainKey: licenceChain(licenceId), eventType: "licence.denied", clauseRef: "39.B",
+      licenceId, talentId: row.talentId, organisationId: production.organisationId,
+      actorId: row.talentId, payload: { reason: "standing_instruction_auto_refused", detail: resolution.reason },
+    });
     void notifyTalentAndReps(db, row.talentId, {
       type: "consent_auto_refused",
       title: `Request auto-declined for ${production.name}`,

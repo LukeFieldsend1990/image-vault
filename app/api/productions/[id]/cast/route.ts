@@ -509,6 +509,7 @@ export async function POST(
           useCategoriesJson: serializeUseCategoryIds(member.useCategoryIds),
           proposedFee: member.proposedFee ?? null,
           productionId: id,
+          organisationId: production.organisationId,
           createdAt: now,
         });
         await mintLicenceCode(db, licenceId);

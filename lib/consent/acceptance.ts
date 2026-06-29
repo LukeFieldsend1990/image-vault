@@ -16,6 +16,7 @@ import { consentAcceptances, productionCast, licences } from "@/lib/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 import { grantConsent, revokeConsent, listConsentRecords } from "@/lib/compliance/consent";
+import { backfillApprovalEvents } from "@/lib/compliance/backfill";
 import { normaliseUseCategoryIds, type UseCategoryId } from "./use-categories";
 import { CONSENT_DOCUMENT_VERSION } from "./document";
 
@@ -113,7 +114,16 @@ export async function acceptConsentForLicence(db: Db, input: AcceptForLicenceInp
   // a PENDING / AWAITING_PACKAGE licence becomes APPROVED, with the proposed fee
   // taken as agreed. The scan can still be attached later.
   const lic = await db
-    .select({ status: licences.status, proposedFee: licences.proposedFee })
+    .select({
+      status: licences.status,
+      proposedFee: licences.proposedFee,
+      talentId: licences.talentId,
+      licenceType: licences.licenceType,
+      territory: licences.territory,
+      projectName: licences.projectName,
+      productionCompany: licences.productionCompany,
+      intendedUse: licences.intendedUse,
+    })
     .from(licences)
     .where(eq(licences.id, input.licenceId))
     .get();
@@ -124,6 +134,27 @@ export async function acceptConsentForLicence(db: Db, input: AcceptForLicenceInp
       .update(licences)
       .set({ status: "APPROVED", approvedBy: input.actorId, approvedAt: now, agreedFee, platformFee })
       .where(eq(licences.id, input.licenceId));
+  }
+
+  // Top up the platform-guaranteed obligations now that consent is recorded.
+  // grantConsent() above writes 39.B; without this a licence approved purely
+  // through the consent document would never carry 39.E/39.H/39.J and would show
+  // false compliance gaps. Idempotent — backfillApprovalEvents skips any event
+  // type already on the chain (and consent.granted is already present here).
+  if (lic && (lic.status === "APPROVED" || lic.status === "PENDING" || lic.status === "AWAITING_PACKAGE")) {
+    await backfillApprovalEvents(
+      db,
+      {
+        id: input.licenceId,
+        talentId: lic.talentId,
+        licenceType: lic.licenceType,
+        territory: lic.territory,
+        projectName: lic.projectName,
+        productionCompany: lic.productionCompany,
+        intendedUse: lic.intendedUse,
+      },
+      { actorId: input.actorId },
+    );
   }
 
   return { acceptanceId, granted, revoked };

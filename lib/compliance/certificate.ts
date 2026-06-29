@@ -532,6 +532,10 @@ const EVENT_LABELS: Record<string, string> = {
   "strike.lifted": "Strike lifted",
   "use.blocked_by_strike": "Use blocked by strike",
   "replica.scrub_attested": "Scrub / deletion attested",
+  "licence.denied": "Licence declined",
+  "licence.revoked": "Licence revoked",
+  "package.attached": "Scan package attached",
+  "consent.counter_proposed": "Counter-offer proposed",
 };
 
 function fmtEventLabel(eventType: string): string {

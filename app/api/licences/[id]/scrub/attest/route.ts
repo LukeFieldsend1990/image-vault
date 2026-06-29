@@ -16,6 +16,7 @@ import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 import { and, eq, inArray } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { attestationSubmittedEmail } from "@/lib/email/templates";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 const ATTESTATION_TEXT = `I confirm that all copies of the scan data licensed under this agreement have been permanently deleted from every device, storage system, and backup under my or my company's control. I understand that this attestation is a legally binding statement and that submitting a false attestation may result in civil or criminal liability.`;
 
@@ -144,6 +145,14 @@ export async function POST(
     .update(licences)
     .set({ status: "CLOSED", scrubAttestedAt: now })
     .where(eq(licences.id, id));
+
+  // Seal the deletion attestation into the compliance ledger (39.K scrub).
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "replica.scrub_attested", clauseRef: "39.K",
+    licenceId: id, talentId: lic.talentId, organisationId: lic.organisationId,
+    actorId: session.sub,
+    payload: { attestationId, devicesCount: devices.length, bridgeCachePurged },
+  });
 
   // Notify talent (+ any reps) + admins — fire-and-forget
   void (async () => {

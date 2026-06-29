@@ -327,6 +327,10 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   "transfer.approved": "Transfer approved",
   "training.notice_filed": "Training notice filed",
   "replica.scrub_attested": "Scrub / deletion attested",
+  "licence.denied": "Licence declined",
+  "licence.revoked": "Licence revoked",
+  "package.attached": "Scan package attached",
+  "consent.counter_proposed": "Counter-offer proposed",
 };
 
 function fmtDate(unix: number): string {

@@ -7,6 +7,7 @@ import { authorizeLicenceConsent } from "@/lib/consent/authorize";
 import { addNegotiationRound } from "@/lib/consent/negotiation";
 import { loadConsentDocByLicence } from "@/lib/consent/load";
 import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 // POST /api/consent/[id]/negotiation/decline
 // Either party ends the negotiation without agreement. Marks the licence DENIED
@@ -29,6 +30,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await db.update(licences).set({ status: "DENIED" }).where(eq(licences.id, id));
   await db.update(productionCast).set({ status: "declined" }).where(eq(productionCast.licenceId, id));
   await addNegotiationRound(db, { licenceId: id, party, action: "declined", comment, createdBy: session.sub });
+
+  // Record the negotiation ending without agreement in the compliance ledger.
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "licence.denied", clauseRef: "39.B",
+    licenceId: id, talentId: auth.licence.talentId, actorId: session.sub,
+    payload: { reason: "negotiation_declined", byParty: party, comment },
+  });
 
   void (async () => {
     try {

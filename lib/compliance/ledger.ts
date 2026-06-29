@@ -8,7 +8,7 @@
 
 import { desc, eq } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
-import { complianceEvents } from "@/lib/db/schema";
+import { complianceEvents, licences } from "@/lib/db/schema";
 import type {
   ChainVerification,
   ComplianceEventType,
@@ -137,6 +137,21 @@ export async function appendEvent(db: Db, spec: AppendEventSpec): Promise<Append
     prevHash,
   );
 
+  // Carry org context on every licence-chain event. Cast/production licences and
+  // their callers historically left this null even when the licence belongs to an
+  // org — backfill it from the licence so org-scoped event queries and org-sealed
+  // certificates see the event. organisationId is not part of the hashed content,
+  // so this never affects chain verification.
+  let organisationId = spec.organisationId ?? null;
+  if (!organisationId && spec.licenceId) {
+    const lic = await db
+      .select({ organisationId: licences.organisationId })
+      .from(licences)
+      .where(eq(licences.id, spec.licenceId))
+      .get();
+    organisationId = lic?.organisationId ?? null;
+  }
+
   const id = crypto.randomUUID();
   const createdAt = Math.floor(Date.now() / 1000);
 
@@ -149,7 +164,7 @@ export async function appendEvent(db: Db, spec: AppendEventSpec): Promise<Append
     clauseRef: spec.clauseRef ?? null,
     licenceId: spec.licenceId ?? null,
     talentId: spec.talentId ?? null,
-    organisationId: spec.organisationId ?? null,
+    organisationId,
     actorId: spec.actorId ?? null,
     scopeJson: canonicalJson(spec.scope ?? {}),
     payloadJson: canonicalJson(payload),

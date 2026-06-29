@@ -482,7 +482,7 @@ registerMcpTool({
     }
 
     const production = await db
-      .select({ id: productions.id, name: productions.name, company: companyNameSql })
+      .select({ id: productions.id, name: productions.name, company: companyNameSql, organisationId: productions.organisationId })
       .from(productions)
       .where(eq(productions.id, productionId))
       .get();
@@ -601,6 +601,7 @@ registerMcpTool({
             permitAiTraining,
             proposedFee: null,
             productionId,
+            organisationId: production.organisationId,
             createdAt: now,
           });
 
@@ -719,7 +720,7 @@ registerMcpTool({
     if (!productionId) return { success: false, message: "productionId is required." };
 
     const production = await db
-      .select({ id: productions.id, name: productions.name, company: companyNameSql })
+      .select({ id: productions.id, name: productions.name, company: companyNameSql, organisationId: productions.organisationId })
       .from(productions)
       .where(eq(productions.id, productionId))
       .get();
