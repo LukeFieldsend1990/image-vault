@@ -1373,3 +1373,13 @@ export const rslLicenseRequests = sqliteTable("rsl_license_requests", {
   createdAt: integer("created_at").notNull(), // unix seconds
   updatedAt: integer("updated_at").notNull(), // unix seconds
 });
+
+export const emailLog = sqliteTable("email_log", {
+  id: text("id").primaryKey(), // UUID
+  toAddress: text("to_address").notNull(), // comma-separated if multiple recipients
+  subject: text("subject").notNull(),
+  status: text("status", { enum: ["sent", "failed"] }).notNull(),
+  errorCode: integer("error_code"), // HTTP status from Resend; null on success
+  errorBody: text("error_body"), // Resend error response body or fetch exception message
+  sentAt: integer("sent_at").notNull(), // unix seconds
+});
