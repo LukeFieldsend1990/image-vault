@@ -42,7 +42,7 @@ export async function POST(
     return NextResponse.json({ error: `This role is already "${cast.status}".` }, { status: 409 });
   }
 
-  let body: { email?: string } & Partial<CastLicenceTerms>;
+  let body: { email?: string; message?: string } & Partial<CastLicenceTerms>;
   try {
     body = JSON.parse(await req.text());
   } catch {
@@ -51,6 +51,7 @@ export async function POST(
   if (typeof body.email !== "string" || !body.email.trim()) {
     return NextResponse.json({ error: "Your client's email is required" }, { status: 400 });
   }
+  const repMessage = typeof body.message === "string" && body.message.trim() ? body.message.trim() : undefined;
 
   // The producer who reserved the slot is the licensee on the resulting licence.
   // The rep is the one contacting the talent, so their email is shown as coordinator.
@@ -71,6 +72,7 @@ export async function POST(
     baseUrl,
     overrides,
     defaults,
+    repMessage,
   });
   if (!result.ok) return NextResponse.json({ error: result.message }, { status: 409 });
 

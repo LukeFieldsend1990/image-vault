@@ -574,16 +574,21 @@ export interface ProductionCastInviteEmailParams {
   validFrom: number;
   validTo: number;
   signupUrl: string;
+  repMessage?: string;
 }
 
 export function productionCastInviteEmail(p: ProductionCastInviteEmailParams): { subject: string; html: string } {
   const characterRow = p.characterName
     ? `<div class="kv-row"><span class="kv-key">Character</span><span class="kv-val">${p.characterName}</span></div>`
     : "";
+  const repMessageBlock = p.repMessage
+    ? `<blockquote style="margin: 16px 0; padding: 12px 16px; border-left: 3px solid #c0392b; background: #fdf5f4; color: #333; font-style: italic; border-radius: 2px;">${p.repMessage}</blockquote>`
+    : "";
   return {
     subject: `You've been invited to join the cast of ${p.productionName}`,
     html: layout(`
       <p>You've been invited to join the cast of <strong>${p.productionName}</strong> by ${p.companyName}.</p>
+      ${repMessageBlock}
       <p>By accepting this invite and approving the licence request, you consent to your scan being used for this production.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
@@ -645,6 +650,7 @@ export interface ProductionCastLinkedEmailParams {
   intendedUse: string;
   proposedFee?: number;
   reviewUrl: string;
+  repMessage?: string;
 }
 
 export function productionCastLinkedEmail(p: ProductionCastLinkedEmailParams): { subject: string; html: string } {
@@ -654,10 +660,14 @@ export function productionCastLinkedEmail(p: ProductionCastLinkedEmailParams): {
   const feeRow = p.proposedFee != null
     ? `<div class="kv-row"><span class="kv-key">Proposed fee</span><span class="kv-val">£${(p.proposedFee / 100).toFixed(2)}</span></div>`
     : "";
+  const repMessageBlock = p.repMessage
+    ? `<blockquote style="margin: 16px 0; padding: 12px 16px; border-left: 3px solid #c0392b; background: #fdf5f4; color: #333; font-style: italic; border-radius: 2px;">${p.repMessage}</blockquote>`
+    : "";
   return {
     subject: `New licence request from ${p.productionName}`,
     html: layout(`
       <p>A licence request has been submitted for your scan package from the production <strong>${p.productionName}</strong>.</p>
+      ${repMessageBlock}
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
         <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
