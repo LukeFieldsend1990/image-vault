@@ -602,7 +602,7 @@ export default function TalentAuthoriseClient({
             <div>
               <p className="text-xs font-semibold" style={{ color: "#dc2626" }}>AI Processing Requested</p>
               <p className="mt-0.5 text-xs" style={{ color: "#991b1b" }}>
-                This licensee has requested permission to use your biometric data to train AI models or generate synthetic media. Review carefully before authorising. Pre-authorisation is not available for AI training licences.
+                This licensee has requested permission to use your biometric data to train AI models or generate synthetic media. Review carefully before authorising.
               </p>
             </div>
           </div>
@@ -634,23 +634,15 @@ export default function TalentAuthoriseClient({
       {/* ── Pre-auth options ──────────────────────────────────────────────── */}
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--color-muted)" }}>Authorisation scope</p>
-        {aiTraining && (
-          <p className="text-xs mb-3 italic" style={{ color: "var(--color-muted)" }}>
-            Pre-authorisation is disabled for AI training licences. Only one-off is available.
-          </p>
-        )}
         <div className="space-y-2">
           {PREAUTH_OPTIONS.map((opt) => {
-            const disabled = aiTraining && opt.value !== "once";
             return (
               <label
                 key={opt.value}
-                className="flex items-start gap-3 rounded border px-4 py-3 transition"
+                className="flex items-start gap-3 rounded border px-4 py-3 transition cursor-pointer"
                 style={{
                   borderColor: preauthOption === opt.value ? "var(--color-ink)" : "var(--color-border)",
                   background: preauthOption === opt.value ? "rgba(0,0,0,0.02)" : "transparent",
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  opacity: disabled ? 0.4 : 1,
                 }}
               >
                 <input
@@ -658,8 +650,7 @@ export default function TalentAuthoriseClient({
                   name="preauth"
                   value={opt.value}
                   checked={preauthOption === opt.value}
-                  onChange={() => !disabled && setPreauthOption(opt.value)}
-                  disabled={disabled}
+                  onChange={() => setPreauthOption(opt.value)}
                   className="mt-0.5 shrink-0"
                 />
                 <div>

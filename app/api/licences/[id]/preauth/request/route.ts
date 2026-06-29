@@ -71,7 +71,7 @@ export async function POST(
 
   // Verify this rep represents the talent on this licence
   const row = await db
-    .select({ talentId: licences.talentId, projectName: licences.projectName, packageId: licences.packageId, permitAiTraining: licences.permitAiTraining, status: licences.status })
+    .select({ talentId: licences.talentId, projectName: licences.projectName, packageId: licences.packageId, status: licences.status })
     .from(licences)
     .where(eq(licences.id, id))
     .get();
@@ -79,7 +79,6 @@ export async function POST(
   if (!row) return NextResponse.json({ error: "Licence not found" }, { status: 404 });
   if (row.status !== "APPROVED") return NextResponse.json({ error: "Licence is not approved" }, { status: 409 });
   if (!row.packageId) return NextResponse.json({ error: "Licence has no package attached" }, { status: 409 });
-  if (row.permitAiTraining) return NextResponse.json({ error: "Pre-auth cannot be requested for AI training licences" }, { status: 409 });
   const rowPackageId = row.packageId;
 
   const repLink = await db

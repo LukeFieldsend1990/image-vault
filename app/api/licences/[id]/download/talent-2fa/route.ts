@@ -69,7 +69,7 @@ export async function POST(
 
   // Fetch the licence to get file_scope and preauth eligibility
   const [licence] = await db
-    .select({ fileScope: licences.fileScope, downloadCount: licences.downloadCount, permitAiTraining: licences.permitAiTraining, validTo: licences.validTo })
+    .select({ fileScope: licences.fileScope, downloadCount: licences.downloadCount, validTo: licences.validTo })
     .from(licences)
     .where(eq(licences.id, id))
     .limit(1)
@@ -121,10 +121,10 @@ export async function POST(
   const ttl = dcSession.expiresAt - now;
   await kv.put(`dual_custody:${id}`, JSON.stringify(completed), { expirationTtl: ttl });
 
-  // Calculate preauth expiry if requested (not available for AI training licences)
+  // Calculate preauth expiry if requested
   let preauthUntil: number | null = null;
   const opt = body.preauthOption;
-  if (opt && opt !== "once" && !licence.permitAiTraining) {
+  if (opt && opt !== "once") {
     if (opt === "7d")      preauthUntil = now + 7  * 86400;
     else if (opt === "14d") preauthUntil = now + 14 * 86400;
     else if (opt === "30d") preauthUntil = now + 30 * 86400;
