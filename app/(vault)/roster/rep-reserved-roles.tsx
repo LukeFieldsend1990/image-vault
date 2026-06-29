@@ -110,13 +110,13 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
                     <LicenceTermsSummary terms={a.terms} />
                   </div>
                   <a
-                    href={`/consent/preview/${a.castId}`}
+                    href={`/consent/cast/${a.castId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block text-xs font-medium mt-3 no-underline"
                     style={{ color: "var(--color-accent)" }}
                   >
-                    Preview the consent document your client will see →
+                    Review, negotiate &amp; send for consent →
                   </a>
                   <div className="mt-4">
                     <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>

@@ -1100,6 +1100,12 @@ export const productionCast = sqliteTable("production_cast", {
   // supplying their client's email.
   repId: text("rep_id").references(() => users.id),
   repInviteId: text("rep_invite_id"),
+  // Performer's custody election at final consent (tokenised link). "self" = they
+  // will register and take ownership; "rep_managed" = they leave the row
+  // production-held, managed by their rep (production stays data controller +
+  // holds the scan). Null until chosen; recording it does not transfer ownership.
+  custodyChoice: text("custody_choice"), // self | rep_managed | null
+  custodyChosenAt: integer("custody_chosen_at"),
 });
 
 // Production-level default licence terms. Set once during guided onboarding (Step 4)
@@ -1294,7 +1300,10 @@ export const standingInstructions = sqliteTable("standing_instructions", {
 // consent terms (scope + fee) between a production and a performer/agent.
 export const licenceNegotiations = sqliteTable("licence_negotiations", {
   id: text("id").primaryKey(),
-  licenceId: text("licence_id").notNull().references(() => licences.id, { onDelete: "cascade" }),
+  // A round hangs off EITHER a licence (registered performer) OR a production-held
+  // cast row (placeholder a rep pre-negotiates on behalf of). Exactly one is set.
+  licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }),
+  castId: text("cast_id").references(() => productionCast.id, { onDelete: "cascade" }),
   round: integer("round").notNull(),
   party: text("party", { enum: ["producer", "talent", "rep"] }).notNull(),
   action: text("action", { enum: ["counter", "accepted", "declined"] }).notNull().default("counter"),
