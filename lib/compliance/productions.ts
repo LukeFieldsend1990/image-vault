@@ -7,7 +7,7 @@
 // and per-licence evaluator (evaluateLicence) so the union view stays consistent
 // with the talent/admin compliance scoring.
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, count, sql } from "drizzle-orm";
 import {
   complianceEvents,
   licences,
@@ -76,21 +76,22 @@ export interface ProductionOverviewRow {
   cast: CastSummary;
 }
 
-function countCast(rows: { status: string; sagMember: boolean }[]): CastSummary {
-  const c: CastSummary = { total: 0, consented: 0, linked: 0, invited: 0, placeholder: 0, declined: 0, sagMembers: 0 };
-  for (const r of rows) {
-    c.total++;
-    if (r.sagMember) c.sagMembers++;
-    switch (r.status) {
-      case "consented": c.consented++; break;
-      case "linked":
-      case "scan_uploaded": c.linked++; break;
-      case "invited": c.invited++; break;
-      case "placeholder": c.placeholder++; break;
-      case "declined": c.declined++; break;
-    }
+function emptyCastSummary(): CastSummary {
+  return { total: 0, consented: 0, linked: 0, invited: 0, placeholder: 0, declined: 0, sagMembers: 0 };
+}
+
+// Fold one (production, status) aggregate group into a running cast summary.
+function foldCastGroup(c: CastSummary, status: string, n: number, sagN: number): void {
+  c.total += n;
+  c.sagMembers += sagN;
+  switch (status) {
+    case "consented": c.consented += n; break;
+    case "linked":
+    case "scan_uploaded": c.linked += n; break;
+    case "invited": c.invited += n; break;
+    case "placeholder": c.placeholder += n; break;
+    case "declined": c.declined += n; break;
   }
-  return c;
 }
 
 /** Every production on the platform with compliance health, cast onboarding and coverage gaps. */
@@ -137,18 +138,26 @@ export async function buildProductionsOverview(db: Db, regime: RegimeId): Promis
     }
   }
 
-  // Cast onboarding counts per production (batch, no N+1).
-  const castByProd = new Map<string, { status: string; sagMember: boolean }[]>();
+  // Cast onboarding counts per production. Aggregate in SQL (GROUP BY production +
+  // status) so the payload is one row per (production, status) rather than one row
+  // per cast member — the oversight view spans every production on the platform.
+  const castByProd = new Map<string, CastSummary>();
   if (prodIds.length) {
-    const castRows = await db
-      .select({ productionId: productionCast.productionId, status: productionCast.status, sagMember: productionCast.sagMember })
+    const castGroups = await db
+      .select({
+        productionId: productionCast.productionId,
+        status: productionCast.status,
+        n: count(),
+        sagN: sql<number>`sum(case when ${productionCast.sagMember} then 1 else 0 end)`,
+      })
       .from(productionCast)
       .where(inArray(productionCast.productionId, prodIds))
+      .groupBy(productionCast.productionId, productionCast.status)
       .all();
-    for (const r of castRows) {
-      const list = castByProd.get(r.productionId) ?? [];
-      list.push({ status: r.status, sagMember: !!r.sagMember });
-      castByProd.set(r.productionId, list);
+    for (const g of castGroups) {
+      const c = castByProd.get(g.productionId) ?? emptyCastSummary();
+      foldCastGroup(c, g.status, g.n, Number(g.sagN ?? 0));
+      castByProd.set(g.productionId, c);
     }
   }
 
@@ -176,7 +185,7 @@ export async function buildProductionsOverview(db: Db, regime: RegimeId): Promis
       requiredGaps: p.requiredGaps,
       coverageGaps,
       useViolations: violationsByProd.get(p.id) ?? 0,
-      cast: countCast(castByProd.get(p.id) ?? []),
+      cast: castByProd.get(p.id) ?? emptyCastSummary(),
     });
   }
 

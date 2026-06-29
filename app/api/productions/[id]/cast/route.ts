@@ -23,7 +23,7 @@ import {
   reconcileTrainingFlag,
   type UseCategoryId,
 } from "@/lib/consent/use-categories";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, asc } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
 import {
@@ -120,7 +120,7 @@ export async function GET(
     .map((r) => r.repInviteId)
     .filter((t): t is string => t !== null);
 
-  const [profiles, inviteRows, licenceRows, repUsers, repInviteRows] = await Promise.all([
+  const [profiles, inviteRows, licenceRows, repUsers, repInviteRows, negoRows] = await Promise.all([
     talentIds.length > 0
       ? db
           .select({
@@ -169,6 +169,14 @@ export async function GET(
           .where(inArray(invites.id, repInviteIds))
           .all()
       : Promise.resolve([]),
+    licenceIds.length > 0
+      ? db
+          .select({ licenceId: licenceNegotiations.licenceId, round: licenceNegotiations.round, party: licenceNegotiations.party, action: licenceNegotiations.action })
+          .from(licenceNegotiations)
+          .where(inArray(licenceNegotiations.licenceId, licenceIds))
+          .orderBy(asc(licenceNegotiations.round))
+          .all()
+      : Promise.resolve([]),
   ]);
 
   const profileMap = new Map(profiles.map((p) => [p.userId, p]));
@@ -179,25 +187,15 @@ export async function GET(
 
   // Pending negotiation: a performer/agent counter-offer awaiting the producer's
   // agreement (latest round is an open talent/rep counter). Surfaced on the cast
-  // list so the producer knows terms changed and need their sign-off.
+  // list so the producer knows terms changed and need their sign-off. negoRows is
+  // ordered by round ascending, so the last row seen per licence is the latest.
+  const latestNegoByLicence = new Map<string, { party: string; action: string }>();
+  for (const n of negoRows) {
+    latestNegoByLicence.set(n.licenceId, { party: n.party, action: n.action });
+  }
   const negoPendingByLicence = new Map<string, boolean>();
-  if (licenceIds.length > 0) {
-    const negoRows = await db
-      .select({ licenceId: licenceNegotiations.licenceId, round: licenceNegotiations.round, party: licenceNegotiations.party, action: licenceNegotiations.action })
-      .from(licenceNegotiations)
-      .where(inArray(licenceNegotiations.licenceId, licenceIds))
-      .all();
-    const byLic = new Map<string, { round: number; party: string; action: string }[]>();
-    for (const n of negoRows) {
-      const arr = byLic.get(n.licenceId) ?? [];
-      arr.push(n);
-      byLic.set(n.licenceId, arr);
-    }
-    for (const [lid, rounds] of byLic) {
-      rounds.sort((a, b) => a.round - b.round);
-      const last = rounds[rounds.length - 1];
-      negoPendingByLicence.set(lid, Boolean(last && last.action === "counter" && (last.party === "talent" || last.party === "rep")));
-    }
+  for (const [lid, last] of latestNegoByLicence) {
+    negoPendingByLicence.set(lid, last.action === "counter" && (last.party === "talent" || last.party === "rep"));
   }
 
   const enriched = castRows.map((row) => ({
