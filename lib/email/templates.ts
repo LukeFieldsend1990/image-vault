@@ -1040,9 +1040,33 @@ export interface ConsentRequestEmailParams {
   companyName: string;
   /** Tokenised public link to the consent document — no account required to read. */
   consentUrl: string;
+  /**
+   * Sent to the performer's representation rather than the performer themselves.
+   * Switches salutation and copy so the rep knows it's being reviewed on their
+   * client's behalf.
+   */
+  recipientIsRep?: boolean;
 }
 
 export function consentRequestEmail(p: ConsentRequestEmailParams): { subject: string; html: string } {
+  if (p.recipientIsRep) {
+    return {
+      subject: `Consent needed for ${p.performerName} — ${p.productionName}`,
+      html: layout(`
+        <p>Hi,</p>
+        <p><strong>${p.companyName}</strong> would like to scan <strong>${p.performerName}</strong>'s likeness for the production <strong>${p.productionName}</strong>, and needs consent first. You're receiving this as their representation.</p>
+        <p>We've prepared a short, plain-English consent document. It explains exactly what's being captured, what each use means, and lets you consent only to the uses you're comfortable with — on your client's behalf, or by forwarding it to them.</p>
+        <div class="kv">
+          <div class="kv-row"><span class="kv-key">Performer</span><span class="kv-val">${p.performerName}</span></div>
+          <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
+          <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
+          <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Awaiting consent</span></span></div>
+        </div>
+        <a class="btn" href="${p.consentUrl}">Read &amp; confirm consent</a>
+        <p class="muted" style="margin-top: 24px;">No account needed to read it. The link is unique to this request — feel free to forward it to your client if they'd prefer to confirm directly.</p>
+      `),
+    };
+  }
   return {
     subject: `Your consent is needed for ${p.productionName}`,
     html: layout(`

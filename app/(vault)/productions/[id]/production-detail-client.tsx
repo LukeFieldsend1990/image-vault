@@ -597,9 +597,10 @@ export default function ProductionDetailClient() {
     setConsentLinkId(castId);
     try {
       const r = await fetch(`/api/productions/${id}/cast/${castId}/consent-link`, { method: "POST" });
-      const d = await r.json().catch(() => ({})) as { ok?: boolean; consentUrl?: string; email?: string; error?: string };
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; consentUrl?: string; email?: string; recipientIsRep?: boolean; error?: string };
       if (r.ok && d.ok) {
-        alert(`Consent document sent${d.email ? ` to ${d.email}` : ""}.\n\nThey can read and confirm without creating an account. Preview link:\n${d.consentUrl}`);
+        const target = d.email ? ` to ${d.email}${d.recipientIsRep ? " (their representation)" : ""}` : "";
+        alert(`Consent document sent${target}.\n\nThey can read and confirm without creating an account. Preview link:\n${d.consentUrl}`);
       } else {
         alert(d.error ?? "Couldn't send the consent document.");
       }
