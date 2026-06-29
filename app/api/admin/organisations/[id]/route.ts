@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { organisations } from "@/lib/db/schema";
+import { organisations, productions, licences, renderBridgeAgents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isOrgType, type OrgType } from "@/lib/organisations/orgTypes";
@@ -60,6 +60,42 @@ export async function PATCH(
   }
 
   await db.update(organisations).set(updates).where(eq(organisations.id, id));
+
+  return NextResponse.json({ ok: true });
+}
+
+// DELETE /api/admin/organisations/[id] — delete a production company / studio org (admin only)
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const session = await requireSession(req);
+  if (isErrorResponse(session)) return session;
+  if (!isAdmin(session.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const db = getDb();
+
+  const [org] = await db
+    .select({ id: organisations.id, orgType: organisations.orgType })
+    .from(organisations)
+    .where(eq(organisations.id, id))
+    .limit(1)
+    .all();
+  if (!org) {
+    return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
+  }
+
+  // Detach linked records to preserve audit trail
+  await db.update(productions).set({ organisationId: null }).where(eq(productions.organisationId, id));
+  await db.update(licences).set({ organisationId: null }).where(eq(licences.organisationId, id));
+
+  // Remove render-bridge agent registrations (NOT NULL FK — must clear before deleting org)
+  await db.delete(renderBridgeAgents).where(eq(renderBridgeAgents.organisationId, id));
+
+  await db.delete(organisations).where(eq(organisations.id, id));
 
   return NextResponse.json({ ok: true });
 }

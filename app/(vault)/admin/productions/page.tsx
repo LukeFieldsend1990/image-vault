@@ -5,6 +5,7 @@ import { eq, sql, desc, inArray } from "drizzle-orm";
 import Link from "next/link";
 import NewCompanyButton from "./new-company-button";
 import DeleteProductionButton from "./delete-production-button";
+import DeleteCompanyButton from "./delete-company-button";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 
@@ -282,24 +283,31 @@ export default async function AdminProductionsPage() {
         {allCompanies.map((c) => {
           const prodCount = prodCountMap.get(c.id) ?? 0;
           return (
-            <Link
+            <div
               key={c.id}
-              href={`/admin/organisations/${c.id}`}
-              className="grid items-center px-5 py-3.5 border-b last:border-0 text-sm min-w-[500px] transition hover:bg-[var(--color-surface)]"
-              style={{
-                gridTemplateColumns: "2fr 1.5fr 1fr 1fr",
-                borderColor: "var(--color-border)",
-              }}
+              className="group relative border-b last:border-0 min-w-[500px]"
+              style={{ borderColor: "var(--color-border)" }}
             >
-              <span className="font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
-                <span className="truncate">{c.name}</span>
-                <OrgTypeBadge type={c.orgType} />
-                <CodeTag code={c.shortCode} />
-              </span>
-              <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{c.website ?? "—"}</span>
-              <span className="text-xs" style={{ color: "var(--color-muted)" }}>{prodCount > 0 ? prodCount : "—"}</span>
-              <span className="text-xs" style={{ color: "var(--color-muted)" }}>{ts(c.createdAt)}</span>
-            </Link>
+              <Link
+                href={`/admin/organisations/${c.id}`}
+                className="grid items-center px-5 py-3.5 pr-12 text-sm transition hover:bg-[var(--color-surface)]"
+                style={{
+                  gridTemplateColumns: "2fr 1.5fr 1fr 1fr",
+                }}
+              >
+                <span className="font-medium truncate flex items-center gap-1.5" style={{ color: "var(--color-ink)" }}>
+                  <span className="truncate">{c.name}</span>
+                  <OrgTypeBadge type={c.orgType} />
+                  <CodeTag code={c.shortCode} />
+                </span>
+                <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>{c.website ?? "—"}</span>
+                <span className="text-xs" style={{ color: "var(--color-muted)" }}>{prodCount > 0 ? prodCount : "—"}</span>
+                <span className="text-xs" style={{ color: "var(--color-muted)" }}>{ts(c.createdAt)}</span>
+              </Link>
+              <div className="absolute right-3 top-0 bottom-0 flex items-center">
+                <DeleteCompanyButton id={c.id} name={c.name} />
+              </div>
+            </div>
           );
         })}
       </div>
