@@ -8,8 +8,9 @@ interface Rep {
   shortCode: string | null;
 }
 
-// Path C producer surface: invite a representing agent to a reserved cast slot —
-// pick an existing rep on Image Vault, or fall back to a free-text email invite.
+// Path C producer surface: invite a representing agent to a reserved cast slot.
+// Empty state shows reps previously used on this org's productions; typing
+// searches by email or AG-#### code without surfacing the full directory.
 export default function InviteRepModal({
   productionId,
   castId,
@@ -24,15 +25,29 @@ export default function InviteRepModal({
   onDone: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [reps, setReps] = useState<Rep[]>([]);
+  const [suggested, setSuggested] = useState<Rep[]>([]);
+  const [searchResults, setSearchResults] = useState<Rep[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Load suggested reps from previous productions on mount
   useEffect(() => {
+    fetch(`/api/productions/${productionId}/suggested-reps`)
+      .then((r) => r.json() as Promise<{ reps?: Rep[] }>)
+      .then((d) => setSuggested(d.reps ?? []))
+      .catch(() => {});
+  }, [productionId]);
+
+  // Search by email or code only when there's a real query
+  useEffect(() => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
     const t = setTimeout(() => {
       fetch(`/api/reps?q=${encodeURIComponent(query)}`)
         .then((r) => r.json() as Promise<{ reps?: Rep[] }>)
-        .then((d) => setReps(d.reps ?? []))
+        .then((d) => setSearchResults(d.reps ?? []))
         .catch(() => {});
     }, 250);
     return () => clearTimeout(t);
@@ -58,6 +73,8 @@ export default function InviteRepModal({
   }
 
   const looksLikeEmail = query.includes("@") && query.includes(".");
+  const listToShow = query.trim() ? searchResults : suggested;
+  const listLabel = query.trim() ? null : suggested.length > 0 ? "From previous productions" : null;
 
   return (
     <div
@@ -81,9 +98,15 @@ export default function InviteRepModal({
           style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "8px 12px", fontSize: 14, color: "var(--color-text)", outline: "none" }}
         />
 
-        {reps.length > 0 && (
+        {listLabel && (
+          <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>
+            {listLabel}
+          </p>
+        )}
+
+        {listToShow.length > 0 && (
           <div className="rounded overflow-hidden mb-3 divide-y" style={{ border: "1px solid var(--color-border)" }}>
-            {reps.map((rep) => (
+            {listToShow.map((rep) => (
               <button
                 key={rep.id}
                 type="button"
