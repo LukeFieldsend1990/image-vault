@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     inviteeEmail?: unknown;
     production?: {
       name?: unknown; type?: unknown; year?: unknown; tmdbId?: unknown;
-      sagProjectNumber?: unknown; isSag?: unknown; isEquity?: unknown;
+      sagProjectNumber?: unknown; isSag?: unknown; isEquity?: unknown; otherUnion?: unknown;
     };
     importCast?: unknown;
     defaultTerms?: {
@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
   const sagProjectNumber = typeof prod.sagProjectNumber === "string" && prod.sagProjectNumber.trim() ? prod.sagProjectNumber.trim() : null;
   const isSag = prod.isSag === true;
   const isEquity = prod.isEquity === true;
+  const otherUnion = typeof prod.otherUnion === "string" && prod.otherUnion.trim() ? prod.otherUnion.trim() : null;
 
   // 1. Production company + org (owner assigned to the invitee on signup).
   const companyId = crypto.randomUUID();
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
     sagProjectNumber,
     isSag,
     isEquity,
+    otherUnion,
     organisationId: orgId,
     createdAt: now,
     updatedAt: now,

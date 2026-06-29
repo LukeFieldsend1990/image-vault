@@ -54,8 +54,9 @@ export default function ConciergeClient() {
 
   const [prod, setProd] = useState({
     name: "", type: "film", year: new Date().getFullYear(),
-    tmdbId: null as number | null, sagProjectNumber: "", isSag: false, isEquity: false,
+    tmdbId: null as number | null, sagProjectNumber: "", isSag: false, isEquity: false, otherUnion: "",
   });
+  const [showOtherUnion, setShowOtherUnion] = useState(false);
   const [importCast, setImportCast] = useState(true);
 
   const [termsOpen, setTermsOpen] = useState(false);
@@ -126,6 +127,7 @@ export default function ConciergeClient() {
             tmdbId: prod.tmdbId ?? undefined,
             sagProjectNumber: prod.sagProjectNumber.trim() || undefined,
             isSag: prod.isSag || undefined, isEquity: prod.isEquity || undefined,
+            otherUnion: showOtherUnion ? prod.otherUnion.trim() || undefined : undefined,
           },
           importCast: importCast && !!prod.tmdbId,
           defaultTerms: termsOpen ? {
@@ -160,7 +162,7 @@ export default function ConciergeClient() {
         </p>
         <div className="flex items-center gap-3 mt-6">
           <Link href={`/productions/${done.productionId}`} className="rounded px-5 py-2 text-sm font-medium text-white" style={{ background: "var(--color-accent)" }}>View production</Link>
-          <button onClick={() => { setDone(null); setCompanyName(""); setInviteeEmail(""); setProd({ name: "", type: "film", year: new Date().getFullYear(), tmdbId: null, sagProjectNumber: "", isSag: false, isEquity: false }); }} className="rounded px-4 py-2 text-sm" style={{ color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>Set up another</button>
+          <button onClick={() => { setDone(null); setCompanyName(""); setInviteeEmail(""); setProd({ name: "", type: "film", year: new Date().getFullYear(), tmdbId: null, sagProjectNumber: "", isSag: false, isEquity: false, otherUnion: "" }); setShowOtherUnion(false); }} className="rounded px-4 py-2 text-sm" style={{ color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>Set up another</button>
         </div>
       </div>
     );
@@ -226,15 +228,38 @@ export default function ConciergeClient() {
         </div>
 
         <Field label="Union project number"><input type="text" value={prod.sagProjectNumber} onChange={(e) => setProd((p) => ({ ...p, sagProjectNumber: e.target.value }))} placeholder="e.g. 24-FS-0123" style={inputStyle} /></Field>
-        <div className="flex items-center gap-6">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={prod.isSag} onChange={(e) => setProd((p) => ({ ...p, isSag: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
-            <span className="text-sm" style={{ color: "var(--color-text)" }}>SAG-AFTRA</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={prod.isEquity} onChange={(e) => setProd((p) => ({ ...p, isEquity: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
-            <span className="text-sm" style={{ color: "var(--color-text)" }}>Equity</span>
-          </label>
+        <div className="rounded p-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>Union affiliation</p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: "sag", label: "SAG-AFTRA", active: prod.isSag, toggle: () => setProd((p) => ({ ...p, isSag: !p.isSag })) },
+              { key: "equity", label: "Equity", active: prod.isEquity, toggle: () => setProd((p) => ({ ...p, isEquity: !p.isEquity })) },
+              { key: "other", label: "Other", active: showOtherUnion, toggle: () => setShowOtherUnion((v) => { if (v) setProd((p) => ({ ...p, otherUnion: "" })); return !v; }) },
+            ].map((u) => (
+              <button
+                key={u.key}
+                type="button"
+                onClick={u.toggle}
+                className="px-4 py-2 rounded text-sm font-medium border transition"
+                style={{
+                  borderColor: u.active ? "var(--color-accent)" : "var(--color-border)",
+                  background: u.active ? "var(--color-accent)" : "transparent",
+                  color: u.active ? "white" : "var(--color-muted)",
+                }}
+              >
+                {u.label}
+              </button>
+            ))}
+          </div>
+          {showOtherUnion && (
+            <input
+              type="text"
+              value={prod.otherUnion}
+              onChange={(e) => setProd((p) => ({ ...p, otherUnion: e.target.value }))}
+              placeholder="Union name"
+              style={{ ...inputStyle, marginTop: 12 }}
+            />
+          )}
         </div>
 
         {/* Default terms */}
