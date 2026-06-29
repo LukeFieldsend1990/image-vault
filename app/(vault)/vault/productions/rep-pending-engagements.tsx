@@ -35,6 +35,7 @@ function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (cas
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [state, setState] = useState<ConnectState>({ kind: "idle" });
+  const [declining, setDeclining] = useState(false);
 
   async function connect() {
     const trimmed = email.trim();
@@ -58,6 +59,22 @@ function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (cas
       setTimeout(() => onConnected(p.castId), 2400);
     } catch {
       setState({ kind: "error", message: "Network error. Please try again." });
+    }
+  }
+
+  async function decline() {
+    const role = p.characterName ?? p.actorName ?? "this role";
+    if (!window.confirm(`Pass on the role of ${role} in ${p.productionName}? The production will be notified so they can reassign it.`)) return;
+    setDeclining(true);
+    try {
+      const r = await fetch(`/api/productions/${p.productionId}/cast/${p.castId}/rep-decline`, { method: "POST" });
+      const d = await r.json() as { ok?: boolean; error?: string };
+      if (r.ok && d.ok) { setTimeout(() => onConnected(p.castId), 100); return; }
+      setState({ kind: "error", message: d.error ?? "Couldn't pass on this role." });
+    } catch {
+      setState({ kind: "error", message: "Network error. Please try again." });
+    } finally {
+      setDeclining(false);
     }
   }
 
@@ -175,6 +192,17 @@ function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (cas
             {state.kind === "error" && (
               <p className="text-xs mt-1.5" style={{ color: "var(--color-accent)" }}>{state.message}</p>
             )}
+            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--color-border)" }}>
+              <button
+                type="button"
+                onClick={decline}
+                disabled={declining || state.kind === "busy"}
+                className="text-xs disabled:opacity-50"
+                style={{ color: "var(--color-muted)", textDecoration: "underline" }}
+              >
+                {declining ? "Passing…" : "Pass on this role"}
+              </button>
+            </div>
           </>
         )}
       </div>

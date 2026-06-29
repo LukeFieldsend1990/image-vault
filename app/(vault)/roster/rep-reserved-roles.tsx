@@ -24,6 +24,7 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [decliningId, setDecliningId] = useState<string | null>(null);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -33,6 +34,21 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
       .then((d) => setAssignments(d.assignments ?? []))
       .catch(() => {});
   }, []);
+
+  async function decline(a: Assignment) {
+    if (!window.confirm(`Pass on the role of ${a.characterName ?? a.actorName ?? "this role"} in ${a.productionName}? The production will be notified so they can reassign it.`)) return;
+    setDecliningId(a.castId);
+    try {
+      const r = await fetch(`/api/productions/${a.productionId}/cast/${a.castId}/rep-decline`, { method: "POST" });
+      const d = await r.json() as { ok?: boolean; error?: string };
+      if (!r.ok || !d.ok) { setErrors((e) => ({ ...e, [a.castId]: d.error ?? "Couldn't decline the role." })); return; }
+      setDoneIds((prev) => new Set(prev).add(a.castId));
+    } catch {
+      setErrors((e) => ({ ...e, [a.castId]: "Network error. Please try again." }));
+    } finally {
+      setDecliningId(null);
+    }
+  }
 
   async function connect(a: Assignment) {
     const email = (emails[a.castId] ?? "").trim();
@@ -134,24 +150,49 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
                     </div>
                     {errors[a.castId] && <p className="text-xs mt-1.5" style={{ color: "var(--color-accent)" }}>{errors[a.castId]}</p>}
                   </div>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => decline(a)}
+                      disabled={decliningId === a.castId}
+                      className="text-xs disabled:opacity-50"
+                      style={{ color: "var(--color-muted)", textDecoration: "underline" }}
+                    >
+                      {decliningId === a.castId ? "Passing…" : "Pass on this role"}
+                    </button>
+                  </div>
                 </>
               ) : (
                 <div
-                  className="mt-4 flex items-start justify-between gap-3 rounded border p-3"
+                  className="mt-4 rounded border p-3"
                   style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
                 >
-                  <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                    {a.companyName} hasn&rsquo;t shared intended use or licence dates for this role yet. Ask them to add the terms before you connect your client.
-                  </p>
-                  {a.coordinatorEmail && (
-                    <a
-                      href={`mailto:${a.coordinatorEmail}?subject=${encodeURIComponent(`Licence terms needed for ${a.characterName ?? a.actorName ?? "reserved role"} in ${a.productionName}`)}&body=${encodeURIComponent(`Hi,\n\nBefore I can connect my client to ${a.characterName ?? a.actorName ?? "the reserved role"} on ${a.productionName}, could you add the intended use and licence dates to the role on Image Vault?\n\nThanks.`)}`}
-                      className="rounded px-4 py-2 text-xs font-medium text-white shrink-0 no-underline"
-                      style={{ background: "var(--color-accent)" }}
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+                      {a.companyName} hasn&rsquo;t shared intended use or licence dates for this role yet. Ask them to add the terms before you connect your client.
+                    </p>
+                    {a.coordinatorEmail && (
+                      <a
+                        href={`mailto:${a.coordinatorEmail}?subject=${encodeURIComponent(`Licence terms needed for ${a.characterName ?? a.actorName ?? "reserved role"} in ${a.productionName}`)}&body=${encodeURIComponent(`Hi,\n\nBefore I can connect my client to ${a.characterName ?? a.actorName ?? "the reserved role"} on ${a.productionName}, could you add the intended use and licence dates to the role on Image Vault?\n\nThanks.`)}`}
+                        className="rounded px-4 py-2 text-xs font-medium text-white shrink-0 no-underline"
+                        style={{ background: "var(--color-accent)" }}
+                      >
+                        Email {a.companyName}
+                      </a>
+                    )}
+                  </div>
+                  {errors[a.castId] && <p className="text-xs mt-2" style={{ color: "var(--color-accent)" }}>{errors[a.castId]}</p>}
+                  <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--color-border)" }}>
+                    <button
+                      type="button"
+                      onClick={() => decline(a)}
+                      disabled={decliningId === a.castId}
+                      className="text-xs disabled:opacity-50"
+                      style={{ color: "var(--color-muted)", textDecoration: "underline" }}
                     >
-                      Email {a.companyName}
-                    </a>
-                  )}
+                      {decliningId === a.castId ? "Passing…" : "Pass on this role"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
