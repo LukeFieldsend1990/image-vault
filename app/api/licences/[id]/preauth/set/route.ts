@@ -32,14 +32,13 @@ export async function POST(
   const db = getDb();
 
   const row = await db
-    .select({ talentId: licences.talentId, permitAiTraining: licences.permitAiTraining, validTo: licences.validTo })
+    .select({ talentId: licences.talentId, validTo: licences.validTo })
     .from(licences)
     .where(eq(licences.id, id))
     .get();
 
   if (!row) return NextResponse.json({ error: "Licence not found" }, { status: 404 });
   if (row.talentId !== session.sub) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (row.permitAiTraining) return NextResponse.json({ error: "Pre-auth not available for AI training licences" }, { status: 409 });
 
   const [totp] = await db
     .select({ secret: totpCredentials.secret })

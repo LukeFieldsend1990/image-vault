@@ -29,14 +29,13 @@ export async function POST(
 
   // Verify the licence belongs to this talent
   const row = await db
-    .select({ talentId: licences.talentId, permitAiTraining: licences.permitAiTraining, validTo: licences.validTo, status: licences.status })
+    .select({ talentId: licences.talentId, validTo: licences.validTo, status: licences.status })
     .from(licences)
     .where(eq(licences.id, id))
     .get();
 
   if (!row) return NextResponse.json({ error: "Licence not found" }, { status: 404 });
   if (row.talentId !== session.sub) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (row.permitAiTraining) return NextResponse.json({ error: "Pre-auth not available for AI training licences" }, { status: 409 });
 
   // Check pending request
   const pending = await kv.get(`preauth_req:${id}`, "json") as { requestedBy: string; option: PreauthOption } | null;

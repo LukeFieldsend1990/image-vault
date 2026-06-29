@@ -967,7 +967,7 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                                 >
                                   {cancellingPreauthId === l.id ? "Removing…" : "Remove pre-auth"}
                                 </button>
-                              ) : !l.permitAiTraining ? (
+                              ) : (
                                 <Link
                                   href={`/vault/authorise/${l.id}`}
                                   className="rounded border px-2.5 py-1.5 text-[11px] transition"
@@ -975,10 +975,6 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                                 >
                                   {role === "rep" ? "Request pre-auth" : "Set pre-auth"}
                                 </Link>
-                              ) : (
-                                <span className="text-[11px] italic" style={{ color: "var(--color-muted)" }}>
-                                  Not available for AI training
-                                </span>
                               )}
                             </div>
                           </div>
