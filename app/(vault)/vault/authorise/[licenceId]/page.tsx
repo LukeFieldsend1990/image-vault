@@ -20,18 +20,20 @@ export default async function TalentAuthorisePage({
   searchParams,
 }: {
   params: Promise<{ licenceId: string }>;
-  searchParams: Promise<{ confirm_preauth?: string }>;
+  searchParams: Promise<{ confirm_preauth?: string; set_preauth?: string }>;
 }) {
   const { licenceId } = await params;
   const sp = await searchParams;
   const role = await roleFromCookie();
   const confirmPreauth = sp.confirm_preauth === "1";
+  const setPreauth = sp.set_preauth === "1";
 
   return (
     <TalentAuthoriseClient
       licenceId={licenceId}
       role={role}
       confirmPreauth={confirmPreauth}
+      setPreauth={setPreauth}
     />
   );
 }

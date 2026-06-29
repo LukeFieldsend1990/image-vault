@@ -454,10 +454,12 @@ export default function TalentAuthoriseClient({
   licenceId,
   role = "talent",
   confirmPreauth = false,
+  setPreauth = false,
 }: {
   licenceId: string;
   role?: string;
   confirmPreauth?: boolean;
+  setPreauth?: boolean;
 }) {
   const [status, setStatus] = useState<StatusData | null>(null);
   const [licence, setLicence] = useState<LicenceData | null>(null);
@@ -493,6 +495,11 @@ export default function TalentAuthoriseClient({
   // ── Rep branch: request preauth or confirm-preauth mode ──────────────────
   if (status !== null && role === "rep" && !confirmPreauth) {
     return <RepRequestView licenceId={licenceId} licence={licence} />;
+  }
+
+  // ── Talent: proactively set pre-auth (independent of any download session) ──
+  if (status !== null && setPreauth && !confirmPreauth && role === "talent") {
+    return <TalentPreauthSetView licenceId={licenceId} licence={licence} />;
   }
 
   // ── Talent: confirm a rep's preauth request ───────────────────────────────

@@ -969,7 +969,7 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                                 </button>
                               ) : (
                                 <Link
-                                  href={`/vault/authorise/${l.id}`}
+                                  href={`/vault/authorise/${l.id}?set_preauth=1`}
                                   className="rounded border px-2.5 py-1.5 text-[11px] transition"
                                   style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
                                 >
