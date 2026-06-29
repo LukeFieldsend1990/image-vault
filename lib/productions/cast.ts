@@ -282,7 +282,7 @@ export async function promoteCastMember(
       characterName: cast.characterName ?? undefined,
       intendedUse,
       proposedFee: proposedFee ?? undefined,
-      reviewUrl: `${opts.baseUrl}/licences/${licenceId}`,
+      reviewUrl: `${opts.baseUrl}/licences?highlight=${licenceId}`,
       repMessage: opts.repMessage,
     });
     await sendEmail({ to: email, subject, html }).catch(() => {});

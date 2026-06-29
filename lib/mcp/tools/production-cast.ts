@@ -501,7 +501,7 @@ registerMcpTool({
             characterName: member.characterName ?? undefined,
             intendedUse: member.intendedUse,
             proposedFee: member.proposedFee ?? undefined,
-            reviewUrl: `${baseUrl}/licences/${licenceId}`,
+            reviewUrl: `${baseUrl}/licences?highlight=${licenceId}`,
           });
           await sendEmail({ to: email, subject, html }).catch(() => {});
 

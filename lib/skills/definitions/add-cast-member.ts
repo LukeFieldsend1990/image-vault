@@ -262,7 +262,7 @@ const skill: SkillDefinition = {
           characterName: characterName ?? undefined,
           intendedUse,
           proposedFee: undefined,
-          reviewUrl: `${baseUrl}/licences/${licenceId}`,
+          reviewUrl: `${baseUrl}/licences?highlight=${licenceId}`,
         });
         await sendEmail({ to: actorEmail, subject, html });
       })();

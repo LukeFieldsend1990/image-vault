@@ -636,7 +636,7 @@ registerMcpTool({
               coordinatorEmail: token.email,
               characterName: characterName ?? undefined,
               intendedUse,
-              reviewUrl: `${baseUrl}/licences/${licenceId}`,
+              reviewUrl: `${baseUrl}/licences?highlight=${licenceId}`,
             });
             await sendEmail({ to: talentUser.email, subject, html }).catch(() => {});
           }
