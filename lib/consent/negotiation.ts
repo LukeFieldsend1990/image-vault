@@ -74,7 +74,8 @@ export async function addNegotiationRound(
     scope?: string[];
     fee?: number | null;
     comment?: string | null;
-    createdBy: string;
+    /** Null for an unregistered performer countering via the tokenised link. */
+    createdBy?: string | null;
   },
 ): Promise<NegotiationRound> {
   if (!input.licenceId && !input.castId) throw new Error("addNegotiationRound: licenceId or castId required");
@@ -94,7 +95,7 @@ export async function addNegotiationRound(
     proposedScopeJson: input.scope ? JSON.stringify(normaliseUseCategoryIds(input.scope)) : null,
     proposedFee: input.fee ?? null,
     comment: input.comment?.trim() || null,
-    createdBy: input.createdBy,
+    createdBy: input.createdBy ?? null,
     createdAt: now,
   });
   return {
