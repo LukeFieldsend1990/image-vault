@@ -140,30 +140,33 @@ export async function GET(req: NextRequest) {
 
   const ids = productionRows.map((p) => p.id);
 
-  const [licenceCounts, castRows] = await Promise.all([
+  const [licenceCounts, castGroups] = await Promise.all([
     ids.length > 0
       ? db.select({ productionId: licences.productionId, count: count() })
           .from(licences).where(inArray(licences.productionId, ids)).groupBy(licences.productionId).all()
       : Promise.resolve([]),
+    // Aggregate cast counts by (production, status) in SQL rather than pulling
+    // every cast row and tallying in JS.
     ids.length > 0
-      ? db.select({ productionId: productionCast.productionId, status: productionCast.status })
-          .from(productionCast).where(inArray(productionCast.productionId, ids)).all()
+      ? db.select({ productionId: productionCast.productionId, status: productionCast.status, n: count() })
+          .from(productionCast).where(inArray(productionCast.productionId, ids))
+          .groupBy(productionCast.productionId, productionCast.status).all()
       : Promise.resolve([]),
   ]);
 
   const countMap = new Map(licenceCounts.map((r) => [r.productionId, r.count]));
 
   const castMap = new Map<string, { total: number; consented: number; invited: number; linked: number; placeholder: number; resolved: number }>();
-  for (const c of castRows) {
-    const cur = castMap.get(c.productionId) ?? { total: 0, consented: 0, invited: 0, linked: 0, placeholder: 0, resolved: 0 };
-    cur.total++;
-    if (c.status === "consented") cur.consented++;
-    else if (c.status === "invited") cur.invited++;
-    else if (c.status === "placeholder") cur.placeholder++;
-    else cur.linked++;
+  for (const g of castGroups) {
+    const cur = castMap.get(g.productionId) ?? { total: 0, consented: 0, invited: 0, linked: 0, placeholder: 0, resolved: 0 };
+    cur.total += g.n;
+    if (g.status === "consented") cur.consented += g.n;
+    else if (g.status === "invited") cur.invited += g.n;
+    else if (g.status === "placeholder") cur.placeholder += g.n;
+    else cur.linked += g.n;
     // "Resolved" = anything that has progressed past a reserved placeholder.
-    if (c.status !== "placeholder") cur.resolved++;
-    castMap.set(c.productionId, cur);
+    if (g.status !== "placeholder") cur.resolved += g.n;
+    castMap.set(g.productionId, cur);
   }
 
   const result = productionRows.map((p) => {

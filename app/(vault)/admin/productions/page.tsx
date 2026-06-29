@@ -63,12 +63,17 @@ export default async function AdminProductionsPage() {
   const productionIds = allProductions.map((p) => p.id);
 
   // Licence counts, cast stats, org names — all batched
-  const [licenceCounts, castRows, orgRows] = await Promise.all([
-    db.select({ productionId: licences.productionId, n: sql<number>`count(*)` })
-      .from(licences).groupBy(licences.productionId).all(),
+  const [licenceCounts, castGroups, orgRows] = await Promise.all([
+    // Scope the count to the productions shown; without a WHERE this aggregated
+    // every licence on the platform.
     productionIds.length > 0
-      ? db.select({ productionId: productionCast.productionId, status: productionCast.status })
-          .from(productionCast).where(inArray(productionCast.productionId, productionIds)).all()
+      ? db.select({ productionId: licences.productionId, n: sql<number>`count(*)` })
+          .from(licences).where(inArray(licences.productionId, productionIds)).groupBy(licences.productionId).all()
+      : Promise.resolve([] as { productionId: string | null; n: number }[]),
+    productionIds.length > 0
+      ? db.select({ productionId: productionCast.productionId, status: productionCast.status, n: sql<number>`count(*)` })
+          .from(productionCast).where(inArray(productionCast.productionId, productionIds))
+          .groupBy(productionCast.productionId, productionCast.status).all()
       : Promise.resolve([]),
     (() => {
       const orgIds = [...new Set(allProductions.map((p) => p.organisationId).filter(Boolean))] as string[];
@@ -83,15 +88,15 @@ export default async function AdminProductionsPage() {
   const orgTypeMap = new Map(orgRows.map((o) => [o.id, o.orgType]));
   const orgShortCodeMap = new Map(orgRows.map((o) => [o.id, o.shortCode]));
 
-  // Cast onboarding stats per production
+  // Cast onboarding stats per production (aggregated in SQL by status)
   const castStatMap = new Map<string, { total: number; consented: number; invited: number; linked: number }>();
-  for (const c of castRows) {
-    const cur = castStatMap.get(c.productionId) ?? { total: 0, consented: 0, invited: 0, linked: 0 };
-    cur.total++;
-    if (c.status === "consented") cur.consented++;
-    else if (c.status === "invited") cur.invited++;
-    else cur.linked++;
-    castStatMap.set(c.productionId, cur);
+  for (const g of castGroups) {
+    const cur = castStatMap.get(g.productionId) ?? { total: 0, consented: 0, invited: 0, linked: 0 };
+    cur.total += g.n;
+    if (g.status === "consented") cur.consented += g.n;
+    else if (g.status === "invited") cur.invited += g.n;
+    else cur.linked += g.n;
+    castStatMap.set(g.productionId, cur);
   }
 
   // Production companies are organisations now (production_company / studio
