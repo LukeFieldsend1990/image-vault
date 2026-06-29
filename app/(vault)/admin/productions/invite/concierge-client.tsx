@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { CAST_LICENCE_TYPES } from "@/lib/productions/cast";
+import { USE_CATEGORIES } from "@/lib/consent/use-categories";
 
 interface TmdbTitle {
   id: number;
@@ -22,15 +22,6 @@ const PRODUCTION_TYPES = [
   { value: "music_video", label: "Music Video" },
   { value: "other", label: "Other" },
 ];
-
-const LICENCE_TYPE_LABELS: Record<string, string> = {
-  film_double: "Digital double · Film",
-  game_character: "Game character",
-  commercial: "Commercial",
-  ai_avatar: "AI avatar",
-  training_data: "Training data",
-  monitoring_reference: "Monitoring reference",
-};
 
 const inputStyle: React.CSSProperties = {
   width: "100%", background: "var(--color-bg)", border: "1px solid var(--color-border)",
@@ -69,8 +60,16 @@ export default function ConciergeClient() {
 
   const [termsOpen, setTermsOpen] = useState(false);
   const [terms, setTerms] = useState({
-    intendedUse: "", licenceType: "film_double", territory: "Worldwide",
-    exclusivity: "non_exclusive", permitAiTraining: false, validFrom: "", validTo: "", feePounds: "",
+    intendedUse: "",
+    useCategoryIds: ["vfx-this"] as string[],
+    territory: "Worldwide",
+    exclusivity: "non_exclusive",
+    permitAiTraining: false,
+    validFrom: "",
+    validTo: "",
+    feePounds: "",
+    feeNA: false,
+    isRelicense: false,
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -106,7 +105,16 @@ export default function ConciergeClient() {
     if (!prod.name.trim()) { setError("Production name is required."); return; }
     setSubmitting(true);
     try {
-      const feePence = terms.feePounds.trim() ? Math.round(parseFloat(terms.feePounds) * 100) : undefined;
+      const validFrom = toUnix(terms.validFrom);
+      const validTo = toUnix(terms.validTo);
+      if (termsOpen && validFrom && validTo && validTo <= validFrom) {
+        setError("End date must be after start date.");
+        setSubmitting(false);
+        return;
+      }
+      const feePence = terms.feeNA
+        ? null
+        : (terms.feePounds.trim() ? Math.round(parseFloat(terms.feePounds) * 100) : undefined);
       const r = await fetch("/api/admin/productions/concierge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -122,13 +130,14 @@ export default function ConciergeClient() {
           importCast: importCast && !!prod.tmdbId,
           defaultTerms: termsOpen ? {
             intendedUse: terms.intendedUse.trim() || undefined,
-            licenceType: terms.licenceType,
+            useCategoryIds: terms.useCategoryIds,
             territory: terms.territory.trim() || undefined,
             exclusivity: terms.exclusivity,
             permitAiTraining: terms.permitAiTraining,
-            validFrom: toUnix(terms.validFrom),
-            validTo: toUnix(terms.validTo),
-            proposedFee: Number.isFinite(feePence) ? feePence : undefined,
+            isRelicense: terms.isRelicense,
+            validFrom,
+            validTo,
+            proposedFee: feePence,
           } : undefined,
         }),
       });
@@ -237,22 +246,68 @@ export default function ConciergeClient() {
           {termsOpen && (
             <div className="space-y-4 mt-4">
               <Field label="Intended use"><input type="text" value={terms.intendedUse} onChange={(e) => setTerms((t) => ({ ...t, intendedUse: e.target.value }))} placeholder="e.g. Digital double for VFX" style={inputStyle} /></Field>
+              <Field label="What access are you requesting?" hint="These pre-tick each performer's consent document. They can untick or add more.">
+                <div className="space-y-2">
+                  {USE_CATEGORIES.map((cat) => {
+                    const active = terms.useCategoryIds.includes(cat.id);
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setTerms((t) => {
+                          const on = t.useCategoryIds.includes(cat.id);
+                          const useCategoryIds = on ? t.useCategoryIds.filter((v) => v !== cat.id) : [...t.useCategoryIds, cat.id];
+                          const permitAiTraining = cat.id === "training" ? !on : t.permitAiTraining;
+                          return { ...t, useCategoryIds, permitAiTraining };
+                        })}
+                        className="w-full flex items-start gap-3 rounded p-3 text-left transition"
+                        style={{ border: `1px solid ${active ? "var(--color-accent)" : "var(--color-border)"}`, background: active ? "rgba(192,57,43,0.05)" : "var(--color-bg)" }}
+                      >
+                        <span className="mt-0.5 flex items-center justify-center rounded shrink-0" style={{ width: 16, height: 16, border: `1px solid ${active ? "var(--color-accent)" : "var(--color-border)"}`, background: active ? "var(--color-accent)" : "transparent", color: "white", fontSize: 11, lineHeight: 1 }}>{active ? "✓" : ""}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{cat.name}</span>
+                            {cat.regimeTag && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>{cat.regimeTag}</span>}
+                            {cat.sensitive && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(180,83,9,0.1)", color: "#b45309" }}>sensitive</span>}
+                          </span>
+                          <span className="block text-xs mt-1" style={{ color: "var(--color-muted)" }}>{cat.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+              <Field label="Territory"><input type="text" value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={inputStyle} /></Field>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Licence type">
-                  <select value={terms.licenceType} onChange={(e) => setTerms((t) => ({ ...t, licenceType: e.target.value }))} style={inputStyle}>
-                    {CAST_LICENCE_TYPES.map((l) => <option key={l} value={l}>{LICENCE_TYPE_LABELS[l] ?? l}</option>)}
-                  </select>
+                <Field label="Valid from">
+                  <input
+                    type="date"
+                    value={terms.validFrom}
+                    onChange={(e) => {
+                      // Suggest an 18-month term when the start date is set.
+                      const validFrom = e.target.value;
+                      let validTo = terms.validTo;
+                      if (validFrom) {
+                        const d = new Date(validFrom + "T00:00:00");
+                        if (!Number.isNaN(d.getTime())) { d.setMonth(d.getMonth() + 18); validTo = d.toISOString().slice(0, 10); }
+                      }
+                      setTerms((t) => ({ ...t, validFrom, validTo }));
+                    }}
+                    style={inputStyle}
+                  />
                 </Field>
-                <Field label="Territory"><input type="text" value={terms.territory} onChange={(e) => setTerms((t) => ({ ...t, territory: e.target.value }))} style={inputStyle} /></Field>
+                <Field label="Valid to" hint="Suggested 18-month term — adjust as needed."><input type="date" value={terms.validTo} onChange={(e) => setTerms((t) => ({ ...t, validTo: e.target.value }))} style={inputStyle} /></Field>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Valid from"><input type="date" value={terms.validFrom} onChange={(e) => setTerms((t) => ({ ...t, validFrom: e.target.value }))} style={inputStyle} /></Field>
-                <Field label="Valid to"><input type="date" value={terms.validTo} onChange={(e) => setTerms((t) => ({ ...t, validTo: e.target.value }))} style={inputStyle} /></Field>
-              </div>
-              <Field label="Proposed fee per actor (£)"><input type="number" min={0} step="0.01" value={terms.feePounds} onChange={(e) => setTerms((t) => ({ ...t, feePounds: e.target.value }))} style={inputStyle} /></Field>
+              <Field label="Proposed fee per actor (£)" hint="Optional — leave blank to negotiate individually, or mark N/A when scanning is part of production costs.">
+                <input type="number" min={0} step="0.01" value={terms.feeNA ? "" : terms.feePounds} disabled={terms.feeNA} onChange={(e) => setTerms((t) => ({ ...t, feePounds: e.target.value }))} style={{ ...inputStyle, opacity: terms.feeNA ? 0.5 : 1 }} placeholder={terms.feeNA ? "N/A" : undefined} />
+              </Field>
               <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={terms.permitAiTraining} onChange={(e) => setTerms((t) => ({ ...t, permitAiTraining: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
-                <span className="text-sm" style={{ color: "var(--color-text)" }}>Permit AI training</span>
+                <input type="checkbox" checked={terms.feeNA} onChange={(e) => setTerms((t) => ({ ...t, feeNA: e.target.checked }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
+                <span className="text-sm" style={{ color: "var(--color-text)" }}>Fee N/A (scanning is part of production costs)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={terms.isRelicense} onChange={(e) => setTerms((t) => ({ ...t, isRelicense: e.target.checked, feeNA: e.target.checked ? false : t.feeNA }))} className="w-4 h-4" style={{ accentColor: "var(--color-accent)" }} />
+                <span className="text-sm" style={{ color: "var(--color-text)" }}>This is a re-licence of an existing scan (a fee is expected)</span>
               </label>
             </div>
           )}
