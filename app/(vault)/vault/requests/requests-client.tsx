@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FeeGuidanceCard from "./fee-guidance-card";
+import RepReservedRoles from "@/app/(vault)/roster/rep-reserved-roles";
 import { parseUseCategoryIds, getUseCategory } from "@/lib/consent/use-categories";
 
 // Human-readable §39 use categories requested on a licence.
@@ -131,6 +132,10 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
           Review and approve or deny licence requests from production companies.
         </p>
       </div>
+
+      {/* Path C reserved roles assigned to this agent — rendered in the same card
+          family as the licence requests below, not as a separate banner. */}
+      {isRep && <RepReservedRoles className="mb-4" />}
 
       {loading && <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>}
 
