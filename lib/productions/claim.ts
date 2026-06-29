@@ -18,6 +18,8 @@ import { eq, and, or, isNull, sql } from "drizzle-orm";
 import {
   productionCast,
   productions,
+  productionCompanies,
+  organisations,
   talentProfiles,
   organisationMembers,
   users,
@@ -38,12 +40,10 @@ export interface ClaimableRole {
   matchType: "tmdb" | "name";
 }
 
-// Company label for a production: organisation, else production company, else generic.
-const companyNameSql = sql<string>`coalesce(
-  (SELECT name FROM organisations WHERE id = ${productions.organisationId}),
-  (SELECT name FROM production_companies WHERE id = ${productions.companyId}),
-  'a production company'
-)`;
+// Company label for a production: organisation, else production company, else
+// generic. Resolved via LEFT JOINs (see findClaimableRoles) rather than a
+// correlated subquery per row.
+const companyNameSql = sql<string>`coalesce(${organisations.name}, ${productionCompanies.name}, 'a production company')`;
 
 /**
  * Find open placeholder roles that match a talent (by tmdbId, falling back to
@@ -74,6 +74,8 @@ export async function findClaimableRoles(db: Db, talentUserId: string): Promise<
     })
     .from(productionCast)
     .innerJoin(productions, eq(productions.id, productionCast.productionId))
+    .leftJoin(organisations, eq(organisations.id, productions.organisationId))
+    .leftJoin(productionCompanies, eq(productionCompanies.id, productions.companyId))
     .where(and(
       eq(productionCast.status, "placeholder"),
       isNull(productionCast.talentId),

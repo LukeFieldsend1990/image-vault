@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { talentProfiles, organisationMembers, productions } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { isIndustryRole } from "@/lib/auth/roles";
 import OnboardingClient from "./onboarding-client";
 
@@ -37,21 +37,13 @@ export default async function OnboardingPage({
   // an admin pre-built one and invited them, or they were added to an org with
   // one), land them on it; otherwise start the guided setup wizard.
   if (isIndustryRole(session.role)) {
-    const orgIds = (await db
-      .select({ organisationId: organisationMembers.organisationId })
-      .from(organisationMembers)
+    const prod = await db
+      .select({ id: productions.id })
+      .from(productions)
+      .innerJoin(organisationMembers, eq(organisationMembers.organisationId, productions.organisationId))
       .where(eq(organisationMembers.userId, session.userId))
-      .all()).map((m) => m.organisationId);
-    let hasProduction = false;
-    if (orgIds.length > 0) {
-      const prod = await db
-        .select({ id: productions.id })
-        .from(productions)
-        .where(inArray(productions.organisationId, orgIds))
-        .get();
-      hasProduction = !!prod;
-    }
-    redirect(hasProduction ? "/productions" : "/productions/setup");
+      .get();
+    redirect(prod ? "/productions" : "/productions/setup");
   }
 
   // Only talent sees this onboarding — reps go straight to dashboard.
