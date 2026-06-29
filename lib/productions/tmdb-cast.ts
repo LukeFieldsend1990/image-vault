@@ -7,7 +7,7 @@
  */
 
 import { talentProfiles, users, productionCast } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 
 type Db = ReturnType<typeof getDb>;
@@ -69,15 +69,27 @@ export async function fetchTmdbCastWithMatches(
   const castList = tmdbData.cast ?? [];
   if (castList.length === 0) return { ok: true, cast: [] };
 
-  // Load talent profiles and build lookup maps (by tmdbId, then normalized name).
-  const allProfiles = await db
-    .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName, tmdbId: talentProfiles.tmdbId })
-    .from(talentProfiles)
-    .all();
+  // Match only against the profiles that could plausibly match this cast list —
+  // by tmdbId, or by normalized name — instead of loading every profile on the
+  // platform. Build lookup maps (by tmdbId, then normalized name).
+  const castTmdbIds = Array.from(new Set(castList.map((c) => c.id)));
+  const castNames = Array.from(new Set(castList.map((c) => c.name.toLowerCase())));
+  const profileMatchers = [
+    castTmdbIds.length > 0 ? inArray(talentProfiles.tmdbId, castTmdbIds) : undefined,
+    castNames.length > 0 ? inArray(sql`lower(${talentProfiles.fullName})`, castNames) : undefined,
+  ].filter(Boolean);
 
-  const byTmdbId = new Map<number, typeof allProfiles[0]>();
-  const byName = new Map<string, typeof allProfiles[0]>();
-  for (const p of allProfiles) {
+  const profiles = profileMatchers.length > 0
+    ? await db
+        .select({ userId: talentProfiles.userId, fullName: talentProfiles.fullName, tmdbId: talentProfiles.tmdbId })
+        .from(talentProfiles)
+        .where(or(...profileMatchers))
+        .all()
+    : [];
+
+  const byTmdbId = new Map<number, typeof profiles[0]>();
+  const byName = new Map<string, typeof profiles[0]>();
+  for (const p of profiles) {
     if (p.tmdbId !== null && p.tmdbId !== undefined) byTmdbId.set(p.tmdbId, p);
     byName.set(p.fullName.toLowerCase(), p);
   }
@@ -90,10 +102,12 @@ export async function fetchTmdbCastWithMatches(
 
   const userEmailMap = new Map<string, string>();
   if (matchedUserIds.size > 0) {
-    const userRows = await db.select({ id: users.id, email: users.email }).from(users).all();
-    for (const u of userRows) {
-      if (matchedUserIds.has(u.id)) userEmailMap.set(u.id, u.email);
-    }
+    const userRows = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(inArray(users.id, Array.from(matchedUserIds)))
+      .all();
+    for (const u of userRows) userEmailMap.set(u.id, u.email);
   }
 
   const cast: MatchedCastMember[] = castList.map((c) => {
@@ -150,11 +164,14 @@ export async function importTmdbPlaceholders(
   const existingTmdbIds = new Set(existing.map((r) => r.tmdbId).filter((t): t is number => t !== null));
 
   const now = Math.floor(Date.now() / 1000);
-  let imported = 0, skipped = 0, matched = 0;
+  let skipped = 0, matched = 0;
 
+  const toInsert = [] as (typeof productionCast.$inferInsert)[];
   for (const m of members) {
     if (existingTmdbIds.has(m.tmdbId)) { skipped++; continue; }
-    await db.insert(productionCast).values({
+    existingTmdbIds.add(m.tmdbId);
+    if (m.matched) matched++;
+    toInsert.push({
       id: crypto.randomUUID(),
       productionId: opts.productionId,
       talentId: null,
@@ -172,10 +189,12 @@ export async function importTmdbPlaceholders(
       addedAt: now,
       linkedAt: null,
     });
-    existingTmdbIds.add(m.tmdbId);
-    imported++;
-    if (m.matched) matched++;
   }
 
-  return { imported, skipped, matched, total: members.length };
+  // Single multi-row insert instead of one round-trip per cast member.
+  if (toInsert.length > 0) {
+    await db.insert(productionCast).values(toInsert);
+  }
+
+  return { imported: toInsert.length, skipped, matched, total: members.length };
 }
