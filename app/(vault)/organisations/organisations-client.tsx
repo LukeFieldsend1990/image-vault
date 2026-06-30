@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { ORG_TYPES, ORG_TYPE_LABELS, type OrgType } from "@/lib/organisations/orgTypes";
+import {
+  COUNTRY_TOP_LEVEL,
+  hasSubPick,
+  subPickList,
+  subPickLabel,
+} from "@/lib/jurisdictions/countries";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
 
@@ -12,6 +19,16 @@ interface OrgMember {
   joinedAt: number;
 }
 
+interface OrgProduction {
+  id: string;
+  name: string;
+  type: string | null;
+  year: number | null;
+  status: string | null;
+  shortCode: string | null;
+  createdAt: number;
+}
+
 interface Organisation {
   id: string;
   name: string;
@@ -19,6 +36,8 @@ interface Organisation {
   billingEmail: string | null;
   orgType?: string | null;
   shortCode?: string | null;
+  country?: string | null;
+  countryTopLevelId?: string | null;
   ownerImplicitAccess?: boolean;
   memberRole: "owner" | "admin" | "member";
   joinedAt: number;
@@ -26,6 +45,7 @@ interface Organisation {
 
 interface OrgDetail extends Organisation {
   members: OrgMember[];
+  productions: OrgProduction[];
 }
 
 const ROLE_COLOURS: Record<string, { bg: string; color: string }> = {
@@ -74,6 +94,13 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
+  // Jurisdiction (inline country picker) state
+  const [showJurisdiction, setShowJurisdiction] = useState(false);
+  const [jurTop, setJurTop] = useState<string | null>(null);
+  const [jurSearch, setJurSearch] = useState("");
+  const [jurSaving, setJurSaving] = useState(false);
+  const [jurMsg, setJurMsg] = useState<string | null>(null);
+
   const loadOrgs = useCallback(async () => {
     try {
       const r = await fetch("/api/organisations");
@@ -92,7 +119,7 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
     setDetailLoading(true);
     try {
       const r = await fetch(`/api/organisations/${orgId}`);
-      const d = await r.json() as { organisation?: Organisation; members?: OrgMember[] };
+      const d = await r.json() as { organisation?: Organisation; members?: OrgMember[]; productions?: OrgProduction[] };
       if (d.organisation && d.members) {
         setSelected((prev) => {
           const base = orgs.find(o => o.id === orgId);
@@ -101,6 +128,7 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
             memberRole: base?.memberRole ?? prev?.memberRole ?? "member",
             joinedAt: base?.joinedAt ?? prev?.joinedAt ?? 0,
             members: d.members!,
+            productions: d.productions ?? [],
           };
         });
         setEditName(d.organisation.name);
@@ -219,6 +247,40 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
     }
   }
 
+  function openJurisdiction() {
+    setShowJurisdiction(true);
+    setJurTop(null);
+    setJurSearch("");
+    setJurMsg(null);
+  }
+
+  async function saveJurisdiction(topLevelId: string, country: string) {
+    if (!selected) return;
+    setJurSaving(true);
+    setJurMsg(null);
+    try {
+      const r = await fetch(`/api/organisations/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ country, countryTopLevelId: topLevelId }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({})) as { error?: string };
+        setJurMsg(d.error ?? "Couldn't save jurisdiction");
+        return;
+      }
+      setShowJurisdiction(false);
+      setJurTop(null);
+      setJurSearch("");
+      await loadOrgs();
+      await loadDetail(selected.id);
+    } catch {
+      setJurMsg("Network error");
+    } finally {
+      setJurSaving(false);
+    }
+  }
+
   async function removeMember(userId: string) {
     if (!selected) return;
     if (!confirm("Remove this member?")) return;
@@ -238,6 +300,19 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
 
   const canManage = selected?.memberRole === "owner" || selected?.memberRole === "admin";
   const isOwner = selected?.memberRole === "owner";
+
+  // Non-blocking "finish setting up" checklist for the org. Derived purely from
+  // the loaded detail — it auto-hides once every item is done, and never
+  // interrupts the production flow (it lives in the org view, on demand).
+  const checklist = selected
+    ? [
+        { key: "jurisdiction", label: "Set your jurisdiction", done: Boolean(selected.country) },
+        { key: "production", label: "Set up your first production", done: selected.productions.length > 0 },
+        { key: "team", label: "Invite a colleague", done: selected.members.length > 1 },
+        { key: "details", label: "Add a website and billing email", done: Boolean(selected.website) && Boolean(selected.billingEmail) },
+      ]
+    : [];
+  const outstanding = checklist.filter((i) => !i.done);
 
   const inputCls = "rounded px-3 py-2 text-sm";
   const inputStyle = { border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" } as const;
@@ -434,6 +509,47 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
 
                     {selected && !detailLoading && (
                       <>
+                        {/* Finish-setting-up checklist — non-blocking, auto-hides when complete */}
+                        {canManage && outstanding.length > 0 && (
+                          <div className="rounded-lg p-4 mt-4" style={{ border: "1px solid var(--color-accent)", background: "rgba(192,57,43,0.04)" }}>
+                            <div className="flex items-center justify-between mb-2.5">
+                              <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-accent)" }}>
+                                Finish setting up
+                              </p>
+                              <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+                                {checklist.length - outstanding.length} of {checklist.length} done
+                              </span>
+                            </div>
+                            <ul className="space-y-1.5">
+                              {checklist.map((item) => (
+                                <li key={item.key} className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="flex items-center gap-2 min-w-0">
+                                    {item.done ? (
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                    ) : (
+                                      <span className="shrink-0 rounded-full" style={{ width: 13, height: 13, border: "1.5px solid var(--color-border)" }} />
+                                    )}
+                                    <span style={{ color: item.done ? "var(--color-muted)" : "var(--color-ink)", textDecoration: item.done ? "line-through" : undefined }}>
+                                      {item.label}
+                                    </span>
+                                  </span>
+                                  {!item.done && item.key === "jurisdiction" && !showJurisdiction && (
+                                    <button type="button" onClick={openJurisdiction} className="text-xs shrink-0" style={{ color: "var(--color-accent)" }}>Set</button>
+                                  )}
+                                  {!item.done && item.key === "production" && (
+                                    <Link href={`/productions/setup?org=${selected.id}`} className="text-xs shrink-0" style={{ color: "var(--color-accent)" }}>Set up</Link>
+                                  )}
+                                  {!item.done && item.key === "details" && !showEdit && (
+                                    <button type="button" onClick={() => { setShowEdit(true); setSaveMsg(null); }} className="text-xs shrink-0" style={{ color: "var(--color-accent)" }}>Add</button>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         {/* Details */}
                         <div className="pt-4">
                           <div className="flex items-center justify-between mb-2">
@@ -473,6 +589,127 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
                               <span style={{ color: "var(--color-muted)" }}>
                                 {selected.billingEmail ? `Billing: ${selected.billingEmail}` : "No billing email set"}
                               </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Jurisdiction — inline country picker (reuses the org-onboarding shape) */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>Jurisdiction</p>
+                            {canManage && (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => { if (showJurisdiction) { setShowJurisdiction(false); setJurTop(null); } else { openJurisdiction(); } }}
+                                onKeyDown={(e) => { if (e.key === "Enter") { if (showJurisdiction) { setShowJurisdiction(false); setJurTop(null); } else { openJurisdiction(); } } }}
+                                className="text-xs cursor-pointer"
+                                style={{ color: "var(--color-accent)" }}
+                              >
+                                {showJurisdiction ? "Cancel" : selected.country ? "Change" : "Set"}
+                              </span>
+                            )}
+                          </div>
+                          {showJurisdiction && canManage ? (
+                            <div className="flex flex-col gap-2">
+                              {!jurTop ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {COUNTRY_TOP_LEVEL.map((c) => (
+                                    <button
+                                      key={c.id}
+                                      type="button"
+                                      disabled={jurSaving}
+                                      onClick={() => { if (hasSubPick(c.id)) { setJurTop(c.id); setJurSearch(""); } else { void saveJurisdiction(c.id, c.label); } }}
+                                      className="text-left rounded p-2.5 disabled:opacity-60"
+                                      style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}
+                                    >
+                                      <div className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{c.label}</div>
+                                      <div className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{c.sub}</div>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <>
+                                  <input
+                                    value={jurSearch}
+                                    onChange={(e) => setJurSearch(e.target.value)}
+                                    placeholder={`Search ${subPickLabel(jurTop)}`}
+                                    className={inputCls}
+                                    style={inputStyle}
+                                    autoComplete="off"
+                                  />
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto">
+                                    {subPickList(jurTop)
+                                      .filter((c) => !jurSearch.trim() || c.toLowerCase().includes(jurSearch.toLowerCase().trim()))
+                                      .map((c) => (
+                                        <button
+                                          key={c}
+                                          type="button"
+                                          disabled={jurSaving}
+                                          onClick={() => void saveJurisdiction(jurTop, c)}
+                                          className="text-left rounded px-3 py-2 disabled:opacity-60"
+                                          style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}
+                                        >
+                                          <span className="text-sm" style={{ color: "var(--color-ink)" }}>{c}</span>
+                                        </button>
+                                      ))}
+                                  </div>
+                                  <button type="button" onClick={() => setJurTop(null)} className="self-start text-xs" style={{ color: "var(--color-muted)" }}>← Back</button>
+                                </>
+                              )}
+                              {jurSaving && <p className="text-xs" style={{ color: "var(--color-muted)" }}>Saving…</p>}
+                              {jurMsg && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{jurMsg}</p>}
+                            </div>
+                          ) : (
+                            <p className="text-sm" style={{ color: selected.country ? "var(--color-ink)" : "var(--color-muted)" }}>
+                              {selected.country
+                                ? selected.country
+                                : "No jurisdiction set — this sets the data-protection regime that applies to the organisation."}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Productions — surface and seed the org's productions */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
+                              Productions · {selected.productions.length}
+                            </p>
+                            {canManage && (
+                              <Link href={`/productions/setup?org=${selected.id}`} className="text-xs" style={{ color: "var(--color-accent)" }}>
+                                Set up a production
+                              </Link>
+                            )}
+                          </div>
+                          {selected.productions.length === 0 ? (
+                            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                              {canManage
+                                ? "No productions yet — seed one to start inviting cast and managing licences."
+                                : "No productions yet."}
+                            </p>
+                          ) : (
+                            <div className="flex flex-col divide-y" style={{ borderColor: "var(--color-border)" }}>
+                              {selected.productions.map((p) => (
+                                <Link key={p.id} href={`/productions/${p.id}`} className="flex items-center justify-between gap-3 py-2 group">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="text-sm font-medium truncate" style={{ color: "var(--color-ink)" }}>{p.name}</span>
+                                      <CodeTag code={p.shortCode} />
+                                    </div>
+                                    <div className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+                                      {[p.type ? p.type.replace(/_/g, " ") : null, p.year, p.status ? p.status.replace(/_/g, " ") : null].filter(Boolean).join(" · ") || "Draft"}
+                                    </div>
+                                  </div>
+                                  <svg
+                                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                                    className="shrink-0 transition-transform group-hover:translate-x-0.5"
+                                    style={{ color: "var(--color-muted)" }}
+                                  >
+                                    <polyline points="9 18 15 12 9 6" />
+                                  </svg>
+                                </Link>
+                              ))}
                             </div>
                           )}
                         </div>

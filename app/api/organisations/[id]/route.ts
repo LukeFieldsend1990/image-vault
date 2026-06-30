@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { organisations, organisationMembers, users } from "@/lib/db/schema";
+import { organisations, organisationMembers, users, productions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { validateCountry } from "@/lib/organisations/country";
 import { syncOrgCountryAcrossProductions } from "@/lib/productions/vendors";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 // GET /api/organisations/[id] — org details + member list
 // Accessible by: org members, talent, rep, admin (talent/rep get read-only view for licence approval)
@@ -55,7 +55,24 @@ export async function GET(
     .where(eq(organisationMembers.organisationId, id))
     .all();
 
-  return NextResponse.json({ organisation: org, members });
+  // Productions this org owns — surfaced in the org view so an industry member
+  // can see and seed productions for the organisation they're populating.
+  const orgProductions = await db
+    .select({
+      id: productions.id,
+      name: productions.name,
+      type: productions.type,
+      year: productions.year,
+      status: productions.status,
+      shortCode: productions.shortCode,
+      createdAt: productions.createdAt,
+    })
+    .from(productions)
+    .where(eq(productions.organisationId, id))
+    .orderBy(desc(productions.createdAt))
+    .all();
+
+  return NextResponse.json({ organisation: org, members, productions: orgProductions });
 }
 
 // PATCH /api/organisations/[id] — update org details (owner/admin members only)
