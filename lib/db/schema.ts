@@ -826,7 +826,10 @@ export const orgConnections = sqliteTable("org_connections", {
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => ({
-  uniqPair: unique().on(t.productionId, t.orgAId, t.orgBId),
+  // One connection per org pair. The connection is org-to-org: once active it
+  // spans every production both orgs work on. productionId records the anchor
+  // it was first offered from.
+  uniqPair: unique().on(t.orgAId, t.orgBId),
 }));
 
 // ── Scan transfers (capture-company upload-on-behalf) ─────────────────────────

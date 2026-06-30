@@ -65,6 +65,9 @@ export default function VendorsPanel({ productionId, embedded = false, canWrite 
   // org id — drives the per-vendor "Connect" affordance.
   const [connByOrg, setConnByOrg] = useState<Record<string, { connectionId: string; status: string; direction: string | null }>>({});
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  // Vendor orgs already connected to this production's org — surfaced as
+  // one-click suggestions when attaching vendors (they aren't auto-attached).
+  const [suggestions, setSuggestions] = useState<OrgMatch[]>([]);
 
   const fetchVendors = useCallback(async () => {
     setLoading(true);
@@ -83,12 +86,16 @@ export default function VendorsPanel({ productionId, embedded = false, canWrite 
     try {
       const r = await fetch(`/api/productions/${productionId}/connections`);
       if (!r.ok) return;
-      const d = (await r.json()) as { connections?: { connectionId: string; counterpartyOrgId: string | null; status: string; direction: string | null }[] };
+      const d = (await r.json()) as {
+        connections?: { connectionId: string; counterpartyOrgId: string | null; status: string; direction: string | null }[];
+        suggestions?: OrgMatch[];
+      };
       const map: Record<string, { connectionId: string; status: string; direction: string | null }> = {};
       for (const c of d.connections ?? []) {
         if (c.counterpartyOrgId) map[c.counterpartyOrgId] = { connectionId: c.connectionId, status: c.status, direction: c.direction };
       }
       setConnByOrg(map);
+      setSuggestions(d.suggestions ?? []);
     } catch {
       // ignore — the connect affordance just won't show state
     }
@@ -234,6 +241,31 @@ export default function VendorsPanel({ productionId, embedded = false, canWrite 
               </div>
             )}
           </div>
+
+          {/* Connected organisations — one-click attach for vendors already
+              connected to this production's org (not auto-attached). */}
+          {(() => {
+            const attachedIds = new Set(vendors.map((v) => v.vendorOrgId));
+            const fresh = suggestions.filter((s) => !attachedIds.has(s.id));
+            if (fresh.length === 0) return null;
+            return (
+              <div className="mb-3">
+                <p className="text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--color-muted)" }}>Connected organisations</p>
+                <div className="flex flex-wrap gap-2">
+                  {fresh.map((s) => (
+                    <button key={s.id} type="button" disabled={busy} onClick={() => attachExisting(s)}
+                      className="flex items-center gap-1.5 rounded-full pl-1.5 pr-2.5 py-1 text-xs disabled:opacity-60"
+                      style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+                      title={`Attach ${s.name} to this production`}>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}>{typeLabel(s.orgType)}</span>
+                      {s.name}
+                      <span style={{ color: "var(--color-accent)" }}>+</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Invite new */}
           {!inviteOpen ? (
