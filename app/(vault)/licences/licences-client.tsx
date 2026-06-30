@@ -244,7 +244,7 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
             Upcoming roles · {upcoming.length}
           </p>
           <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
-            Cast you&apos;ve reserved or invited on your productions. <strong style={{ color: "var(--color-ink)" }}>These aren&apos;t licences yet</strong> — each becomes a pending licence once the performer has an email and joins Image Vault. Add their email from the production to move them forward.
+            Cast you&apos;ve reserved or invited on your productions. <strong style={{ color: "var(--color-ink)" }}>These aren&apos;t licences yet</strong> — each becomes a pending licence once the performer has an email and joins Image Vault. Add their email from the production to move them forward, or attach their agent.
           </p>
           <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
             {upcoming.map((r, i) => {
