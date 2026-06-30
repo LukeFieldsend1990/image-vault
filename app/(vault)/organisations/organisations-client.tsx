@@ -40,6 +40,7 @@ interface Organisation {
   country?: string | null;
   countryTopLevelId?: string | null;
   ownerImplicitAccess?: boolean;
+  setupDismissed?: boolean;
   memberRole: "owner" | "admin" | "member";
   joinedAt: number;
 }
@@ -248,6 +249,21 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
     }
   }
 
+  async function dismissChecklist() {
+    if (!selected) return;
+    // Optimistic — hide immediately, then persist.
+    setSelected((prev) => (prev ? { ...prev, setupDismissed: true } : prev));
+    try {
+      await fetch(`/api/organisations/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ setupDismissed: true }),
+      });
+    } catch {
+      // best-effort — if it fails it simply reappears on next load
+    }
+  }
+
   function openJurisdiction() {
     setShowJurisdiction(true);
     setJurTop(null);
@@ -309,7 +325,7 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
     ? [
         { key: "jurisdiction", label: "Set your jurisdiction", done: Boolean(selected.country) },
         { key: "production", label: "Set up your first production", done: selected.productions.length > 0 },
-        { key: "team", label: "Invite a colleague", done: selected.members.length > 1 },
+        { key: "team", label: "Invite a member", done: selected.members.length > 1 },
         { key: "details", label: "Add a website and billing email", done: Boolean(selected.website) && Boolean(selected.billingEmail) },
       ]
     : [];
@@ -510,16 +526,31 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
 
                     {selected && !detailLoading && (
                       <>
-                        {/* Finish-setting-up checklist — non-blocking, auto-hides when complete */}
-                        {canManage && outstanding.length > 0 && (
+                        {/* Finish-setting-up checklist — non-blocking, auto-hides when
+                            complete, and permanently dismissable via the × */}
+                        {canManage && outstanding.length > 0 && !selected.setupDismissed && (
                           <div className="rounded-lg p-4 mt-4" style={{ border: "1px solid var(--color-accent)", background: "rgba(192,57,43,0.04)" }}>
                             <div className="flex items-center justify-between mb-2.5">
                               <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-accent)" }}>
                                 Finish setting up
                               </p>
-                              <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
-                                {checklist.length - outstanding.length} of {checklist.length} done
-                              </span>
+                              <div className="flex items-center gap-2.5">
+                                <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+                                  {checklist.length - outstanding.length} of {checklist.length} done
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={dismissChecklist}
+                                  aria-label="Dismiss setup checklist"
+                                  title="Dismiss — this won't come back"
+                                  className="flex items-center justify-center rounded hover:opacity-70"
+                                  style={{ width: 16, height: 16, color: "var(--color-muted)" }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                             <ul className="space-y-1.5">
                               {checklist.map((item) => (

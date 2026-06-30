@@ -774,6 +774,9 @@ export const organisations = sqliteTable("organisations", {
   // every production the org owns (legacy behaviour). When false (default), only
   // a production's owner reaches it unless colleagues are explicitly added.
   ownerImplicitAccess: integer("owner_implicit_access", { mode: "boolean" }).notNull().default(false),
+  // When true, the "finish setting up" checklist in the organisations view is
+  // permanently dismissed for this org (an owner/admin chose to hide it).
+  setupDismissed: integer("setup_dismissed", { mode: "boolean" }).notNull().default(false),
 });
 
 export const organisationMembers = sqliteTable("organisation_members", {
