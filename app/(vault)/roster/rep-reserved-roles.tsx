@@ -113,10 +113,10 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
                     href={`/consent/cast/${a.castId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-block text-xs font-medium mt-3 no-underline"
-                    style={{ color: "var(--color-accent)" }}
+                    className="inline-block rounded px-4 py-2 text-xs font-medium mt-3 no-underline text-white transition"
+                    style={{ background: "var(--color-accent)" }}
                   >
-                    Review, negotiate &amp; send for consent →
+                    Review consent
                   </a>
                   <div className="mt-4">
                     <label className="block text-xs mb-1.5" style={{ color: "var(--color-muted)" }}>
