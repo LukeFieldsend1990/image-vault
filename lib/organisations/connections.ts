@@ -145,44 +145,37 @@ export interface VisibilityResult {
   connectionId: string | null;
 }
 
-// Resolve what `viewerOrgIds` may see of `targetOrgId`. Scoped to a production
-// when given; otherwise any active connection between the parties counts.
-// Mirrors the shape of resolveOwnerAccess() in lib/productions/access.ts.
+// Resolve what `viewerOrgIds` may see of `targetOrgId`. Connections are
+// org-to-org: a single active connection between the two orgs grants visibility
+// across every production they both work on. Mirrors the shape of
+// resolveOwnerAccess() in lib/productions/access.ts.
 export async function resolveOrgVisibility(
   db: Db,
   viewerOrgIds: string[],
   targetOrgId: string,
-  productionId?: string,
 ): Promise<VisibilityResult> {
   if (viewerOrgIds.length === 0 || viewerOrgIds.includes(targetOrgId)) {
     return { tier: null, connectionId: null };
   }
 
-  // Candidate connections: target is one party, a viewer org is the other.
-  const rows = await db
+  // The active connection: target is one party, a viewer org is the other.
+  const conn = await db
     .select()
     .from(orgConnections)
     .where(
       and(
         eq(orgConnections.status, "active"),
-        productionId ? eq(orgConnections.productionId, productionId) : undefined,
         or(
           and(eq(orgConnections.orgAId, targetOrgId), inArray(orgConnections.orgBId, viewerOrgIds)),
           and(eq(orgConnections.orgBId, targetOrgId), inArray(orgConnections.orgAId, viewerOrgIds)),
         ),
       ),
     )
-    .all();
+    .get();
 
-  // Take the most permissive active connection if several productions overlap.
-  let best: { tier: VisibilityTier; connectionId: string } | null = null;
-  for (const conn of rows) {
-    const tier = exposedTierFor(conn as ConnectionRow, viewerOrgIds);
-    if (tier && (!best || tierRank(tier) > tierRank(best.tier))) {
-      best = { tier, connectionId: conn.id };
-    }
-  }
-  return best ? { tier: best.tier, connectionId: best.connectionId } : { tier: null, connectionId: null };
+  if (!conn) return { tier: null, connectionId: null };
+  const tier = exposedTierFor(conn as ConnectionRow, viewerOrgIds);
+  return tier ? { tier, connectionId: conn.id } : { tier: null, connectionId: null };
 }
 
 // ── DB: audit ────────────────────────────────────────────────────────────────
@@ -239,16 +232,12 @@ export async function offerConnection(
   const initiatorIsA = orgAId === input.initiatorOrgId;
   const now = Math.floor(Date.now() / 1000);
 
+  // One connection per org pair (regardless of which production it was first
+  // offered on) — an active connection spans every shared production.
   const existing = await db
     .select()
     .from(orgConnections)
-    .where(
-      and(
-        eq(orgConnections.productionId, input.productionId),
-        eq(orgConnections.orgAId, orgAId),
-        eq(orgConnections.orgBId, orgBId),
-      ),
-    )
+    .where(and(eq(orgConnections.orgAId, orgAId), eq(orgConnections.orgBId, orgBId)))
     .get();
 
   if (existing && (existing.status === "active" || existing.status === "pending")) {
@@ -256,10 +245,12 @@ export async function offerConnection(
   }
 
   if (existing) {
-    // Re-offer over a declined/revoked row — reset cleanly to pending.
+    // Re-offer over a declined/revoked row — reset cleanly to pending, re-anchored
+    // to the production this fresh offer was made from.
     await db
       .update(orgConnections)
       .set({
+        productionId: input.productionId,
         initiatedByOrgId: input.initiatorOrgId,
         initiatedByUserId: input.initiatedByUserId,
         status: "pending",

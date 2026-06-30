@@ -1,6 +1,6 @@
 # Spec — Organisation-to-Organisation Visibility Consent
 
-**Status:** Phases 1–2 implemented (identity + contacts tiers). Phase 3 (shared-context tier) and Phase 4 (standing connections) remain design-only.
+**Status:** Phases 1–2 implemented (identity + contacts tiers). Connections are **org-to-org and span every shared production** (the Phase-4 "standing connection" model — a single active connection between two orgs applies wherever they both work; productionId is kept only as the anchor it was first offered from). Phase 3 (shared-context tier) remains design-only.
 **Author:** Product / Eng
 **Date:** June 2026
 **Audience:** Founders, eng, design

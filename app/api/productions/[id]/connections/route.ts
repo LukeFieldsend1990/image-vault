@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { orgConnections } from "@/lib/db/schema";
+import { orgConnections, organisations } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import {
   getManagedOrgIds,
@@ -12,7 +12,8 @@ import {
   type ConnectionRow,
   type VisibilityTier,
 } from "@/lib/organisations/connections";
-import { and, eq, or, inArray } from "drizzle-orm";
+import { isVendorOrgType } from "@/lib/organisations/orgTypes";
+import { eq, or, inArray } from "drizzle-orm";
 import { sendConnectionOfferNotification } from "@/lib/organisations/connection-notify";
 
 // The caller's party orgs on this production (orgs they manage that are party).
@@ -25,45 +26,62 @@ async function callerParties(db: ReturnType<typeof getDb>, userId: string, produ
   return { managed, parties, managedParties };
 }
 
-// GET /api/productions/[id]/connections — connections on this production that
-// involve one of the caller's party orgs, from their perspective. Drives the
-// per-vendor connect state on the production vendor panel.
+// GET /api/productions/[id]/connections — the caller's org-to-org connections,
+// from the perspective of the org they manage on this production. Connections
+// are org-level, so this returns every connection that org has (not just ones
+// anchored to this production) — that's what lets a vendor connected elsewhere
+// show as "Connected" here, and surface as a suggested vendor to attach.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
 
   const db = getDb();
-  const { managedParties } = await callerParties(db, session.sub, id);
-  if (managedParties.length === 0) return NextResponse.json({ connections: [] });
+  const { parties, managedParties } = await callerParties(db, session.sub, id);
+  if (managedParties.length === 0) return NextResponse.json({ connections: [], suggestions: [] });
+
+  // Perspective org: prefer the producer org when the caller manages it.
+  const myOrg = parties.producerOrgId && managedParties.includes(parties.producerOrgId)
+    ? parties.producerOrgId
+    : managedParties[0];
 
   const rows = await db
     .select()
     .from(orgConnections)
-    .where(
-      and(
-        eq(orgConnections.productionId, id),
-        or(inArray(orgConnections.orgAId, managedParties), inArray(orgConnections.orgBId, managedParties)),
-      ),
-    )
+    .where(or(eq(orgConnections.orgAId, myOrg), eq(orgConnections.orgBId, myOrg)))
     .all();
 
+  const counterpartyIds = [...new Set(rows.map((r) => counterpartyOrgId(r as ConnectionRow, myOrg)).filter((v): v is string => Boolean(v)))];
+  const orgRows = counterpartyIds.length
+    ? await db
+        .select({ id: organisations.id, name: organisations.name, orgType: organisations.orgType, shortCode: organisations.shortCode, vendorAuditPassed: organisations.vendorAuditPassed })
+        .from(organisations)
+        .where(inArray(organisations.id, counterpartyIds))
+        .all()
+    : [];
+  const orgById = new Map(orgRows.map((o) => [o.id, o]));
+
   const connections = rows
+    .filter((r) => r.status === "pending" || r.status === "active")
     .map((r) => {
-      const mine = managedParties.find((m) => m === r.orgAId || m === r.orgBId);
-      if (!mine) return null;
-      const cp = counterpartyOrgId(r as ConnectionRow, mine);
+      const cp = counterpartyOrgId(r as ConnectionRow, myOrg);
       return {
         connectionId: r.id,
-        myOrgId: mine,
+        myOrgId: myOrg,
         counterpartyOrgId: cp,
         status: r.status,
-        direction: r.status === "pending" ? (r.initiatedByOrgId === mine ? "outgoing" : "incoming") : null,
+        direction: r.status === "pending" ? (r.initiatedByOrgId === myOrg ? "outgoing" : "incoming") : null,
       };
-    })
-    .filter(Boolean);
+    });
 
-  return NextResponse.json({ connections });
+  // Connected vendor orgs → suggested when attaching vendors to this production.
+  const suggestions = rows
+    .filter((r) => r.status === "active")
+    .map((r) => orgById.get(counterpartyOrgId(r as ConnectionRow, myOrg) ?? ""))
+    .filter((o): o is NonNullable<typeof o> => Boolean(o) && isVendorOrgType(o!.orgType))
+    .map((o) => ({ id: o.id, name: o.name, orgType: o.orgType, shortCode: o.shortCode, vendorAuditPassed: o.vendorAuditPassed }));
+
+  return NextResponse.json({ connections, suggestions });
 }
 
 // POST /api/productions/[id]/connections — offer a visibility connection to a
