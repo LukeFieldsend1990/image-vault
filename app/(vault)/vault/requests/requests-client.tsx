@@ -276,7 +276,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                     className="rounded px-4 py-2 text-xs font-medium text-white transition"
                     style={{ background: "var(--color-accent)" }}
                   >
-                    Review &amp; give consent
+                    Review consent
                   </Link>
                   <button
                     type="button"
@@ -525,7 +525,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                       className="rounded px-4 py-2 text-xs font-medium text-white transition"
                       style={{ background: "var(--color-accent)" }}
                     >
-                      Review &amp; give consent
+                      Review consent
                     </Link>
                     <button
                       onClick={() => setDenyingId(r.id)}
