@@ -177,14 +177,22 @@ export default function SetupClient() {
   // Step 6 — done
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null);
 
-  // Load eligible orgs once (owner/admin → can create productions).
+  // Load eligible orgs once (owner/admin → can create productions). When the
+  // wizard is opened from an organisation ("Set up a production" in the org
+  // view), an ?org=<id> param preselects that organisation so the seeded
+  // production lands in the right place.
   useEffect(() => {
+    const preselectOrg = new URLSearchParams(window.location.search).get("org");
     fetch("/api/organisations")
       .then((r) => r.json() as Promise<{ organisations?: Organisation[] }>)
       .then((d) => {
         const eligible = (d.organisations ?? []).filter((o) => o.memberRole === "owner" || o.memberRole === "admin");
         setOrgs(eligible);
-        if (eligible.length > 0) { setOrgMode("pick"); setOrgId(eligible[0].id); }
+        if (eligible.length > 0) {
+          const preferred = preselectOrg && eligible.some((o) => o.id === preselectOrg) ? preselectOrg : eligible[0].id;
+          setOrgMode("pick");
+          setOrgId(preferred);
+        }
       })
       .catch(() => {});
   }, []);

@@ -794,6 +794,38 @@ export const organisationInvites = sqliteTable("organisation_invites", {
   createdAt: integer("created_at").notNull(),
 });
 
+// Mutual, production-scoped visibility connection between two organisations.
+// Neither side sees the other until BOTH accept; each side independently
+// controls what it exposes about itself via a tier (identity → contacts →
+// shared_context). This is an identity/contacts layer only — it is never a path
+// to performer likeness data, which stays gated by vendorAuthorisations +
+// Bridge. See specs/ORG-VISIBILITY-CONSENT-SPEC.md and lib/orgs/connections.ts.
+export const orgConnections = sqliteTable("org_connections", {
+  id: text("id").primaryKey(),
+  // The shared production this connection is scoped to (the anchor).
+  productionId: text("production_id").notNull().references(() => productions.id, { onDelete: "cascade" }),
+  // The two orgs, stored in canonical order (orgAId < orgBId lexically) so a
+  // pair on a production is unique regardless of who initiated.
+  orgAId: text("org_a_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  orgBId: text("org_b_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  initiatedByOrgId: text("initiated_by_org_id").notNull().references(() => organisations.id),
+  initiatedByUserId: text("initiated_by_user_id").notNull().references(() => users.id),
+  status: text("status", { enum: ["pending", "active", "declined", "revoked"] }).notNull().default("pending"),
+  // What each org exposes about ITSELF. Cumulative: contacts ⊇ identity,
+  // shared_context ⊇ contacts. Default on accept is identity.
+  orgATier: text("org_a_tier", { enum: ["identity", "contacts", "shared_context"] }).notNull().default("identity"),
+  orgBTier: text("org_b_tier", { enum: ["identity", "contacts", "shared_context"] }).notNull().default("identity"),
+  respondedByUserId: text("responded_by_user_id").references(() => users.id),
+  acceptedAt: integer("accepted_at"),
+  declinedAt: integer("declined_at"),
+  revokedAt: integer("revoked_at"),
+  revokedByOrgId: text("revoked_by_org_id").references(() => organisations.id),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => ({
+  uniqPair: unique().on(t.productionId, t.orgAId, t.orgBId),
+}));
+
 // ── Scan transfers (capture-company upload-on-behalf) ─────────────────────────
 // A scan_service / vendor org uploads a package either into a talent's vault
 // (to_talent) or against a production licence's pending scan (to_licence). The
