@@ -120,9 +120,9 @@ export default function ConnectionsSection({ orgId, canManage }: { orgId: string
           Connections{connections.length > 0 ? ` · ${connections.length}` : ""}
         </p>
         <span
-          title="To connect with another organisation, open a production you share, go to its Vendors list and attach them, then click Connect. The request appears here for both sides to accept."
+          title="To start one: open a production you share → Vendors → attach the organisation → Connect. Their request will appear here."
           aria-label="How connections work"
-          className="flex items-center justify-center rounded-full cursor-help"
+          className="flex items-center justify-center rounded-full"
           style={{ width: 14, height: 14, border: "1px solid var(--color-border)", color: "var(--color-muted)", fontSize: 9, fontWeight: 700 }}
         >
           i
@@ -132,10 +132,9 @@ export default function ConnectionsSection({ orgId, canManage }: { orgId: string
       {loading ? (
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>
       ) : connections.length === 0 ? (
-        <div className="rounded p-3 text-sm" style={{ border: "1px dashed var(--color-border)", color: "var(--color-muted)" }}>
-          <p className="mb-2">No connections yet. Connect with another organisation to see each other while you work together on a production — both sides must agree, and you choose what to share.</p>
-          <p className="text-xs">To start one: open a production you share → <strong>Vendors</strong> → attach the organisation → <strong>Connect</strong>. Their request will appear here.</p>
-        </div>
+        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+          No connections yet.
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           {/* Incoming requests */}
