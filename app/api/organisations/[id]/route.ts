@@ -98,7 +98,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { name?: string; website?: string; billingEmail?: string; country?: string; countryTopLevelId?: string; ownerImplicitAccess?: boolean };
+  let body: { name?: string; website?: string; billingEmail?: string; country?: string; countryTopLevelId?: string; ownerImplicitAccess?: boolean; setupDismissed?: boolean };
   try {
     body = JSON.parse(await req.text());
   } catch {
@@ -109,6 +109,8 @@ export async function PATCH(
   if (body.name?.trim()) updates.name = body.name.trim();
   if ("website" in body) updates.website = body.website?.trim() ?? null;
   if ("billingEmail" in body) updates.billingEmail = body.billingEmail?.trim() ?? null;
+  // Permanently dismiss the org's "finish setting up" checklist (owner/admin).
+  if ("setupDismissed" in body) updates.setupDismissed = Boolean(body.setupDismissed);
   // Owner-only governance toggle — admins can edit other org details but not this.
   if ("ownerImplicitAccess" in body) {
     const isOwner = membership?.memberRole === "owner" || session.role === "admin";

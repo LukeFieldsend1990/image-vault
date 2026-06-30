@@ -115,16 +115,27 @@ export default function ConnectionsSection({ orgId, canManage }: { orgId: string
 
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-widest font-semibold mb-2" style={{ color: "var(--color-muted)" }}>
-        Connections{connections.length > 0 ? ` · ${connections.length}` : ""}
-      </p>
+      <div className="flex items-center gap-1.5 mb-2">
+        <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
+          Connections{connections.length > 0 ? ` · ${connections.length}` : ""}
+        </p>
+        <span
+          title="To connect with another organisation, open a production you share, go to its Vendors list and attach them, then click Connect. The request appears here for both sides to accept."
+          aria-label="How connections work"
+          className="flex items-center justify-center rounded-full cursor-help"
+          style={{ width: 14, height: 14, border: "1px solid var(--color-border)", color: "var(--color-muted)", fontSize: 9, fontWeight: 700 }}
+        >
+          i
+        </span>
+      </div>
 
       {loading ? (
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>Loading…</p>
       ) : connections.length === 0 ? (
-        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-          No connections yet. When you collaborate with another organisation on a production, you can connect to see each other — both sides must agree.
-        </p>
+        <div className="rounded p-3 text-sm" style={{ border: "1px dashed var(--color-border)", color: "var(--color-muted)" }}>
+          <p className="mb-2">No connections yet. Connect with another organisation to see each other while you work together on a production — both sides must agree, and you choose what to share.</p>
+          <p className="text-xs">To start one: open a production you share → <strong>Vendors</strong> → attach the organisation → <strong>Connect</strong>. Their request will appear here.</p>
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
           {/* Incoming requests */}
