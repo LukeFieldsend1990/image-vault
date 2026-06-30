@@ -1,9 +1,18 @@
 # Spec — Organisation-to-Organisation Visibility Consent
 
-**Status:** Draft for review
+**Status:** Phases 1–2 implemented (identity + contacts tiers). Phase 3 (shared-context tier) and Phase 4 (standing connections) remain design-only.
 **Author:** Product / Eng
 **Date:** June 2026
 **Audience:** Founders, eng, design
+
+> **Implementation note.** The model is live: `org_connections` (migration
+> `0096`), the consent engine + resolver in `lib/organisations/connections.ts`,
+> routes under `app/api/productions/[id]/connections`,
+> `app/api/organisations/[id]/connections`, and `app/api/connections/[connId]`
+> (+ `/respond`), and UI in `app/(vault)/organisations/connections-section.tsx`
+> plus a Connect affordance on the production vendor panel. The `shared_context`
+> tier is accepted by the schema/selector but currently renders only the shared
+> production name; Phase 3 fills in cast/licence context.
 
 ---
 

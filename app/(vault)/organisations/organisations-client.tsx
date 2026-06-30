@@ -11,6 +11,7 @@ import {
 } from "@/lib/jurisdictions/countries";
 import OrgTypeBadge from "@/app/components/org-type-badge";
 import CodeTag from "@/app/components/code-tag";
+import ConnectionsSection from "./connections-section";
 
 interface OrgMember {
   userId: string;
@@ -713,6 +714,9 @@ export default function OrganisationsClient({ canCreate = true }: { canCreate?: 
                             </div>
                           )}
                         </div>
+
+                        {/* Connections — org-to-org visibility consent */}
+                        <ConnectionsSection orgId={selected.id} canManage={canManage} />
 
                         {/* Production access — owner-only governance toggle */}
                         {isOwner && (

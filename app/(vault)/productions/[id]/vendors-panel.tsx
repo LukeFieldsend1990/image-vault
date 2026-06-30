@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { ORG_TYPE_LABELS, VENDOR_ORG_TYPES, isOrgType } from "@/lib/organisations/orgTypes";
 
 interface VendorRow {
@@ -60,6 +61,11 @@ export default function VendorsPanel({ productionId, embedded = false, canWrite 
   const [notice, setNotice] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  // Org-to-org visibility connections on this production, keyed by counterparty
+  // org id — drives the per-vendor "Connect" affordance.
+  const [connByOrg, setConnByOrg] = useState<Record<string, { connectionId: string; status: string; direction: string | null }>>({});
+  const [connectingId, setConnectingId] = useState<string | null>(null);
+
   const fetchVendors = useCallback(async () => {
     setLoading(true);
     try {
@@ -73,7 +79,38 @@ export default function VendorsPanel({ productionId, embedded = false, canWrite 
     }
   }, [productionId]);
 
-  useEffect(() => { void fetchVendors(); }, [fetchVendors]);
+  const fetchConnections = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/productions/${productionId}/connections`);
+      if (!r.ok) return;
+      const d = (await r.json()) as { connections?: { connectionId: string; counterpartyOrgId: string | null; status: string; direction: string | null }[] };
+      const map: Record<string, { connectionId: string; status: string; direction: string | null }> = {};
+      for (const c of d.connections ?? []) {
+        if (c.counterpartyOrgId) map[c.counterpartyOrgId] = { connectionId: c.connectionId, status: c.status, direction: c.direction };
+      }
+      setConnByOrg(map);
+    } catch {
+      // ignore — the connect affordance just won't show state
+    }
+  }, [productionId]);
+
+  useEffect(() => { void fetchVendors(); void fetchConnections(); }, [fetchVendors, fetchConnections]);
+
+  async function connect(vendorOrgId: string) {
+    setConnectingId(vendorOrgId); setError(""); setNotice("");
+    try {
+      const r = await fetch(`/api/productions/${productionId}/connections`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetOrgId: vendorOrgId, tier: "identity" }),
+      });
+      const d = await r.json() as { ok?: boolean; error?: string };
+      if (!r.ok || !d.ok) { setError(d.error ?? "Couldn't send connection request."); return; }
+      setNotice("Connection request sent.");
+      await fetchConnections();
+    } finally {
+      setConnectingId(null);
+    }
+  }
 
   function handleSearch(q: string) {
     setQuery(q);
@@ -244,7 +281,7 @@ export default function VendorsPanel({ productionId, embedded = false, canWrite 
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
-                {["Vendor", "Type", "Bridge access", "Status", ""].map((h) => (
+                {["Vendor", "Type", "Bridge access", "Status", "Connection", ""].map((h) => (
                   <th key={h} className="text-left px-4 py-2.5 text-xs font-medium tracking-wider uppercase" style={{ color: "var(--color-muted)" }}>{h}</th>
                 ))}
               </tr>
@@ -272,6 +309,26 @@ export default function VendorsPanel({ productionId, embedded = false, canWrite 
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={pending ? { background: "rgba(180,83,9,0.12)", color: "#b45309" } : { background: "rgba(22,101,52,0.12)", color: "#166534" }}>
                         {pending ? "Invited" : "Active"}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        if (pending || !v.vendorOrgId) return <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>;
+                        const conn = connByOrg[v.vendorOrgId];
+                        if (conn?.status === "active") {
+                          return <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(22,101,52,0.12)", color: "#166534" }}>Connected</span>;
+                        }
+                        if (conn?.status === "pending") {
+                          return conn.direction === "incoming"
+                            ? <Link href="/organisations" className="text-xs" style={{ color: "var(--color-accent)" }}>Review</Link>
+                            : <span className="text-xs" style={{ color: "var(--color-muted)" }}>Request sent</span>;
+                        }
+                        if (!canWrite) return <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>;
+                        return (
+                          <button onClick={() => connect(v.vendorOrgId!)} disabled={connectingId === v.vendorOrgId} className="text-xs" style={{ color: "var(--color-accent)" }}>
+                            {connectingId === v.vendorOrgId ? "Sending…" : "Connect"}
+                          </button>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {canWrite && (
