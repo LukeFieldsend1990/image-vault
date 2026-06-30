@@ -113,6 +113,24 @@ interface LicenceTerms {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
+const PRODUCTION_STATUS_LABELS: Record<string, string> = {
+  development: "Development",
+  pre_production: "Pre-Production",
+  production: "In Production",
+  post_production: "Post-Production",
+  released: "Released",
+  cancelled: "Cancelled",
+};
+
+const PRODUCTION_STATUS_COLOURS: Record<string, string> = {
+  development: "#6b7280",
+  pre_production: "#b45309",
+  production: "#166534",
+  post_production: "#7c3aed",
+  released: "#0891b2",
+  cancelled: "#374151",
+};
+
 const CAST_STATUS_COLOUR: Record<string, string> = {
   placeholder: "#6b7280",
   invited: "#b45309",
@@ -301,6 +319,8 @@ export default function ProductionDetailClient() {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [markingIncludedId, setMarkingIncludedId] = useState<string | null>(null);
   const [inviteRepFor, setInviteRepFor] = useState<{ castId: string; label: string } | null>(null);
+
+  const [savingStatus, setSavingStatus] = useState(false);
 
   // Union project number — set here rather than in the guided setup (bare-minimum onboarding).
   const [editingUnionNum, setEditingUnionNum] = useState(false);
@@ -654,6 +674,22 @@ export default function ProductionDetailClient() {
     }
   }
 
+  async function handleStatusChange(newStatus: string) {
+    setSavingStatus(true);
+    try {
+      const r = await fetch(`/api/productions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (r.ok) {
+        setProduction((p) => (p ? { ...p, status: newStatus } : p));
+      }
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
   async function handleRemove(castId: string) {
     if (!confirm("Remove this cast member? This cannot be undone.")) return;
     setRemovingId(castId);
@@ -963,6 +999,34 @@ export default function ProductionDetailClient() {
                 SAG {production.sagProjectNumber}
               </span>
             )}
+            {production.status && canWrite ? (
+              <select
+                value={production.status}
+                onChange={(e) => void handleStatusChange(e.target.value)}
+                disabled={savingStatus}
+                className="text-xs font-medium rounded"
+                style={{
+                  background: `${PRODUCTION_STATUS_COLOURS[production.status] ?? "#6b7280"}18`,
+                  color: PRODUCTION_STATUS_COLOURS[production.status] ?? "#6b7280",
+                  border: `1px solid ${PRODUCTION_STATUS_COLOURS[production.status] ?? "#6b7280"}40`,
+                  padding: "2px 6px",
+                  cursor: "pointer",
+                  outline: "none",
+                  opacity: savingStatus ? 0.5 : 1,
+                }}
+              >
+                {Object.entries(PRODUCTION_STATUS_LABELS).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            ) : production.status ? (
+              <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{
+                background: `${PRODUCTION_STATUS_COLOURS[production.status] ?? "#6b7280"}18`,
+                color: PRODUCTION_STATUS_COLOURS[production.status] ?? "#6b7280",
+              }}>
+                {PRODUCTION_STATUS_LABELS[production.status] ?? production.status}
+              </span>
+            ) : null}
           </div>
         </div>
 
