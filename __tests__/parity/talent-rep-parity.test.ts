@@ -34,6 +34,9 @@ const TALENT_ONLY_WHITELIST: Record<string, string> = {
   "onboarding/union-affiliation/route.ts": "talent's own onboarding union affiliation",
   "vault/packages/search/route.ts": "talent searches their own scan packages",
   "cast/dismiss/route.ts": "talent personally dismisses a 'Not me' cast-claim suggestion for their own identity",
+  "monitor/route.ts": "talent's own likeness monitor config — reps are alerted on hits but triage is an identity decision",
+  "monitor/scan/route.ts": "talent runs likeness scans over their own biometric identity anchors",
+  "monitor/hits/[id]/route.ts": "talent personally confirms/dismisses likeness hits ('is this me?' is an identity decision)",
 };
 
 const API_DIR = join(process.cwd(), "app", "api");

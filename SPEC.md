@@ -4031,3 +4031,31 @@ New tab on `app/(vault)/vault/packages/[packageId]/page.tsx` alongside Files and
 | Does talent need per-vignette approval, or is the global `pitch_vignettes_enabled` toggle sufficient? | Product | Open |
 | Audio: Higgsfield-native audio generation, or ElevenLabs for voiceover? | Product | Deferred to Phase 2 |
 | Model selection: expose Kling vs Veo vs Sora to reps in UI, or keep configurable by admin only? | Product | Open |
+
+---
+
+## 18. Likeness Monitor — AI-Adjudicated Misuse Detection
+
+**Fight fire with fire:** the platform that vaults a talent's biometric scan data also watches public platforms for AI-generated misuse of that likeness, using the vault's own AI stack to adjudicate what its detectors surface.
+
+### 18.1 Concept
+
+Talent's verified identity anchors — TMDB profile + filmography (onboarding), scan packages, and geometry fingerprints watermarked into licensed deliveries — form a reference signature. Scans sweep short-form platforms (Instagram Reels, TikTok, YouTube Shorts, X, plus search/stock/AI-gen surfaces), score candidate content with detector signals, and hand every candidate to the `callAi()` reasoning layer (same cost-tracked Anthropic/Workers-AI orchestrator behind inbox triage) for a verdict: flag or clear, confidence, AI-generated likelihood, risk level (low/medium/high/critical), rationale. Geometry-fingerprint correlation is treated as scan-data provenance → automatic critical risk.
+
+### 18.2 What's real vs simulated
+
+- **Simulated:** the crawler stage (`lib/monitor/candidates.ts`) emits plausible candidates with synthetic detector signals — real platform firehose ingestion is out of scope for the demo.
+- **Real:** AI adjudication via `callAi()` (feature `likeness_monitor`, budget-tracked, heuristic-threshold fallback when AI is off/over budget), persistence (`likeness_monitors`, `monitor_scans`, `likeness_hits` — migration 0101), in-app alerts to talent + reps (`notifyTalentAndReps`), Resend alert email with content links, triage flow, and admin MCP visibility (`list_likeness_hits`).
+
+### 18.3 Surfaces
+
+- `/vault/monitor` (talent, gated with the royalty-meter flag): scan theatre, hit feed with confidence/risk/adjudicator rationale, triage actions (request takedown / dismiss / mark resolved), continuous-monitoring pause toggle, scan history.
+- API: `GET|PATCH /api/monitor`, `POST /api/monitor/scan`, `PATCH /api/monitor/hits/:id`. Talent-only (identity decision — parity-whitelisted); reps receive hit notifications.
+- Hit lifecycle: `new → confirmed | dismissed | takedown_requested → resolved`.
+
+### 18.4 Deferred
+
+- [ ] Scheduled sweeps (cron worker) driving the "continuous monitoring" toggle end-to-end
+- [ ] Rep read-only monitor view from the roster
+- [ ] Takedown enforcement queue (DMCA notice drafting — AI-generated, human-approved)
+- [ ] Real detector integrations (perceptual hash index, face-embedding search, C2PA provenance checks)

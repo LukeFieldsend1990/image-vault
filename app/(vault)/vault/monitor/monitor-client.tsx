@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { TalentIdentityForMonitor } from "./page";
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// ── Types (mirror /api/monitor payloads) ────────────────────────────────────
 
 type ScanStatus = "idle" | "checking" | "clear" | "flagged";
 
@@ -16,11 +16,51 @@ interface Platform {
   checkDuration: number;
 }
 
+interface LikenessHit {
+  id: string;
+  platform: string;
+  contentType: string;
+  contentUrl: string;
+  authorHandle: string | null;
+  caption: string | null;
+  confidence: number;
+  aiGeneratedLikelihood: number;
+  riskLevel: string;
+  matchSignals: string[];
+  aiRationale: string | null;
+  status: string;
+  detectedAt: number;
+}
+
 interface ScanRecord {
   id: string;
-  ranAt: Date;
-  result: "clean" | "flagged";
+  startedAt: number;
+  status: string;
   platformsChecked: number;
+  candidatesAnalysed: number;
+  hitsFound: number;
+  aiProvider: string | null;
+}
+
+interface MonitorConfig {
+  id: string;
+  status: "active" | "paused";
+  sensitivity: string;
+  lastScanAt: number | null;
+}
+
+interface MonitorState {
+  monitor: MonitorConfig | null;
+  hits: LikenessHit[];
+  scans: ScanRecord[];
+}
+
+interface ScanResponse {
+  scanId: string;
+  platformsChecked: number;
+  candidatesAnalysed: number;
+  newHits: LikenessHit[];
+  aiProvider: string;
 }
 
 // ── Platform icons ──────────────────────────────────────────────────────────
@@ -98,28 +138,37 @@ function PinterestIcon() {
   );
 }
 
-// ── Initial platform data ───────────────────────────────────────────────────
+const PLATFORM_ICONS: Record<string, React.ReactNode> = {
+  youtube: <YouTubeIcon />,
+  tiktok: <TikTokIcon />,
+  instagram: <InstagramIcon />,
+  x: <XIcon />,
+  pinterest: <PinterestIcon />,
+  google: <GoogleIcon />,
+  getty: <GettyIcon />,
+  midjourney: <MidjourneyIcon />,
+};
 
+// Ids must match lib/monitor/platforms.ts so hit platforms map onto rows.
 const INITIAL_PLATFORMS: Omit<Platform, "status">[] = [
-  { id: "youtube",    name: "YouTube",              category: "Video",    icon: <YouTubeIcon />,    checkDuration: 900  },
-  { id: "tiktok",     name: "TikTok",               category: "Video",    icon: <TikTokIcon />,     checkDuration: 700  },
-  { id: "instagram",  name: "Instagram Reels",      category: "Video",    icon: <InstagramIcon />,  checkDuration: 800  },
-  { id: "x",          name: "X (Twitter)",          category: "Social",   icon: <XIcon />,          checkDuration: 600  },
-  { id: "pinterest",  name: "Pinterest",            category: "Social",   icon: <PinterestIcon />,  checkDuration: 500  },
-  { id: "google",     name: "Google Images",        category: "Search",   icon: <GoogleIcon />,     checkDuration: 1100 },
-  { id: "getty",      name: "Getty / Shutterstock", category: "Stock",    icon: <GettyIcon />,      checkDuration: 750  },
-  { id: "midjourney", name: "AI Platforms",         category: "AI Gen",   icon: <MidjourneyIcon />, checkDuration: 1300 },
+  { id: "instagram",  name: "Instagram Reels",      category: "Video",  icon: <InstagramIcon />,  checkDuration: 800  },
+  { id: "tiktok",     name: "TikTok",               category: "Video",  icon: <TikTokIcon />,     checkDuration: 700  },
+  { id: "youtube",    name: "YouTube Shorts",       category: "Video",  icon: <YouTubeIcon />,    checkDuration: 900  },
+  { id: "x",          name: "X (Twitter)",          category: "Social", icon: <XIcon />,          checkDuration: 600  },
+  { id: "pinterest",  name: "Pinterest",            category: "Social", icon: <PinterestIcon />,  checkDuration: 500  },
+  { id: "google",     name: "Google Images",        category: "Search", icon: <GoogleIcon />,     checkDuration: 1100 },
+  { id: "getty",      name: "Getty / Shutterstock", category: "Stock",  icon: <GettyIcon />,      checkDuration: 750  },
+  { id: "midjourney", name: "AI Platforms",         category: "AI Gen", icon: <MidjourneyIcon />, checkDuration: 1300 },
 ];
 
-const INITIAL_HISTORY: ScanRecord[] = [
-  { id: "sr-001", ranAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3), result: "clean", platformsChecked: 8 },
-  { id: "sr-002", ranAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7), result: "clean", platformsChecked: 8 },
-];
+const PLATFORM_LABELS: Record<string, string> = Object.fromEntries(
+  INITIAL_PLATFORMS.map((p) => [p.id, p.name])
+);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatRelative(date: Date): string {
-  const diff = Date.now() - date.getTime();
+function formatRelative(unix: number): string {
+  const diff = Date.now() - unix * 1000;
   const mins = Math.floor(diff / 60000);
   if (mins < 2) return "just now";
   if (mins < 60) return `${mins} mins ago`;
@@ -129,12 +178,27 @@ function formatRelative(date: Date): string {
   return `${days}d ago`;
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-GB", {
+function formatDate(unix: number): string {
+  return new Date(unix * 1000).toLocaleDateString("en-GB", {
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
 }
+
+const RISK_COLORS: Record<string, { bg: string; fg: string }> = {
+  low: { bg: "rgba(107,114,128,0.12)", fg: "#6b7280" },
+  medium: { bg: "rgba(217,119,6,0.12)", fg: "#d97706" },
+  high: { bg: "rgba(239,68,68,0.12)", fg: "#dc2626" },
+  critical: { bg: "rgba(127,29,29,0.15)", fg: "#7f1d1d" },
+};
+
+const HIT_STATUS_LABELS: Record<string, string> = {
+  new: "New",
+  confirmed: "Confirmed",
+  dismissed: "Dismissed",
+  takedown_requested: "Takedown requested",
+  resolved: "Resolved",
+};
 
 // ── Status badge ────────────────────────────────────────────────────────────
 
@@ -240,6 +304,132 @@ function IdentityBadge({ identity }: { identity: TalentIdentityForMonitor }) {
   );
 }
 
+// ── Hit card ────────────────────────────────────────────────────────────────
+
+function ConfidenceBar({ value, label }: { value: number; label: string }) {
+  const color = value >= 85 ? "#dc2626" : value >= 65 ? "#d97706" : "#6b7280";
+  return (
+    <div className="flex-1 min-w-[130px]">
+      <div className="flex items-baseline justify-between">
+        <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>{label}</p>
+        <p className="text-xs font-semibold" style={{ color }}>{value}%</p>
+      </div>
+      <div className="mt-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+        <div className="h-full rounded-full" style={{ width: `${value}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
+function HitCard({ hit, onTriage, busy }: {
+  hit: LikenessHit;
+  onTriage: (id: string, status: string) => void;
+  busy: boolean;
+}) {
+  const risk = RISK_COLORS[hit.riskLevel] ?? RISK_COLORS.medium;
+  const open = hit.status === "new" || hit.status === "confirmed";
+  return (
+    <div className="rounded-md border p-4 space-y-3"
+      style={{ borderColor: hit.status === "new" ? "rgba(239,68,68,0.35)" : "var(--color-border)", background: "var(--color-bg)" }}>
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
+          style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}>
+          {PLATFORM_ICONS[hit.platform] ?? <GettyIcon />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              {PLATFORM_LABELS[hit.platform] ?? hit.platform}
+            </p>
+            <span className="text-xs" style={{ color: "var(--color-muted)" }}>{hit.authorHandle}</span>
+            <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+              style={{ background: risk.bg, color: risk.fg }}>
+              {hit.riskLevel}
+            </span>
+            <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
+              style={{ background: "var(--color-border)", color: "var(--color-muted)" }}>
+              {HIT_STATUS_LABELS[hit.status] ?? hit.status}
+            </span>
+          </div>
+          {hit.caption && (
+            <p className="text-xs mt-1 line-clamp-2" style={{ color: "var(--color-muted)" }}>
+              &ldquo;{hit.caption}&rdquo;
+            </p>
+          )}
+        </div>
+        <p className="shrink-0 text-xs" style={{ color: "var(--color-muted)" }}>{formatRelative(hit.detectedAt)}</p>
+      </div>
+
+      <div className="flex gap-6 flex-wrap">
+        <ConfidenceBar value={hit.confidence} label="Likeness match" />
+        <ConfidenceBar value={hit.aiGeneratedLikelihood} label="AI-generated" />
+      </div>
+
+      {hit.matchSignals.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {hit.matchSignals.map((s, i) => (
+            <span key={i} className="rounded px-2 py-0.5 text-[10px] font-medium"
+              style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-muted)" }}>
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {hit.aiRationale && (
+        <p className="text-xs leading-relaxed rounded px-3 py-2"
+          style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}>
+          <span className="font-semibold" style={{ color: "var(--color-ink)" }}>Adjudicator: </span>
+          {hit.aiRationale}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <a href={hit.contentUrl} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition"
+          style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+          View content
+        </a>
+        {open && hit.status !== "takedown_requested" && (
+          <button
+            onClick={() => onTriage(hit.id, "takedown_requested")}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-60"
+            style={{ background: "#c0392b" }}
+          >
+            Request takedown
+          </button>
+        )}
+        {hit.status === "new" && (
+          <button
+            onClick={() => onTriage(hit.id, "dismissed")}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60"
+            style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+          >
+            Dismiss — not me
+          </button>
+        )}
+        {hit.status === "takedown_requested" && (
+          <button
+            onClick={() => onTriage(hit.id, "resolved")}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60"
+            style={{ borderColor: "var(--color-border)", color: "#16a34a" }}
+          >
+            Mark resolved
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 interface Props {
@@ -251,22 +441,53 @@ export default function MonitorClient({ identity }: Props) {
     INITIAL_PLATFORMS.map((p) => ({ ...p, status: "idle" as ScanStatus }))
   );
   const [scanning, setScanning] = useState(false);
-  const [scanComplete, setScanComplete] = useState(false);
-  const [history, setHistory] = useState<ScanRecord[]>(INITIAL_HISTORY);
-  const [lastScanned, setLastScanned] = useState<Date | null>(null);
+  const [lastResult, setLastResult] = useState<ScanResponse | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [hits, setHits] = useState<LikenessHit[]>([]);
+  const [scans, setScans] = useState<ScanRecord[]>([]);
+  const [monitor, setMonitor] = useState<MonitorConfig | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [triaging, setTriaging] = useState<string | null>(null);
 
   const name = identity?.fullName ?? "your likeness";
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/monitor");
+      if (!res.ok) return;
+      const data = (await res.json()) as MonitorState;
+      setHits(data.hits);
+      setScans(data.scans);
+      setMonitor(data.monitor);
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const runScan = useCallback(async () => {
     if (scanning) return;
 
     setScanning(true);
-    setScanComplete(false);
+    setLastResult(null);
+    setScanError(null);
     setPlatforms(INITIAL_PLATFORMS.map((p) => ({ ...p, status: "idle" as ScanStatus })));
 
-    for (let i = 0; i < INITIAL_PLATFORMS.length; i++) {
-      const platform = INITIAL_PLATFORMS[i];
+    // Kick off the real sweep; the per-platform animation plays while the
+    // server crawls candidates and the AI adjudicator scores them.
+    const request = fetch("/api/monitor/scan", { method: "POST" })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error ?? "Scan failed");
+        }
+        return (await res.json()) as ScanResponse;
+      });
 
+    for (const platform of INITIAL_PLATFORMS) {
       setPlatforms((prev) =>
         prev.map((p) => (p.id === platform.id ? { ...p, status: "checking" } : p))
       );
@@ -277,17 +498,54 @@ export default function MonitorClient({ identity }: Props) {
       await new Promise((r) => setTimeout(r, 180));
     }
 
-    const now = new Date();
-    setLastScanned(now);
-    setScanning(false);
-    setScanComplete(true);
-    setHistory((prev) => [
-      { id: `sr-${Date.now()}`, ranAt: now, result: "clean", platformsChecked: INITIAL_PLATFORMS.length },
-      ...prev,
-    ]);
-  }, [scanning]);
+    try {
+      const result = await request;
+      const hitPlatforms = new Set(result.newHits.map((h) => h.platform));
+      setPlatforms((prev) =>
+        prev.map((p) => (hitPlatforms.has(p.id) ? { ...p, status: "flagged" } : p))
+      );
+      setLastResult(result);
+      setHits((prev) => [...result.newHits, ...prev]);
+      await refresh();
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Scan failed");
+    } finally {
+      setScanning(false);
+    }
+  }, [scanning, refresh]);
 
-  const allClear = scanComplete && platforms.every((p) => p.status === "clear");
+  const triageHit = useCallback(async (id: string, status: string) => {
+    setTriaging(id);
+    try {
+      const res = await fetch(`/api/monitor/hits/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        setHits((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)));
+      }
+    } finally {
+      setTriaging(null);
+    }
+  }, []);
+
+  const toggleMonitor = useCallback(async () => {
+    if (!monitor) return;
+    const next = monitor.status === "active" ? "paused" : "active";
+    setMonitor({ ...monitor, status: next });
+    await fetch("/api/monitor", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: next }),
+    });
+  }, [monitor]);
+
+  const openHits = hits.filter((h) => h.status === "new" || h.status === "confirmed" || h.status === "takedown_requested");
+  const closedHits = hits.filter((h) => h.status === "dismissed" || h.status === "resolved");
+  const newCount = hits.filter((h) => h.status === "new").length;
+  const scanClean = lastResult !== null && lastResult.newHits.length === 0;
+  const lastScanAt = monitor?.lastScanAt ?? null;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
@@ -299,7 +557,7 @@ export default function MonitorClient({ identity }: Props) {
             Likeness Monitor
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-            Scanning public platforms for unauthorised use of{" "}
+            AI-adjudicated scanning of public platforms for unauthorised use of{" "}
             <span className="font-medium" style={{ color: "var(--color-ink)" }}>{name}</span>.
           </p>
         </div>
@@ -335,8 +593,62 @@ export default function MonitorClient({ identity }: Props) {
       {/* ── Identity badge ── */}
       {identity && <IdentityBadge identity={identity} />}
 
+      {/* ── Monitor status strip ── */}
+      {monitor && (
+        <div className="flex items-center justify-between rounded-md border px-4 py-3"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <div className="flex items-center gap-2.5">
+            <span className="h-2 w-2 rounded-full"
+              style={{ background: monitor.status === "active" ? "#16a34a" : "#d97706" }} />
+            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+              Continuous monitoring{" "}
+              <span className="font-semibold" style={{ color: "var(--color-ink)" }}>
+                {monitor.status === "active" ? "active" : "paused"}
+              </span>
+              {lastScanAt ? ` · last sweep ${formatRelative(lastScanAt)}` : ""}
+            </p>
+          </div>
+          <button onClick={toggleMonitor} className="text-xs font-medium underline underline-offset-2"
+            style={{ color: "var(--color-muted)" }}>
+            {monitor.status === "active" ? "Pause" : "Resume"}
+          </button>
+        </div>
+      )}
+
       {/* ── Status banner ── */}
-      {allClear && (
+      {scanError && (
+        <div className="flex items-center gap-4 rounded-md border px-5 py-4"
+          style={{ background: "rgba(217,119,6,0.06)", borderColor: "rgba(217,119,6,0.25)" }}>
+          <p className="text-sm font-medium" style={{ color: "#d97706" }}>{scanError}</p>
+        </div>
+      )}
+
+      {lastResult && lastResult.newHits.length > 0 && (
+        <div className="flex items-center gap-4 rounded-md border px-5 py-4"
+          style={{ background: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.3)" }}>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+            style={{ background: "rgba(239,68,68,0.12)" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "#dc2626" }}>
+              {lastResult.newHits.length === 1
+                ? `1 new likeness hit detected for ${name}`
+                : `${lastResult.newHits.length} new likeness hits detected for ${name}`}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+              {lastResult.candidatesAnalysed} candidates analysed across {lastResult.platformsChecked} platforms.
+              You{identity ? " and your reps" : ""} have been alerted by email and in-app notification — review below.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {scanClean && (
         <div className="flex items-center gap-4 rounded-md border px-5 py-4"
           style={{ background: "rgba(34,197,94,0.07)", borderColor: "rgba(34,197,94,0.25)" }}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
@@ -350,14 +662,14 @@ export default function MonitorClient({ identity }: Props) {
               No unauthorised usage detected for {name}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-              All {INITIAL_PLATFORMS.length} platforms checked — your likeness is secure.
-              {lastScanned && ` Last scanned ${formatRelative(lastScanned)}.`}
+              {lastResult?.candidatesAnalysed ?? 0} candidates cleared by the adjudicator across all {INITIAL_PLATFORMS.length} platforms.
+              {lastScanAt && ` Last scanned ${formatRelative(lastScanAt)}.`}
             </p>
           </div>
         </div>
       )}
 
-      {!scanComplete && !scanning && (
+      {!lastResult && !scanning && !scanError && (
         <div className="flex items-center gap-4 rounded-md border px-5 py-4"
           style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
@@ -369,9 +681,13 @@ export default function MonitorClient({ identity }: Props) {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Awaiting scan</p>
+            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+              {newCount > 0 ? `${newCount} hit${newCount === 1 ? "" : "s"} awaiting review` : "Awaiting scan"}
+            </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-              Run a scan to check all monitored platforms for unauthorised use of {name}.
+              {newCount > 0
+                ? "Review the flagged content below, or run a fresh sweep."
+                : `Run a scan to check all monitored platforms for unauthorised use of ${name}.`}
             </p>
           </div>
         </div>
@@ -389,8 +705,22 @@ export default function MonitorClient({ identity }: Props) {
           <div>
             <p className="text-sm font-medium" style={{ color: "#3b82f6" }}>Scan in progress</p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-              Cross-referencing {name}&apos;s biometric signature across {INITIAL_PLATFORMS.length} platforms using perceptual hash matching and facial geometry analysis.
+              Cross-referencing {name}&apos;s biometric signature across {INITIAL_PLATFORMS.length} platforms, then adjudicating candidates with the vault&apos;s AI reasoning layer.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Detected hits ── */}
+      {loaded && openHits.length > 0 && (
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+            Detected hits
+          </p>
+          <div className="space-y-3">
+            {openHits.map((hit) => (
+              <HitCard key={hit.id} hit={hit} onTriage={triageHit} busy={triaging === hit.id} />
+            ))}
           </div>
         </div>
       )}
@@ -403,7 +733,7 @@ export default function MonitorClient({ identity }: Props) {
             Monitored platforms
           </p>
           <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-            {platforms.filter((p) => p.status === "clear").length}/{platforms.length} checked
+            {platforms.filter((p) => p.status === "clear" || p.status === "flagged").length}/{platforms.length} checked
           </span>
         </div>
         <div className="px-5" style={{ background: "var(--color-bg)" }}>
@@ -423,15 +753,19 @@ export default function MonitorClient({ identity }: Props) {
           {[
             {
               step: "1",
-              text: `Perceptual hash fingerprints derived from ${name}'s scan package are distributed to monitoring agents at each platform's data boundary.`,
+              text: `Perceptual hash fingerprints derived from ${name}'s scan packages and geometry fingerprints watermarked into licensed deliveries form the reference signature.`,
             },
             {
               step: "2",
-              text: "Facial geometry vectors extracted during onboarding are cross-referenced against newly indexed media using privacy-preserving nearest-neighbour search.",
+              text: "Automated detectors sweep newly indexed short-form content and score each candidate: face-embedding similarity, perceptual hash distance, geometry fingerprint correlation and a synthetic-media classifier.",
             },
             {
               step: "3",
-              text: "Any confirmed match triggers an alert and automatically drafts a licence request or DMCA takedown on your behalf, subject to your approval.",
+              text: "The vault's AI reasoning layer — the same cost-tracked stack behind inbox triage — adjudicates every candidate, clearing genuine archival footage and flagging AI-generated misuse with a rationale and risk level.",
+            },
+            {
+              step: "4",
+              text: "Confirmed hits alert you and your reps instantly (in-app + email with the content link). You decide: request a takedown or dismiss — nothing is actioned without your say-so.",
             },
           ].map(({ step, text }) => (
             <div key={step} className="flex items-start gap-3">
@@ -454,31 +788,32 @@ export default function MonitorClient({ identity }: Props) {
         </p>
         <div className="rounded-md border divide-y overflow-hidden"
           style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}>
-          {history.length === 0 && (
+          {scans.length === 0 && (
             <p className="px-5 py-4 text-sm" style={{ color: "var(--color-muted)" }}>No scans run yet.</p>
           )}
-          {history.map((record) => (
+          {scans.map((record) => (
             <div key={record.id} className="flex items-center justify-between px-5 py-3.5"
               style={{ borderColor: "var(--color-border)" }}>
               <div>
                 <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-                  {record.result === "clean"
+                  {record.hitsFound === 0
                     ? `Clean — no violations found for ${name}`
-                    : "Violations detected"}
+                    : `${record.hitsFound} violation${record.hitsFound === 1 ? "" : "s"} detected`}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-                  {formatDate(record.ranAt)} · {record.platformsChecked} platforms
+                  {formatDate(record.startedAt)} · {record.platformsChecked} platforms · {record.candidatesAnalysed} candidates
+                  {record.aiProvider === "ai" ? " · AI adjudicated" : record.aiProvider === "heuristic" ? " · heuristic thresholds" : ""}
                 </p>
               </div>
               <span
                 className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
                 style={
-                  record.result === "clean"
+                  record.hitsFound === 0
                     ? { background: "rgba(34,197,94,0.10)", color: "#16a34a" }
                     : { background: "rgba(239,68,68,0.10)", color: "#dc2626" }
                 }
               >
-                {record.result === "clean" ? (
+                {record.hitsFound === 0 ? (
                   <>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
@@ -491,6 +826,20 @@ export default function MonitorClient({ identity }: Props) {
           ))}
         </div>
       </div>
+
+      {/* ── Resolved / dismissed archive ── */}
+      {closedHits.length > 0 && (
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+            Closed hits
+          </p>
+          <div className="space-y-3 opacity-70">
+            {closedHits.map((hit) => (
+              <HitCard key={hit.id} hit={hit} onTriage={triageHit} busy={triaging === hit.id} />
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   );

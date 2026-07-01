@@ -1120,3 +1120,53 @@ export function consentConfirmedEmail(p: ConsentConfirmedEmailParams): { subject
     `),
   };
 }
+
+// ── Likeness monitor hit alert ───────────────────────────────────────────────
+
+export interface LikenessHitAlertParams {
+  talentName: string;
+  hits: Array<{
+    platform: string;
+    contentUrl: string;
+    authorHandle: string;
+    confidence: number;
+    riskLevel: string;
+    rationale: string | null;
+  }>;
+  monitorUrl: string;
+}
+
+export function likenessHitAlertEmail(p: LikenessHitAlertParams): { subject: string; html: string } {
+  const riskBadge = (level: string) =>
+    level === "critical" || level === "high"
+      ? `<span class="badge badge-denied">${escapeHtml(level)}</span>`
+      : level === "medium"
+        ? `<span class="badge badge-pending">${escapeHtml(level)}</span>`
+        : `<span class="badge badge-revoked">${escapeHtml(level)}</span>`;
+
+  const hitBlocks = p.hits
+    .map(
+      (h) => `
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Platform</span><span class="kv-val">${escapeHtml(h.platform)}</span></div>
+        <div class="kv-row"><span class="kv-key">Account</span><span class="kv-val">${escapeHtml(h.authorHandle)}</span></div>
+        <div class="kv-row"><span class="kv-key">Confidence</span><span class="kv-val">${h.confidence}% likeness match</span></div>
+        <div class="kv-row"><span class="kv-key">Risk</span><span class="kv-val">${riskBadge(h.riskLevel)}</span></div>
+        <div class="kv-row"><span class="kv-key">Content</span><span class="kv-val"><a href="${h.contentUrl}" style="color:#c0392b;">${escapeHtml(h.contentUrl)}</a></span></div>
+        ${h.rationale ? `<div class="kv-row"><span class="kv-key">Analysis</span><span class="kv-val">${escapeHtml(h.rationale)}</span></div>` : ""}
+      </div>`
+    )
+    .join("");
+
+  const count = p.hits.length;
+  return {
+    subject: `[Likeness Alert] ${count} new hit${count === 1 ? "" : "s"} detected for ${p.talentName}`,
+    html: layout(`
+      <p><strong>Your likeness monitor flagged ${count === 1 ? "a new item" : `${count} new items`}.</strong></p>
+      <p>Automated detectors matched content against ${escapeHtml(p.talentName)}'s verified identity anchors, and the AI adjudicator confirmed ${count === 1 ? "it" : "them"} as likely unauthorised synthetic usage. Nothing has been actioned yet — review each hit and choose whether to request a takedown or dismiss it.</p>
+      ${hitBlocks}
+      <p class="muted">Links above lead to third-party platforms. Detection combines perceptual hashing, face-embedding similarity and geometry-fingerprint correlation from your vaulted scan packages.</p>
+      <a class="btn" href="${p.monitorUrl}">Review in Likeness Monitor</a>
+    `),
+  };
+}
