@@ -27,6 +27,9 @@ export const users = sqliteTable("users", {
   // to legacy values by a CHECK that cannot be removed in D1 without recreating
   // the table. Effective role = trueRole ?? role. NULL for talent/rep/admin/licensee.
   trueRole: text("true_role"),
+  // Claimable-stub marker: set for auto-provisioned AI licensees (OLP funnel)
+  // that have not yet verified/claimed their account. NULL for real users.
+  unclaimedAt: integer("unclaimed_at"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -164,7 +167,7 @@ export const licences = sqliteTable("licences", {
   platformFee: integer("platform_fee"),  // cents (15% of agreed_fee)
   downloadCount: integer("download_count").notNull().default(0),
   lastDownloadAt: integer("last_download_at"),
-  deliveryMode: text("delivery_mode", { enum: ["standard", "bridge_only"] }).notNull().default("standard"),
+  deliveryMode: text("delivery_mode", { enum: ["standard", "bridge_only", "metered_api"] }).notNull().default("standard"),
   // Pre-authorisation: talent (or rep-confirmed) blanket approval for future downloads
   preauthUntil: integer("preauth_until"),   // unix timestamp; null = no active pre-auth
   preauthSetBy: text("preauth_set_by").references(() => users.id), // who set it
@@ -187,6 +190,8 @@ export const licences = sqliteTable("licences", {
   inclusionReason: text("inclusion_reason"),
   inclusionMarkedBy: text("inclusion_marked_by").references(() => users.id),
   inclusionMarkedAt: integer("inclusion_marked_at"),
+  // Origin of the licence — "olp" for AI-originated (RSL Open License Protocol).
+  source: text("source"),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -963,6 +968,10 @@ export const royaltySources = sqliteTable("royalty_sources", {
   createdAt: integer("created_at").notNull(),
   createdBy: text("created_by").references(() => users.id),
   revokedAt: integer("revoked_at"),
+  // OLP funnel: labelling (dashboard) + per-source credit ceiling.
+  origin: text("origin"),            // "olp" for AI-originated
+  clientId: text("client_id"),       // rsl_clients.id
+  usageCapUnits: integer("usage_cap_units"), // null = uncapped
 });
 
 export const usageEvents = sqliteTable("usage_events", {
@@ -1411,7 +1420,7 @@ export const rslLicenseRequests = sqliteTable("rsl_license_requests", {
   contactEmail: text("contact_email"),
   intendedUse: text("intended_use"),
   status: text("status", {
-    enum: ["pending_review", "granted", "denied", "expired"],
+    enum: ["pending_review", "offered", "accepted", "granted", "denied", "expired"],
   }).notNull().default("pending_review"),
   decidedBy: text("decided_by").references(() => users.id),
   decidedAt: integer("decided_at"), // unix seconds
@@ -1420,8 +1429,55 @@ export const rslLicenseRequests = sqliteTable("rsl_license_requests", {
   licenseExpiresAt: integer("license_expires_at"), // unix seconds
   // Link to a formal licence once one is created through the normal flow.
   licenceId: text("licence_id").references(() => licences.id, { onDelete: "set null" }),
+  acceptedAt: integer("accepted_at"), // when the AI client accepted the offer
   createdAt: integer("created_at").notNull(), // unix seconds
   updatedAt: integer("updated_at").notNull(), // unix seconds
+});
+
+// ── RSL OLP → licence funnel (Phase 2.5) — specs/RSL-OLP-LICENCE-FUNNEL-SPEC.md ──
+
+// Talent AI rate card: a standing per-usage price list. When present, an OLP
+// request can be quoted instantly; with auto_accept + posture green it
+// auto-licenses. Amounts are integer cents (USD).
+export const rslRateCards = sqliteTable("rsl_rate_cards", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  useCategoryId: text("use_category_id").notNull(), // training | replica
+  unitType: text("unit_type", {
+    enum: ["per_generation", "per_1k_inferences", "per_frame", "per_second"],
+  }).notNull().default("per_generation"),
+  unitRatePence: integer("unit_rate_pence").notNull(), // cents
+  upfrontFeePence: integer("upfront_fee_pence"),
+  termDays: integer("term_days").notNull().default(365),
+  autoAccept: integer("auto_accept", { mode: "boolean" }).notNull().default(false),
+  currency: text("currency").notNull().default("USD"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => ({ uniqTalentCategory: unique().on(t.talentId, t.useCategoryId) }));
+
+// AI-client → licensee mapping (the claimable stub). Deduped by client_key
+// (normalised client_id, else contact_email). Admin can block a client.
+export const rslClients = sqliteTable("rsl_clients", {
+  id: text("id").primaryKey(),
+  clientKey: text("client_key").notNull().unique(),
+  licenseeId: text("licensee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  organisationId: text("organisation_id").references(() => organisations.id),
+  clientName: text("client_name"),
+  contactEmail: text("contact_email"),
+  verified: integer("verified", { mode: "boolean" }).notNull().default(false),
+  blockedAt: integer("blocked_at"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+// Platform kill switches for the OLP rail (singleton row, id = 'singleton').
+export const rslSettings = sqliteTable("rsl_settings", {
+  id: text("id").primaryKey(),
+  olpEnabled: integer("olp_enabled", { mode: "boolean" }).notNull().default(true),
+  autoAcceptEnabled: integer("auto_accept_enabled", { mode: "boolean" }).notNull().default(true),
+  updatedAt: integer("updated_at").notNull(),
+  updatedBy: text("updated_by").references(() => users.id),
 });
 
 export const castClaimDismissals = sqliteTable("cast_claim_dismissals", {

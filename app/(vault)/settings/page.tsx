@@ -15,6 +15,7 @@ import BillingFees from "./billing-fees";
 import ShowCodesToggle from "./show-codes-toggle";
 import StandingInstructions from "./standing-instructions";
 import RslConsentProfile from "./rsl-consent-profile";
+import RslRateCard from "./rsl-rate-card";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -405,6 +406,9 @@ export default async function SettingsPage({
 
       {/* Public consent profile / RSL (talent only) */}
       {user?.role === "talent" && <RslConsentProfile />}
+
+      {/* AI rate card (talent only) */}
+      {user?.role === "talent" && <RslRateCard />}
 
 
       {/* CAS Bridge (licensee + rep + talent) */}

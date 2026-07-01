@@ -11,13 +11,22 @@
  * attests granted CONSENT; metered billing runs through royalty_sources.
  */
 
-import { eq, and, desc } from "drizzle-orm";
-import { rslLicenseRequests, rslProfiles, users } from "@/lib/db/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
+import { rslLicenseRequests, rslProfiles, users, royaltySources, licences } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 import { getKv } from "@/lib/db";
 import { sha256Hex } from "@/lib/auth/requireRoyaltySource";
 import { RSL_USAGE_MAP, RSL_PAYMENT_TYPE, derivePosture, type Posture } from "./posture";
 import { isPublic } from "./visibility";
+import { baseUrl } from "./profile";
+
+/** The metering endpoint an AI client posts usage to (with its rsk_ key). */
+export function usageEndpoint(): string {
+  return `${baseUrl()}/api/royalties/usage`;
+}
+
+/** Statuses in which an OLP request is still "open" (dedupable, not final). */
+export const OPEN_REQUEST_STATUSES = ["pending_review", "offered", "accepted"] as const;
 
 type Db = ReturnType<typeof getDb>;
 
@@ -113,11 +122,36 @@ export async function findOpenRequest(
         eq(rslLicenseRequests.talentId, talentId),
         eq(rslLicenseRequests.usage, usage),
         eq(rslLicenseRequests.clientId, clientId),
-        eq(rslLicenseRequests.status, "pending_review"),
+        inArray(rslLicenseRequests.status, [...OPEN_REQUEST_STATUSES]),
       ),
     )
     .orderBy(desc(rslLicenseRequests.createdAt))
     .get();
+}
+
+/**
+ * Consent-withdrawal cascade: revoke every active OLP-originated royalty source
+ * for a talent so metering stops immediately (unpublish / posture→red /
+ * vault-lock / admin-revoke). The usage endpoint already 401s a revoked source.
+ */
+export async function revokeRoyaltySourcesForTalent(db: Db, talentId: string): Promise<number> {
+  const rows = await db
+    .select({ id: royaltySources.id })
+    .from(royaltySources)
+    .innerJoin(licences, eq(licences.id, royaltySources.licenceId))
+    .where(
+      and(
+        eq(licences.talentId, talentId),
+        eq(royaltySources.origin, "olp"),
+        eq(royaltySources.status, "active"),
+      ),
+    )
+    .all();
+  const now = Math.floor(Date.now() / 1000);
+  for (const r of rows) {
+    await db.update(royaltySources).set({ status: "revoked", revokedAt: now }).where(eq(royaltySources.id, r.id));
+  }
+  return rows.length;
 }
 
 /**

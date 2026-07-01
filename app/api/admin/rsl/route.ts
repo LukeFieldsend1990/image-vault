@@ -7,6 +7,7 @@ import { rslProfiles, users, talentProfiles } from "@/lib/db/schema";
 import { derivePosture } from "@/lib/rsl/posture";
 import { consentProfileUrl } from "@/lib/rsl/profile";
 import { generateSlug, isPublic } from "@/lib/rsl/visibility";
+import { revokeRoyaltySourcesForTalent } from "@/lib/rsl/olp";
 
 /**
  * Admin master switch for public RSL profiles. Even when a talent has opted in,
@@ -112,6 +113,8 @@ export async function POST(req: NextRequest) {
       .update(rslProfiles)
       .set({ adminApproved: false, publicSlug: null, approvedBy: null, approvedAt: null, updatedAt: now })
       .where(eq(rslProfiles.talentId, talentId));
+    // Consent-withdrawal cascade: kill any live OLP metering for this talent.
+    await revokeRoyaltySourcesForTalent(db, talentId);
   }
 
   return NextResponse.json({ ok: true });

@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { getProfileBySlug, consentProfileUrl, baseUrl } from "@/lib/rsl/profile";
+import { rslLicenseRequests } from "@/lib/db/schema";
+import { getProfileBySlug, baseUrl } from "@/lib/rsl/profile";
 import { derivePosture } from "@/lib/rsl/posture";
 import { isPublic } from "@/lib/rsl/visibility";
 import {
   OLP_GRANT_TYPE,
   decideForUsage,
-  offerForUsage,
   parseResourceToSlug,
   createRequest,
   findOpenRequest,
-  hasPendingForUsage,
   grantRequest,
+  storeDelivery,
+  usageEndpoint,
 } from "@/lib/rsl/olp";
 import { capHeaders } from "@/lib/rsl/cap";
 import { notifyTalentAndReps, notifyAdmins } from "@/lib/notifications/create";
 import { checkRateLimit, getClientIp } from "@/lib/auth/rateLimit";
+import { getRslSettings } from "@/lib/rsl/settings";
+import { provisionLicensee } from "@/lib/rsl/licensee";
+import { getRateCardForUsage } from "@/lib/rsl/rateCard";
+import { createOlpLicence, approveOlpLicence, buildOffer } from "@/lib/rsl/funnel";
 
 /**
  * OLP token endpoint (OAuth 2.0 extension, grant_type=rsl). A machine client
@@ -110,82 +116,108 @@ export async function POST(req: NextRequest) {
 
   const posture = await derivePosture(db, row.profile.talentId);
   const decision = decideForUsage(posture, usage);
-  const contentUrl = consentProfileUrl(slug);
 
-  if (decision.kind === "invalid") {
+  if (decision.kind === "denied") {
+    return oauthError("access_denied", "The rights-holder prohibits this usage of their likeness.", 403, capHeaders(slug));
+  }
+  if (decision.kind !== "auto_grant" && decision.kind !== "review") {
     return oauthError("invalid_request", `Unsupported usage "${usage}".`, 400);
   }
-  if (decision.kind === "denied") {
-    return oauthError(
-      "access_denied",
-      "The rights-holder prohibits this usage of their likeness.",
-      403,
-      capHeaders(slug),
-    );
+  const categoryId = decision.categoryId;
+  const talentId = row.profile.talentId;
+  const now = Math.floor(Date.now() / 1000);
+
+  // Platform kill switch.
+  const settings = await getRslSettings(db);
+  if (!settings.olpEnabled) {
+    return oauthError("temporarily_unavailable", "Licensing is temporarily disabled.", 503, capHeaders(slug));
   }
 
+  // A contact email is required — it's how we reach the licensee's owner and
+  // send the claim link.
+  const contactEmail = typeof params.contact_email === "string" ? params.contact_email.trim().slice(0, 200) : "";
+  if (!contactEmail) {
+    return oauthError("invalid_request", "A contact_email is required to license this likeness.", 400, capHeaders(slug));
+  }
   const clientId = typeof params.client_id === "string" ? params.client_id.slice(0, 200) : null;
   const clientName = typeof params.client_name === "string" ? params.client_name.slice(0, 200) : null;
-  const contactEmail = typeof params.contact_email === "string" ? params.contact_email.slice(0, 200) : null;
   const intendedUse = typeof params.intended_use === "string" ? params.intended_use.slice(0, 500) : null;
 
-  // ── green: standing instruction = always → auto-grant consent, mint token ──
-  if (decision.kind === "auto_grant") {
-    const reqRow = await createRequest(db, {
-      talentId: row.profile.talentId,
+  // Provision (or reuse) the claimable licensee stub.
+  const licensee = await provisionLicensee(db, { clientId, clientName, contactEmail });
+  if (licensee.blocked) {
+    return oauthError("access_denied", "This client is blocked from licensing.", 403, capHeaders(slug));
+  }
+
+  const rateCard = await getRateCardForUsage(db, talentId, usage);
+  const offer = buildOffer(usage, rateCard);
+
+  // Reuse an open request for this client+usage, else create licence + request.
+  let reqRow = await findOpenRequest(db, talentId, usage, licensee.clientRowId);
+  let isNew = false;
+  if (!reqRow) {
+    const { licenceId } = await createOlpLicence(db, {
+      talentId,
       usage,
-      categoryId: decision.categoryId,
-      postureLight: "green",
-      clientId,
+      categoryId,
+      licenseeId: licensee.licenseeId,
+      organisationId: licensee.organisationId,
+      clientName,
+      intendedUse,
+      rateCard,
+    });
+    const created = await createRequest(db, {
+      talentId,
+      usage,
+      categoryId,
+      postureLight: decision.kind === "auto_grant" ? "green" : "amber",
+      clientId: licensee.clientRowId,
       clientName,
       contactEmail,
       intendedUse,
     });
+    const newStatus = rateCard ? "offered" : "pending_review";
+    await db.update(rslLicenseRequests).set({ licenceId, status: newStatus, updatedAt: now }).where(eq(rslLicenseRequests.id, created.id));
+    reqRow = { ...created, licenceId, status: newStatus };
+    isNew = true;
+  }
+  const licenceId = reqRow.licenceId!;
+
+  // ── auto-license: posture green + a rate card that opts into auto-accept ──
+  if (decision.kind === "auto_grant" && rateCard && rateCard.autoAccept && settings.autoAcceptEnabled && reqRow.status !== "granted") {
+    const { royaltyKey } = await approveOlpLicence(db, { licenceId, approverId: talentId, clientId: licensee.clientRowId });
     const grant = await grantRequest(db, reqRow.id, null);
-    void notifyTalentAndReps(db, row.profile.talentId, {
+    await db.update(rslLicenseRequests).set({ acceptedAt: now, updatedAt: now }).where(eq(rslLicenseRequests.id, reqRow.id));
+    const delivery = {
+      license: grant.rawToken,
+      royalty_key: royaltyKey,
+      usage_endpoint: usageEndpoint(),
+      unit_type: rateCard.unitType,
+      unit_rate_cents: rateCard.unitRatePence,
+      expires_at: grant.expiresAt,
+    };
+    await storeDelivery(reqRow.id, JSON.stringify(delivery));
+    void notifyTalentAndReps(db, talentId, {
       type: "rsl_license_granted",
       title: "AI licence auto-granted",
-      body: `${clientName || clientId || "A machine client"} acquired an RSL licence for ${usage} (auto-granted per your standing instruction).`,
-      href: "/settings",
+      body: `${clientName || "A machine client"} licensed your likeness for ${usage} at your published rate.`,
+      href: "/royalties",
     });
     return NextResponse.json(
-      {
-        status: "granted",
-        request_id: reqRow.id,
-        license: grant.rawToken,
-        token_type: "rsl-license",
-        usage,
-        expires_at: grant.expiresAt,
-        offer: offerForUsage(usage, contentUrl),
-      },
+      { status: "granted", request_id: reqRow.id, usage, offer, token_type: "rsl-license", ...delivery },
       { status: 200, headers: capHeaders(slug) },
     );
   }
 
-  // ── amber: permitted with terms → route to the rights-holder for review ──
-  const existing = await findOpenRequest(db, row.profile.talentId, usage, clientId);
-  // Debounce notifications: only the first outstanding request per usage pings
-  // the rights-holder, so varying client_id can't be used to spam them.
-  const hadPending = existing ? true : await hasPendingForUsage(db, row.profile.talentId, usage);
-  const reqRow = existing ?? (await createRequest(db, {
-    talentId: row.profile.talentId,
-    usage,
-    categoryId: decision.categoryId,
-    postureLight: "amber",
-    clientId,
-    clientName,
-    contactEmail,
-    intendedUse,
-  }));
-  if (!hadPending) {
-    const who = clientName || clientId || "A machine client";
-    void notifyTalentAndReps(db, row.profile.talentId, {
+  // ── otherwise: route to a human (offered = priced, pending_review = needs a price) ──
+  if (isNew) {
+    const who = clientName || "A machine client";
+    void notifyTalentAndReps(db, talentId, {
       type: "rsl_license_request",
       title: "AI licence request",
       body: `${who} requested to license your likeness for ${usage}.`,
-      href: "/settings",
+      href: "/vault/requests",
     });
-    // Admins action OLP requests, so notify them too (debounced like the talent's).
     void notifyAdmins(db, {
       type: "rsl_license_request_admin",
       title: "AI licence request to review",
@@ -195,11 +227,11 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json(
     {
-      status: "authorization_pending",
+      status: reqRow.status === "offered" ? "offer_available" : "authorization_pending",
       request_id: reqRow.id,
       poll_url: `${baseUrl()}/api/rsl/olp/requests/${reqRow.id}`,
       usage,
-      offer: offerForUsage(usage, contentUrl),
+      offer,
     },
     { status: 202, headers: capHeaders(slug) },
   );

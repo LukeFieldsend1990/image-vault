@@ -33,6 +33,7 @@ const TALENT_ONLY_WHITELIST: Record<string, string> = {
   "onboarding/search/route.ts": "talent's own onboarding identity search",
   "onboarding/union-affiliation/route.ts": "talent's own onboarding union affiliation",
   "vault/packages/search/route.ts": "talent searches their own scan packages",
+  "cast/dismiss/route.ts": "talent personally dismisses a 'Not me' cast-claim suggestion for their own identity",
 };
 
 const API_DIR = join(process.cwd(), "app", "api");
