@@ -13,9 +13,6 @@ import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
 import DemoToggleCard from "./demo-toggle-card";
 import BillingFees from "./billing-fees";
 import ShowCodesToggle from "./show-codes-toggle";
-import StandingInstructions from "./standing-instructions";
-import RslConsentProfile from "./rsl-consent-profile";
-import RslRateCard from "./rsl-rate-card";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -401,14 +398,23 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* Standing instructions (talent only) */}
-      {user?.role === "talent" && <StandingInstructions />}
-
-      {/* Public consent profile / RSL (talent only) */}
-      {user?.role === "talent" && <RslConsentProfile />}
-
-      {/* AI rate card (talent only) */}
-      {user?.role === "talent" && <RslRateCard />}
+      {/* AI & Likeness Licensing — dedicated RSL page (talent only) */}
+      {user?.role === "talent" && (
+        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
+            AI &amp; Likeness Licensing
+          </h2>
+          <Link href="/settings/rsl" className="flex items-center justify-between text-sm" style={{ color: "var(--color-ink)" }}>
+            <span>Consent rules, public profile, Human Consent ID &amp; AI rate card</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </Link>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+            Control how AI may use your likeness — and what it costs.
+          </p>
+        </div>
+      )}
 
 
       {/* CAS Bridge (licensee + rep + talent) */}
