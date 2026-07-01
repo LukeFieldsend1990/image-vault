@@ -20,6 +20,7 @@ interface ProfileVM {
   profession: string | null;
   links: { label: string; url: string }[];
   humanConsentId: string | null;
+  hcrDiverged: boolean;
   status: Status;
   publicUrl: string | null;
   posture: { categories: CategoryPosture[]; overall: Light };
@@ -216,6 +217,12 @@ export default function RslConsentProfile() {
             >
               Remove
             </button>
+            {vm.hcrDiverged && (
+              <div className="w-full mt-2 rounded px-3 py-2 text-xs" style={{ background: "rgba(180,83,9,0.08)", border: "1px solid rgba(180,83,9,0.3)", color: "#b45309", lineHeight: 1.5 }}>
+                <strong>Posture mismatch.</strong> Your Image Vault consent posture has changed since you linked this HCR ID. Your listing on the Human Consent Registry may no longer reflect your current stance — please update it at{" "}
+                <a href="https://registry.rslmedia.org/" target="_blank" rel="noopener noreferrer" className="underline">registry.rslmedia.org</a>.
+              </div>
+            )}
             <span className="w-full text-xs mt-1" style={{ color: "var(--color-muted)" }}>
               Your Human Consent ID is shown as a verified badge on your public consent profile.
             </span>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { USE_CATEGORIES } from "@/lib/consent/use-categories";
 
 type Disposition = "always" | "case_by_case" | "never";
+type EffectiveDisposition = Disposition | null; // null = not set (defaults to prohibited on consent profile)
 
 const OPTIONS: { value: Disposition; label: string; hint: string }[] = [
   { value: "always", label: "Always", hint: "Auto-grant — your agent never has to ask" },
@@ -61,11 +62,13 @@ export default function StandingInstructions({ talentId, subtitle }: { talentId?
       if (!r.ok) {
         const d = (await r.json()) as { error?: string };
         setError(d.error ?? "Could not save.");
-        setMap((m) => ({ ...m, [categoryId]: prev ?? "case_by_case" }));
+        if (prev !== undefined) setMap((m) => ({ ...m, [categoryId]: prev }));
+        else setMap((m) => { const n = { ...m }; delete n[categoryId]; return n; });
       }
     } catch {
       setError("Network error.");
-      setMap((m) => ({ ...m, [categoryId]: prev ?? "case_by_case" }));
+      if (prev !== undefined) setMap((m) => ({ ...m, [categoryId]: prev }));
+      else setMap((m) => { const n = { ...m }; delete n[categoryId]; return n; });
     } finally {
       setSavingId(null);
     }
@@ -86,15 +89,16 @@ export default function StandingInstructions({ talentId, subtitle }: { talentId?
       ) : (
         <div className="space-y-2.5">
           {USE_CATEGORIES.map((c) => {
-            const current = map[c.id] ?? "case_by_case";
+            const current: EffectiveDisposition = map[c.id] ?? null;
+            const isUnset = current === null;
             return (
               <div key={c.id} className="rounded-lg p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
                 <div className="flex items-center gap-2 flex-wrap mb-2">
                   <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{c.name}</span>
                   {c.regimeTag && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>{c.regimeTag}</span>}
                   {c.sensitive && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(180,83,9,0.1)", color: "#b45309" }}>sensitive</span>}
-                  <span className="ml-auto text-[11px]" style={{ color: DISPOSITION_COLOUR[current] }}>
-                    {savingId === c.id ? "Saving…" : OPTIONS.find((o) => o.value === current)?.label}
+                  <span className="ml-auto text-[11px]" style={{ color: isUnset ? "var(--color-muted)" : DISPOSITION_COLOUR[current!] }}>
+                    {savingId === c.id ? "Saving…" : isUnset ? "Not set" : OPTIONS.find((o) => o.value === current)?.label}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
@@ -118,6 +122,11 @@ export default function StandingInstructions({ talentId, subtitle }: { talentId?
                     );
                   })}
                 </div>
+                {isUnset && (
+                  <p className="text-[11px] mt-2" style={{ color: "#991b1b" }}>
+                    Not set — shows as <strong>Prohibited</strong> on your consent profile until you choose.
+                  </p>
+                )}
               </div>
             );
           })}
