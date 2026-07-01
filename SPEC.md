@@ -4053,9 +4053,72 @@ Talent's verified identity anchors — TMDB profile + filmography (onboarding), 
 - API: `GET|PATCH /api/monitor`, `POST /api/monitor/scan`, `PATCH /api/monitor/hits/:id`. Talent-only (identity decision — parity-whitelisted); reps receive hit notifications.
 - Hit lifecycle: `new → confirmed | dismissed | takedown_requested → resolved`.
 
-### 18.4 Deferred
+### 18.4 True-Signal Detection — Instagram Reels Integration Plan
+
+The simulated crawler (`generateCandidates()` in `lib/monitor/candidates.ts`) is the **only** fictional stage — the adjudicator, signal vocabulary, hit schema, dedupe, alerts, triage and MCP surface all consume the same `CandidateContent` shape and survive the swap unchanged. Going real means replacing that one function with three vendor-backed stages:
+
+#### Stage 1 — Discovery (Apify)
+
+There is no official route: the Instagram Graph API has no reels search/firehose and hashtag search is crippled (business accounts, 30 hashtags/week). Commercial scraping infrastructure is how every real player operates (Vermillio, Loti).
+
+- **Vendor**: Apify — maintained actors `apify/instagram-search-scraper` / `apify/instagram-hashtag-scraper`, driven via REST (start run → poll → fetch dataset JSON).
+- **Yield per item**: reel URL, author handle, caption, view/like counts, **thumbnail + video URLs** (feeds Stage 2).
+- **Search terms from existing anchors**: TMDB name + modifiers (`"{name}" ai`, `"{name}" deepfake`), hashtag sweeps (`#aivideo`, `#deepfake`) filtered by name-in-caption, knownFor titles.
+- **Cost**: ~$0.50–2.50 / 1,000 results; a 100–200-reel sweep per talent is pennies.
+- **Secret**: `APIFY_TOKEN`.
+- ⚠️ Scraping violates Meta ToS — Apify carries operational risk, but adopting it is a knowing business decision.
+
+#### Stage 2 — Face matching (AWS Rekognition)
+
+Workers AI has no face-recognition model; Rekognition fits because `aws4fetch` is already a dependency (R2 presigning) — sign Rekognition REST calls from the Worker, no SDK.
+
+- One **face collection per talent** (`CreateCollection` → `IndexFaces`), seeded from reference images we already hold: TMDB `profileImageUrl`, package cover images (R2), later scan-derived stills.
+- Per candidate: `SearchFacesByImage` on the thumbnail (later: sampled video frames) → real 0–100 similarity → maps directly onto the existing `faceEmbeddingSimilarity` signal.
+- **Cost**: ~$1 / 1,000 images. **Secrets**: AWS key pair with Rekognition permissions (reuse aws4fetch pattern; new `REKOGNITION_ACCESS_KEY_ID` / `REKOGNITION_SECRET_ACCESS_KEY` + region var).
+
+#### Stage 3 — Synthetic-media detection (Hive AI)
+
+- **Vendor**: Hive AI deepfake / AI-generated content detection — plain REST, thumbnail or video URL in, classifier score out → maps onto `syntheticMediaScore`.
+- Alternative: Reality Defender (higher end, enterprise-sales gated). Hive keys are self-serve.
+- **Cost**: ~$1–3 / 1,000 items. **Secret**: `HIVE_API_KEY`.
+
+#### Signals that stay stubbed
+
+- `perceptualHashDistance` — needs a pHash index built from scan-package stills (own pipeline job; medium effort, no vendor).
+- `geometryFingerprintCorrelation` — recovering watermark bits from re-compressed platform video is a research project, not an integration. Stays `null`; adjudicator + heuristic already handle null.
+
+#### Architecture change required: async scans
+
+An Apify run takes 1–3 minutes, so the scan can no longer be a single awaited POST:
+
+1. `POST /api/monitor/scan` creates the `monitor_scans` row (`running`) and returns the scan id immediately.
+2. Processing continues via `ctx.waitUntil()` (or a `monitor-jobs` queue if runs exceed Worker limits): Apify run → per-candidate Rekognition + Hive → adjudication → hits/alerts → scan row `complete`/`error` (write the error message to `monitor_scans.error`; the UI currently shows only a generic "Scan failed").
+3. Client polls `GET /api/monitor` (or a `GET /api/monitor/scans/:id`) instead of playing a fixed-length animation — schema already anticipated this (`monitor_scans.status`: running/complete/error).
+
+#### Rollout & degradation
+
+Each stage lights up independently on the codebase's standard graceful-degradation pattern (cf. `RESEND_API_KEY`):
+
+- No `APIFY_TOKEN` → fall back to the simulated crawler (current behaviour).
+- No Rekognition keys → skip face matching; adjudicator is told the signal is unavailable.
+- No `HIVE_API_KEY` → same for synthetic-media score.
+
+Recommended order: **Apify first** — real discovery with partial signals beats perfect signals over fake reels. Then Rekognition (biggest false-positive reducer), then Hive.
+
+#### Status
+
+- [x] Plan agreed (2026-07-02) — waiting on account/key acquisition: `APIFY_TOKEN`, AWS Rekognition key pair, `HIVE_API_KEY`
+- [ ] Build `lib/monitor/ingest/instagram.ts` (Apify client + term builder)
+- [ ] Build `lib/monitor/detectors/face.ts` (Rekognition via aws4fetch) + collection seeding job
+- [ ] Build `lib/monitor/detectors/synthetic.ts` (Hive)
+- [ ] Flip scan to async + client polling; surface `monitor_scans.error` in the UI
+- [ ] Extend adjudicator prompt for missing-signal candour ("face match unavailable — verdict from caption/metadata only")
+
+### 18.5 Deferred
 
 - [ ] Scheduled sweeps (cron worker) driving the "continuous monitoring" toggle end-to-end
 - [ ] Rep read-only monitor view from the roster
 - [ ] Takedown enforcement queue (DMCA notice drafting — AI-generated, human-approved)
-- [ ] Real detector integrations (perceptual hash index, face-embedding search, C2PA provenance checks)
+- [ ] TikTok / YouTube Shorts / X discovery (same 3-stage shape; Apify has actors for each)
+- [ ] Perceptual hash index from scan stills; C2PA provenance checks
+- [ ] Video-frame sampling (thumbnails only in v1 of true-signal detection)
