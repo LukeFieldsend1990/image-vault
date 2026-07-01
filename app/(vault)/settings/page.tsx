@@ -402,7 +402,7 @@ export default async function SettingsPage({
       {user?.role === "talent" && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>
-            AI &amp; Likeness Licensing
+            RSL — AI Likeness Licensing
           </h2>
           <Link href="/settings/rsl" className="flex items-center justify-between text-sm" style={{ color: "var(--color-ink)" }}>
             <span>Consent rules, public profile, Human Consent ID &amp; AI rate card</span>
@@ -411,7 +411,8 @@ export default async function SettingsPage({
             </svg>
           </Link>
           <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
-            Control how AI may use your likeness — and what it costs.
+            The open <strong>RSL</strong> (Really Simple Licensing) standard for AI use of your likeness — separate from
+            your Image Vault production licences.
           </p>
         </div>
       )}
