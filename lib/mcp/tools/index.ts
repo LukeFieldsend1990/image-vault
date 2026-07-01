@@ -10,3 +10,4 @@ import "./administration";
 import "./onboarding";
 import "./production-cast";
 import "./tmdb-cast";
+import "./likeness-monitor";

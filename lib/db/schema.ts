@@ -1487,6 +1487,58 @@ export const castClaimDismissals = sqliteTable("cast_claim_dismissals", {
   dismissedAt: integer("dismissed_at").notNull(),
 });
 
+// ── Likeness Monitoring ────────────────────────────────────────────────────
+// AI-adjudicated detection of unauthorised likeness usage on public
+// short-form platforms. One monitor per talent; scans sweep the platform
+// list, adjudicate candidates via callAi(), and persist hits for triage.
+
+export const likenessMonitors = sqliteTable("likeness_monitors", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["active", "paused"] }).notNull().default("active"),
+  sensitivity: text("sensitivity", { enum: ["strict", "balanced", "relaxed"] }).notNull().default("balanced"),
+  lastScanAt: integer("last_scan_at"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const monitorScans = sqliteTable("monitor_scans", {
+  id: text("id").primaryKey(),
+  monitorId: text("monitor_id").notNull().references(() => likenessMonitors.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  trigger: text("trigger", { enum: ["manual", "scheduled"] }).notNull().default("manual"),
+  status: text("status", { enum: ["running", "complete", "error"] }).notNull().default("running"),
+  platformsChecked: integer("platforms_checked").notNull().default(0),
+  candidatesAnalysed: integer("candidates_analysed").notNull().default(0),
+  hitsFound: integer("hits_found").notNull().default(0),
+  aiProvider: text("ai_provider"), // ai | heuristic
+  error: text("error"),
+  startedAt: integer("started_at").notNull(),
+  completedAt: integer("completed_at"),
+});
+
+export const likenessHits = sqliteTable("likeness_hits", {
+  id: text("id").primaryKey(),
+  scanId: text("scan_id").notNull().references(() => monitorScans.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  platform: text("platform").notNull(), // instagram | tiktok | youtube | x
+  contentType: text("content_type", { enum: ["reel", "short", "video", "post"] }).notNull().default("reel"),
+  contentUrl: text("content_url").notNull(),
+  authorHandle: text("author_handle"),
+  caption: text("caption"),
+  confidence: integer("confidence").notNull(), // 0-100 likeness match confidence
+  aiGeneratedLikelihood: integer("ai_generated_likelihood").notNull(), // 0-100
+  riskLevel: text("risk_level", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
+  matchSignalsJson: text("match_signals_json").notNull().default("[]"), // JSON string[]
+  aiRationale: text("ai_rationale"),
+  status: text("status", {
+    enum: ["new", "confirmed", "dismissed", "takedown_requested", "resolved"],
+  }).notNull().default("new"),
+  statusUpdatedBy: text("status_updated_by").references(() => users.id),
+  statusUpdatedAt: integer("status_updated_at"),
+  detectedAt: integer("detected_at").notNull(),
+});
+
 export const emailLog = sqliteTable("email_log", {
   id: text("id").primaryKey(), // UUID
   toAddress: text("to_address").notNull(), // comma-separated if multiple recipients

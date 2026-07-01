@@ -136,6 +136,19 @@ export const CONCEPTS: ConceptEntry[] = [
     related: ["audit-log", "admin-panel"],
   },
   {
+    id: "likeness-monitoring",
+    name: "Likeness Monitoring",
+    summary: "AI-adjudicated detection of unauthorised likeness usage on public short-form platforms, with talent alerting and takedown triage.",
+    details:
+      "One likenessMonitors row per talent; each scan sweeps the platform registry (Instagram Reels, TikTok, YouTube Shorts, X, plus search/stock/AI-gen surfaces), " +
+      "generates detector-scored candidates (face-embedding similarity, perceptual hash distance, geometry-fingerprint correlation, synthetic-media score — simulated crawler stage), " +
+      "and adjudicates them via callAi() with heuristic-threshold fallback. Hits persist to likenessHits with confidence, risk level and rationale; " +
+      "new hits notify the talent and their reps in-app and email the content link. Triage transitions: new → confirmed/dismissed/takedown_requested/resolved. " +
+      "Talent UI at /vault/monitor (gated with the royalty-meter flag); admin visibility via the list_likeness_hits MCP tool.",
+    codePaths: ["lib/monitor/", "app/api/monitor/", "app/(vault)/vault/monitor/", "lib/mcp/tools/likeness-monitor.ts"],
+    related: ["ai-infrastructure", "vault-packages", "security-model"],
+  },
+  {
     id: "audit-log",
     name: "Audit Log",
     summary: "Unified admin event stream assembled from downloads, bridge events, grants, licences, signups, packages, invites and password resets.",
