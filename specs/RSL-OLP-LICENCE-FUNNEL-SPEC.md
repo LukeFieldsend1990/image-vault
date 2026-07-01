@@ -64,6 +64,9 @@ AI → POST /olp/token (amber)
 - A **machine-side accept** endpoint so the AI can agree to terms across the API boundary.
 - **Credential handoff**: deliver the `rsk_` royalty key (not just the consent token) via the OLP poll.
 - **Consent-withdrawal cascade**: revoke/posture-red/vault-lock also revokes the `royaltySources` row so metering stops.
+- A **required bot contact email** + claimable-stub email verification.
+- An **admin control console** (`/admin/rsl`) over the whole rail — kill switches, clients, rate cards, usage caps, request overrides (§9).
+- **Metered-dashboard labelling** so OLP earnings are distinguishable in `/royalties` — accrual, feed, and splits already flow through the existing rails (§10).
 
 ---
 
@@ -89,6 +92,8 @@ pending_review  → offered → accepted → granted        (happy path)
 | `denied` | `DENIED`/`REVOKED` | refused or withdrawn |
 
 ### 2. Licensee identity — claimable stub
+
+**A contact email is required.** The bot's request MUST carry a `contact_email` (self-declared, untrusted) on any amber/funnel path — it's how we reach the licensee's owner, send the claim/verify link, and give the talent/admin someone to contact. A request that reaches amber with no `contact_email` is rejected `400 invalid_request` ("a contact_email is required to license this likeness"). Red/denied requests never need one. The email is treated as **unverified** until the stub is claimed (email-verified) via the existing invite flow; the admin panel shows verified vs unverified plainly.
 
 On the **first** amber request from a client (deduped by normalised `client_id`, else `contact_email`):
 
@@ -171,9 +176,34 @@ The AI meters use with `Authorization: Bearer rsk_…` at `/api/royalties/usage`
 
 Extend the withdrawal path (already honoured for tokens in `introspect`): when a talent unpublishes / posture→red / vault-locks / admin-revokes, also set the linked `royaltySources.status = "revoked"` so **metering stops immediately** (the usage endpoint already rejects revoked sources). Belt-and-braces with the introspect re-check.
 
-### 8. Surfacing
+### 8. Surfacing (talent/rep)
 
-The PENDING licence appears in `/vault/requests` natively. Enhancement: when `source = "olp"`, badge it "AI licence · via RSL", show the client identity + that it's metered/likeness, and (if a rate card exists) a one-click **Approve at my rate**. The existing admin `/admin/rsl` OLP panel stays as the operator view.
+The PENDING licence appears in `/vault/requests` natively. Enhancement: when `source = "olp"`, badge it "AI licence · via RSL", show the **client identity + contact email** and that it's metered/likeness, and (if a rate card exists) a one-click **Approve at my rate**. The talent also sees the resulting earnings in their existing `/royalties` dashboard (§10).
+
+### 9. Admin control surface (`/admin/rsl`)
+
+Everything in this funnel is operable and overridable by an admin — `/admin/rsl` becomes the single console for the whole AI-licensing rail, extending the existing approve/deny panel. Admin (whitelist) can:
+
+- **Global kill switch** — `rsl_settings.olp_enabled` and `auto_accept_enabled` (platform-wide). Off = the token endpoint stops issuing/creating; a hard stop independent of any talent setting.
+- **OLP requests / licences** — list + filter (pending / offered / accepted / granted / denied) across all talent; **approve, deny, or override** any request; force-expire; re-issue or **revoke a credential** (flips `royaltySources.status='revoked'` → metering stops).
+- **Rate cards** — view/edit **any** talent's `rsl_rate_cards`, and force `auto_accept` off per-talent or globally.
+- **Licensee stubs** — list AI clients, see verified-vs-unverified + contact email, **verify/claim, suspend, or block** a client (blocked client → all future token calls denied); see every licence/source per client.
+- **Usage caps** — set a per-source or per-client usage ceiling (the credit-risk stopgap, §Security).
+- **Metered oversight** — an admin metered view (§10) of all OLP-originated sources: accrual, splits, top clients, anomalies.
+- **Audit** — every admin action (approve/deny/revoke/verify/block/cap) is logged; reuses the existing admin-action audit pattern.
+
+Implementation: expand `app/(vault)/admin/rsl/` with tabbed sections (Requests · Rate cards · Clients · Usage · Settings) over new admin APIs under `app/api/admin/rsl/*`. All gated by `isAdmin` (same whitelist as the rest of `/admin`).
+
+### 10. Metered dashboard integration
+
+Because the funnel issues real `royaltySources` rows, **OLP earnings flow into the existing metered dashboard automatically** — no parallel reporting. Specifically:
+
+- **Talent** `/royalties` (`royalties-client.tsx` → `/api/royalties/summary`, `/feed`, `/sources`) already reads `royaltySources` + `usageEvents`; an OLP-originated source shows up there as soon as it's created. Enhancement: tag sources with `origin: "olp"` + the client name so the dashboard labels "AI licence (RSL)" rows and filters by them.
+- **Live feed** — OLP metering events (`POST /api/royalties/usage`) already land in `/api/royalties/feed`, so the real-time meter reflects AI usage with no change.
+- **Admin** — an admin metered view aggregates OLP sources platform-wide (total accrual, per-client, per-talent, platform-fee take), surfaced under `/admin/rsl` (§9) and/or the existing `/admin/financial`.
+- **Splits** unchanged — `computeRoyalty` (80/10/10 default via `talentSettings`) applies identically to OLP usage.
+
+The only new plumbing is the `origin`/`client` labelling so AI-sourced revenue is *distinguishable* in the dashboard — the accrual, feed, and splits are the same rails the metered dashboard already runs.
 
 ---
 
@@ -184,18 +214,22 @@ The PENDING licence appears in `/vault/requests` natively. Enhancement: when `so
 - **`licences.source`** TEXT nullable (`"olp"`) — migration `0094` (additive).
 - **`users.unclaimedAt`** INTEGER nullable — migration `0095` (additive).
 - **`rsl_license_requests`**: add `accepted_at` INTEGER; extend `status` enum with `offered`, `accepted` (app-level; TEXT column) — migration `0096` for `accepted_at`.
+- **`rsl_settings`** (singleton) — `olp_enabled`, `auto_accept_enabled` platform kill switches — migration `0097`.
+- **`royaltySources`**: add `origin` TEXT nullable (`"olp"`) + `clientId` TEXT nullable (for dashboard labelling/filtering) + `usageCapUnits` INTEGER nullable (credit stopgap) — migration `0098` (additive).
+- **licensee stub**: add `blockedAt` INTEGER nullable on the client/org (or `users`) so admin can hard-block a bot — migration `0099`.
 - App-enum-only (no DB migration): `deliveryMode += "metered_api"`, `orgType += "ai_licensee"`.
 
 ## Endpoints (new / changed)
 
 | Endpoint | Change |
 |---|---|
-| `POST /api/rsl/olp/token` | amber path now provisions licensee stub + creates PENDING licence + links request; returns offer (rate card if present); auto-approves when green + autoAccept. |
+| `POST /api/rsl/olp/token` | **requires `contact_email`** on amber (else `400`); provisions licensee stub + creates PENDING licence + links request; returns offer (rate card if present); auto-approves when green + autoAccept + platform kill-switch on. |
 | `POST /api/rsl/olp/requests/[id]/accept` | **new** — AI accepts current terms. |
 | `GET /api/rsl/olp/requests/[id]` | returns `offer` + status; delivers `royalty_key` (not just token) once on `granted`. |
 | `POST /api/rsl/requests/[id]` (grant) | grant now **approves the linked licence** + issues royalty key. |
 | `GET/PUT /api/rsl/rate-card` | **new** — talent (self/rep/admin) manages the rate card. |
-| `POST /api/royalties/usage` | unchanged (already the metering rail). |
+| `GET/POST /api/admin/rsl/*` | **new** — admin console APIs: `settings` (kill switches), `clients` (verify/suspend/block), `rate-cards`, `usage` (caps + metered oversight), `requests` (override/revoke). All `isAdmin`. |
+| `POST /api/royalties/usage` | unchanged (already the metering rail; honours `royaltySources.status` + usage cap). |
 
 ## Security & abuse
 
