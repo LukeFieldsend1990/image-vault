@@ -1,6 +1,6 @@
 # Spec — Funnelling OLP "permitted-with-terms" requests into Image Vault licences (Phase 2.5)
 
-**Status:** proposed · **Author:** Luke + Claude · **Date:** 2026-06-30
+**Status:** proposed · all open decisions resolved (see Decisions §) · ready to build 2.5a · **Author:** Luke + Claude · **Date:** 2026-06-30
 **Builds on:** `specs/RSL-CONSENT-REGISTRY-SPEC.md` (Phases 1–3, merged). This is the deferred **Phase 2.5** — turning a machine consent grant into a real, negotiable, billable licence.
 
 ---
@@ -137,12 +137,14 @@ rsl_rate_cards(
   upfrontFeePence,                       // nullable
   termDays default 365,
   autoAccept default 0,                  // green + this ⇒ auto-license, no human
-  currency default 'GBP',
+  currency default 'USD',                // single platform currency (see note)
   active default 1,
   createdAt, updatedAt,
   UNIQUE(talentId, useCategoryId)
 )
 ```
+
+> **Money & currency.** The Image Vault currency is **USD — dollars + cents**, single-currency. All amounts stay **integer cents** (minor units); the existing `*Pence` column names (`unitRatePence`, `proposedFee`, …) are a **legacy misnomer — read them as "cents"**, and format for display as USD (`$1,234.56`). No DB rename in this spec; a follow-on can de-anglicise the naming. No multi-currency / FX.
 
 Decision matrix (posture × rate card):
 
@@ -251,10 +253,10 @@ Actual payment **capture** (invoice / prepaid / card), licensee **KYC/verificati
 | **2.5b — Auto-license** | green + `autoAccept` fast path + machine `accept` endpoint + withdrawal→royalty revoke cascade. |
 | **2.5c — Billing** | the settlement follow-on (payment capture, usage caps, KYC). |
 
-## Open questions
+## Decisions (resolved)
 
-1. **Confirm the four assumptions** above (licensee stub / likeness-metered / rate-card pricing / payment-out-of-scope).
-2. **Term default** — 365 days per OLP licence, talent-overridable? Auto-renew or expire-and-re-request?
-3. **Currency** — GBP only initially (pence is the unit throughout), or multi-currency from day one?
-4. **Usage cap stopgap** — do we want a per-source usage ceiling before real payment capture exists, to bound credit risk?
-5. **Stub claim** — email the `contact_email` a claim link immediately, or only once a licence is approved?
+1. ✅ **Four core assumptions confirmed** — auto-provisioned claimable licensee stub · packageless likeness-metered licence · published-rate-instant-else-human pricing · funnel + metering in scope, payment capture deferred.
+2. ✅ **Term** — 365 days per OLP licence, talent-overridable via the rate card; **expire-and-re-request** (no silent auto-renew, so consent is re-affirmed each term).
+3. ✅ **Currency** — **USD, dollars + cents**, single-currency; amounts are integer cents (see "Money & currency" note); no multi-currency/FX.
+4. ✅ **Usage-cap stopgap** — **yes**, a per-source usage ceiling (admin-settable, §9) to bound credit risk until payment capture ships.
+5. ✅ **Stub claim email** — sent **only once a licence is approved** (no email on casual/unapproved requests).
