@@ -38,6 +38,13 @@ function viewModel(
   else if (p.publishOptIn && !p.adminApproved) status = "awaiting_approval";
   else status = "not_published";
 
+  // Flag if the current posture has drifted from what was in effect when the
+  // HCR ID was linked — the talent may need to update their registry listing.
+  const hcrDiverged =
+    !!p.humanConsentId &&
+    !!p.hcrPostureOverall &&
+    p.hcrPostureOverall !== posture.overall;
+
   return {
     publishOptIn: p.publishOptIn,
     adminApproved: p.adminApproved,
@@ -45,6 +52,7 @@ function viewModel(
     profession: p.profession,
     links: parseLinks(p.linksJson),
     humanConsentId: p.humanConsentId,
+    hcrDiverged,
     status,
     publicUrl: live && p.publicSlug ? consentProfileUrl(p.publicSlug) : null,
     posture,
@@ -115,11 +123,15 @@ export async function PATCH(req: NextRequest) {
     if (raw === null || raw === "") {
       updates.humanConsentId = null;
       updates.registryStatus = "not_linked";
+      updates.hcrPostureOverall = null;
     } else {
       const hcid = normalizeHumanConsentId(raw);
       if (!hcid) return NextResponse.json({ error: "Invalid Human Consent ID" }, { status: 400 });
       updates.humanConsentId = hcid;
       updates.registryStatus = "linked";
+      // Snapshot the current posture so we can detect drift later.
+      const currentPosture = await derivePosture(db, session.sub);
+      updates.hcrPostureOverall = currentPosture.overall;
     }
   }
 

@@ -1383,6 +1383,9 @@ export const rslProfiles = sqliteTable("rsl_profiles", {
   licenseServerEnabled: integer("license_server_enabled", { mode: "boolean" }).notNull().default(false),
   humanConsentId: text("human_consent_id"),
   registryStatus: text("registry_status", { enum: ["not_linked", "pending", "linked", "error"] }).notNull().default("not_linked"),
+  // Posture snapshot taken when the HCR ID was linked. If the current derived
+  // posture diverges from this, the talent should update their HCR listing.
+  hcrPostureOverall: text("hcr_posture_overall"),
   createdAt: integer("created_at").notNull(), // unix seconds
   updatedAt: integer("updated_at").notNull(), // unix seconds
 });
