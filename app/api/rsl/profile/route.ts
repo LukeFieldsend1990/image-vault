@@ -13,6 +13,7 @@ import {
 import { derivePosture } from "@/lib/rsl/posture";
 import { isPublic } from "@/lib/rsl/visibility";
 import { normalizeHumanConsentId } from "@/lib/rsl/registry";
+import { revokeRoyaltySourcesForTalent } from "@/lib/rsl/olp";
 
 /**
  * The talent's own RSL consent-profile controls. A talent manages only their
@@ -136,6 +137,11 @@ export async function PATCH(req: NextRequest) {
   }
 
   await db.update(rslProfiles).set(updates).where(eq(rslProfiles.talentId, session.sub));
+
+  // Unpublishing withdraws consent — stop any live OLP metering.
+  if (updates.publishOptIn === false) {
+    await revokeRoyaltySourcesForTalent(db, session.sub);
+  }
 
   const profile = await getRslProfile(db, session.sub);
   const userRow = await db

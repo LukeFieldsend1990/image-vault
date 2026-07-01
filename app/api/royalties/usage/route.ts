@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { licences, talentSettings, usageEvents } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { licences, talentSettings, usageEvents, royaltySources } from "@/lib/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 import { requireRoyaltySource, isRoyaltySourceError } from "@/lib/auth/requireRoyaltySource";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
 import { computeRoyalty, DEFAULT_SPLIT, type SplitPcts } from "@/lib/royalties/split";
@@ -75,6 +75,28 @@ export async function POST(req: NextRequest) {
       { error: "Licence does not permit AI/likeness generation" },
       { status: 403 },
     );
+  }
+
+  // OLP credit stopgap: enforce a per-source usage ceiling if set (bounds how
+  // much an AI client can accrue before payment capture exists).
+  const src = await db
+    .select({ cap: royaltySources.usageCapUnits })
+    .from(royaltySources)
+    .where(eq(royaltySources.id, auth.sourceId))
+    .get();
+  if (src?.cap != null) {
+    const usedRow = await db
+      .select({ total: sql<number>`coalesce(sum(${usageEvents.units}), 0)` })
+      .from(usageEvents)
+      .where(eq(usageEvents.sourceId, auth.sourceId))
+      .get();
+    const used = usedRow?.total ?? 0;
+    if (used + units > src.cap) {
+      return NextResponse.json(
+        { error: "usage_cap_exceeded", cap: src.cap, used },
+        { status: 402 },
+      );
+    }
   }
 
   // SAG-AFTRA 39.G — refuse to meter a use while a covering strike is active.
