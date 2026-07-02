@@ -4,8 +4,8 @@
 // is never mandated. Match status is derived at read time (never stored) so a member
 // flips to "on platform" the moment they onboard.
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { talentProfiles, unionMembers, users } from "@/lib/db/schema";
+import { and, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { licences, organisations, scanPackages, talentProfiles, talentReps, unionMembers, users } from "@/lib/db/schema";
 import { normaliseName } from "./watchlist";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { getUnionIdsForUser } from "./grants";
@@ -22,6 +22,10 @@ export interface MemberRow {
   matchedTalentId: string | null;
   matchedEmail: string | null;
   unionAffiliation: string | null;
+  packagesHeld: number;
+  licencesHeld: number;
+  activeProductionCount: number;
+  primaryAgent: string | null;
 }
 
 export interface MemberRoster {
@@ -74,18 +78,89 @@ export async function buildMemberRoster(db: Db, unionId: string): Promise<Member
 
   const byName = await loadTalentByName(db);
 
+  // Identify matched user IDs so we can batch-fetch enrichment data.
+  const matchedUserIds = [...new Set(
+    rows.map((r) => byName.get(normaliseName(r.name))?.userId).filter((id): id is string => !!id)
+  )];
+
+  // Batch-fetch packages, licences, active productions, and primary agent for matched users.
+  const packageCounts = new Map<string, number>();
+  const licenceCounts = new Map<string, number>();
+  const productionCounts = new Map<string, number>();
+  const primaryAgents = new Map<string, string>();
+
+  if (matchedUserIds.length > 0) {
+    const ACTIVE_STATUSES = ["APPROVED", "PENDING", "AWAITING_PACKAGE"] as const;
+
+    const [pkgRows, licRows, prodRows, repRows] = await Promise.all([
+      db.select({ talentId: scanPackages.talentId, cnt: count() })
+        .from(scanPackages)
+        .where(and(inArray(scanPackages.talentId, matchedUserIds), eq(scanPackages.status, "ready")))
+        .groupBy(scanPackages.talentId)
+        .all(),
+
+      db.select({ talentId: licences.talentId, cnt: count() })
+        .from(licences)
+        .where(and(inArray(licences.talentId, matchedUserIds), inArray(licences.status, ACTIVE_STATUSES)))
+        .groupBy(licences.talentId)
+        .all(),
+
+      db.select({ talentId: licences.talentId, productionId: licences.productionId })
+        .from(licences)
+        .where(and(
+          inArray(licences.talentId, matchedUserIds),
+          isNotNull(licences.productionId),
+          inArray(licences.status, ACTIVE_STATUSES),
+        ))
+        .all(),
+
+      db.select({ talentId: talentReps.talentId, repEmail: users.email, agencyName: organisations.name })
+        .from(talentReps)
+        .leftJoin(users, eq(talentReps.repId, users.id))
+        .leftJoin(organisations, eq(talentReps.agencyOrgId, organisations.id))
+        .where(inArray(talentReps.talentId, matchedUserIds))
+        .orderBy(desc(talentReps.createdAt))
+        .all(),
+    ]);
+
+    for (const r of pkgRows) packageCounts.set(r.talentId, r.cnt);
+    for (const r of licRows) licenceCounts.set(r.talentId, r.cnt);
+
+    // Count distinct production IDs per talent.
+    const prodSeen = new Map<string, Set<string>>();
+    for (const r of prodRows) {
+      if (!r.productionId) continue;
+      const s = prodSeen.get(r.talentId) ?? new Set<string>();
+      s.add(r.productionId);
+      prodSeen.set(r.talentId, s);
+    }
+    for (const [tid, s] of prodSeen) productionCounts.set(tid, s.size);
+
+    // Pick the most recent rep per talent (rows are ordered desc by createdAt).
+    for (const r of repRows) {
+      if (!primaryAgents.has(r.talentId)) {
+        primaryAgents.set(r.talentId, r.agencyName ?? r.repEmail ?? "");
+      }
+    }
+  }
+
   let onPlatform = 0;
   const members: MemberRow[] = rows.map((r) => {
     const match = byName.get(normaliseName(r.name));
     if (match) onPlatform++;
+    const uid = match?.userId ?? null;
     return {
       id: r.id,
       name: r.name,
       addedAt: r.addedAt,
       onPlatform: !!match,
-      matchedTalentId: match?.userId ?? null,
+      matchedTalentId: uid,
       matchedEmail: match?.email ?? null,
       unionAffiliation: match?.unionAffiliation ?? null,
+      packagesHeld: uid ? (packageCounts.get(uid) ?? 0) : 0,
+      licencesHeld: uid ? (licenceCounts.get(uid) ?? 0) : 0,
+      activeProductionCount: uid ? (productionCounts.get(uid) ?? 0) : 0,
+      primaryAgent: uid ? (primaryAgents.get(uid) ?? null) : null,
     };
   });
 

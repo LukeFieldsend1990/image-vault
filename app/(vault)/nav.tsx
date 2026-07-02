@@ -404,6 +404,19 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
+    // Union team management — invite/remove users who share this union's compliance
+    // surfaces. Same unionWatcher gate as Members.
+    href: "/union-team",
+    label: "Team",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="7" r="4" />
+        <path d="M5.5 21v-2a6.5 6.5 0 0 1 13 0v2" />
+        <path d="M17 11l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: (
@@ -500,10 +513,10 @@ export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterE
   if (isComplianceRole(role) && !platformOversight && !unionWatcher) {
     base = base.filter((item) => item.href !== "/watchlist");
   }
-  // The Member roster is union-owned (one list per union). Only a union watcher
-  // maintains it — a platform-wide regulator has no union, so hide it from them.
+  // The Member roster and Team management are union-owned (one list per union). Only
+  // a union watcher maintains them — a platform-wide regulator has no union.
   if (isComplianceRole(role) && !unionWatcher) {
-    base = base.filter((item) => item.href !== "/members");
+    base = base.filter((item) => item.href !== "/members" && item.href !== "/union-team");
   }
   // Insurer watchers (compliance role with an insurer grant) get the Underwriting
   // surface, placed first as their primary landing.
