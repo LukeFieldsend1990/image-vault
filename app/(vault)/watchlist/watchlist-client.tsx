@@ -24,6 +24,8 @@ interface WatchlistEntry {
   matchedProductionId: string | null;
   matchedProductionName: string | null;
   matchedStatus: string | null;
+  matchedCompanyName: string | null;
+  matchedType: string | null;
 }
 
 interface UnionOption { id: string; shortName: string }
@@ -40,7 +42,13 @@ interface Candidate {
 }
 
 const STAGE_LABELS: Record<string, string> = {
-  development: "Development", pre_production: "Pre-production", production: "In production", unknown: "Stage unknown",
+  development: "Development",
+  pre_production: "Pre-production",
+  production: "In production",
+  post_production: "Post-production",
+  released: "Released",
+  cancelled: "Cancelled",
+  unknown: "Stage unknown",
 };
 const TYPE_LABELS: Record<string, string> = {
   film: "Feature Film", tv_series: "TV Series", tv_movie: "TV Movie",
@@ -247,9 +255,9 @@ function EntryRow({ entry, onChanged }: { entry: WatchlistEntry; onChanged: () =
             )}
           </h2>
           <p className="text-xs mt-0.5 truncate" style={{ color: "var(--color-muted)" }}>
-            {entry.companyName ?? "Company unknown"}
-            {entry.type ? ` · ${TYPE_LABELS[entry.type] ?? entry.type}` : ""}
-            {` · ${STAGE_LABELS[entry.expectedStage] ?? entry.expectedStage}`}
+            {(entry.ratified ? (entry.matchedCompanyName ?? entry.companyName) : entry.companyName) ?? "Company unknown"}
+            {(() => { const t = entry.ratified ? (entry.matchedType ?? entry.type) : entry.type; return t ? ` · ${TYPE_LABELS[t] ?? t}` : ""; })()}
+            {(() => { const s = entry.ratified ? (entry.matchedStatus ?? entry.expectedStage) : entry.expectedStage; return ` · ${STAGE_LABELS[s] ?? s}`; })()}
             {entry.expectedStartDate ? ` · expected ${fmtDate(entry.expectedStartDate)}` : ""}
           </p>
         </div>

@@ -12,6 +12,10 @@ interface MemberRow {
   matchedTalentId: string | null;
   matchedEmail: string | null;
   unionAffiliation: string | null;
+  packagesHeld: number;
+  licencesHeld: number;
+  activeProductionCount: number;
+  primaryAgent: string | null;
 }
 
 interface UnionOption { id: string; shortName: string }
@@ -227,8 +231,14 @@ export default function MembersClient() {
                     </span>
                   )}
                 </div>
-                {m.onPlatform && m.matchedEmail && (
-                  <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>{m.matchedEmail}</p>
+                {m.onPlatform && (
+                  <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>
+                    {m.matchedEmail}
+                    {m.primaryAgent ? ` · ${m.primaryAgent}` : ""}
+                    {m.packagesHeld > 0 ? ` · ${m.packagesHeld} pkg${m.packagesHeld !== 1 ? "s" : ""}` : ""}
+                    {m.licencesHeld > 0 ? ` · ${m.licencesHeld} licence${m.licencesHeld !== 1 ? "s" : ""}` : ""}
+                    {m.activeProductionCount > 0 ? ` · ${m.activeProductionCount} production${m.activeProductionCount !== 1 ? "s" : ""}` : ""}
+                  </p>
                 )}
               </div>
               {m.onPlatform ? (

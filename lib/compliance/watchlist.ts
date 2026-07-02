@@ -7,7 +7,7 @@
 // "on Image Vault" automatically the moment a matching production is registered.
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { productionWatchlist, productions, users } from "@/lib/db/schema";
+import { productionCompanies, productionWatchlist, productions, users } from "@/lib/db/schema";
 import type { getDb } from "@/lib/db";
 
 type Db = ReturnType<typeof getDb>;
@@ -32,6 +32,8 @@ export interface WatchlistEntry {
   matchedProductionId: string | null;
   matchedProductionName: string | null;
   matchedStatus: string | null;
+  matchedCompanyName: string | null;
+  matchedType: string | null;
 }
 
 // Exported for tests — the matcher that decides whether a watchlist entry has been
@@ -56,10 +58,18 @@ export async function buildWatchlist(db: Db, unionIds?: string[]): Promise<Watch
     .all();
   if (entries.length === 0) return [];
 
-  // Productions to match against — only the fields we need for matching + display.
+  // Productions to match against — fields needed for matching + display enrichment.
   const prodRows = await db
-    .select({ id: productions.id, name: productions.name, tmdbId: productions.tmdbId, status: productions.status })
+    .select({
+      id: productions.id,
+      name: productions.name,
+      tmdbId: productions.tmdbId,
+      status: productions.status,
+      type: productions.type,
+      companyName: productionCompanies.name,
+    })
     .from(productions)
+    .leftJoin(productionCompanies, eq(productions.companyId, productionCompanies.id))
     .all();
   const byTmdb = new Map<number, (typeof prodRows)[number]>();
   const byName = new Map<string, (typeof prodRows)[number]>();
@@ -98,6 +108,8 @@ export async function buildWatchlist(db: Db, unionIds?: string[]): Promise<Watch
       matchedProductionId: match?.id ?? null,
       matchedProductionName: match?.name ?? null,
       matchedStatus: match?.status ?? null,
+      matchedCompanyName: match?.companyName ?? null,
+      matchedType: match?.type ?? null,
     };
   });
 }
