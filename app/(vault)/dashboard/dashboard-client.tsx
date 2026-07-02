@@ -1101,7 +1101,7 @@ export default function DashboardClient() {
               Royalty earnings →
             </p>
             <p className="text-sm font-semibold mt-0.5 tabular-nums group-hover:underline" style={{ color: "var(--color-ink)" }}>
-              £{(royaltyLifetimePence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${(royaltyLifetimePence / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </Link>
         )}

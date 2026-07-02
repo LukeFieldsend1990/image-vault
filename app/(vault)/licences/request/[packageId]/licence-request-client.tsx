@@ -25,7 +25,7 @@ const LICENCE_TYPES: LicenceTypeOption[] = [
     id: "film_double",
     label: "Film / Double",
     description: "Stunt, background, or digital double for screen productions",
-    feeGuidance: "Typical: £5,000 – £50,000+",
+    feeGuidance: "Typical: $5,000 – $50,000+",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="7" width="20" height="15" rx="2" />
@@ -39,7 +39,7 @@ const LICENCE_TYPES: LicenceTypeOption[] = [
     id: "game_character",
     label: "Game Character",
     description: "3D modelling for interactive entertainment and game development",
-    feeGuidance: "Typical: £2,000 – £25,000",
+    feeGuidance: "Typical: $2,000 – $25,000",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <line x1="6" y1="12" x2="10" y2="12" />
@@ -54,7 +54,7 @@ const LICENCE_TYPES: LicenceTypeOption[] = [
     id: "commercial",
     label: "Commercial / Advertising",
     description: "Brand campaigns, product placement, or promotional content",
-    feeGuidance: "Typical: £3,000 – £15,000",
+    feeGuidance: "Typical: $3,000 – $15,000",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
@@ -65,7 +65,7 @@ const LICENCE_TYPES: LicenceTypeOption[] = [
     id: "ai_avatar",
     label: "AI Avatar / Virtual Self",
     description: "Personal digital assistant, metaverse presence, or interactive replica",
-    feeGuidance: "Typical: £10,000 – £100,000",
+    feeGuidance: "Typical: $10,000 – $100,000",
     aiImplied: true,
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -80,7 +80,7 @@ const LICENCE_TYPES: LicenceTypeOption[] = [
     id: "training_data",
     label: "AI Training Data",
     description: "Dataset inclusion for machine learning model training",
-    feeGuidance: "Typical: £20,000 – £200,000+",
+    feeGuidance: "Typical: $20,000 – $200,000+",
     aiImplied: true,
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -94,7 +94,7 @@ const LICENCE_TYPES: LicenceTypeOption[] = [
     id: "monitoring_reference",
     label: "Identity / Security Reference",
     description: "Biometric identity verification or security monitoring systems",
-    feeGuidance: "Typical: £1,000 – £10,000",
+    feeGuidance: "Typical: $1,000 – $10,000",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -506,7 +506,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
                 className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm"
                 style={{ color: "var(--color-muted)" }}
               >
-                £
+                $
               </span>
               <input
                 type="number"
@@ -649,7 +649,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "var(--color-muted)" }}>
-                  Rate (£ per unit)
+                  Rate ($ per unit)
                 </label>
                 <input
                   type="number"
@@ -665,7 +665,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
             </div>
             {proposedUnitRatePounds && (
               <p className="text-[11px] mt-2" style={{ color: "var(--color-muted)" }}>
-                e.g. 1,000 {proposedUnitType === "per_generation" ? "generations" : proposedUnitType === "per_frame" ? "frames" : proposedUnitType === "per_second" ? "seconds" : "1k-inference batches"} = £{(parseFloat(proposedUnitRatePounds || "0") * 1000).toFixed(2)} gross · talent receives 65%
+                e.g. 1,000 {proposedUnitType === "per_generation" ? "generations" : proposedUnitType === "per_frame" ? "frames" : proposedUnitType === "per_second" ? "seconds" : "1k-inference batches"} = ${(parseFloat(proposedUnitRatePounds || "0") * 1000).toFixed(2)} gross · talent receives 65%
               </p>
             )}
           </div>
@@ -685,7 +685,7 @@ export default function LicenceRequestClient({ packageId }: { packageId: string 
 
   function renderStep4() {
     const feePence = proposedFee ? Math.round(parseFloat(proposedFee) * 100) : 0;
-    const feeDisplay = feePence > 0 ? `£${(feePence / 100).toLocaleString("en-GB")}` : "Not specified";
+    const feeDisplay = feePence > 0 ? `$${(feePence / 100).toLocaleString("en-US")}` : "Not specified";
     const typeLabel = LICENCE_TYPES.find((t) => t.id === licenceType)?.label ?? licenceType;
     const exclusivityLabel = EXCLUSIVITY_OPTIONS.find((e) => e.id === exclusivity)?.label ?? exclusivity;
 
