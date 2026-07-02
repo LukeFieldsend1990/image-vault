@@ -125,7 +125,7 @@ function formatDate(ts: number | null): string {
 }
 
 function fmtGBP(pence: number) {
-  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
 }
 
 // Map of licenceId → bridge agent status; re-fetches when the set of project-scoped licences changes.

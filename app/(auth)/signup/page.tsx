@@ -3,11 +3,15 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+// "licensee" is the legacy name for the industry role; it stays here so legacy
+// invite links that carry role=licensee still resolve to a label and a radio,
+// but it is filtered out of the self-serve list (see the render below) so new
+// production users aren't shown two identical "Industry"/"Licensee" options.
 const ROLES = [
   { value: "talent", label: "Talent", description: "Actor, performer or model storing their own scans" },
   { value: "rep", label: "Representative", description: "Agent or agency managing talent" },
   { value: "industry", label: "Industry", description: "Production company licensing scans" },
-  { value: "licensee", label: "Licensee", description: "Production company licensing scans" },
+  { value: "licensee", label: "Industry", description: "Production company licensing scans" },
 ] as const;
 
 type Role = "talent" | "rep" | "industry" | "licensee";
@@ -153,7 +157,7 @@ function SignupForm() {
               style={{ borderColor: "#991b1b", background: "rgba(153,27,27,0.06)", color: "#991b1b" }}
             >
               {inviteInfo.reason ?? "This invite link is invalid or has expired."}
-              {" "}You may still register as a Licensee below.
+              {" "}You may still register as Industry below.
             </div>
           )}
 
@@ -164,7 +168,7 @@ function SignupForm() {
                 Account type
               </label>
               <div className="space-y-2">
-                {ROLES.map((r) => {
+                {ROLES.filter((r) => r.value !== "licensee" || inviteInfo?.role === "licensee").map((r) => {
                   const needsInvite = INVITE_REQUIRED.includes(r.value) && !inviteToken;
                   const isDisabled = roleLocked ? r.value !== inviteInfo?.role : needsInvite;
                   return (

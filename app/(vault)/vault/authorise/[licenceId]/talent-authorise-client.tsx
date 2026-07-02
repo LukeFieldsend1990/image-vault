@@ -61,7 +61,7 @@ function fmtDate(unix: number) {
 }
 
 function fmtGBP(pence: number) {
-  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
 }
 
 // ── Shared: licence summary card ─────────────────────────────────────────────

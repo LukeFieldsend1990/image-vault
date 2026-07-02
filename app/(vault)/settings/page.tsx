@@ -66,7 +66,7 @@ const ROLE_LABELS: Record<Role, string> = {
   talent: "Talent",
   rep: "Representative / Agency",
   industry: "Industry",
-  licensee: "Licensee",
+  licensee: "Industry",
   admin: "Platform Admin",
 };
 
