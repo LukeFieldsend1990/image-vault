@@ -41,6 +41,7 @@ export default function UnionTeamClient() {
   const [error, setError] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteScope, setInviteScope] = useState<string>("union");
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<string | null>(null);
 
@@ -87,7 +88,7 @@ export default function UnionTeamClient() {
       const res = await fetch("/api/compliance/team", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), unionId }),
+        body: JSON.stringify({ email: inviteEmail.trim(), unionId, scope: inviteScope }),
       });
       const d = (await res.json()) as { error?: string; existing?: boolean };
       if (!res.ok || d.error) {
@@ -102,7 +103,7 @@ export default function UnionTeamClient() {
     } finally {
       setInviting(false);
     }
-  }, [inviteEmail, unionId, load]);
+  }, [inviteEmail, inviteScope, unionId, load]);
 
   const revoke = useCallback(async (id: string, label: string) => {
     if (!confirm(`Remove ${label} from the team?`)) return;
@@ -156,6 +157,16 @@ export default function UnionTeamClient() {
             className="text-sm rounded px-3 py-1.5 flex-1 min-w-[200px]"
             style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
           />
+          <select
+            value={inviteScope}
+            onChange={(e) => setInviteScope(e.target.value)}
+            className="text-xs rounded px-2 py-1.5"
+            style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
+          >
+            <option value="union">Union scope</option>
+            <option value="production">Production</option>
+            <option value="talent">Talent</option>
+          </select>
           <button type="submit" disabled={inviting || !inviteEmail.trim()}
             className="text-sm rounded px-4 py-1.5 font-medium text-white whitespace-nowrap"
             style={{ background: "var(--color-accent)", opacity: inviting || !inviteEmail.trim() ? 0.5 : 1 }}>
