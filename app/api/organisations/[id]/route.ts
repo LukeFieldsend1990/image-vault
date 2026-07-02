@@ -3,7 +3,6 @@ import { getDb } from "@/lib/db";
 import { organisations, organisationMembers, users, productions, licences, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
-import { isIndustryRole } from "@/lib/auth/roles";
 import { validateCountry } from "@/lib/organisations/country";
 import { syncOrgCountryAcrossProductions } from "@/lib/productions/vendors";
 import { eq, and, desc, inArray } from "drizzle-orm";
