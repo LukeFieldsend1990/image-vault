@@ -35,7 +35,7 @@ const UNIT_LABELS: Record<string, string> = {
 };
 
 function gbp(pence: number): string {
-  return "£" + (pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return "$" + (pence / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function relTime(unixSec: number): string {
@@ -146,7 +146,7 @@ function RoyaltyHub({ summary, pulse }: { summary: Summary; pulse: number }) {
           <CountUp pence={summary.lifetimePence} />
         </p>
         <p className="text-[11px] mt-1.5" style={{ color: "var(--color-muted)" }}>
-          {summary.eventCount.toLocaleString("en-GB")} generations
+          {summary.eventCount.toLocaleString("en-US")} generations
         </p>
         {summary.todayPence > 0 && (
           <p className="text-[11px] mt-1 font-medium tabular-nums" style={{ color: "var(--color-accent)" }}>
@@ -252,7 +252,7 @@ function LiveFeed({ initial, hasMoreInitial }: { initial: FeedEvent[]; hasMoreIn
             <div className="min-w-0">
               <p className="text-sm font-medium truncate" style={{ color: "var(--color-ink)" }}>{e.source}</p>
               <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-                {e.units.toLocaleString("en-GB")} × {UNIT_LABELS[e.eventType] ?? e.eventType} · {relTime(e.recordedAt)}
+                {e.units.toLocaleString("en-US")} × {UNIT_LABELS[e.eventType] ?? e.eventType} · {relTime(e.recordedAt)}
               </p>
             </div>
             <span className="text-sm font-semibold tabular-nums shrink-0 ml-3" style={{ color: "#059669" }}>
@@ -401,7 +401,7 @@ export default function RoyaltiesClient() {
             <Stat label="Today" value={gbp(summary.todayPence)} />
             <Stat label="Last 24h" value={gbp(summary.last24hPence)} />
             <Stat label="Lifetime" value={gbp(summary.lifetimePence)} />
-            <Stat label="Generations" value={summary.eventCount.toLocaleString("en-GB")} />
+            <Stat label="Generations" value={summary.eventCount.toLocaleString("en-US")} />
           </div>
           <div className="rounded border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
             <p className="text-[10px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--color-muted)" }}>
@@ -477,7 +477,7 @@ export default function RoyaltiesClient() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] uppercase tracking-widest font-semibold block mb-1" style={{ color: "var(--color-muted)" }}>Rate (£/unit)</label>
+                  <label className="text-[10px] uppercase tracking-widest font-semibold block mb-1" style={{ color: "var(--color-muted)" }}>Rate ($/unit)</label>
                   <input name="rate" required type="number" step="0.001" min="0.001" placeholder="0.05"
                     className="w-full text-sm rounded border px-2 py-1.5 bg-white" style={{ borderColor: "var(--color-border)" }} />
                 </div>

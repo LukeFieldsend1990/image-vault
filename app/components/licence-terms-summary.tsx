@@ -82,7 +82,7 @@ export default function LicenceTermsSummary({ terms }: { terms?: LicenceTermsVie
   const feeText =
     terms.proposedFee == null
       ? null
-      : `£${(terms.proposedFee / 100).toLocaleString()}`;
+      : `$${(terms.proposedFee / 100).toLocaleString()}`;
 
   return (
     <div
