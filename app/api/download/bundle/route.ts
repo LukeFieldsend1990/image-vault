@@ -12,8 +12,13 @@ interface DownloadToken {
   licenceId: string;
   fileId: string;
   licenseeId: string;
+  downloadEventId?: string; // absent on legacy tokens issued before per-serve scoping
   expiresAt: number;
 }
+
+// A licence must be actively APPROVED to serve bytes — revocation (SCRUB_PERIOD)
+// and expiry (EXPIRED/CLOSED) must cut access even while dl_tokens live in KV.
+const SERVEABLE_STATUS = "APPROVED";
 
 // ── CRC-32 ────────────────────────────────────────────────────────────────────
 
@@ -247,7 +252,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
-  // Confirm licence not revoked
+  // Confirm the licence is still serveable (revoked/expired licences flip out of APPROVED)
   const [licence] = await db
     .select({ status: licences.status })
     .from(licences)
@@ -255,8 +260,8 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .all();
 
-  if (!licence || licence.status === "REVOKED") {
-    return NextResponse.json({ error: "Licence has been revoked" }, { status: 410 });
+  if (!licence || licence.status !== SERVEABLE_STATUS) {
+    return NextResponse.json({ error: "Licence is no longer active" }, { status: 410 });
   }
 
   // Fetch all file metadata
@@ -269,13 +274,23 @@ export async function GET(req: NextRequest) {
 
   const fileMap = new Map(fileRows.map((f) => [f.id, f]));
 
-  // Mark download events as completed (fire-and-forget; don't block stream)
-  void db
-    .update(downloadEvents)
-    .set({ completedAt: now })
-    .where(inArray(downloadEvents.fileId, fileIds));
+  // Mark each serve's own download event completed. Scope by the tokens' event ids
+  // (falling back to licence+licensee+file) so we never stamp events for other
+  // licences that share a fileId. Use waitUntil so the write actually commits —
+  // a bare `void db.update(...)` builder is a lazy thenable that never runs.
+  const { env, ctx: bundleCtx } = getCloudflareContext();
+  const eventIds = tokenDataList.map((t) => t.downloadEventId).filter((x): x is string => !!x);
+  bundleCtx.waitUntil(
+    (eventIds.length > 0
+      ? db.update(downloadEvents).set({ completedAt: now }).where(inArray(downloadEvents.id, eventIds))
+      : db.update(downloadEvents).set({ completedAt: now }).where(and(
+          inArray(downloadEvents.fileId, fileIds),
+          eq(downloadEvents.licenceId, licenceIds[0]),
+          eq(downloadEvents.licenseeId, session.sub),
+        ))
+    ).catch(() => { /* audit completion is best-effort */ }),
+  );
 
-  const { env } = getCloudflareContext();
   const enc = new TextEncoder();
 
   // Build streaming ZIP
@@ -406,8 +421,8 @@ export async function POST(req: NextRequest) {
     .limit(1)
     .all();
 
-  if (!licence || licence.status === "REVOKED") {
-    return NextResponse.json({ error: "Licence has been revoked" }, { status: 410 });
+  if (!licence || licence.status !== SERVEABLE_STATUS) {
+    return NextResponse.json({ error: "Licence is no longer active" }, { status: 410 });
   }
 
   const sessionTokens = dcSession.downloadTokens; // narrow out of closure to satisfy TS
@@ -424,12 +439,19 @@ export async function POST(req: NextRequest) {
 
   const fileMap = new Map(fileRows.map((f) => [f.id, f]));
 
-  void db
-    .update(downloadEvents)
-    .set({ completedAt: now })
-    .where(inArray(downloadEvents.fileId, fileIds));
+  const { env, ctx: postCtx } = getCloudflareContext();
 
-  const { env } = getCloudflareContext();
+  // Mark completion scoped to this licence + the licensee whose events these are
+  // (the org member who completed the licensee 2FA), not every event sharing a
+  // fileId. waitUntil so the write commits after the response returns.
+  const auditLicenseeId = dcSession.completedByLicenseeId ?? dcSession.licenseeId;
+  postCtx.waitUntil(
+    db.update(downloadEvents).set({ completedAt: now }).where(and(
+      inArray(downloadEvents.fileId, fileIds),
+      eq(downloadEvents.licenceId, licenceId),
+      eq(downloadEvents.licenseeId, auditLicenseeId),
+    )).catch(() => { /* audit completion is best-effort */ }),
+  );
   const enc = new TextEncoder();
 
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();

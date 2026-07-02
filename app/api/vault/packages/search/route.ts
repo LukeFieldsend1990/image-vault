@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { scanPackages, packageTags, talentProfiles, users } from "@/lib/db/schema";
+import { scanPackages, packageTags, talentProfiles, users, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and, like, sql, isNull, inArray } from "drizzle-orm";
 
@@ -16,12 +16,25 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
-  // Build conditions for scan_packages
+  // Build conditions for scan_packages.
+  // Industry/licensee browse the whole marketplace; talent see only their own;
+  // reps see only the packages of talent they actually represent (not every
+  // package on the platform).
   const pkgConditions = [isNull(scanPackages.deletedAt)];
 
-  // Licensees see all non-deleted packages; talent/rep see only their own
   if (session.role === "talent") {
     pkgConditions.push(eq(scanPackages.talentId, session.sub));
+  } else if (session.role === "rep") {
+    const managed = await db
+      .select({ talentId: talentReps.talentId })
+      .from(talentReps)
+      .where(eq(talentReps.repId, session.sub))
+      .all();
+    const managedIds = managed.map((m) => m.talentId);
+    if (managedIds.length === 0) {
+      return NextResponse.json({ packages: [], total: 0 });
+    }
+    pkgConditions.push(inArray(scanPackages.talentId, managedIds));
   }
 
   // If filtering by tag or category, find matching package IDs first

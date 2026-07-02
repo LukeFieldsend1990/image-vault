@@ -106,10 +106,15 @@ export async function POST(
           catch { return true; }
         });
 
+    const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
+    const userAgent = req.headers.get("user-agent") ?? null;
+
     const downloadTokens: Array<{ fileId: string; filename: string; token: string }> = [];
     for (const file of scopedFiles) {
       const token = crypto.randomUUID();
-      await kv.put(`dl_token:${token}`, JSON.stringify({ licenceId: id, fileId: file.id, licenseeId: dcSession.licenseeId, expiresAt: tokenExpiry }), { expirationTtl: DOWNLOAD_TOKEN_TTL });
+      const downloadEventId = crypto.randomUUID();
+      await db.insert(downloadEvents).values({ id: downloadEventId, licenceId: id, licenseeId: session.sub, fileId: file.id, ip, userAgent, startedAt: now });
+      await kv.put(`dl_token:${token}`, JSON.stringify({ licenceId: id, fileId: file.id, licenseeId: dcSession.licenseeId, downloadEventId, expiresAt: tokenExpiry }), { expirationTtl: DOWNLOAD_TOKEN_TTL });
       downloadTokens.push({ fileId: file.id, filename: file.filename, token });
     }
 
@@ -118,12 +123,6 @@ export async function POST(
     await kv.put(`dual_custody:${id}`, JSON.stringify(completed), { expirationTtl: ttl });
 
     await db.update(licences).set({ downloadCount: (licenceRow.downloadCount ?? 0) + 1, lastDownloadAt: now }).where(eq(licences.id, id));
-
-    const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
-    const userAgent = req.headers.get("user-agent") ?? null;
-    for (const file of scopedFiles) {
-      await db.insert(downloadEvents).values({ id: crypto.randomUUID(), licenceId: id, licenseeId: session.sub, fileId: file.id, ip, userAgent, startedAt: now });
-    }
 
     return NextResponse.json({ step: "complete", downloadTokens });
   }

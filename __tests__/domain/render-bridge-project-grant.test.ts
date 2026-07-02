@@ -93,6 +93,7 @@ describe("GET /api/bridge/render-bridge/:agentId/project-grant", () => {
       fileScope: null,
       productionId: null,
     }]);
+    t.enqueue([]);                       // justExpired scrub-period sweep
     t.enqueue([{                         // files for pkg-1
       id: "file-1",
       filename: "body_scan.usd",
@@ -134,6 +135,7 @@ describe("GET /api/bridge/render-bridge/:agentId/project-grant", () => {
       fileScope: null,
       productionId: null,
     }]);
+    t.enqueue([]); // justExpired scrub-period sweep
     t.enqueue([
       { id: "f1", filename: "ready.usd", r2Key: "r2/f1", sizeBytes: 100, sha256: null, uploadStatus: "complete" },
       { id: "f2", filename: "pending.usd", r2Key: "r2/f2", sizeBytes: 100, sha256: null, uploadStatus: "pending" },
@@ -161,6 +163,7 @@ describe("GET /api/bridge/render-bridge/:agentId/project-grant", () => {
       fileScope: JSON.stringify(["f1"]), // only file f1 is in scope
       productionId: null,
     }]);
+    t.enqueue([]); // justExpired scrub-period sweep
     t.enqueue([
       { id: "f1", filename: "scoped.usd", r2Key: "r2/f1", sizeBytes: 100, sha256: null, uploadStatus: "complete" },
       { id: "f2", filename: "excluded.usd", r2Key: "r2/f2", sizeBytes: 100, sha256: null, uploadStatus: "complete" },

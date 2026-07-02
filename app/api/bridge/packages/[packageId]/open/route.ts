@@ -153,7 +153,7 @@ export async function POST(
     return NextResponse.json({ error: "Package does not match licence" }, { status: 400 });
   }
   if (licence.status !== "APPROVED") {
-    void db.insert(bridgeEvents).values({
+    await db.insert(bridgeEvents).values({
       id: crypto.randomUUID(),
       grantId: null,
       packageId,
@@ -167,7 +167,7 @@ export async function POST(
     return NextResponse.json({ error: "Licence is not approved" }, { status: 409 });
   }
   if (licence.validTo + 86400 <= now) {
-    void db.insert(bridgeEvents).values({
+    await db.insert(bridgeEvents).values({
       id: crypto.randomUUID(),
       grantId: null,
       packageId,

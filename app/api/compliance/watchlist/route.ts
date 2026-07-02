@@ -19,7 +19,7 @@ async function resolveUnion(
 ): Promise<{ available: { id: string; shortName: string }[]; unionId: string } | { error: string; status: number }> {
   const available = isAdmin(session.email)
     ? UNION_PRESETS.map((u) => ({ id: u.id, shortName: u.shortName }))
-    : (await getUnionIdsForUser(db, session.sub)).map((id) => ({
+    : (await getUnionIdsForUser(db, session.sub, { scopes: ["platform", "union"] })).map((id) => ({
         id,
         shortName: getUnionPreset(id)?.shortName ?? id,
       }));

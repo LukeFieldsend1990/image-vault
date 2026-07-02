@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { organisations, organisationMembers, users, productions } from "@/lib/db/schema";
+import { organisations, organisationMembers, users, productions, licences, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { validateCountry } from "@/lib/organisations/country";
 import { syncOrgCountryAcrossProductions } from "@/lib/productions/vendors";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 
 // GET /api/organisations/[id] — org details + member list
 // Accessible by: org members, talent, rep, admin (talent/rep get read-only view for licence approval)
@@ -30,30 +31,71 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Licensees must be members; talent/rep/admin can view for licence context
-  if (isIndustryRole(session.role)) {
+  // Access model:
+  //  - admins: full view.
+  //  - org members: full view (with member emails).
+  //  - talent/rep: read-only view ONLY when they are a counterparty to a licence
+  //    held by this org (the licence-approval context). They do NOT get the member
+  //    email roster — that would let any talent/rep harvest emails for every org.
+  const orgAdmin = isAdmin(session.email);
+  let isMember = false;
+  if (!orgAdmin) {
     const [membership] = await db
       .select({ memberRole: organisationMembers.memberRole })
       .from(organisationMembers)
       .where(and(eq(organisationMembers.organisationId, id), eq(organisationMembers.userId, session.sub)))
       .limit(1)
       .all();
-    if (!membership) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    isMember = !!membership;
+
+    if (!isMember) {
+      // Non-member: require a licence relationship with this org.
+      let hasLicenceTie = false;
+      if (session.role === "talent") {
+        const tie = await db
+          .select({ id: licences.id })
+          .from(licences)
+          .where(and(eq(licences.organisationId, id), eq(licences.talentId, session.sub)))
+          .limit(1)
+          .all();
+        hasLicenceTie = tie.length > 0;
+      } else if (session.role === "rep") {
+        const managed = await db
+          .select({ talentId: talentReps.talentId })
+          .from(talentReps)
+          .where(eq(talentReps.repId, session.sub))
+          .all();
+        const managedIds = managed.map((m) => m.talentId);
+        if (managedIds.length > 0) {
+          const tie = await db
+            .select({ id: licences.id })
+            .from(licences)
+            .where(and(eq(licences.organisationId, id), inArray(licences.talentId, managedIds)))
+            .limit(1)
+            .all();
+          hasLicenceTie = tie.length > 0;
+        }
+      }
+      if (!hasLicenceTie) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
   }
 
-  const members = await db
-    .select({
-      userId: organisationMembers.userId,
-      email: users.email,
-      memberRole: organisationMembers.memberRole,
-      joinedAt: organisationMembers.joinedAt,
-    })
-    .from(organisationMembers)
-    .innerJoin(users, eq(users.id, organisationMembers.userId))
-    .where(eq(organisationMembers.organisationId, id))
-    .all();
+  const canSeeMemberEmails = orgAdmin || isMember;
+  const members = canSeeMemberEmails
+    ? await db
+        .select({
+          userId: organisationMembers.userId,
+          email: users.email,
+          memberRole: organisationMembers.memberRole,
+          joinedAt: organisationMembers.joinedAt,
+        })
+        .from(organisationMembers)
+        .innerJoin(users, eq(users.id, organisationMembers.userId))
+        .where(eq(organisationMembers.organisationId, id))
+        .all()
+    : [];
 
   // Productions this org owns — surfaced in the org view so an industry member
   // can see and seed productions for the organisation they're populating.

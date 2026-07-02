@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, users, scanPackages, bridgeGrants, renderBridgeAgents, organisationMembers } from "@/lib/db/schema";
+import { licences, users, scanPackages, bridgeGrants, renderBridgeAgents, organisationMembers, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
@@ -46,8 +46,18 @@ export async function POST(
   if (!licence) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  // Talent themselves, an admin, or a rep who represents this talent (delegation).
   if (licence.talentId !== session.sub && session.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    let allowed = false;
+    if (session.role === "rep") {
+      const link = await db
+        .select({ id: talentReps.id })
+        .from(talentReps)
+        .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, licence.talentId)))
+        .get();
+      allowed = !!link;
+    }
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (licence.status !== "APPROVED") {
     return NextResponse.json({ error: "Only APPROVED licences can be revoked" }, { status: 409 });
@@ -57,7 +67,14 @@ export async function POST(
   }
   const licencePackageId = licence.packageId;
 
-  // Kill any active dual-custody session in KV
+  // Kill any active dual-custody session in KV, and purge the per-file download
+  // tokens it issued so they can't stream during the 48h token TTL. (The download
+  // routes also refuse to serve a non-APPROVED licence, so this is defence-in-depth
+  // for the window where the session record still exists.)
+  const dc = await kv.get(`dual_custody:${id}`, "json") as { downloadTokens?: Array<{ token: string }> } | null;
+  if (dc?.downloadTokens?.length) {
+    await Promise.all(dc.downloadTokens.map((t) => kv.delete(`dl_token:${t.token}`).catch(() => {})));
+  }
   await kv.delete(`dual_custody:${id}`);
 
   const scrubDeadline = now + SCRUB_WINDOW_DAYS * 86400;

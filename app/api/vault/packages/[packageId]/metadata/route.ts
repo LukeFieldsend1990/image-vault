@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db";
 import { scanPackages, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { triggerReindex } from "@/lib/search/reindex";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 async function canAccessPackage(db: ReturnType<typeof getDb>, packageId: string, session: { sub: string; role: string }) {
   const [pkg] = await db
@@ -18,10 +18,11 @@ async function canAccessPackage(db: ReturnType<typeof getDb>, packageId: string,
   if (session.role === "admin") return pkg;
   if (session.role === "talent" && pkg.talentId === session.sub) return pkg;
   if (session.role === "rep") {
+    // Must represent THIS package's talent — not merely be a rep for someone.
     const [rep] = await db
       .select({ id: talentReps.id })
       .from(talentReps)
-      .where(eq(talentReps.repId, session.sub))
+      .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, pkg.talentId)))
       .all();
     if (rep) return pkg;
   }

@@ -34,6 +34,7 @@ describe("POST /api/royalties/usage — 39.G strike enforcement", () => {
 
   it("returns 423 and meters nothing while a covering strike is active", async () => {
     t.enqueue({ status: "APPROVED", licenceType: "ai_avatar", permitAiTraining: false }); // licence validation
+    t.enqueue(null); // royaltySources usage-cap lookup (no cap set)
     t.enqueue({ organisationId: null, productionId: null }); // findCoveringStrike licence load
     t.enqueue({ id: "s1", scope: "global", reason: "SAG-AFTRA strike" }); // active strike
     t.enqueue(null); // appendEvent tip for use.blocked_by_strike

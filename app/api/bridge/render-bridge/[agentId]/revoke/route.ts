@@ -62,7 +62,7 @@ export async function POST(
     .set({ status: "revoked", revokedAt: now, pendingAction: "purge" })
     .where(and(eq(renderBridgeAgents.id, agentId), isNull(renderBridgeAgents.revokedAt)));
 
-  void db.insert(bridgeEvents).values({
+  await db.insert(bridgeEvents).values({
     id: crypto.randomUUID(),
     grantId: null,
     packageId: "_lifecycle_",

@@ -31,6 +31,7 @@ describe("attestations (39.E / 39.H)", () => {
 
   it("403 when a talent tries to attest (producer/admin only)", async () => {
     t.setSession(TALENT);
+    t.enqueue({ complianceEnabled: true }); // isComplianceEnabled users lookup
     t.enqueue(LICENCE);
     const res = await attestRoute.POST(buildRequest("/api/compliance/attestations", { body: { licenceId: "L1", attestationType: "security_custody", attestationText: "we secure it" } }));
     expect(res.status).toBe(403);
@@ -44,6 +45,7 @@ describe("attestations (39.E / 39.H)", () => {
 
   it("records a biometric-isolation attestation + 39.E event", async () => {
     t.setSession(LICENSEE);
+    t.enqueue({ complianceEnabled: true }); // isComplianceEnabled users lookup
     t.enqueue(LICENCE); // authorizeProducer
     t.enqueue(null); // appendEvent tip
     const res = await attestRoute.POST(buildRequest("/api/compliance/attestations", { body: { licenceId: "L1", attestationType: "biometric_isolation", attestationText: "biometrics stay in the vault" } }));
@@ -61,6 +63,7 @@ describe("transfers (39.I)", () => {
 
   it("producer requests a transfer → requested row + transfer.requested event", async () => {
     t.setSession(LICENSEE);
+    t.enqueue({ complianceEnabled: true }); // isComplianceEnabled users lookup
     t.enqueue(LICENCE); // authorizeProducer
     t.enqueue(null); // appendEvent tip
     const res = await transferRoute.POST(buildRequest("/api/compliance/transfers", { body: { licenceId: "L1", toPartyName: "Third Party VFX" } }));
@@ -103,6 +106,7 @@ describe("business reason (39.J) + training notice (39.L)", () => {
 
   it("records a 39.J business reason", async () => {
     t.setSession(LICENSEE);
+    t.enqueue({ complianceEnabled: true }); // isComplianceEnabled users lookup
     t.enqueue(LICENCE);
     t.enqueue(null);
     const res = await reasonRoute.POST(buildRequest("/api/compliance/business-reason", { body: { licenceId: "L1", reason: "stunt double for action sequence" } }));
@@ -113,6 +117,7 @@ describe("business reason (39.J) + training notice (39.L)", () => {
 
   it("files a 39.L training notice when trainingNotice is set", async () => {
     t.setSession(LICENSEE);
+    t.enqueue({ complianceEnabled: true }); // isComplianceEnabled users lookup
     t.enqueue(LICENCE);
     t.enqueue(null);
     const res = await reasonRoute.POST(buildRequest("/api/compliance/business-reason", { body: { licenceId: "L1", trainingNotice: true } }));

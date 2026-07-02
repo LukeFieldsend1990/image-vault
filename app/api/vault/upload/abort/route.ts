@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
-import { scanFiles, uploadSessions } from "@/lib/db/schema";
+import { scanFiles, uploadSessions, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { hasRepAccess } from "@/lib/auth/repAccess";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
@@ -31,6 +32,29 @@ export async function POST(req: NextRequest) {
 
   if (!uploadSession) {
     return NextResponse.json({ error: "Upload session not found" }, { status: 404 });
+  }
+
+  // Verify ownership before aborting anyone's in-flight upload (destructive)
+  const ownerFile = await db
+    .select({ packageId: scanFiles.packageId })
+    .from(scanFiles)
+    .where(eq(scanFiles.id, fileId))
+    .get();
+  if (!ownerFile) {
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
+  }
+  const ownerPkg = await db
+    .select({ talentId: scanPackages.talentId })
+    .from(scanPackages)
+    .where(eq(scanPackages.id, ownerFile.packageId))
+    .get();
+  if (!ownerPkg) {
+    return NextResponse.json({ error: "Package not found" }, { status: 404 });
+  }
+  const isOwner = ownerPkg.talentId === session.sub;
+  const isRep = session.role === "rep" && (await hasRepAccess(session.sub, ownerPkg.talentId));
+  if (!isOwner && !isRep && session.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { env } = getCloudflareContext();
