@@ -37,6 +37,7 @@ describe("POST /api/compliance/consent", () => {
 
   it("403 when a licensee tries to grant consent (write is talent/rep/admin only)", async () => {
     t.setSession({ sub: "lic-1", email: "l@x.com", role: "licensee" });
+    t.enqueue({ complianceEnabled: true }); // isComplianceEnabled users lookup
     t.enqueue(LICENCE); // authorizeLicence licence lookup
     const res = await route.POST(buildRequest("/api/compliance/consent", { body: { licenceId: "L1", useType: "ai_avatar" } }));
     expect(res.status).toBe(403);
@@ -44,6 +45,7 @@ describe("POST /api/compliance/consent", () => {
 
   it("grants consent: appends a hash-chained consent.granted event + a granted projection row", async () => {
     t.setSession({ sub: "talent-1", email: "t@x.com", role: "talent" });
+    t.enqueue({ complianceEnabled: true }); // isComplianceEnabled users lookup
     t.enqueue(LICENCE); // authorizeLicence
     t.enqueue(null);    // appendEvent tip (genesis)
 
@@ -68,6 +70,7 @@ describe("POST /api/compliance/consent", () => {
 
   it("records a dub-language consent as a 39.D event when language is set", async () => {
     t.setSession({ sub: "talent-1", email: "t@x.com", role: "talent" });
+    t.enqueue({ complianceEnabled: true }); // isComplianceEnabled users lookup
     t.enqueue(LICENCE);
     t.enqueue(null);
 
@@ -95,6 +98,7 @@ describe("DELETE /api/compliance/consent (revoke)", () => {
   it("revokes: appends consent.revoked + flips the projection row to revoked", async () => {
     t.setSession({ sub: "talent-1", email: "t@x.com", role: "talent" });
     t.enqueue({ licenceId: "L1" });                          // route record lookup
+    t.enqueue({ complianceEnabled: true });                   // isComplianceEnabled users lookup
     t.enqueue(LICENCE);                                       // authorizeLicence
     t.enqueue({ id: "rec-1", licenceId: "L1", talentId: "talent-1", useType: "ai_avatar", territory: null, language: null, status: "granted" }); // revokeConsent select
     t.enqueue(null);                                          // appendEvent tip

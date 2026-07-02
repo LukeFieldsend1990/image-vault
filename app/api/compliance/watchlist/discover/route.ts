@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   const callerUnions = isAdmin(session.email)
     ? null // null = no union filter on dedup
-    : await getUnionIdsForUser(db, session.sub);
+    : await getUnionIdsForUser(db, session.sub, { scopes: ["platform", "union"] });
   if (callerUnions && callerUnions.length === 0) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

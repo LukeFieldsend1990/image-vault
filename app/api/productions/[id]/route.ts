@@ -153,10 +153,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const db = getDb();
 
-  // Auth: admin, rep, or someone with write access to the production's owning org
-  // (org owner/admin, or an explicitly-added production editor) — so producers and
-  // delegated colleagues can edit their own production's non-key details.
-  let allowed = isAdmin(session.email) || session.role === "rep";
+  // Auth: admin, someone with write access to the production's owning org (org
+  // owner/admin or an explicitly-added production editor), or a rep who is actually
+  // linked to THIS production (a reserved cast slot or agency-shared visibility) —
+  // so producers and delegated colleagues can edit their own production's details.
+  // A blanket `session.role === "rep"` check would let any rep edit any production.
+  let allowed = isAdmin(session.email);
   if (!allowed && isIndustryRole(session.role)) {
     const prod = await db
       .select({ organisationId: productions.organisationId })
@@ -166,6 +168,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!prod) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const access = await resolveOwnerAccess(db, id, prod.organisationId, session.sub);
     if (access.canWrite) allowed = true;
+  }
+  if (!allowed && session.role === "rep") {
+    const repCast = await db
+      .select({ id: productionCast.id })
+      .from(productionCast)
+      .where(and(eq(productionCast.productionId, id), eq(productionCast.repId, session.sub)))
+      .get();
+    if (repCast) {
+      allowed = true;
+    } else {
+      const ctx = await getRepAgencyContext(db, session.sub);
+      if (ctx.agencyProductionIds.includes(id)) allowed = true;
+    }
   }
   if (!allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

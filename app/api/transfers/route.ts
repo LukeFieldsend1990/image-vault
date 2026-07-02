@@ -8,6 +8,8 @@ import {
   licences,
   users,
   talentReps,
+  vendorAuthorisations,
+  productionVendors,
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { mintScanNumber } from "@/lib/codes/codes";
@@ -137,7 +139,7 @@ export async function POST(req: NextRequest) {
     // to the internal UUID for backwards compatibility / programmatic callers.
     const ref = body.targetLicenceId.trim();
     const licence = await db
-      .select({ id: licences.id, talentId: licences.talentId, status: licences.status })
+      .select({ id: licences.id, talentId: licences.talentId, status: licences.status, organisationId: licences.organisationId, productionId: licences.productionId })
       .from(licences)
       .where(or(eq(licences.shortCode, ref.toUpperCase()), eq(licences.id, ref)))
       .get();
@@ -145,6 +147,42 @@ export async function POST(req: NextRequest) {
     if (licence.status !== "AWAITING_PACKAGE") {
       return NextResponse.json({ error: "Licence is not awaiting a package" }, { status: 409 });
     }
+
+    // The sending org must actually be tied to this licence — otherwise a member of
+    // any org could inject a package into another tenant's licence just by knowing
+    // its LC-#### code. Legitimate senders: the licensee org itself, an org
+    // vendor-authorised on the licence, or an active vendor on its production.
+    if (session.role !== "admin") {
+      let orgTiedToLicence = licence.organisationId === fromOrgId;
+      if (!orgTiedToLicence) {
+        const vAuth = await db
+          .select({ id: vendorAuthorisations.id })
+          .from(vendorAuthorisations)
+          .where(and(
+            eq(vendorAuthorisations.licenceId, licence.id),
+            eq(vendorAuthorisations.vendorOrgId, fromOrgId),
+            eq(vendorAuthorisations.status, "active"),
+          ))
+          .get();
+        orgTiedToLicence = !!vAuth;
+      }
+      if (!orgTiedToLicence && licence.productionId) {
+        const pVendor = await db
+          .select({ id: productionVendors.id })
+          .from(productionVendors)
+          .where(and(
+            eq(productionVendors.productionId, licence.productionId),
+            eq(productionVendors.vendorOrgId, fromOrgId),
+            eq(productionVendors.status, "active"),
+          ))
+          .get();
+        orgTiedToLicence = !!pVendor;
+      }
+      if (!orgTiedToLicence) {
+        return NextResponse.json({ error: "Your organisation is not authorised to deliver to this licence" }, { status: 403 });
+      }
+    }
+
     toTalentId = licence.talentId;
     targetLicenceId = licence.id;
   } else {

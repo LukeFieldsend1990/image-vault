@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
 import { licences, talentReps, users, scanPackages } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 
 type PreauthOption = "7d" | "14d" | "30d" | "licence";
@@ -31,7 +31,17 @@ export async function GET(
     .get();
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (row.talentId !== session.sub && session.role !== "rep" && session.role !== "admin") {
+  // The talent themselves, an admin, or a rep who actually represents THIS talent.
+  let permitted = row.talentId === session.sub || session.role === "admin";
+  if (!permitted && session.role === "rep") {
+    const link = await db
+      .select({ id: talentReps.id })
+      .from(talentReps)
+      .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, row.talentId)))
+      .get();
+    permitted = !!link;
+  }
+  if (!permitted) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -84,7 +94,7 @@ export async function POST(
   const repLink = await db
     .select({ id: talentReps.id })
     .from(talentReps)
-    .where(eq(talentReps.repId, session.sub))
+    .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, row.talentId)))
     .get();
 
   if (!repLink) return NextResponse.json({ error: "You do not represent this talent" }, { status: 403 });

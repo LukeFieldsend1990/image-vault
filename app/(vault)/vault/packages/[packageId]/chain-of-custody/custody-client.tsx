@@ -116,7 +116,38 @@ const EVENT_CONFIG: Record<
       </svg>
     ),
   },
+  compliance_event: {
+    label: "COMPLIANCE LEDGER",
+    colour: "#6d28d9",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <polyline points="9 12 11 14 15 10" />
+      </svg>
+    ),
+  },
 };
+
+// Human-readable names for the hash-chained compliance-ledger event types.
+const COMPLIANCE_EVENT_LABELS: Record<string, string> = {
+  "download.initiated": "Download initiated",
+  "custody.licensee_verified": "Dual-custody: licensee 2FA verified",
+  "custody.talent_verified": "Dual-custody: talent 2FA verified",
+  "consent.granted": "Consent granted",
+  "consent.dub_language_granted": "Dub-language consent granted",
+  "consent.revoked": "Consent revoked",
+  "licence.revoked": "Licence revoked",
+  "biometric.isolation_attested": "Biometric-isolation attestation",
+  "transfer.requested": "Third-party transfer requested",
+  "transfer.approved": "Third-party transfer approved",
+  "business_reason.recorded": "Business reason recorded",
+  "training.notice_filed": "AI-training notice filed",
+};
+
+function complianceLabel(eventType: string | undefined): string {
+  if (!eventType) return "Ledger event";
+  return COMPLIANCE_EVENT_LABELS[eventType] ?? eventType.replace(/[._]/g, " ");
+}
 
 function EventRow({ event, index }: { event: CustodyEvent; index: number }) {
   const cfg = EVENT_CONFIG[event.type];
@@ -136,7 +167,7 @@ function EventRow({ event, index }: { event: CustodyEvent; index: number }) {
         {/* Event label + timestamp */}
         <div className="flex items-baseline justify-between gap-4 flex-wrap mb-1">
           <span className="text-[10px] font-bold tracking-[0.12em]" style={{ color: cfg.colour }}>
-            {cfg.label}
+            {event.type === "compliance_event" ? complianceLabel(event.complianceEventType).toUpperCase() : cfg.label}
           </span>
           <span className="text-[10px] font-mono tabular-nums shrink-0" style={{ color: "#777777" }}>
             {isoUtc(event.at)}
@@ -219,6 +250,23 @@ function EventRow({ event, index }: { event: CustodyEvent; index: number }) {
               )}
               {event.bytesTransferred != null && (
                 <p>Size: <span className="font-medium">{fmtBytes(event.bytesTransferred)}</span></p>
+              )}
+              {event.ip && (
+                <p>Source IP: <span className="font-mono font-medium">{event.ip}</span></p>
+              )}
+            </>
+          )}
+
+          {event.type === "compliance_event" && (
+            <>
+              {event.projectName && (
+                <p>Project: <span className="font-medium">{event.projectName}</span>{event.productionCompany ? <> — {event.productionCompany}</> : null}</p>
+              )}
+              {event.actor && (
+                <p>Actor: <span className="font-medium">{event.actor}</span></p>
+              )}
+              {event.clauseRef && (
+                <p>Clause: <span className="font-mono font-medium">{event.clauseRef}</span></p>
               )}
               {event.ip && (
                 <p>Source IP: <span className="font-mono font-medium">{event.ip}</span></p>

@@ -6,6 +6,7 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isIndustryRole } from "@/lib/auth/roles";
 import { eq, and } from "drizzle-orm";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 export interface DualCustodySession {
   licenceId: string;
@@ -133,6 +134,20 @@ export async function POST(
 
   await kv.put(`dual_custody:${id}`, JSON.stringify(session_data), {
     expirationTtl: 3600,
+  });
+
+  // Durable custody record: the dual-custody session lives only in KV (1h TTL),
+  // so append a ledger event that survives for the chain of custody.
+  appendEventBg(db, {
+    chainKey: licenceChain(id),
+    eventType: "download.initiated",
+    licenceId: id,
+    talentId: licence.talentId,
+    organisationId: licence.organisationId ?? null,
+    actorId: session.sub,
+    payload: { packageId: licence.packageId },
+    ipAddress: req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null,
+    userAgent: req.headers.get("user-agent") ?? null,
   });
 
   void notifyTalentAndReps(db, licence.talentId, {

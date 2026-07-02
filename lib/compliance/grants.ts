@@ -57,20 +57,21 @@ export async function getActiveGrants(db: Db, userId: string): Promise<ActiveGra
 
 /**
  * The union ids a user watches — distinct unionIds of their active union-subtype
- * grants. With `platformOnly`, restricts to platform-scoped union grants. Without
- * it, includes union-scope grants too, so a watcher tied to a single union by a
- * union-scope grant still counts as that union's watcher.
+ * grants. With `scopes`, only grants at those scopes count: roster/watchlist
+ * management passes ["platform", "union"] so a watcher whose union grant is
+ * scoped below the whole union (organisation/production/talent) does not gain
+ * union-wide surfaces. Without it, every union grant attributes the watcher.
  */
 export async function getUnionIdsForUser(
   db: Db,
   userId: string,
-  opts: { platformOnly?: boolean } = {},
+  opts: { scopes?: readonly string[] } = {},
 ): Promise<string[]> {
   const grants = await getActiveGrants(db, userId);
   const ids = new Set<string>();
   for (const g of grants) {
     if (g.subtype !== "union") continue;
-    if (opts.platformOnly && g.scope !== "platform") continue;
+    if (opts.scopes && !opts.scopes.includes(g.scope)) continue;
     // For union-scope grants the union id is on scopeId; for the rest it's on unionId.
     const uid = g.unionId ?? (g.scope === "union" ? g.scopeId : null);
     if (uid) ids.add(uid);

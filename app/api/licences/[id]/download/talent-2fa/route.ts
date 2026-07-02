@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getKv } from "@/lib/db";
-import { licences, scanFiles, totpCredentials, downloadEvents, users, scanPackages } from "@/lib/db/schema";
+import { licences, scanFiles, totpCredentials, downloadEvents, users, scanPackages, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { verifyTotpCode } from "@/lib/auth/totp";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { downloadCompleteEmail } from "@/lib/email/templates";
 import { triggerAiService } from "@/lib/ai/service";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { DualCustodySession } from "../initiate/route";
 import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 const DOWNLOAD_TOKEN_TTL = 48 * 60 * 60; // 48 hours in seconds
 
@@ -44,15 +45,28 @@ export async function POST(
   if (!dcSession || dcSession.expiresAt < now) {
     return NextResponse.json({ error: "No active download session" }, { status: 409 });
   }
+
+  const db = getDb();
+
+  // The talent themselves, an admin, or a rep who represents this talent may
+  // complete the talent custody leg (verifying their OWN TOTP below — delegation).
   if (dcSession.talentId !== session.sub && session.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    let allowed = false;
+    if (session.role === "rep") {
+      const link = await db
+        .select({ id: talentReps.id })
+        .from(talentReps)
+        .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, dcSession.talentId)))
+        .get();
+      allowed = !!link;
+    }
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (dcSession.step !== "awaiting_talent") {
     return NextResponse.json({ step: dcSession.step });
   }
 
   // Verify talent TOTP
-  const db = getDb();
   const [totp] = await db
     .select({ secret: totpCredentials.secret })
     .from(totpCredentials)
@@ -97,18 +111,36 @@ export async function POST(
         }
       });
 
-  // Generate a short-lived download token per file, store in KV
+  // Log download events — use completedByLicenseeId when an org member (not the initiator) did the licensee 2FA.
+  // The event id is threaded into the token so the byte-serve stamps completion on this exact row
+  // (not every row that happens to share a fileId across other licences).
+  const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
+  const userAgent = req.headers.get("user-agent") ?? null;
+  const auditLicenseeId = dcSession.completedByLicenseeId ?? dcSession.licenseeId;
+
+  // Generate a short-lived download token per file, paired with its audit event, store in KV
   const tokenExpiry = now + DOWNLOAD_TOKEN_TTL;
   const downloadTokens: Array<{ fileId: string; filename: string; token: string }> = [];
 
   for (const file of scopedFiles) {
     const token = crypto.randomUUID();
+    const downloadEventId = crypto.randomUUID();
+    await db.insert(downloadEvents).values({
+      id: downloadEventId,
+      licenceId: id,
+      licenseeId: auditLicenseeId,
+      fileId: file.id,
+      ip,
+      userAgent,
+      startedAt: now,
+    });
     await kv.put(
       `dl_token:${token}`,
       JSON.stringify({
         licenceId: id,
         fileId: file.id,
         licenseeId: dcSession.licenseeId,
+        downloadEventId,
         expiresAt: tokenExpiry,
       }),
       { expirationTtl: DOWNLOAD_TOKEN_TTL }
@@ -131,6 +163,22 @@ export async function POST(
     else if (opt === "licence") preauthUntil = licence.validTo;
   }
 
+  // Durable custody record: talent custody leg verified and download tokens issued.
+  // Flag when an admin completed the talent leg so it's distinguishable from the
+  // talent's own approval in the chain of custody.
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "custody.talent_verified",
+    licenceId: id, talentId: dcSession.talentId, organisationId: dcSession.organisationId,
+    actorId: session.sub,
+    payload: {
+      byRole: session.role,
+      adminOverride: session.role === "admin" && dcSession.talentId !== session.sub,
+      fileCount: scopedFiles.length,
+      preauthUntil,
+    },
+    ipAddress: ip, userAgent,
+  });
+
   // Update licence stats (and preauth if set)
   await db
     .update(licences)
@@ -140,23 +188,6 @@ export async function POST(
       ...(preauthUntil !== null ? { preauthUntil, preauthSetBy: session.sub } : {}),
     })
     .where(eq(licences.id, id));
-
-  // Log download events — use completedByLicenseeId when an org member (not the initiator) did the licensee 2FA
-  const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
-  const userAgent = req.headers.get("user-agent") ?? null;
-  const auditLicenseeId = dcSession.completedByLicenseeId ?? dcSession.licenseeId;
-
-  for (const file of scopedFiles) {
-    await db.insert(downloadEvents).values({
-      id: crypto.randomUUID(),
-      licenceId: id,
-      licenseeId: auditLicenseeId,
-      fileId: file.id,
-      ip,
-      userAgent,
-      startedAt: now,
-    });
-  }
 
   const { ctx } = getCloudflareContext();
   ctx.waitUntil(

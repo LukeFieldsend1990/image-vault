@@ -40,6 +40,7 @@ export async function requireRenderBridgeToken(
       organisationId: renderBridgeAgents.organisationId,
       status: renderBridgeAgents.status,
       revokedAt: renderBridgeAgents.revokedAt,
+      tokenExpiresAt: renderBridgeAgents.tokenExpiresAt,
     })
     .from(renderBridgeAgents)
     .where(eq(renderBridgeAgents.serviceTokenHash, tokenHash))
@@ -50,6 +51,11 @@ export async function requireRenderBridgeToken(
   }
   if (agent.revokedAt !== null || agent.status === "revoked") {
     return NextResponse.json({ error: "Agent revoked" }, { status: 401 });
+  }
+  // Enforce the advertised token expiry — a token registered/rotated with a
+  // 1-year lifetime must actually stop working, not live forever until revoked.
+  if (agent.tokenExpiresAt != null && agent.tokenExpiresAt <= Math.floor(Date.now() / 1000)) {
+    return NextResponse.json({ error: "Service token expired" }, { status: 401 });
   }
 
   return {

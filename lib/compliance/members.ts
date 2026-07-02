@@ -166,7 +166,9 @@ export interface RosterUnionContext {
  * Resolve which union's roster a caller is acting on. The roster is union-owned —
  * one list per union, maintained by that union — so access is union-bound:
  *  - Admins manage every union preset.
- *  - A union watcher with a platform-scoped union grant manages only that union(s).
+ *  - A union watcher manages only the union(s) named by a platform- or
+ *    union-scoped union grant. Narrower union grants (organisation/production/
+ *    talent scope) do NOT confer union-wide roster management.
  *  - Anyone else (e.g. a regulator with a platform-wide grant) has no union to
  *    maintain and is refused — the roster is not a cross-union oversight surface.
  * Returns an error shape (mapped to a 4xx by the route) when the caller has no
@@ -179,7 +181,7 @@ export async function resolveRosterUnion(
 ): Promise<RosterUnionContext | { error: string; status: number }> {
   const available = isAdmin(session.email)
     ? UNION_PRESETS.map((u) => ({ id: u.id, shortName: u.shortName }))
-    : (await getUnionIdsForUser(db, session.sub)).map((id) => ({
+    : (await getUnionIdsForUser(db, session.sub, { scopes: ["platform", "union"] })).map((id) => ({
         id,
         shortName: getUnionPreset(id)?.shortName ?? id,
       }));

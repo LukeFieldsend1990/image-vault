@@ -4,6 +4,7 @@ import { packageTags, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { callAiService } from "@/lib/ai/service";
 import { triggerReindex } from "@/lib/search/reindex";
+import { resolvePackageOwnerAccess } from "@/lib/vault/packageAccess";
 import { eq } from "drizzle-orm";
 
 // GET /api/ai/package-tags/:packageId — return all tags for the package
@@ -16,6 +17,9 @@ export async function GET(
 
   const { packageId } = await params;
   const db = getDb();
+
+  const access = await resolvePackageOwnerAccess(db, packageId, session);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const tags = await db
     .select()
@@ -36,6 +40,9 @@ export async function POST(
 
   const { packageId } = await params;
   const db = getDb();
+
+  const access = await resolvePackageOwnerAccess(db, packageId, session);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   let body: { tag?: string; category?: string; aiTrigger?: boolean };
   try {

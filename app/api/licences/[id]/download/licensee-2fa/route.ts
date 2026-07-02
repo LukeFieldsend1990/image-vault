@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { downloadRequestEmail } from "@/lib/email/templates";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 import type { DualCustodySession } from "../initiate/route";
 
 // POST /api/licences/[id]/download/licensee-2fa
@@ -106,10 +107,15 @@ export async function POST(
           catch { return true; }
         });
 
+    const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
+    const userAgent = req.headers.get("user-agent") ?? null;
+
     const downloadTokens: Array<{ fileId: string; filename: string; token: string }> = [];
     for (const file of scopedFiles) {
       const token = crypto.randomUUID();
-      await kv.put(`dl_token:${token}`, JSON.stringify({ licenceId: id, fileId: file.id, licenseeId: dcSession.licenseeId, expiresAt: tokenExpiry }), { expirationTtl: DOWNLOAD_TOKEN_TTL });
+      const downloadEventId = crypto.randomUUID();
+      await db.insert(downloadEvents).values({ id: downloadEventId, licenceId: id, licenseeId: session.sub, fileId: file.id, ip, userAgent, startedAt: now });
+      await kv.put(`dl_token:${token}`, JSON.stringify({ licenceId: id, fileId: file.id, licenseeId: dcSession.licenseeId, downloadEventId, expiresAt: tokenExpiry }), { expirationTtl: DOWNLOAD_TOKEN_TTL });
       downloadTokens.push({ fileId: file.id, filename: file.filename, token });
     }
 
@@ -119,11 +125,14 @@ export async function POST(
 
     await db.update(licences).set({ downloadCount: (licenceRow.downloadCount ?? 0) + 1, lastDownloadAt: now }).where(eq(licences.id, id));
 
-    const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null;
-    const userAgent = req.headers.get("user-agent") ?? null;
-    for (const file of scopedFiles) {
-      await db.insert(downloadEvents).values({ id: crypto.randomUUID(), licenceId: id, licenseeId: session.sub, fileId: file.id, ip, userAgent, startedAt: now });
-    }
+    // Durable custody record: licensee verified, and (via active pre-auth) the
+    // talent custody leg was waived — record both so the chain of custody is honest.
+    appendEventBg(db, {
+      chainKey: licenceChain(id), eventType: "custody.licensee_verified",
+      licenceId: id, talentId: dcSession.talentId, organisationId: dcSession.organisationId,
+      actorId: session.sub, payload: { preauth: true, fileCount: scopedFiles.length },
+      ipAddress: ip, userAgent,
+    });
 
     return NextResponse.json({ step: "complete", downloadTokens });
   }
@@ -131,6 +140,15 @@ export async function POST(
   const updated: DualCustodySession = { ...dcSession, step: "awaiting_talent", completedByLicenseeId: session.sub };
   const ttl = dcSession.expiresAt - now;
   await kv.put(`dual_custody:${id}`, JSON.stringify(updated), { expirationTtl: ttl });
+
+  // Durable custody record: licensee custody leg verified (awaiting talent).
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "custody.licensee_verified",
+    licenceId: id, talentId: dcSession.talentId, organisationId: dcSession.organisationId,
+    actorId: session.sub, payload: { preauth: false },
+    ipAddress: req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null,
+    userAgent: req.headers.get("user-agent") ?? null,
+  });
 
   // Notify talent/rep that their authorisation is required (fire-and-forget)
   void (async () => {

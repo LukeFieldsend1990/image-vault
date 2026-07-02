@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { scanPackages, scanFiles, licences, downloadEvents, users, talentProfiles } from "@/lib/db/schema";
+import { scanPackages, scanFiles, licences, downloadEvents, users, talentProfiles, complianceEvents } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { formatChainCode } from "@/lib/codes/codes";
@@ -15,7 +15,8 @@ export type CustodyEventType =
   | "licence_denied"
   | "licence_revoked"
   | "file_downloaded"
-  | "talent_downloaded";
+  | "talent_downloaded"
+  | "compliance_event";
 
 export interface CustodyEvent {
   type: CustodyEventType;
@@ -40,6 +41,9 @@ export interface CustodyEvent {
   ip?: string | null;
   userAgent?: string | null;
   completedAt?: number | null;
+  // compliance_event (hash-chained ledger: consent, custody legs, attestations, transfers…)
+  complianceEventType?: string;
+  clauseRef?: string | null;
 }
 
 export interface CustodyPackage {
@@ -124,11 +128,35 @@ export async function GET(
     }).from(licences).where(eq(licences.packageId, packageId)).all(),
   ]);
 
+  // Hash-chained compliance-ledger events for every licence on this package —
+  // consent grants/withdrawals, dual-custody legs, attestations, transfers, etc.
+  // These live in the append-only ledger, not on the licence columns, so the
+  // chain-of-custody document would otherwise omit them entirely.
+  const licenceChainKeys = licenceRows.map((l) => `licence:${l.id}`);
+  const ledgerEvents = licenceChainKeys.length > 0
+    ? await db
+        .select({
+          licenceId: complianceEvents.licenceId,
+          eventType: complianceEvents.eventType,
+          clauseRef: complianceEvents.clauseRef,
+          actorId: complianceEvents.actorId,
+          ipAddress: complianceEvents.ipAddress,
+          userAgent: complianceEvents.userAgent,
+          createdAt: complianceEvents.createdAt,
+        })
+        .from(complianceEvents)
+        .where(inArray(complianceEvents.chainKey, licenceChainKeys))
+        .all()
+    : [];
+
   // Collect all user IDs we need emails for
   const userIdSet = new Set<string>();
   for (const l of licenceRows) {
     userIdSet.add(l.licenseeId);
     if (l.approvedBy) userIdSet.add(l.approvedBy);
+  }
+  for (const e of ledgerEvents) {
+    if (e.actorId) userIdSet.add(e.actorId);
   }
 
   let dlEvents: {
@@ -284,6 +312,23 @@ export async function GET(
         completedAt: dl.completedAt,
       });
     }
+  }
+
+  // Compliance-ledger events (durable, hash-chained)
+  for (const e of ledgerEvents) {
+    const licence = e.licenceId ? licenceMap.get(e.licenceId) : undefined;
+    events.push({
+      type: "compliance_event",
+      at: e.createdAt,
+      complianceEventType: e.eventType,
+      clauseRef: e.clauseRef,
+      licenceId: e.licenceId ?? undefined,
+      projectName: licence?.projectName,
+      productionCompany: licence?.productionCompany,
+      actor: e.actorId ? (userMap.get(e.actorId) ?? "Unknown") : undefined,
+      ip: e.ipAddress,
+      userAgent: e.userAgent,
+    });
   }
 
   // Sort chronologically

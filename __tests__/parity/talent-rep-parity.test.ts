@@ -32,7 +32,6 @@ const TALENT_ONLY_WHITELIST: Record<string, string> = {
   "onboarding/confirm/route.ts": "talent's own onboarding/profile confirmation",
   "onboarding/search/route.ts": "talent's own onboarding identity search",
   "onboarding/union-affiliation/route.ts": "talent's own onboarding union affiliation",
-  "vault/packages/search/route.ts": "talent searches their own scan packages",
   "cast/dismiss/route.ts": "talent personally dismisses a 'Not me' cast-claim suggestion for their own identity",
   "monitor/route.ts": "talent's own likeness monitor config — reps are alerted on hits but triage is an identity decision",
   "monitor/scan/route.ts": "talent runs likeness scans over their own biometric identity anchors",

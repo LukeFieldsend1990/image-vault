@@ -20,7 +20,7 @@ async function authorise(
   if (entryUnionId === undefined) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
   if (isAdmin(session.email)) return null;
-  const allowed = await getUnionIdsForUser(db, session.sub);
+  const allowed = await getUnionIdsForUser(db, session.sub, { scopes: ["platform", "union"] });
   if (allowed.length === 0) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!entryUnionId || !allowed.includes(entryUnionId)) {
     return NextResponse.json({ error: "No access to this entry" }, { status: 403 });

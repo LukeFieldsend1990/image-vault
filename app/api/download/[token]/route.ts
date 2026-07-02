@@ -9,8 +9,14 @@ interface DownloadToken {
   licenceId: string;
   fileId: string;
   licenseeId: string;
+  downloadEventId?: string; // absent on legacy tokens issued before per-serve scoping
   expiresAt: number;
 }
+
+// A licence must be actively APPROVED to serve bytes. Revocation flips it to
+// SCRUB_PERIOD (and expiry to EXPIRED/CLOSED), which must cut access immediately
+// even though issued dl_tokens still exist in KV.
+const SERVEABLE_STATUS = "APPROVED";
 
 // GET /api/download/[token] — validate a dual-custody download token and stream the file
 export async function GET(
@@ -37,7 +43,7 @@ export async function GET(
 
   const db = getDb();
 
-  // Check licence hasn't been revoked since token was issued
+  // Check the licence is still serveable (not revoked/expired) since token was issued
   const [licence] = await db
     .select({ status: licences.status })
     .from(licences)
@@ -45,8 +51,8 @@ export async function GET(
     .limit(1)
     .all();
 
-  if (!licence || licence.status === "REVOKED") {
-    return NextResponse.json({ error: "Licence has been revoked" }, { status: 410 });
+  if (!licence || licence.status !== SERVEABLE_STATUS) {
+    return NextResponse.json({ error: "Licence is no longer active" }, { status: 410 });
   }
 
   // Fetch file metadata
@@ -85,11 +91,21 @@ export async function GET(
     return NextResponse.json({ error: "File not in storage" }, { status: 404 });
   }
 
-  // Mark download event as completed
+  // Mark this serve's download event completed. Scope to the token's own event id
+  // so we never stamp events belonging to other licences/licensees that share this
+  // fileId. Legacy tokens (no event id) fall back to the licence+licensee+file scope.
   await db
     .update(downloadEvents)
     .set({ completedAt: now, bytesTransferred: object.size ?? null })
-    .where(eq(downloadEvents.fileId, tokenData.fileId));
+    .where(
+      tokenData.downloadEventId
+        ? eq(downloadEvents.id, tokenData.downloadEventId)
+        : and(
+            eq(downloadEvents.fileId, tokenData.fileId),
+            eq(downloadEvents.licenceId, tokenData.licenceId),
+            eq(downloadEvents.licenseeId, tokenData.licenseeId),
+          ),
+    );
 
   const headers = new Headers();
   headers.set("Content-Type", file.contentType ?? "application/octet-stream");

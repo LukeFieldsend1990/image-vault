@@ -66,7 +66,7 @@ export async function POST(
     .set({ publishedPackagesJson: JSON.stringify(publishedPackages) })
     .where(eq(renderBridgeAgents.id, agentId));
 
-  void db.insert(bridgeEvents).values({
+  await db.insert(bridgeEvents).values({
     id: crypto.randomUUID(),
     grantId: null,
     packageId: body.packageId,

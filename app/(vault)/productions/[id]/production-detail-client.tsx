@@ -987,7 +987,13 @@ export default function ProductionDetailClient() {
           <div className="flex items-center gap-3 flex-wrap">
             {(production.orgName ?? production.companyName) && (
               <span className="text-sm flex items-center gap-1.5" style={{ color: "var(--color-muted)" }}>
-                <span>{production.orgName ?? production.companyName}</span>
+                {production.organisationId && (production.viewerRole === "owner" || production.viewerRole === "admin") ? (
+                  <a href={`/organisations/${production.organisationId}`} className="hover:underline" style={{ color: "var(--color-accent)" }}>
+                    {production.orgName ?? production.companyName}
+                  </a>
+                ) : (
+                  <span>{production.orgName ?? production.companyName}</span>
+                )}
                 <OrgTypeBadge type={production.orgType} />
                 <CodeTag code={production.orgShortCode} />
               </span>
@@ -1083,6 +1089,77 @@ export default function ProductionDetailClient() {
       {/* ── Overview tab — permanent production infrastructure ── */}
       {activeTab === "overview" && (
         <div>
+      {/* Licences on this production — so owners/admins see the licensing that this
+          production drives, not just cast slots. Reps get their own scoped table. */}
+      {(production.viewerRole === "owner" || production.viewerRole === "admin") && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
+              Licences · {licences.length}
+            </p>
+            <a href="/licences" className="text-xs font-medium" style={{ color: "var(--color-accent)" }}>
+              View all licences
+            </a>
+          </div>
+          {licences.length === 0 ? (
+            <div className="rounded p-6 text-center text-xs" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-muted)" }}>
+              No licences reference this production yet. Licences appear here once a production company requests access to a cast member&apos;s scans.
+            </div>
+          ) : (
+            <div className="rounded overflow-hidden" style={{ border: "1px solid var(--color-border)" }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
+                    {["Talent", "Type", "Status", "Valid To", "Fee"].map((h) => (
+                      <th key={h} className="text-left px-4 py-2.5 text-xs font-medium tracking-wider uppercase" style={{ color: "var(--color-muted)" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {licences.map((lic, i) => {
+                    const licColour: Record<string, string> = {
+                      APPROVED: "#166534", PENDING: "#b45309", AWAITING_PACKAGE: "#7c3aed",
+                      DENIED: "#991b1b", REVOKED: "#6b7280", EXPIRED: "#6b7280",
+                    };
+                    const colour = licColour[lic.status] ?? "#6b7280";
+                    return (
+                      <tr key={lic.id} style={{ borderBottom: i < licences.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{lic.talentName ?? "Performer"}</span>
+                            <CodeTag code={lic.talentShortCode} />
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                            {lic.licenceType ? lic.licenceType.replace(/_/g, " ") : "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${colour}18`, color: colour }}>
+                            {lic.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                            {new Date(lic.validTo * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                            {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString("en-GB")}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString("en-GB")} proposed` : "—"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Union project number — editable by owners/admins and operational members. */}
       {canWrite && (production.viewerRole === "owner" || production.viewerRole === "admin") && (
         <div className="mb-6 flex items-center gap-2 flex-wrap text-xs">

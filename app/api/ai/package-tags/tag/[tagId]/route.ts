@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { packageTags } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { triggerReindex } from "@/lib/search/reindex";
+import { resolvePackageOwnerAccess } from "@/lib/vault/packageAccess";
 import { eq } from "drizzle-orm";
 
 // PATCH /api/ai/package-tags/:tagId — accept or dismiss a tag
@@ -39,6 +40,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const access = await resolvePackageOwnerAccess(db, existing.packageId, session);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   await db
     .update(packageTags)
     .set({
@@ -73,6 +77,9 @@ export async function DELETE(
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  const access = await resolvePackageOwnerAccess(db, existing.packageId, session);
+  if (!access) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await db.delete(packageTags).where(eq(packageTags.id, tagId));
 
