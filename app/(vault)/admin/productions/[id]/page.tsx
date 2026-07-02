@@ -332,7 +332,7 @@ export default async function AdminProductionDetailPage({ params }: { params: Pr
                   {l.status}
                 </span>
                 <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                  {l.agreedFee ? `£${(l.agreedFee / 100).toLocaleString("en-GB")}` : "—"}
+                  {l.agreedFee ? `$${(l.agreedFee / 100).toLocaleString("en-US")}` : "—"}
                 </span>
                 <span className="text-xs" style={{ color: "var(--color-muted)" }}>{ts(l.createdAt)}</span>
               </div>

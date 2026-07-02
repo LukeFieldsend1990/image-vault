@@ -60,8 +60,8 @@ function fmtDate(unix: number) {
   return new Date(unix * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function fmtGBP(pence: number) {
-  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
+function fmtUSD(pence: number) {
+  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
 // ── Shared: licence summary card ─────────────────────────────────────────────
@@ -624,15 +624,15 @@ export default function TalentAuthoriseClient({
           <div className="space-y-1.5 text-xs">
             <div className="flex justify-between">
               <span style={{ color: "var(--color-muted)" }}>Proposed licence fee</span>
-              <span style={{ color: "var(--color-ink)" }}>{fmtGBP(licence.proposedFee)}</span>
+              <span style={{ color: "var(--color-ink)" }}>{fmtUSD(licence.proposedFee)}</span>
             </div>
             <div className="flex justify-between">
               <span style={{ color: "var(--color-muted)" }}>Platform fee (15%)</span>
-              <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(licence.proposedFee * 0.15))}</span>
+              <span style={{ color: "var(--color-muted)" }}>−{fmtUSD(Math.round(licence.proposedFee * 0.15))}</span>
             </div>
             <div className="flex justify-between border-t pt-1.5 font-semibold" style={{ borderColor: "var(--color-border)" }}>
               <span style={{ color: "var(--color-ink)" }}>Your earnings</span>
-              <span style={{ color: "var(--color-accent)" }}>{fmtGBP(netEarnings)}</span>
+              <span style={{ color: "var(--color-accent)" }}>{fmtUSD(netEarnings)}</span>
             </div>
           </div>
         </div>

@@ -323,7 +323,7 @@ export default function ConciergeClient() {
                 </Field>
                 <Field label="Valid to" hint="Suggested 18-month term — adjust as needed."><input type="date" value={terms.validTo} onChange={(e) => setTerms((t) => ({ ...t, validTo: e.target.value }))} style={inputStyle} /></Field>
               </div>
-              <Field label="Proposed fee per actor (£)" hint="Optional — leave blank to negotiate individually, or mark N/A when scanning is part of production costs.">
+              <Field label="Proposed fee per actor ($)" hint="Optional — leave blank to negotiate individually, or mark N/A when scanning is part of production costs.">
                 <input type="number" min={0} step="0.01" value={terms.feeNA ? "" : terms.feePounds} disabled={terms.feeNA} onChange={(e) => setTerms((t) => ({ ...t, feePounds: e.target.value }))} style={{ ...inputStyle, opacity: terms.feeNA ? 0.5 : 1 }} placeholder={terms.feeNA ? "N/A" : undefined} />
               </Field>
               <label className="flex items-center gap-2 cursor-pointer select-none">

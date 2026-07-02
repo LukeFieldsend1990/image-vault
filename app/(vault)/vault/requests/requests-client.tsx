@@ -56,8 +56,8 @@ function formatDate(ts: number | null): string {
   return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function fmtGBP(pence: number) {
-  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
+function fmtUSD(pence: number) {
+  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
 export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
@@ -184,7 +184,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                     </p>
                     {r.proposedFee && (
                       <p className="text-xs mt-1 font-medium" style={{ color: "var(--color-accent)" }}>
-                        Proposed fee: {fmtGBP(r.proposedFee)}
+                        Proposed fee: {fmtUSD(r.proposedFee)}
                       </p>
                     )}
                   </div>
@@ -350,7 +350,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                     </p>
                     {r.proposedFee && netEarnings !== null && (
                       <p className="text-xs mt-1 font-medium" style={{ color: "var(--color-accent)" }}>
-                        Proposed fee: {fmtGBP(r.proposedFee)} · Your earnings: {fmtGBP(netEarnings)}
+                        Proposed fee: {fmtUSD(r.proposedFee)} · Your earnings: {fmtUSD(netEarnings)}
                       </p>
                     )}
                   </div>
@@ -417,7 +417,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                         <p className="mb-2 font-medium" style={{ color: "var(--color-ink)" }}>Fee breakdown</p>
                         <div className="flex justify-between">
                           <span style={{ color: "var(--color-muted)" }}>Proposed fee</span>
-                          <span style={{ color: "var(--color-ink)" }}>{fmtGBP(r.proposedFee)}</span>
+                          <span style={{ color: "var(--color-ink)" }}>{fmtUSD(r.proposedFee)}</span>
                         </div>
                         {(() => {
                           const platPct = 100 - (r.agencySharePct ?? 10) - (r.talentSharePct ?? 80);
@@ -425,17 +425,17 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                             <>
                               <div className="flex justify-between">
                                 <span style={{ color: "var(--color-muted)" }}>Platform fee ({platPct}%)</span>
-                                <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * platPct / 100))}</span>
+                                <span style={{ color: "var(--color-muted)" }}>−{fmtUSD(Math.round(r.proposedFee * platPct / 100))}</span>
                               </div>
                               {isRep ? (
                                 <div className="flex justify-between">
                                   <span style={{ color: "var(--color-muted)" }}>Talent share ({r.talentSharePct ?? 80}%)</span>
-                                  <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * (r.talentSharePct ?? 80) / 100))}</span>
+                                  <span style={{ color: "var(--color-muted)" }}>−{fmtUSD(Math.round(r.proposedFee * (r.talentSharePct ?? 80) / 100))}</span>
                                 </div>
                               ) : (
                                 <div className="flex justify-between">
                                   <span style={{ color: "var(--color-muted)" }}>Agency commission ({r.agencySharePct ?? 10}%)</span>
-                                  <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(r.proposedFee * (r.agencySharePct ?? 10) / 100))}</span>
+                                  <span style={{ color: "var(--color-muted)" }}>−{fmtUSD(Math.round(r.proposedFee * (r.agencySharePct ?? 10) / 100))}</span>
                                 </div>
                               )}
                             </>
@@ -446,7 +446,7 @@ export default function RequestsClient({ isRep = false }: { isRep?: boolean }) {
                           style={{ borderColor: "var(--color-border)" }}
                         >
                           <span style={{ color: "var(--color-ink)" }}>Your earnings ({sharePct}%)</span>
-                          <span style={{ color: "var(--color-accent)" }}>{fmtGBP(netEarnings)}</span>
+                          <span style={{ color: "var(--color-accent)" }}>{fmtUSD(netEarnings)}</span>
                         </div>
                       </div>
                     )}

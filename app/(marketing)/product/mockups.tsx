@@ -358,10 +358,10 @@ export function LicenceMockup() {
                 Period: 10 May 2026 – 25 Dec 2026
               </p>
               <p className="mt-1 text-[10px] font-medium" style={{ color: "var(--color-accent)" }}>
-                Agreed fee: £200,000
+                Agreed fee: $200,000
               </p>
               <p className="text-[10px] font-medium" style={{ color: "var(--color-accent)" }}>
-                Your earnings: £160,000
+                Your earnings: $160,000
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -530,9 +530,9 @@ export function MonitorMockup() {
 /* ── Royalty Hub — live pay-per-use meter ── */
 export function RoyaltiesMockup() {
   const feed = [
-    ["Aurora Pictures Ltd", "AI avatar render — Northern Light", "+ £4,800"],
-    ["Halcyon Interactive", "Game likeness — Season 2", "+ £2,150"],
-    ["Meridian Broadcasting", "Promo extension — 6 months", "+ £950"],
+    ["Aurora Pictures Ltd", "AI avatar render — Northern Light", "+ $4,800"],
+    ["Halcyon Interactive", "Game likeness — Season 2", "+ $2,150"],
+    ["Meridian Broadcasting", "Promo extension — 6 months", "+ $950"],
   ];
   return (
     <BrowserFrame url="changling.io/royalties">
@@ -572,7 +572,7 @@ export function RoyaltiesMockup() {
                   Lifetime
                 </p>
                 <p className="text-base font-semibold" style={{ color: "var(--color-ink)" }}>
-                  £48,250
+                  $48,250
                 </p>
                 <p className="text-[8px]" style={{ color: "var(--color-muted)" }}>
                   1,284 generations
@@ -584,9 +584,9 @@ export function RoyaltiesMockup() {
           {/* Stat tiles */}
           <div className="grid flex-1 grid-cols-2 gap-2">
             {[
-              ["Today", "£312"],
-              ["Last 24h", "£1,180"],
-              ["Lifetime", "£48,250"],
+              ["Today", "$312"],
+              ["Last 24h", "$1,180"],
+              ["Lifetime", "$48,250"],
               ["Generations", "1,284"],
             ].map(([k, v]) => (
               <div

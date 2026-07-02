@@ -8,7 +8,7 @@ import { resolveOwnerAccess } from "@/lib/productions/access";
 import { eq } from "drizzle-orm";
 
 // POST /api/licences/[id]/mark-included
-// Mark a licence as production-included (£0 fee, not a re-licence). Allowed for:
+// Mark a licence as production-included ($0 fee, not a re-licence). Allowed for:
 //   - platform admins
 //   - the licensee who holds the licence
 //   - any production member with write access (editor / owner)

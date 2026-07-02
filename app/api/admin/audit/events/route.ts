@@ -42,7 +42,7 @@ function fmt(bytes: number | null): string {
   return (bytes / 1e3).toFixed(1) + " KB";
 }
 
-function fmtGBP(pence: number | null): string {
+function fmtUSD(pence: number | null): string {
   if (!pence) return "";
   return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
@@ -245,7 +245,7 @@ export async function GET(req: NextRequest) {
       timestamp: e.createdAt,
       actor: e.licenseeEmail,
       detail: `Licence requested — ${e.projectName} (${e.productionCompany})`,
-      meta: e.proposedFee ? fmtGBP(e.proposedFee) : null,
+      meta: e.proposedFee ? fmtUSD(e.proposedFee) : null,
       severity: "info",
     });
     if (e.approvedAt) {
@@ -255,7 +255,7 @@ export async function GET(req: NextRequest) {
         timestamp: e.approvedAt,
         actor: e.approverEmail ?? e.talentEmail,
         detail: `Licence approved — ${e.projectName}`,
-        meta: e.agreedFee ? fmtGBP(e.agreedFee) : null,
+        meta: e.agreedFee ? fmtUSD(e.agreedFee) : null,
         severity: "info",
       });
     }

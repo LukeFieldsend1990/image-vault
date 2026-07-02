@@ -107,7 +107,7 @@ interface LicenceTerms {
   exclusivity: string;
   permitAiTraining: boolean;
   proposedFee: string;
-  feeNA: boolean;             // item 9 — fee is N/A (null), distinct from £0
+  feeNA: boolean;             // item 9 — fee is N/A (null), distinct from $0
   isRelicense: boolean;       // item 9 — re-licence of an existing scan
 }
 
@@ -504,7 +504,7 @@ export default function ProductionDetailClient() {
       territory: terms.territory || undefined,
       exclusivity: terms.exclusivity || "non_exclusive",
       permitAiTraining: terms.permitAiTraining,
-      // Item 9 — N/A fee is sent as null (distinct from £0); relicense flag carried through.
+      // Item 9 — N/A fee is sent as null (distinct from $0); relicense flag carried through.
       proposedFee: terms.feeNA ? null : (terms.proposedFee ? Math.round(parseFloat(terms.proposedFee) * 100) : undefined),
       isRelicense: terms.isRelicense,
     };
@@ -570,7 +570,7 @@ export default function ProductionDetailClient() {
   }
 
   async function handleMarkIncluded(licenceId: string) {
-    const reason = window.prompt("Mark this licence as production-included (£0 fee — the scan was produced and paid for as part of this production). Add a reference/justification:", "");
+    const reason = window.prompt("Mark this licence as production-included ($0 fee — the scan was produced and paid for as part of this production). Add a reference/justification:", "");
     if (reason === null) return;
     setMarkingIncludedId(licenceId);
     try {
@@ -942,7 +942,7 @@ export default function ProductionDetailClient() {
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                            {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
+                            {lic.agreedFee ? `$${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `$${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
                           </span>
                         </td>
                       </tr>
@@ -1147,7 +1147,7 @@ export default function ProductionDetailClient() {
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                            {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString("en-GB")}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString("en-GB")} proposed` : "—"}
+                            {lic.agreedFee ? `$${(lic.agreedFee / 100).toLocaleString("en-US")}` : lic.proposedFee ? `$${(lic.proposedFee / 100).toLocaleString("en-US")} proposed` : "—"}
                           </span>
                         </td>
                       </tr>
@@ -1583,9 +1583,9 @@ export default function ProductionDetailClient() {
                 )}
               </div>
 
-              {/* Fee + relicense (item 9). N/A fee (null) is distinct from £0. */}
+              {/* Fee + relicense (item 9). N/A fee (null) is distinct from $0. */}
               <div>
-                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Proposed Fee (£)</label>
+                <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Proposed Fee ($)</label>
                 <input
                   type="number"
                   min={0}
@@ -1930,12 +1930,12 @@ export default function ProductionDetailClient() {
                       <td className="px-4 py-3">
                         {lic.productionIncluded ? (
                           <span className="text-xs px-2 py-0.5 rounded font-medium" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }} title="Scan produced & paid for as part of this production — no licence fee">
-                            Included · £0
+                            Included · $0
                           </span>
                         ) : (
                           <div className="flex flex-col gap-1">
                             <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                              {lic.agreedFee ? `£${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `£${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
+                              {lic.agreedFee ? `$${(lic.agreedFee / 100).toLocaleString()}` : lic.proposedFee ? `$${(lic.proposedFee / 100).toLocaleString()} proposed` : "—"}
                             </span>
                             {canWrite && (
                               <button

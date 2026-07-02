@@ -36,7 +36,7 @@ function fmtDate(unix: number | null): string {
   });
 }
 
-function fmtGBP(pence: number | null): string {
+function fmtUSD(pence: number | null): string {
   if (!pence) return "Not specified";
   return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 }
@@ -532,7 +532,7 @@ export async function GET(
     </div>
     <div class="cover-meta-cell">
       <div class="label">Agreed Fee</div>
-      <div class="value">${fmtGBP(agreedFee)}</div>
+      <div class="value">${fmtUSD(agreedFee)}</div>
     </div>
     <div class="cover-meta-cell">
       <div class="label">Approved</div>
@@ -586,9 +586,9 @@ export async function GET(
     <tr><td>"Picture"</td><td>means the production identified as <strong>"${lic.projectName}"</strong> by ${lic.productionCompany}, as further described in Schedule 2.</td></tr>
     <tr><td>"Platform"</td><td>means the Changling Image Vault platform, operated by Changling Ltd., through which the Licensed Material is accessed and this Agreement is administered.</td></tr>
     <tr><td>"Platform Operator"</td><td>means Changling Ltd., acting as an intermediary and platform service provider and not as a party to the Permitted Use.</td></tr>
-    <tr><td>"Platform Fee"</td><td>means the service fee payable to the Platform Operator, being ${fmtGBP(platformFee)} (representing 15% of the Agreed Fee).</td></tr>
+    <tr><td>"Platform Fee"</td><td>means the service fee payable to the Platform Operator, being ${fmtUSD(platformFee)} (representing 15% of the Agreed Fee).</td></tr>
     <tr><td>"Producer"</td><td>means the party licensed to use the Biometric Data under this Agreement, being <strong>${lic.productionCompany}</strong>.</td></tr>
-    <tr><td>"Agreed Fee"</td><td>means the total licence fee of ${fmtGBP(agreedFee)}, of which ${fmtGBP(talentFee)} is payable to the Artist and ${fmtGBP(platformFee)} is payable to the Platform Operator as the Platform Fee.</td></tr>
+    <tr><td>"Agreed Fee"</td><td>means the total licence fee of ${fmtUSD(agreedFee)}, of which ${fmtUSD(talentFee)} is payable to the Artist and ${fmtUSD(platformFee)} is payable to the Platform Operator as the Platform Fee.</td></tr>
     <tr><td>"Intellectual Property Rights"</td><td>means all patents, copyrights, database rights, trade marks, design rights, rights in confidential information, and all other intellectual property rights whether registered or unregistered, worldwide.</td></tr>
     <tr><td>"Personal Data"</td><td>has the meaning given in the UK General Data Protection Regulation (UK GDPR) as retained in UK domestic law by the European Union (Withdrawal) Act 2018.</td></tr>
     <tr><td>"Moral Rights"</td><td>means the right of the Artist to be identified as the subject of the Licensed Material and the right to object to derogatory treatment thereof, as provided by Chapter IV of the Copyright, Designs and Patents Act 1988.</td></tr>
@@ -684,8 +684,8 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
   <div class="section-title"><span class="section-number">7.</span>Fees &amp; Payment</div>
-  <div class="clause"><span class="clause-num">7.1</span><span class="clause-body">In consideration of the rights granted under this Agreement, the Producer shall pay the Agreed Fee of <strong>${fmtGBP(agreedFee)}</strong> (exclusive of VAT) in accordance with this Clause 7.</span></div>
-  <div class="clause"><span class="clause-num">7.2</span><span class="clause-body">The Agreed Fee shall be disbursed as follows: <strong>${fmtGBP(talentFee)}</strong> to the Artist and <strong>${fmtGBP(platformFee)}</strong> (representing 15% of the Agreed Fee) to the Platform Operator as the Platform Service Fee.</span></div>
+  <div class="clause"><span class="clause-num">7.1</span><span class="clause-body">In consideration of the rights granted under this Agreement, the Producer shall pay the Agreed Fee of <strong>${fmtUSD(agreedFee)}</strong> (exclusive of VAT) in accordance with this Clause 7.</span></div>
+  <div class="clause"><span class="clause-num">7.2</span><span class="clause-body">The Agreed Fee shall be disbursed as follows: <strong>${fmtUSD(talentFee)}</strong> to the Artist and <strong>${fmtUSD(platformFee)}</strong> (representing 15% of the Agreed Fee) to the Platform Operator as the Platform Service Fee.</span></div>
   <div class="clause"><span class="clause-num">7.3</span><span class="clause-body">Payment of the Agreed Fee is due within thirty (30) days of the Effective Date unless otherwise agreed in writing by the parties. All payments shall be made in US dollars (USD) unless otherwise agreed.</span></div>
   <div class="clause"><span class="clause-num">7.4</span><span class="clause-body">All sums payable under this Agreement are exclusive of Value Added Tax (VAT). Where VAT is applicable, it shall be charged in addition at the prevailing rate and shall be payable by the Producer upon receipt of a valid VAT invoice.</span></div>
   <div class="clause"><span class="clause-num">7.5</span><span class="clause-body">In the event of late payment, interest shall accrue on the outstanding amount at the rate of 8% per annum above the Bank of England base rate in accordance with the Late Payment of Commercial Debts (Interest) Act 1998.</span></div>
@@ -809,9 +809,9 @@ export async function GET(
     <tr><td>Licence Start</td><td>${fmtDate(lic.validFrom)}</td></tr>
     <tr><td>Licence End</td><td>${fmtDate(lic.validTo)}</td></tr>
     <tr><td>AI Processing</td><td>${lic.permitAiTraining ? "Permitted (see Clause 3 and 4.4)" : "Not permitted"}</td></tr>
-    <tr><td>Agreed Fee</td><td>${fmtGBP(agreedFee)}</td></tr>
-    <tr><td>Platform Fee (15%)</td><td>${fmtGBP(platformFee)}</td></tr>
-    <tr><td>Talent Receives</td><td>${fmtGBP(talentFee)}</td></tr>
+    <tr><td>Agreed Fee</td><td>${fmtUSD(agreedFee)}</td></tr>
+    <tr><td>Platform Fee (15%)</td><td>${fmtUSD(platformFee)}</td></tr>
+    <tr><td>Talent Receives</td><td>${fmtUSD(talentFee)}</td></tr>
   </table>
 </div>
 

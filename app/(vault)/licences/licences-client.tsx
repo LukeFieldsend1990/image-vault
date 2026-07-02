@@ -114,8 +114,8 @@ function formatDate(ts: number | null): string {
   return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function fmtGBP(pence: number) {
-  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
+function fmtUSD(pence: number) {
+  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
 type TabValue = LicenceStatus | "ALL" | "SCRUB";
@@ -430,7 +430,7 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
                     </p>
                     {feeRef && (
                       <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
-                        {l.agreedFee ? "Agreed fee" : "Proposed fee"}: {fmtGBP(feeRef)}
+                        {l.agreedFee ? "Agreed fee" : "Proposed fee"}: {fmtUSD(feeRef)}
                       </p>
                     )}
                     {l.deniedReason && (
@@ -585,7 +585,7 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
                         <p className="mb-2 font-medium" style={{ color: "var(--color-ink)" }}>Fee</p>
                         <div className="flex justify-between">
                           <span style={{ color: "var(--color-muted)" }}>{l.agreedFee ? "Agreed fee" : "Proposed fee"}</span>
-                          <span style={{ color: "var(--color-ink)" }}>{fmtGBP(feeRef)}</span>
+                          <span style={{ color: "var(--color-ink)" }}>{fmtUSD(feeRef)}</span>
                         </div>
                       </div>
                     )}

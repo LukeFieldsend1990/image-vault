@@ -424,7 +424,7 @@ export default function SetupClient() {
     if (validFrom && validTo && validTo <= validFrom) { setError("End date must be after start date."); return; }
     setBusy(true);
     try {
-      // N/A fee (item 9) persists as null, distinct from £0; otherwise pence.
+      // N/A fee (item 9) persists as null, distinct from $0; otherwise pence.
       const feePence = terms.feeNA ? null : (terms.feePounds.trim() ? Math.round(parseFloat(terms.feePounds) * 100) : undefined);
       const r = await fetch(`/api/productions/${productionId}/default-terms`, {
         method: "PUT",
@@ -934,7 +934,7 @@ export default function SetupClient() {
               <input type="date" value={terms.validTo} onChange={(e) => setTerms((t) => ({ ...t, validTo: e.target.value }))} style={inputStyle} />
             </Field>
           </div>
-          <Field label="Proposed fee per actor (£)" hint="Optional — leave blank to negotiate individually, or mark N/A when scanning is part of production costs.">
+          <Field label="Proposed fee per actor ($)" hint="Optional — leave blank to negotiate individually, or mark N/A when scanning is part of production costs.">
             <input type="number" min={0} step="0.01" value={terms.feeNA ? "" : terms.feePounds} disabled={terms.feeNA} onChange={(e) => setTerms((t) => ({ ...t, feePounds: e.target.value }))} style={{ ...inputStyle, opacity: terms.feeNA ? 0.5 : 1 }} placeholder={terms.feeNA ? "N/A" : undefined} />
           </Field>
           <label className="flex items-center gap-2 cursor-pointer select-none">

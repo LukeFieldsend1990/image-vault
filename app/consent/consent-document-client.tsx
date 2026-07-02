@@ -40,7 +40,7 @@ interface NegotiationState {
 
 function feeLabel(pence: number | null): string {
   if (pence == null) return "No fee (N/A)";
-  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 function parseFeeInput(v: string): number | null {
   const t = v.trim();
@@ -469,7 +469,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
       <p className="text-xs mb-3" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
         Adjust the use categories above, set your fee, and add a note. {isProducer ? "The performer will review and respond." : "The production will review and accept or counter."}
       </p>
-      <label className="text-xs block mb-1" style={{ color: "var(--color-muted)" }}>Proposed fee (£) — leave blank for N/A</label>
+      <label className="text-xs block mb-1" style={{ color: "var(--color-muted)" }}>Proposed fee ($) — leave blank for N/A</label>
       <input
         type="number" min={0} value={counterFee} onChange={(e) => setCounterFee(e.target.value)} placeholder="N/A"
         className="w-full mb-3 rounded px-3 py-2 text-sm" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}

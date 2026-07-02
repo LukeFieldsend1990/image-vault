@@ -124,8 +124,8 @@ function formatDate(ts: number | null): string {
   return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function fmtGBP(pence: number) {
-  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 0 })}`;
+function fmtUSD(pence: number) {
+  return `$${(pence / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
 
 // Map of licenceId → bridge agent status; re-fetches when the set of project-scoped licences changes.
@@ -610,10 +610,10 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                         {netEarnings !== null && feeRef !== null && (
                           <>
                             <p className="mt-1 text-xs font-medium" style={{ color: "var(--color-accent)" }}>
-                              {l.agreedFee ? "Agreed fee" : "Proposed fee"}: {fmtGBP(feeRef)}
+                              {l.agreedFee ? "Agreed fee" : "Proposed fee"}: {fmtUSD(feeRef)}
                             </p>
                             <p className="mt-0.5 text-xs font-medium" style={{ color: "var(--color-accent)" }}>
-                              Your earnings: {fmtGBP(netEarnings)}
+                              Your earnings: {fmtUSD(netEarnings)}
                             </p>
                           </>
                         )}
@@ -805,26 +805,26 @@ export default function TalentLicencesClient({ role = "talent", highlight = null
                             <p className="mb-2 font-medium" style={{ color: "var(--color-ink)" }}>Fee breakdown</p>
                             <div className="flex justify-between">
                               <span style={{ color: "var(--color-muted)" }}>{l.agreedFee ? "Agreed fee" : "Proposed fee"}</span>
-                              <span style={{ color: "var(--color-ink)" }}>{fmtGBP(feeRef)}</span>
+                              <span style={{ color: "var(--color-ink)" }}>{fmtUSD(feeRef)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span style={{ color: "var(--color-muted)" }}>Platform fee ({platformPct}%)</span>
-                              <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * platformPct / 100))}</span>
+                              <span style={{ color: "var(--color-muted)" }}>−{fmtUSD(Math.round(feeRef * platformPct / 100))}</span>
                             </div>
                             {role === "rep" ? (
                               <div className="flex justify-between">
                                 <span style={{ color: "var(--color-muted)" }}>Talent share ({l.talentSharePct ?? 80}%)</span>
-                                <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * (l.talentSharePct ?? 80) / 100))}</span>
+                                <span style={{ color: "var(--color-muted)" }}>−{fmtUSD(Math.round(feeRef * (l.talentSharePct ?? 80) / 100))}</span>
                               </div>
                             ) : (
                               <div className="flex justify-between">
                                 <span style={{ color: "var(--color-muted)" }}>Agency commission ({l.agencySharePct ?? 10}%)</span>
-                                <span style={{ color: "var(--color-muted)" }}>−{fmtGBP(Math.round(feeRef * (l.agencySharePct ?? 10) / 100))}</span>
+                                <span style={{ color: "var(--color-muted)" }}>−{fmtUSD(Math.round(feeRef * (l.agencySharePct ?? 10) / 100))}</span>
                               </div>
                             )}
                             <div className="flex justify-between border-t pt-1 font-semibold" style={{ borderColor: "var(--color-border)" }}>
                               <span style={{ color: "var(--color-ink)" }}>Your earnings ({sharePct}%)</span>
-                              <span style={{ color: "var(--color-accent)" }}>{fmtGBP(netEarnings)}</span>
+                              <span style={{ color: "var(--color-accent)" }}>{fmtUSD(netEarnings)}</span>
                             </div>
                           </div>
                         )}
