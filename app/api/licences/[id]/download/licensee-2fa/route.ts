@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/send";
 import { downloadRequestEmail } from "@/lib/email/templates";
 import { isIndustryRole } from "@/lib/auth/roles";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 import type { DualCustodySession } from "../initiate/route";
 
 // POST /api/licences/[id]/download/licensee-2fa
@@ -124,12 +125,30 @@ export async function POST(
 
     await db.update(licences).set({ downloadCount: (licenceRow.downloadCount ?? 0) + 1, lastDownloadAt: now }).where(eq(licences.id, id));
 
+    // Durable custody record: licensee verified, and (via active pre-auth) the
+    // talent custody leg was waived — record both so the chain of custody is honest.
+    appendEventBg(db, {
+      chainKey: licenceChain(id), eventType: "custody.licensee_verified",
+      licenceId: id, talentId: dcSession.talentId, organisationId: dcSession.organisationId,
+      actorId: session.sub, payload: { preauth: true, fileCount: scopedFiles.length },
+      ipAddress: ip, userAgent,
+    });
+
     return NextResponse.json({ step: "complete", downloadTokens });
   }
 
   const updated: DualCustodySession = { ...dcSession, step: "awaiting_talent", completedByLicenseeId: session.sub };
   const ttl = dcSession.expiresAt - now;
   await kv.put(`dual_custody:${id}`, JSON.stringify(updated), { expirationTtl: ttl });
+
+  // Durable custody record: licensee custody leg verified (awaiting talent).
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "custody.licensee_verified",
+    licenceId: id, talentId: dcSession.talentId, organisationId: dcSession.organisationId,
+    actorId: session.sub, payload: { preauth: false },
+    ipAddress: req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? null,
+    userAgent: req.headers.get("user-agent") ?? null,
+  });
 
   // Notify talent/rep that their authorisation is required (fire-and-forget)
   void (async () => {

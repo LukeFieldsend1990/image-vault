@@ -10,6 +10,7 @@ import { triggerAiService } from "@/lib/ai/service";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { DualCustodySession } from "../initiate/route";
 import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
+import { appendEventBg, licenceChain } from "@/lib/compliance/emit-bg";
 
 const DOWNLOAD_TOKEN_TTL = 48 * 60 * 60; // 48 hours in seconds
 
@@ -161,6 +162,22 @@ export async function POST(
     else if (opt === "30d") preauthUntil = now + 30 * 86400;
     else if (opt === "licence") preauthUntil = licence.validTo;
   }
+
+  // Durable custody record: talent custody leg verified and download tokens issued.
+  // Flag when an admin completed the talent leg so it's distinguishable from the
+  // talent's own approval in the chain of custody.
+  appendEventBg(db, {
+    chainKey: licenceChain(id), eventType: "custody.talent_verified",
+    licenceId: id, talentId: dcSession.talentId, organisationId: dcSession.organisationId,
+    actorId: session.sub,
+    payload: {
+      byRole: session.role,
+      adminOverride: session.role === "admin" && dcSession.talentId !== session.sub,
+      fileCount: scopedFiles.length,
+      preauthUntil,
+    },
+    ipAddress: ip, userAgent,
+  });
 
   // Update licence stats (and preauth if set)
   await db
