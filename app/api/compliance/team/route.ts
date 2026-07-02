@@ -113,9 +113,13 @@ export async function POST(req: NextRequest) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!email) return NextResponse.json({ error: "email is required" }, { status: 400 });
 
-  const scope = typeof body.scope === "string" && ["platform", "union"].includes(body.scope)
-    ? body.scope
-    : "union";
+  const ALLOWED_SCOPES = ["union", "production", "talent"] as const;
+  const requestedScope = typeof body.scope === "string" ? body.scope : "union";
+  const scope = isAdmin(session.email) && requestedScope === "platform"
+    ? "platform"
+    : (ALLOWED_SCOPES as readonly string[]).includes(requestedScope)
+      ? requestedScope
+      : "union";
 
   const now = Math.floor(Date.now() / 1000);
 
