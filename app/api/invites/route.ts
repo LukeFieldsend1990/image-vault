@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (!skipEmail) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
     const { subject, html } = inviteEmail({
       to: normalEmail,
       inviterEmail: session.email,

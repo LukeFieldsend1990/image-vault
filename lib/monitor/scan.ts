@@ -388,7 +388,7 @@ async function alertTalent(
   hits: LikenessHitRecord[],
   baseUrl?: string
 ): Promise<void> {
-  const monitorUrl = `${baseUrl ?? "https://changling.io"}/vault/monitor`;
+  const monitorUrl = `${baseUrl ?? "https://imagevault.ai"}/vault/monitor`;
   const top = hits.reduce((a, b) => (b.confidence > a.confidence ? b : a), hits[0]);
 
   await notifyTalentAndReps(db, talentId, {

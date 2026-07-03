@@ -20,7 +20,7 @@ import {
 } from "@/lib/email/templates";
 import { eq, and } from "drizzle-orm";
 
-const BASE_URL = () => process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+const BASE_URL = () => process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
 // POST /api/transfers/[id] — { action: submit | accept | reject | cancel }
 export async function POST(

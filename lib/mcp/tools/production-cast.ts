@@ -48,9 +48,9 @@ function getBaseUrl(): string {
   try {
     const { env } = getCloudflareContext();
     const e = env as unknown as Record<string, string | undefined>;
-    return e.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    return e.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   } catch {
-    return process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    return process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   }
 }
 

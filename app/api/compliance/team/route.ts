@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
       subject: `You've been added to the ${preset?.shortName ?? "union"} team on Image Vault`,
       html: `
         <p>You now have access to the <strong>${preset?.shortName ?? ctx.unionId}</strong> union team on Image Vault.</p>
-        <p><a href="${process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io"}/union-team">View your team</a></p>
+        <p><a href="${process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai"}/union-team">View your team</a></p>
       `,
     });
 
@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
   });
 
   const preset = getUnionPreset(ctx.unionId);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   void sendEmail({
     to: email,
     subject: `You've been invited to join ${preset?.shortName ?? "a union"} on Image Vault`,

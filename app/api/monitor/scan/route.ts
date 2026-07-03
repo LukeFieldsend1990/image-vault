@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   } catch {
     env = { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY };
   }
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
   const result = await runLikenessScan(env, db, {
     talentId: session.sub,

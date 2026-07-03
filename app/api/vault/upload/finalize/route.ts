@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   const totalSizeBytes = sizeResult?.total ?? 0;
 
   if (talentUser?.email && fileCount > 0) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
     const { subject, html } = uploadCompleteEmail({
       talentEmail: talentUser.email,
       packageName: pkg.name,

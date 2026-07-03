@@ -44,7 +44,7 @@ export default function MarketingLayout({
 
           <div className="flex items-center gap-4">
             <a
-              href="https://changling.io/demo"
+              href="https://imagevault.ai/demo"
               className="text-xs font-medium tracking-wide uppercase transition hover:opacity-60"
               style={{ color: "var(--color-accent)" }}
             >

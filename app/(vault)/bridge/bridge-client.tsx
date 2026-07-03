@@ -571,7 +571,7 @@ export default function BridgeClient({ role, setupStatus }: { role: string; setu
       {!loading && agents.length === 0 && isIndustryRole(role) && setupStatus && (
         <BridgeSetupChecklist
           setup={setupStatus}
-          vaultUrl={process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io"}
+          vaultUrl={process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai"}
         />
       )}
       {!loading && agents.length === 0 && (!isIndustryRole(role) || !setupStatus) && <EmptyState role={role} />}

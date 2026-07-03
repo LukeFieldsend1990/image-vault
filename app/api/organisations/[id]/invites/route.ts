@@ -64,7 +64,7 @@ export async function POST(
     createdAt: now,
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   const joinUrl = `${baseUrl}/organisations/join?token=${inviteId}`;
 
   void sendEmail({

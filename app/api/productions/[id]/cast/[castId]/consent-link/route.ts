@@ -86,7 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!email) return NextResponse.json({ error: "Add a contact email for this performer (or assign a rep) first." }, { status: 400 });
 
   const token = await mintConsentToken({ castId: cast.id, productionId: id, email });
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   const consentUrl = `${baseUrl}/consent/access/${token}`;
 
   const companyName = production.organisationId

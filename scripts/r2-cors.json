@@ -2,8 +2,8 @@
   "cors_rules": [
     {
       "allowed_origins": [
-        "https://changling.io",
-        "https://*.changling.io",
+        "https://imagevault.ai",
+        "https://*.imagevault.ai",
         "http://localhost:3000"
       ],
       "allowed_methods": ["GET", "PUT", "HEAD"],

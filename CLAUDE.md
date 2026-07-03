@@ -234,7 +234,7 @@ MCP server at `/api/mcp` (Streamable HTTP, stateless JSON-RPC) gives whitelisted
 - **Audit**: every call logged to `mcpAuditLog` with secret-bearing params redacted (`lib/mcp/audit.ts`). Rate limits: 120 RPC/min per token, 5 TOTP attempts/5 min.
 - **Extending**: tools self-register like skills — add a file under `lib/mcp/tools/` calling `registerMcpTool({ name, description, inputSchema, mutating, execute })`, import it from `lib/mcp/tools/index.ts`. Set `mutating: true` for anything that writes; the dispatcher injects and enforces `totp_code` automatically (never declare it in your own schema).
 - **Semantic layer**: `lib/mcp/semantic-layer.ts` is a curated concept map (compiled from the Notion "Image Vault concepts" docs) exposed via `list_concepts` / `explain_concept`. Update it when architecture changes.
-- **Connect**: `claude mcp add --transport http image-vault https://changling.io/api/mcp --header "Authorization: Bearer mcp_…"`
+- **Connect**: `claude mcp add --transport http image-vault https://imagevault.ai/api/mcp --header "Authorization: Bearer mcp_…"`
 
 ## Environment & Secrets
 

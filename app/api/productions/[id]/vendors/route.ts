@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     productionName: production.name,
     companyName,
     actorUserId: session.sub,
-    baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io",
+    baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai",
     vendorOrgId: typeof body.vendorOrgId === "string" ? body.vendorOrgId : undefined,
     email: typeof body.email === "string" ? body.email : undefined,
     orgName: typeof body.orgName === "string" ? body.orgName : undefined,

@@ -160,7 +160,7 @@ export async function PATCH(
   })();
 
   void (async () => {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
     const [licenseeUser, talentUser] = await Promise.all([
       db.select({ email: users.email }).from(users).where(eq(users.id, licence.licenseeId)).get(),
       db.select({ email: users.email }).from(users).where(eq(users.id, licence.talentId)).get(),

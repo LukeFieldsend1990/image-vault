@@ -88,7 +88,7 @@ export async function POST(
     .where(eq(users.id, session.sub))
     .get();
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
   // Production-level default terms act as the lowest-precedence fallback so a
   // placeholder with no stored terms can still resolve from the wizard's defaults.

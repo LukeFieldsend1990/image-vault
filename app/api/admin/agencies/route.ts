@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
     organisationId: orgId,
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   const { subject, html } = agentInviteEmail({
     to: adminEmail,
     agencyName: name,

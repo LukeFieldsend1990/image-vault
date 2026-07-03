@@ -31,8 +31,8 @@ binding = "AI"
 # Environment Variables
 # -------------------------------------------------------------------
 [vars]
-RESEND_FROM_EMAIL = "Changling <noreply@changling.io>"
-APP_URL = "https://changling.io"
+RESEND_FROM_EMAIL = "Image Vault <noreply@imagevault.ai>"
+APP_URL = "https://imagevault.ai"
 
 # -------------------------------------------------------------------
 # Secrets (set via: wrangler secret put SECRET_NAME --config comms-worker/wrangler.toml)

@@ -112,7 +112,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
           productionName,
           consentedCount: uses.length,
           totalCount: total,
-          reviewUrl: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io"}/productions/${data.productionId}#cast`,
+          reviewUrl: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai"}/productions/${data.productionId}#cast`,
         });
         await sendEmail({ to: coordinator.email, subject, html });
       }

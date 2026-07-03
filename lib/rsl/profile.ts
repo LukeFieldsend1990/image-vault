@@ -20,7 +20,7 @@ export interface PublicLink {
 
 /** Canonical platform base URL (matches lib/consent + the rest of the app). */
 export function baseUrl(): string {
-  return process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  return process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 }
 
 /** Public consent-profile page URL for a slug. */

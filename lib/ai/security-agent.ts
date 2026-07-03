@@ -319,7 +319,7 @@ async function deliverVerdict(
     priority,
   });
 
-  const appUrl = env.APP_URL ?? "https://changling.io";
+  const appUrl = env.APP_URL ?? "https://imagevault.ai";
   const { subject, html } = securityAlertEmail({
     severity: verdict.severity,
     headline: verdict.headline,

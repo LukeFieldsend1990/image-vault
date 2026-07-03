@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       db.select({ fullName: talentProfiles.fullName }).from(talentProfiles).where(eq(talentProfiles.userId, session.sub)).get(),
     ]);
     if (!talentUser?.email) return;
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
     const { subject, html } = scanBookingConfirmedEmail({
       talentEmail: talentUser.email,
       talentName: profile?.fullName ?? talentUser.email,

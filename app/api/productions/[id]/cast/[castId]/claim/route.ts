@@ -18,7 +18,7 @@ export async function POST(
     return NextResponse.json({ error: "Only talent can claim a reserved role" }, { status: 403 });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   const db = getDb();
   const result = await claimRole(db, { talentUserId: session.sub, productionId: id, castId, baseUrl });
   if (!result.ok) {

@@ -61,7 +61,7 @@ export async function POST(
   if (typeof body.validTo === "number") overrides.validTo = body.validTo;
 
   const defaults = await loadProductionDefaultTerms(db, id);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
   const result = await promoteCastMember(db, {
     productionId: id,

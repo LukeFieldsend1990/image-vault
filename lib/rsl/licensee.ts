@@ -55,7 +55,7 @@ export async function provisionLicensee(
   // legacy values; effective industry role is expressed via that value).
   await db.insert(users).values({
     id: licenseeId,
-    email: `olp-${licenseeId}@licensee.changling.io`,
+    email: `olp-${licenseeId}@licensee.imagevault.ai`,
     passwordHash: `!olp-stub-${crypto.randomUUID()}`, // not a valid hash → cannot authenticate
     role: "licensee",
     unclaimedAt: now,

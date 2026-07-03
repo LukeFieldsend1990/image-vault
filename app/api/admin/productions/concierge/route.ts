@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
     orgSubtype: "production_company",
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   void (async () => {
     const { subject, html } = conciergeProductionInviteEmail({
       recipientEmail: inviteeEmail,
