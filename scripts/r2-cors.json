@@ -1,21 +1,23 @@
 {
-  "cors_rules": [
+  "rules": [
     {
-      "allowed_origins": [
-        "https://imagevault.ai",
-        "https://*.imagevault.ai",
-        "http://localhost:3000"
-      ],
-      "allowed_methods": ["GET", "PUT", "HEAD"],
-      "allowed_headers": [
-        "Content-Type",
-        "Content-Length",
-        "x-amz-content-sha256",
-        "x-amz-date",
-        "authorization"
-      ],
-      "expose_headers": ["ETag"],
-      "max_age_seconds": 3600
+      "allowed": {
+        "origins": [
+          "https://imagevault.ai",
+          "https://*.imagevault.ai",
+          "http://localhost:3000"
+        ],
+        "methods": ["GET", "PUT", "HEAD"],
+        "headers": [
+          "Content-Type",
+          "Content-Length",
+          "x-amz-content-sha256",
+          "x-amz-date",
+          "authorization"
+        ]
+      },
+      "exposeHeaders": ["ETag"],
+      "maxAgeSeconds": 3600
     }
   ]
 }
