@@ -15,6 +15,10 @@ export interface EmailPayload {
   to: string | string[];
   subject: string;
   html: string;
+  /** Override the default sender. Must be on a domain the Resend key can send from. */
+  from?: string;
+  /** Set the Reply-To header (e.g. the person who submitted a form). */
+  replyTo?: string;
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<void> {
@@ -100,10 +104,11 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from,
+          from: payload.from ?? from,
           to: filtered,
           subject: payload.subject,
           html: payload.html,
+          ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
         }),
       });
 

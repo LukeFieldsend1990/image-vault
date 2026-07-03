@@ -3,6 +3,7 @@ import {
   isContactRecipient,
   CONTACT_ADDRESS,
   CONTACT_RECIPIENTS,
+  CONTACT_FROM,
 } from "@/lib/inbound/contact-forward";
 
 describe("contact-forward recipient matching", () => {
@@ -32,5 +33,10 @@ describe("contact-forward recipient matching", () => {
     expect(CONTACT_ADDRESS).toBe("contact@imagevault.ai");
     expect(CONTACT_RECIPIENTS).toContain("lukefieldsend@googlemail.com");
     expect(CONTACT_RECIPIENTS).toContain("Martin.davison@gmail.com");
+  });
+
+  it("sends from a verified imagevault.ai domain (not changling.io)", () => {
+    expect(CONTACT_FROM).toContain("@imagevault.ai");
+    expect(CONTACT_FROM).not.toContain("changling.io");
   });
 });

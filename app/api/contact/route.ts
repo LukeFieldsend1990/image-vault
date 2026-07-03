@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email/send";
 import { contactEnquiryEmail } from "@/lib/email/templates";
-import { CONTACT_RECIPIENTS } from "@/lib/inbound/contact-forward";
+import { CONTACT_RECIPIENTS, CONTACT_FROM } from "@/lib/inbound/contact-forward";
 
 /**
  * The /contact form delivers enquiries to CONTACT_RECIPIENTS. Mail sent directly
@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
   void (async () => {
     await sendEmail({
       to: CONTACT_RECIPIENTS,
+      from: CONTACT_FROM,
+      replyTo: email.trim(),
       subject: emailSubject,
       html,
     });
