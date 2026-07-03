@@ -204,7 +204,7 @@ export default function BridgeSettingsClient({
 
   const totalActiveGrants = activeGrantsByLicence.reduce((s, x) => s + x.count, 0);
 
-  const vaultUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const vaultUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   const dockerOrgId = connectionIds[0]?.orgId ?? "<YOUR_ORG_ID>";
   const dockerToken = createdToken ?? "<YOUR_BRIDGE_TOKEN>";
   const dockerCmd = [
@@ -269,11 +269,11 @@ export default function BridgeSettingsClient({
               className="flex-1 rounded px-3 py-2 text-xs font-mono select-all"
               style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-ink)" }}
             >
-              {process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io"}
+              {process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai"}
             </code>
             <button
               type="button"
-              onClick={() => void navigator.clipboard.writeText(process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io")}
+              onClick={() => void navigator.clipboard.writeText(process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai")}
               className="shrink-0 rounded border px-3 py-2 text-xs transition hover:opacity-70"
               style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
             >

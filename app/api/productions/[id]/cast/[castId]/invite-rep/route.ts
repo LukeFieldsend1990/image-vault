@@ -58,7 +58,7 @@ export async function POST(
     return NextResponse.json({ error: "Provide a repUserId or an email" }, { status: 400 });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   const result = await inviteRepForCast(db, {
     productionId: id,
     castId,

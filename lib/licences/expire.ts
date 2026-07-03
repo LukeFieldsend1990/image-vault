@@ -64,7 +64,7 @@ export async function beginScrubPeriod(db: DrizzleD1Database<any>, licenceId: st
   }
 
   void (async () => {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
     const attestUrl = `${baseUrl}/licences/${licenceId}/scrub`;
 
     const [licenseeUser, pkg] = await Promise.all([

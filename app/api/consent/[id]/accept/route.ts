@@ -130,7 +130,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           productionName,
           consentedCount,
           totalCount: total,
-          reviewUrl: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io"}/licences/${id}`,
+          reviewUrl: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai"}/licences/${id}`,
         });
         await sendEmail({ to: licensee.email, subject, html });
       }

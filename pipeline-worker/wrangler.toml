@@ -55,7 +55,7 @@ service = "image-vault-ai"
 # -------------------------------------------------------------------
 [vars]
 RESEND_FROM_EMAIL = "Image Vault <noreply@imagevault.ai>"
-APP_URL = "https://changling.io"
+APP_URL = "https://imagevault.ai"
 
 # -------------------------------------------------------------------
 # Secrets (set via: wrangler secret put SECRET_NAME --config pipeline-worker/wrangler.toml)

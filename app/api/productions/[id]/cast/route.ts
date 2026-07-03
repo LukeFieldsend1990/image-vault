@@ -429,7 +429,7 @@ export async function POST(
   const coordinatorEmail = coordinatorUser?.email ?? session.email;
 
   const now = Math.floor(Date.now() / 1000);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
   let created = 0;
   let linked = 0;

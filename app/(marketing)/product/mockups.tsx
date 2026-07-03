@@ -196,7 +196,7 @@ export function VaultMockup() {
     },
   ];
   return (
-    <BrowserFrame url="changling.io/dashboard">
+    <BrowserFrame url="imagevault.ai/dashboard">
       <div className="flex" style={{ minHeight: "360px" }}>
         <SidebarRail active="Vault" />
         <div className="flex flex-1 flex-col">
@@ -301,7 +301,7 @@ export function VaultMockup() {
 /* ── Active licence card with commercial terms ── */
 export function LicenceMockup() {
   return (
-    <BrowserFrame url="changling.io/vault/licences">
+    <BrowserFrame url="imagevault.ai/vault/licences">
       <div className="p-5">
         <p className="mb-1 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
           Licences
@@ -418,7 +418,7 @@ export function MonitorMockup() {
     { name: "AI Platforms", kind: "AI Gen", state: "Scanning" },
   ];
   return (
-    <BrowserFrame url="changling.io/vault/monitor">
+    <BrowserFrame url="imagevault.ai/vault/monitor">
       <div className="p-5">
         <div className="mb-3 flex items-start justify-between">
           <div>
@@ -535,7 +535,7 @@ export function RoyaltiesMockup() {
     ["Meridian Broadcasting", "Promo extension — 6 months", "+ $950"],
   ];
   return (
-    <BrowserFrame url="changling.io/royalties">
+    <BrowserFrame url="imagevault.ai/royalties">
       <div className="p-5">
         <p
           className="text-[9px] font-medium tracking-widest uppercase"
@@ -654,7 +654,7 @@ export function ComplianceMockup() {
     ["05", "Bridge manifest signed", "Render Bridge — P-256 signature", "2026-05-19 14:02 UTC"],
   ];
   return (
-    <BrowserFrame url="changling.io/vault/packages/…/chain-of-custody">
+    <BrowserFrame url="imagevault.ai/vault/packages/…/chain-of-custody">
       <div className="p-5">
         <div className="mb-4 flex items-start justify-between">
           <div>
@@ -765,7 +765,7 @@ export function ComplianceMockup() {
 /* ── AI-triaged inbound mailbox ── */
 export function InboxMockup() {
   return (
-    <BrowserFrame url="changling.io/inbox">
+    <BrowserFrame url="imagevault.ai/inbox">
       <div className="p-5">
         <p
           className="mb-3 text-[9px] font-medium tracking-widest uppercase"

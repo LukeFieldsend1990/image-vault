@@ -196,7 +196,7 @@ export async function POST(
       db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, licencePackageId)).get(),
     ]);
     if (!licenseeUser?.email) return;
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
     const { subject, html } = licenceApprovedEmail({
       licenseeEmail: licenseeUser.email,
       projectName: licence.projectName,
