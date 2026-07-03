@@ -68,7 +68,6 @@ export async function POST(req: NextRequest) {
   let webhookSecret: string | undefined;
   let queue: { send(body: unknown): Promise<void> } | undefined;
   let resendApiKey: string | undefined;
-  let resendFrom: string | undefined;
   let waitUntil: ((p: Promise<unknown>) => void) | undefined;
   try {
     const { env, ctx } = getCloudflareContext();
@@ -76,12 +75,10 @@ export async function POST(req: NextRequest) {
     webhookSecret = e.RESEND_WEBHOOK_SECRET as string | undefined;
     queue = e.INBOUND_QUEUE as typeof queue;
     resendApiKey = e.RESEND_API_KEY as string | undefined;
-    resendFrom = e.RESEND_FROM_EMAIL as string | undefined;
     waitUntil = ctx.waitUntil.bind(ctx);
   } catch {
     webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
     resendApiKey = process.env.RESEND_API_KEY;
-    resendFrom = process.env.RESEND_FROM_EMAIL;
   }
 
   if (webhookSecret) {
@@ -139,7 +136,7 @@ export async function POST(req: NextRequest) {
   // a user alias below.
   if (isContactRecipient(allRecipients)) {
     const doForward = forwardContactEmail(
-      { RESEND_API_KEY: resendApiKey, RESEND_FROM_EMAIL: resendFrom },
+      { RESEND_API_KEY: resendApiKey },
       resendEmailId
     ).catch((err) => console.error("[webhook] Contact forward failed", err));
     if (waitUntil) waitUntil(doForward);

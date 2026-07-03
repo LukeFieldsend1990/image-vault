@@ -23,9 +23,15 @@ export const CONTACT_RECIPIENTS = [
   "Martin.davison@gmail.com",
 ];
 
+/**
+ * Sender for contact mail. Must be on a domain the Resend key is authorised to
+ * send from — imagevault.ai is verified; changling.io is not, so the global
+ * RESEND_FROM_EMAIL (noreply@changling.io) would be rejected with a 403.
+ */
+export const CONTACT_FROM = "Image Vault <noreply@imagevault.ai>";
+
 interface ForwardEnv {
   RESEND_API_KEY?: string;
-  RESEND_FROM_EMAIL?: string;
 }
 
 interface ResendInboundEmail {
@@ -106,7 +112,7 @@ export async function forwardContactEmail(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM_EMAIL ?? "Changling <noreply@changling.io>",
+      from: CONTACT_FROM,
       to: CONTACT_RECIPIENTS,
       reply_to: email.from,
       subject,
