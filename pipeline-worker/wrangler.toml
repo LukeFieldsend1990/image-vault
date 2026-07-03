@@ -54,7 +54,7 @@ service = "image-vault-ai"
 # Environment Variables
 # -------------------------------------------------------------------
 [vars]
-RESEND_FROM_EMAIL = "Changling <noreply@changling.io>"
+RESEND_FROM_EMAIL = "Image Vault <noreply@imagevault.ai>"
 APP_URL = "https://changling.io"
 
 # -------------------------------------------------------------------
