@@ -56,7 +56,7 @@ export async function POST(
   }
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   try {
     const result = await markLicenceIncluded(db, { licenceId: id, markedByUserId: session.sub, reason, baseUrl });
     if (!result.ok) return NextResponse.json({ error: result.message }, { status: 409 });

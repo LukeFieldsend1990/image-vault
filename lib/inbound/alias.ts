@@ -1,6 +1,6 @@
 /**
  * Generates memorable two-word aliases (adjective-noun).
- * e.g. brave-falcon@changling.io
+ * e.g. brave-falcon@imagevault.ai
  *
  * ~200 adjectives × ~200 nouns = 40,000 unique combos.
  */
@@ -57,7 +57,7 @@ export function generateAlias(): string {
   return `${adj}-${noun}`;
 }
 
-export const INBOUND_DOMAIN = "changling.io";
+export const INBOUND_DOMAIN = "imagevault.ai";
 
 export function fullAddress(alias: string): string {
   return `${alias}@${INBOUND_DOMAIN}`;

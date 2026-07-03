@@ -36,7 +36,7 @@ preview_bucket_name = "image-vault-scans-dev"
 # Environment Variables
 # -------------------------------------------------------------------
 [vars]
-APP_URL = "https://changling.io"
+APP_URL = "https://imagevault.ai"
 HIGGSFIELD_MODEL = "kling-3.0"
 
 # -------------------------------------------------------------------

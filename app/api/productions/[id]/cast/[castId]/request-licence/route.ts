@@ -135,7 +135,7 @@ export async function POST(
   // Point the cast row at the new licence and clear any prior `declined` state.
   await db.update(productionCast).set({ licenceId, status: "linked" }).where(eq(productionCast.id, castId));
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   const reviewUrl = `${baseUrl}/licences/${licenceId}`;
   const talent = await db.select({ email: users.email }).from(users).where(eq(users.id, row.talentId)).get();
 

@@ -30,7 +30,7 @@ export async function sendConnectionOfferNotification(
 
     const initiatorName = initiator?.name ?? "An organisation";
     const productionName = production?.name ?? "a production";
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
     const subject = `${initiatorName} wants to connect on ${productionName}`;
     const html = `

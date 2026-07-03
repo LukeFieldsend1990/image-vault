@@ -23,7 +23,7 @@ binding = "SCANS_BUCKET"
 bucket_name = "image-vault-scans-dev"
 
 [vars]
-APP_URL = "https://changling.io"
+APP_URL = "https://imagevault.ai"
 RESEND_FROM_EMAIL = "Image Vault <noreply@imagevault.ai>"
 
 # Secrets (set via: wrangler secret put SECRET_NAME --config ai-worker/wrangler.toml)

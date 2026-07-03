@@ -7,7 +7,7 @@
  * Every tool call is rate-limited and written to mcp_audit_log.
  *
  * Connect from Claude Code:
- *   claude mcp add --transport http image-vault https://changling.io/api/mcp \
+ *   claude mcp add --transport http image-vault https://imagevault.ai/api/mcp \
  *     --header "Authorization: Bearer mcp_…"
  */
 

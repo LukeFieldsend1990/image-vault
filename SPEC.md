@@ -185,7 +185,7 @@ GitHub repo (main branch)
        └─ PR preview URL generated per branch
 ```
 
-- **Production:** `https://changling.io`
+- **Production:** `https://imagevault.ai`
 - **Preview:** `https://<branch>.<project>.pages.dev` per PR/branch
 - Wrangler secrets managed via Cloudflare dashboard (never in repo)
 - D1 migrations run via `wrangler d1 migrations apply` as part of release process
@@ -579,7 +579,7 @@ Theme is resolved at the edge (middleware) and injected as CSS variables + passe
   - `RESEND_API_KEY` + `RESEND_FROM_EMAIL` — transactional email (licence requests, approvals, download alerts)
   - `TMDB_API_KEY` — talent onboarding search
   - `BRIDGE_SIGNING_KEY_JWK` — manifest signing for CAS Bridge desktop app
-  - `NEXT_PUBLIC_BASE_URL` — used in all email links; falls back to `https://changling.io`
+  - `NEXT_PUBLIC_BASE_URL` — used in all email links; falls back to `https://imagevault.ai`
   - `ANTHROPIC_API_KEY` — AI suggestion engine (optional, graceful degrade)
   - `MESHY_API_KEY` — pipeline GLB generation (optional, graceful degrade)
 - [ ] Add startup secret validation: log missing required secrets on cold start so misconfigs surface immediately instead of crashing on first request

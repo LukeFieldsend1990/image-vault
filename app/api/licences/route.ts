@@ -375,7 +375,7 @@ export async function POST(req: NextRequest) {
 
   // Notification routing depends on who created the licence.
   void (async () => {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
     if (isPlaceholder) {
       // Notify licensee: "Licence confirmed — awaiting scan capture"

@@ -160,7 +160,7 @@ export async function POST(
       db.select({ name: scanPackages.name }).from(scanPackages).where(eq(scanPackages.id, dcSession.packageId)).get(),
     ]);
     if (!talentUser?.email || !licenceRow || !pkg) return;
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
     const { subject, html } = downloadRequestEmail({
       talentEmail: talentUser.email,
       licenseeEmail: licenseeUser?.email ?? "Unknown",

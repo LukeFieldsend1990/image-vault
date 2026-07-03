@@ -132,7 +132,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const coordinatorEmail = coordinator?.email ?? session.email;
 
   const now = Math.floor(Date.now() / 1000);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
   const existingUser = await db
     .select({ id: users.id, role: users.role, trueRole: users.trueRole })

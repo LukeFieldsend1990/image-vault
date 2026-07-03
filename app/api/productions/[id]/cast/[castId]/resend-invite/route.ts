@@ -114,7 +114,7 @@ export async function POST(
     .get();
   const coordinatorEmail = coordinatorUser?.email ?? session.email;
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
 
   // Re-send email using existing invite ID
   void (async () => {

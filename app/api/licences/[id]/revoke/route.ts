@@ -136,7 +136,7 @@ export async function POST(
     ]);
 
     if (!licenseeUser?.email) return;
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://changling.io";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
     const attestUrl = `${baseUrl}/licences/${id}/scrub`;
     const packageName = pkg?.name ?? licencePackageId;
 

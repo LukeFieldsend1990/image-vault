@@ -111,7 +111,7 @@ const skill: SkillDefinition = {
       };
     }
 
-    const baseUrl = (ctx.env.NEXT_PUBLIC_BASE_URL as string) ?? "https://changling.io";
+    const baseUrl = (ctx.env.NEXT_PUBLIC_BASE_URL as string) ?? "https://imagevault.ai";
 
     const results = rows.map((r) => ({
       id: r.id,

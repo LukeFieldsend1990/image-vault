@@ -30,7 +30,7 @@ binding = "AI"
 # Environment Variables
 # -------------------------------------------------------------------
 [vars]
-APP_URL = "https://changling.io"
+APP_URL = "https://imagevault.ai"
 
 # -------------------------------------------------------------------
 # Secrets (set via: wrangler secret put SECRET_NAME --config ai-cron-worker/wrangler.toml)
