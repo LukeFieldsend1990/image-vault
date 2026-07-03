@@ -94,14 +94,15 @@ Both directions run through **Resend**, so the domain has to be verified there a
 - The 301 redirect covers clients still pointed at the old URL until they reconnect.
 
 ### 6. CORS
-- `scripts/r2-cors.json` now allows `https://imagevault.ai` + `https://*.imagevault.ai` (kept `http://localhost:3000`).
-- **Apply it to the R2 bucket(s)** — browser direct-to-R2 **uploads** (`/api/vault/upload/presign`) and any browser-side presigned fetches break without it:
+- `scripts/r2-cors.json` (final state) allows `https://imagevault.ai` + `https://*.imagevault.ai` + `http://localhost:3000`, in the Cloudflare REST `rules` schema (the subcommand is `set`, **not** `put`, and it rejects the old S3-style `cors_rules` schema):
   ```bash
-  wrangler r2 bucket cors put image-vault-scans --file scripts/r2-cors.json
+  wrangler r2 bucket cors set image-vault-scans --file scripts/r2-cors.json --force
   # repeat for the dev bucket if you use browser uploads in preview:
-  wrangler r2 bucket cors put image-vault-scans-dev --file scripts/r2-cors.json
+  wrangler r2 bucket cors set image-vault-scans-dev --file scripts/r2-cors.json --force
   ```
-  (Or R2 dashboard → bucket → Settings → CORS Policy.) Consider **keeping the old origin in the allowlist during cutover** and removing it after.
+  (`scripts/r2-cors-apply.sh` posts the same file to the REST API with a token, and now works too.)
+- **CUTOVER STATE (already applied to `image-vault-scans`):** a superset allowing **both** `imagevault.ai` **and** `changling.io` (+ their `*.` wildcards + localhost) is live now, so browser uploads keep working on the current `changling.io` site during the switch. **After `changling.io` is retired, re-apply the committed `scripts/r2-cors.json`** (imagevault.ai-only) with the command above to drop the old origin.
+- Browser direct-to-R2 **uploads** (`/api/vault/upload/presign`) and browser-side presigned fetches break without this.
 
 ### 7. Inbox triage
 - No domain-critical logic of its own — it depends entirely on **area 2 (receive)** working. Once inbound MX + webhook + `INBOUND_DOMAIN` are aligned, triage runs unchanged.
