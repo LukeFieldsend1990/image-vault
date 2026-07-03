@@ -896,6 +896,40 @@ export function registerInterestEmail(p: RegisterInterestParams): { subject: str
   };
 }
 
+export interface ContactEnquiryParams {
+  name: string;
+  email: string;
+  subject?: string;
+  message: string;
+  submittedAt: number;
+}
+
+export function contactEnquiryEmail(p: ContactEnquiryParams): { subject: string; html: string } {
+  const dt = new Date(p.submittedAt * 1000).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+  });
+  // Public, unauthenticated form — treat every field as untrusted and escape it.
+  const name = escapeHtml(p.name);
+  const email = escapeHtml(p.email);
+  const subjectLine = p.subject ? escapeHtml(p.subject) : "";
+  const message = escapeHtml(p.message).replace(/\n/g, "<br />");
+  return {
+    subject: `[Image Vault] Contact enquiry${subjectLine ? ` — ${subjectLine}` : ""} from ${name}`,
+    html: layout(`
+      <p>A new enquiry has been submitted via the Image Vault contact page.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Name</span><span class="kv-val">${name}</span></div>
+        <div class="kv-row"><span class="kv-key">Email</span><span class="kv-val">${email}</span></div>
+        ${subjectLine ? `<div class="kv-row"><span class="kv-key">Subject</span><span class="kv-val">${subjectLine}</span></div>` : ""}
+        <div class="kv-row"><span class="kv-key">Message</span><span class="kv-val">${message}</span></div>
+        <div class="kv-row"><span class="kv-key">Submitted</span><span class="kv-val">${dt}</span></div>
+      </div>
+      <p class="muted">Reply directly to <a href="mailto:${email}">${email}</a> to follow up with the sender.</p>
+    `),
+  };
+}
+
 // ── Security alert (ambient security agent) ─────────────────────────────────
 
 /**

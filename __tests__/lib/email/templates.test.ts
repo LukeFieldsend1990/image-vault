@@ -11,6 +11,7 @@ import {
   scanBookingCancelledEmail,
   passwordResetEmail,
   downloadCompleteEmail,
+  contactEnquiryEmail,
 } from "@/lib/email/templates";
 
 describe("email templates", () => {
@@ -215,6 +216,47 @@ describe("email templates", () => {
     });
     expect(talent.html).toContain("chain of custody");
     expect(talent.html).not.toContain("IP address");
+  });
+
+  it("contactEnquiryEmail includes sender details and message", () => {
+    const result = contactEnquiryEmail({
+      name: "Jane Smith",
+      email: "jane@example.com",
+      subject: "Access question",
+      message: "Line one\nLine two",
+      submittedAt: 1700000000,
+    });
+    expect(result.subject).toContain("Jane Smith");
+    expect(result.subject).toContain("Access question");
+    expect(result.html).toContain("jane@example.com");
+    expect(result.html).toContain("Line one<br />Line two");
+    expect(result.html).toContain("mailto:jane@example.com");
+  });
+
+  it("contactEnquiryEmail escapes untrusted HTML in every field", () => {
+    const result = contactEnquiryEmail({
+      name: "<script>alert(1)</script>",
+      email: "x@y.com",
+      subject: "<img src=x onerror=alert(2)>",
+      message: "<b>bold</b> & <i>tags</i>",
+      submittedAt: 1700000000,
+    });
+    expect(result.html).not.toContain("<script>");
+    expect(result.html).not.toContain("<img src=x");
+    expect(result.html).not.toContain("<b>bold</b>");
+    expect(result.html).toContain("&lt;script&gt;");
+    expect(result.html).toContain("&amp;");
+  });
+
+  it("contactEnquiryEmail omits subject row when not provided", () => {
+    const result = contactEnquiryEmail({
+      name: "Casey Jones",
+      email: "ns@example.com",
+      message: "Hi there",
+      submittedAt: 1700000000,
+    });
+    expect(result.subject).not.toContain("—");
+    expect(result.html).not.toContain('kv-key">Subject');
   });
 
   it("all templates produce valid HTML with layout wrapper", () => {
