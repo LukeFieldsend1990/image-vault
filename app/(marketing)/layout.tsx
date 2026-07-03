@@ -30,6 +30,7 @@ export default function MarketingLayout({
               ["Features", "#features"],
               ["Security", "#security"],
               ["How it works", "#how-it-works"],
+              ["Contact", "/contact"],
             ].map(([label, href]) => (
               <a
                 key={href}
@@ -97,6 +98,13 @@ export default function MarketingLayout({
               style={{ color: "var(--color-muted)" }}
             >
               Request access
+            </Link>
+            <Link
+              href="/contact"
+              className="text-xs transition hover:opacity-60"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Contact
             </Link>
             <span className="text-xs" style={{ color: "var(--color-muted)" }}>
               &copy; {new Date().getFullYear()} Image Vault

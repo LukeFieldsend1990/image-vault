@@ -4,6 +4,7 @@ import { inboundAliases, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { INBOUND_DOMAIN } from "@/lib/inbound/alias";
+import { isContactRecipient, forwardContactEmail } from "@/lib/inbound/contact-forward";
 
 /**
  * Verify Resend webhook signature using svix.
@@ -66,13 +67,21 @@ export async function POST(req: NextRequest) {
   // 1. Verify webhook signature
   let webhookSecret: string | undefined;
   let queue: { send(body: unknown): Promise<void> } | undefined;
+  let resendApiKey: string | undefined;
+  let resendFrom: string | undefined;
+  let waitUntil: ((p: Promise<unknown>) => void) | undefined;
   try {
-    const { env } = getCloudflareContext();
+    const { env, ctx } = getCloudflareContext();
     const e = env as unknown as Record<string, unknown>;
     webhookSecret = e.RESEND_WEBHOOK_SECRET as string | undefined;
     queue = e.INBOUND_QUEUE as typeof queue;
+    resendApiKey = e.RESEND_API_KEY as string | undefined;
+    resendFrom = e.RESEND_FROM_EMAIL as string | undefined;
+    waitUntil = ctx.waitUntil.bind(ctx);
   } catch {
     webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+    resendApiKey = process.env.RESEND_API_KEY;
+    resendFrom = process.env.RESEND_FROM_EMAIL;
   }
 
   if (webhookSecret) {
@@ -123,8 +132,22 @@ export async function POST(req: NextRequest) {
   }
   await kv.put(dedupeKey, "processing", { expirationTtl: 86400 });
 
-  // 5. Resolve alias from recipients
   const allRecipients = [...(event.data.to ?? []), ...(event.data.cc ?? [])];
+
+  // 5. Public contact mailbox — forward to the team, then stop. This is a fixed
+  // address on a different domain than the alias inbox, so it never resolves to
+  // a user alias below.
+  if (isContactRecipient(allRecipients)) {
+    const doForward = forwardContactEmail(
+      { RESEND_API_KEY: resendApiKey, RESEND_FROM_EMAIL: resendFrom },
+      resendEmailId
+    ).catch((err) => console.error("[webhook] Contact forward failed", err));
+    if (waitUntil) waitUntil(doForward);
+    else await doForward;
+    return NextResponse.json({ ok: true, routed: true, forwarded: "contact" });
+  }
+
+  // 6. Resolve alias from recipients
   const aliasLocal = findAlias(allRecipients);
 
   if (!aliasLocal) {
@@ -132,7 +155,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, routed: false });
   }
 
-  // 6. Look up alias in DB
+  // 7. Look up alias in DB
   const db = getDb();
   const alias = await db
     .select()
@@ -145,7 +168,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, routed: false });
   }
 
-  // 7. Check user has inbound enabled
+  // 8. Check user has inbound enabled
   const user = await db
     .select({ inboundEnabled: users.inboundEnabled })
     .from(users)
@@ -157,7 +180,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, routed: false, reason: "feature_disabled" });
   }
 
-  // 8. Enqueue to comms worker (worker fetches full email via Resend API)
+  // 9. Enqueue to comms worker (worker fetches full email via Resend API)
   if (queue) {
     await queue.send({
       resendEmailId,
