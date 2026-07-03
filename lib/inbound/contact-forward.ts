@@ -25,8 +25,8 @@ export const CONTACT_RECIPIENTS = [
 
 /**
  * Sender for contact mail. Must be on a domain the Resend key is authorised to
- * send from — imagevault.ai is verified; changling.io is not, so the global
- * RESEND_FROM_EMAIL (noreply@changling.io) would be rejected with a 403.
+ * send from — imagevault.ai is verified; changling.io is not (Resend rejects it
+ * with a 403). Kept explicit so contact mail is unaffected by RESEND_FROM_EMAIL.
  */
 export const CONTACT_FROM = "Image Vault <noreply@imagevault.ai>";
 

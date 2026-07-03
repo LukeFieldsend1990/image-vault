@@ -3,7 +3,8 @@
  * Works on Cloudflare edge (no Node.js runtime needed).
  *
  * Set RESEND_API_KEY in .dev.vars / Cloudflare Pages secrets.
- * Set RESEND_FROM_EMAIL to your verified sender (e.g. "Changling <noreply@changling.io>").
+ * Set RESEND_FROM_EMAIL to a verified sender (e.g. "Image Vault <noreply@imagevault.ai>").
+ * The domain must be verified for sending in Resend — imagevault.ai is; changling.io is not.
  */
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -31,12 +32,12 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
     const { env, ctx } = getCloudflareContext();
     const e = env as unknown as Record<string, string | undefined>;
     apiKey = e.RESEND_API_KEY;
-    from = e.RESEND_FROM_EMAIL ?? "Changling <noreply@changling.io>";
+    from = e.RESEND_FROM_EMAIL ?? "Image Vault <noreply@imagevault.ai>";
     waitUntil = ctx.waitUntil.bind(ctx);
   } catch {
     // Local dev — fall back to process.env
     apiKey = process.env.RESEND_API_KEY;
-    from = process.env.RESEND_FROM_EMAIL ?? "Changling <noreply@changling.io>";
+    from = process.env.RESEND_FROM_EMAIL ?? "Image Vault <noreply@imagevault.ai>";
   }
 
   if (!apiKey) {
