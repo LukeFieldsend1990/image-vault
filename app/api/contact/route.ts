@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email/send";
 import { contactEnquiryEmail } from "@/lib/email/templates";
+import { CONTACT_RECIPIENTS } from "@/lib/inbound/contact-forward";
 
 /**
- * Recipients for the public contact form. Enquiries submitted at /contact are
- * delivered to both addresses — the functional equivalent of forwarding
- * contact@imagevault.ai to these mailboxes.
- *
- * NB: true inbound forwarding of the contact@imagevault.ai mailbox (i.e. someone
- * emailing that address directly) is configured separately via Cloudflare Email
- * Routing at the DNS level, not in application code.
+ * The /contact form delivers enquiries to CONTACT_RECIPIENTS. Mail sent directly
+ * to contact@imagevault.ai reaches the same inboxes via the Resend inbound
+ * webhook (see lib/inbound/contact-forward.ts) — one shared recipient list.
  */
-const CONTACT_RECIPIENTS = [
-  "lukefieldsend@googlemail.com",
-  "Martin.davison@gmail.com",
-];
 
 const MAX_MESSAGE = 5000;
 const MAX_FIELD = 200;

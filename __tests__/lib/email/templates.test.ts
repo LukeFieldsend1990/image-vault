@@ -12,6 +12,7 @@ import {
   passwordResetEmail,
   downloadCompleteEmail,
   contactEnquiryEmail,
+  contactForwardEmail,
 } from "@/lib/email/templates";
 
 describe("email templates", () => {
@@ -257,6 +258,43 @@ describe("email templates", () => {
     });
     expect(result.subject).not.toContain("—");
     expect(result.html).not.toContain('kv-key">Subject');
+  });
+
+  it("contactForwardEmail includes sender, subject and body", () => {
+    const result = contactForwardEmail({
+      fromAddress: "sender@outside.com",
+      subject: "Question about licensing",
+      body: "First line\nSecond line",
+      receivedAt: 1700000000,
+    });
+    expect(result.subject).toContain("Question about licensing");
+    expect(result.subject).toContain("sender@outside.com");
+    expect(result.html).toContain("sender@outside.com");
+    expect(result.html).toContain("First line<br />Second line");
+    expect(result.html).toContain("contact@imagevault.ai");
+  });
+
+  it("contactForwardEmail escapes untrusted sender content", () => {
+    const result = contactForwardEmail({
+      fromAddress: "<b>evil</b>@x.com",
+      subject: "<script>alert(1)</script>",
+      body: "<img src=x onerror=alert(2)> & more",
+      receivedAt: 1700000000,
+    });
+    expect(result.html).not.toContain("<script>");
+    expect(result.html).not.toContain("<img src=x");
+    expect(result.html).toContain("&lt;script&gt;");
+    expect(result.html).toContain("&amp;");
+  });
+
+  it("contactForwardEmail falls back to (no subject)", () => {
+    const result = contactForwardEmail({
+      fromAddress: "s@x.com",
+      body: "hi",
+      receivedAt: 1700000000,
+    });
+    expect(result.subject).toContain("(no subject)");
+    expect(result.html).toContain("(no subject)");
   });
 
   it("all templates produce valid HTML with layout wrapper", () => {

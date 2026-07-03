@@ -930,6 +930,37 @@ export function contactEnquiryEmail(p: ContactEnquiryParams): { subject: string;
   };
 }
 
+export interface ContactForwardParams {
+  fromAddress: string;
+  subject?: string;
+  body: string;
+  receivedAt: number;
+}
+
+export function contactForwardEmail(p: ContactForwardParams): { subject: string; html: string } {
+  const dt = new Date(p.receivedAt * 1000).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+  });
+  // Forwarded from an external, unauthenticated sender — escape every field.
+  const from = escapeHtml(p.fromAddress);
+  const subjectText = p.subject?.trim() || "(no subject)";
+  const subjectLine = escapeHtml(subjectText);
+  const body = escapeHtml(p.body).replace(/\n/g, "<br />");
+  return {
+    subject: `[Image Vault] Contact — ${subjectText} from ${p.fromAddress}`,
+    html: layout(`
+      <p>A message was sent to <strong>contact@imagevault.ai</strong> and forwarded to you. Reply directly to this email to reach the sender.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">From</span><span class="kv-val">${from}</span></div>
+        <div class="kv-row"><span class="kv-key">Subject</span><span class="kv-val">${subjectLine}</span></div>
+        <div class="kv-row"><span class="kv-key">Received</span><span class="kv-val">${dt}</span></div>
+      </div>
+      <p>${body}</p>
+    `),
+  };
+}
+
 // ── Security alert (ambient security agent) ─────────────────────────────────
 
 /**
