@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email/send";
 import { registerInterestEmail } from "@/lib/email/templates";
 import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
+import { CONTACT_FROM } from "@/lib/inbound/contact-forward";
 
 const COMPANY_TYPES = [
   "Production Company",
@@ -50,9 +51,13 @@ export async function POST(req: NextRequest) {
     submittedAt,
   });
 
+  // Mirror the contact form: send from the verified imagevault.ai sender and set
+  // Reply-To to the applicant so the team can reply straight back to them.
   void (async () => {
     await sendEmail({
       to: ADMIN_EMAILS as unknown as string[],
+      from: CONTACT_FROM,
+      replyTo: email.trim(),
       subject,
       html,
     });
