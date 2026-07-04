@@ -13,6 +13,8 @@
  */
 
 import { contactForwardEmail } from "@/lib/email/templates";
+import { getDb } from "@/lib/db";
+import { emailLog } from "@/lib/db/schema";
 
 /** The public mailbox that forwards to the team. */
 export const CONTACT_ADDRESS = "contact@imagevault.ai";
@@ -71,6 +73,73 @@ function htmlToText(html: string): string {
 }
 
 /**
+ * Record a forward failure in the outbound email log so it surfaces in the admin
+ * failure view (and is queryable), mirroring how sendEmail() logs its own
+ * failures. Best-effort — a logging failure must never mask the original error.
+ */
+async function logForwardFailure(
+  stage: "fetch" | "send",
+  errorCode: number | null,
+  errorBody: string
+): Promise<void> {
+  try {
+    const db = getDb();
+    await db.insert(emailLog).values({
+      id: crypto.randomUUID(),
+      toAddress: CONTACT_RECIPIENTS.join(", "),
+      subject: `[contact-forward] ${stage} failed`,
+      status: "failed",
+      errorCode,
+      errorBody: errorBody.slice(0, 2000),
+      sentAt: Math.floor(Date.now() / 1000),
+    });
+  } catch {
+    // Outside request context or DB unavailable — nothing more we can do.
+  }
+}
+
+/**
+ * Fetch the inbound message from Resend, retrying briefly on the errors that
+ * mean "not persisted yet". The webhook fires the instant Resend accepts the
+ * message, and this forward runs inline (not via the delayed inbound queue that
+ * the alias path uses), so the message can 404 for a moment before it becomes
+ * retrievable. A few short retries close that race.
+ */
+async function fetchInboundEmail(
+  apiKey: string,
+  resendEmailId: string
+): Promise<
+  | { ok: true; email: ResendInboundEmail }
+  | { ok: false; status: number; body: string }
+> {
+  // Attempt immediately, then back off. Total added latency ≤ ~2.75s, all inside
+  // the webhook's waitUntil so it never delays the HTTP response.
+  const backoffMs = [0, 750, 2000];
+  let status = 0;
+  let body = "";
+
+  for (const wait of backoffMs) {
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+
+    // Inbound emails use /emails/receiving/{id} — not /emails/{id}.
+    const res = await fetch(`https://api.resend.com/emails/receiving/${resendEmailId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (res.ok) {
+      return { ok: true, email: (await res.json()) as ResendInboundEmail };
+    }
+
+    status = res.status;
+    body = await res.text();
+    // Only 404 (not yet persisted), 429 (rate limited) and 5xx (transient) are
+    // worth retrying. Anything else (401/403 auth, 400 bad id) will not recover.
+    if (status !== 404 && status !== 429 && status < 500) break;
+  }
+
+  return { ok: false, status, body };
+}
+
+/**
  * Fetch the full inbound message from Resend and forward it to the team.
  * Returns a small result object for logging; never throws for expected failures.
  */
@@ -84,15 +153,13 @@ export async function forwardContactEmail(
     return { ok: false, reason: "no_api_key" };
   }
 
-  // Inbound emails use /emails/receiving/{id} — not /emails/{id}.
-  const res = await fetch(`https://api.resend.com/emails/receiving/${resendEmailId}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (!res.ok) {
-    console.error("[contact-forward] Failed to fetch inbound email:", res.status, await res.text());
+  const fetched = await fetchInboundEmail(apiKey, resendEmailId);
+  if (!fetched.ok) {
+    console.error("[contact-forward] Failed to fetch inbound email:", fetched.status, fetched.body);
+    await logForwardFailure("fetch", fetched.status || null, fetched.body);
     return { ok: false, reason: "fetch_failed" };
   }
-  const email = (await res.json()) as ResendInboundEmail;
+  const email = fetched.email;
 
   const body = email.text?.trim()
     || (email.html ? htmlToText(email.html) : "")
@@ -121,7 +188,9 @@ export async function forwardContactEmail(
   });
 
   if (!sendRes.ok) {
-    console.error("[contact-forward] Failed to send forward:", sendRes.status, await sendRes.text());
+    const sendBody = await sendRes.text();
+    console.error("[contact-forward] Failed to send forward:", sendRes.status, sendBody);
+    await logForwardFailure("send", sendRes.status, sendBody);
     return { ok: false, reason: "send_failed" };
   }
 
