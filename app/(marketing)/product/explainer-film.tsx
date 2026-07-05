@@ -4,6 +4,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 
 const SRC = "/explainer/imagevault-explainer.html";
 
+// Handshake with the embedded film: it announces READY once its script is
+// listening, and holds its opening frame until we post PLAY (which we do when
+// the frame scrolls into view).
+const FILM_READY = "imagevault-explainer:ready";
+const FILM_PLAY = "imagevault-explainer:play";
+
 const COARSE_POINTER = "(pointer: coarse)";
 
 function subscribeCoarsePointer(onChange: () => void) {
@@ -15,6 +21,10 @@ function subscribeCoarsePointer(onChange: () => void) {
 /**
  * The explainer film embed, with tap-to-fullscreen.
  *
+ * The film preloads but holds its opening frame until it scrolls into view:
+ * the bundled asset waits for a play message when embedded (and posts a ready
+ * message once listening), and we send it when the IntersectionObserver fires.
+ *
  * iPhone Safari does not support the Fullscreen API on iframes (only on
  * <video>), so we fill the viewport with a fixed overlay instead — and attempt
  * the real Fullscreen API as progressive enhancement (Android Chrome, desktop,
@@ -25,6 +35,9 @@ export default function ExplainerFilm() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [expanded, setExpanded] = useState(false);
+  // Play immediately if IntersectionObserver is somehow unavailable.
+  const [inView, setInView] = useState(() => typeof IntersectionObserver === "undefined");
+  const [filmReady, setFilmReady] = useState(false);
 
   // Touch devices get a tap-the-whole-surface affordance; pointer devices get a
   // corner control so the iframe's own buttons stay usable. Read via an external
@@ -48,8 +61,40 @@ export default function ExplainerFilm() {
     });
   }, []);
 
+  // The film holds its opening frame until told to play; start it once a good
+  // chunk of the frame has actually been scrolled into view.
+  useEffect(() => {
+    if (inView) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setInView(true);
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [inView]);
+
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.data === FILM_READY && e.source === iframeRef.current?.contentWindow) {
+        setFilmReady(true);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  useEffect(() => {
+    if (!inView || !filmReady) return;
+    iframeRef.current?.contentWindow?.postMessage(FILM_PLAY, "*");
+  }, [inView, filmReady]);
+
   const open = useCallback(() => {
     setExpanded(true);
+    setInView(true);
     const el = wrapRef.current as
       | (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void })
       | null;
