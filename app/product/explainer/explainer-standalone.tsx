@@ -53,16 +53,24 @@ export default function ExplainerStandalone() {
   useEffect(() => {
     const fit = () => {
       const angle = orientationAngle();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
       if (!baseRef.current) {
-        baseRef.current = { w: window.innerWidth, h: window.innerHeight, angle };
+        baseRef.current = { w: vw, h: vh, angle };
       }
       const base = baseRef.current;
       if (angle === base.angle) {
+        // iOS Safari fires `resize` with the rotated dimensions BEFORE it
+        // updates the orientation angle. An aspect flip while the angle is
+        // unchanged is that mid-rotation window — don't clobber the frozen
+        // base with rotated dimensions; the orientation event that follows
+        // will engage the lock.
+        if (vw >= vh !== base.w >= base.h) return;
         // Still in the loaded orientation — fill the viewport and track its
         // size so plain resizes (desktop windows, collapsing URL bars) keep
         // working as before.
-        base.w = window.innerWidth;
-        base.h = window.innerHeight;
+        base.w = vw;
+        base.h = vh;
         setLock(null);
       } else {
         // Rotated away: pin the frozen layout to the physical screen. The
