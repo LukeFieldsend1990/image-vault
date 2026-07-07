@@ -102,7 +102,7 @@ export default function ProductPage() {
             What Image Vault does
           </p>
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-            A sixty-second tour
+            A ninety-second tour
           </p>
         </div>
         <ExplainerFilm />
