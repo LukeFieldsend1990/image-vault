@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const SRC = "/explainer/imagevault-explainer.html";
 
@@ -10,13 +10,35 @@ const SRC = "/explainer/imagevault-explainer.html";
 const FILM_READY = "imagevault-explainer:ready";
 const FILM_PLAY = "imagevault-explainer:play";
 
+// Current screen rotation, in degrees counterclockwise from the device's
+// natural orientation (Screen Orientation API, legacy iOS fallback).
+function orientationAngle(): number {
+  if (typeof screen !== "undefined" && screen.orientation) {
+    return screen.orientation.angle;
+  }
+  const legacy = (window as Window & { orientation?: number }).orientation;
+  return typeof legacy === "number" ? (legacy + 360) % 360 : 0;
+}
+
+type Lock = { w: number; h: number; rotate: number };
+
 /**
  * The explainer film filling the whole viewport on its own route. Unlike the
  * /product embed there is no scroll gate — the page *is* the film — so we
  * post PLAY as soon as the film reports READY.
+ *
+ * Orientation is locked to how the page loaded. The film fits itself to the
+ * viewport it starts in (rotating to fill a portrait phone), and re-fitting
+ * after an OS rotation letterboxes it behind mobile browser chrome. The web
+ * can't lock orientation outside fullscreen (and never on iPhone Safari), so
+ * we emulate it: freeze the layout at its loaded size and counter-rotate when
+ * the OS rotates the browser, keeping the film glued to the physical screen
+ * like a native app with a locked orientation.
  */
 export default function ExplainerStandalone() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const baseRef = useRef<{ w: number; h: number; angle: number } | null>(null);
+  const [lock, setLock] = useState<Lock | null>(null);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -28,15 +50,63 @@ export default function ExplainerStandalone() {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
+  useEffect(() => {
+    const fit = () => {
+      const angle = orientationAngle();
+      if (!baseRef.current) {
+        baseRef.current = { w: window.innerWidth, h: window.innerHeight, angle };
+      }
+      const base = baseRef.current;
+      if (angle === base.angle) {
+        // Still in the loaded orientation — fill the viewport and track its
+        // size so plain resizes (desktop windows, collapsing URL bars) keep
+        // working as before.
+        base.w = window.innerWidth;
+        base.h = window.innerHeight;
+        setLock(null);
+      } else {
+        // Rotated away: pin the frozen layout to the physical screen. The
+        // iframe keeps its pre-rotation size, so the film inside never
+        // re-fits.
+        setLock({ w: base.w, h: base.h, rotate: base.angle - angle });
+      }
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    const so = typeof screen !== "undefined" ? screen.orientation : undefined;
+    so?.addEventListener?.("change", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("orientationchange", fit);
+      so?.removeEventListener?.("change", fit);
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0" style={{ background: "#FBFAF7" }}>
-      <iframe
-        ref={iframeRef}
-        src={SRC}
-        title="What Image Vault does — the explainer film"
-        scrolling="no"
-        style={{ display: "block", width: "100%", height: "100%", border: 0 }}
-      />
+    <div className="fixed inset-0 overflow-hidden" style={{ background: "#FBFAF7" }}>
+      <div
+        style={
+          lock
+            ? {
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: lock.w,
+                height: lock.h,
+                transform: `translate(-50%, -50%) rotate(${lock.rotate}deg)`,
+              }
+            : { position: "absolute", inset: 0 }
+        }
+      >
+        <iframe
+          ref={iframeRef}
+          src={SRC}
+          title="What Image Vault does — the explainer film"
+          scrolling="no"
+          style={{ display: "block", width: "100%", height: "100%", border: 0 }}
+        />
+      </div>
       <Link
         href="/product"
         aria-label="Back to the product page"
