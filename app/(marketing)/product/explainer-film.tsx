@@ -170,7 +170,7 @@ export default function ExplainerFilm() {
       <iframe
         ref={iframeRef}
         src={SRC}
-        title="What Image Vault does — a sixty-second explainer film"
+        title="What Image Vault does — a ninety-second explainer film"
         loading="lazy"
         scrolling="no"
         style={
