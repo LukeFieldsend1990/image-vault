@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Image Vault — Pillars Deck</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --cream: #FBFAF7; --ink: #2D2B26; --red: #BC3D2C; --muted: #8A857A; --line: #E4E0D6;
+  }
+  body { background: #333; }
+  .slide {
+    width: 1600px; height: 900px; background: var(--cream); position: relative;
+    font-family: Georgia, 'Times New Roman', serif; color: var(--ink);
+    padding: 90px 110px; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .slide::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: var(--red); }
+  .kicker {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace; text-transform: uppercase;
+    letter-spacing: 0.22em; font-size: 17px; color: var(--red); margin-bottom: 28px;
+  }
+  .logo { font-size: 44px; letter-spacing: -0.01em; }
+  .logo .bars { color: var(--red); font-weight: bold; padding: 0 6px; }
+  h1 { font-size: 96px; line-height: 1.06; letter-spacing: -0.02em; font-weight: 500; }
+  h1 .red { color: var(--red); font-style: italic; }
+  h2 { font-size: 72px; line-height: 1.08; letter-spacing: -0.02em; font-weight: 500; margin-bottom: 30px; }
+  .sub { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-size: 27px; line-height: 1.55; color: var(--muted); max-width: 900px; }
+  .bullets { margin-top: 56px; display: grid; gap: 26px; }
+  .bullet { display: flex; gap: 22px; align-items: baseline; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-size: 26px; line-height: 1.45; max-width: 1150px; }
+  .bullet::before { content: ""; width: 12px; height: 12px; background: var(--red); border-radius: 50%; flex: none; transform: translateY(-2px); }
+  .bullet b { font-weight: 600; }
+  .foot {
+    position: absolute; bottom: 44px; left: 110px; right: 110px; display: flex; justify-content: space-between;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 15px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .pillarnum { position: absolute; top: 82px; right: 110px; font-size: 190px; color: var(--line); font-weight: 500; line-height: 1; }
+  .chips { display: flex; gap: 22px; margin-top: 64px; }
+  .chip { border: 1.5px solid var(--line); background: #fff; border-radius: 10px; padding: 30px 36px; min-width: 280px; }
+  .chip .v { font-size: 52px; letter-spacing: -0.02em; }
+  .chip .v em { color: var(--red); font-style: normal; }
+  .chip .k { font-family: ui-monospace, Menlo, monospace; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-top: 12px; }
+  .flow { display: flex; align-items: center; gap: 18px; margin-top: 60px; font-family: ui-monospace, Menlo, monospace; font-size: 21px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .flow .step { border: 1.5px solid var(--ink); padding: 16px 26px; border-radius: 8px; background: #fff; }
+  .flow .arrow { color: var(--red); font-size: 26px; }
+  .center { align-items: center; justify-content: center; text-align: center; }
+  .center .sub { margin-left: auto; margin-right: auto; }
+</style>
+</head>
+<body>
+
+<!-- 1 · Title -->
+<div class="slide center" id="s1">
+  <div class="logo" style="margin-bottom: 70px;">Image<span class="bars">‖</span>Vault</div>
+  <h1>You negotiate the rights.<br><span class="red">The Vault enforces them.</span></h1>
+  <p class="sub" style="margin-top: 44px;">Trust and rights infrastructure for AI-native production — consent, custody, compliance and royalties for the digital likeness era.</p>
+  <div class="flow">
+    <span class="step">Registry</span><span class="arrow">→</span>
+    <span class="step">Identity</span><span class="arrow">→</span>
+    <span class="step">Licensing</span><span class="arrow">→</span>
+    <span class="step">Provenance</span>
+  </div>
+  <div class="foot"><span>imagevault.ai</span><span>The likeness licensing platform</span></div>
+</div>
+
+<!-- 2 · Consent OS -->
+<div class="slide" id="s2">
+  <div class="pillarnum">01</div>
+  <div class="kicker">Pillar One</div>
+  <h2>Consent OS</h2>
+  <p class="sub">The performer's single source of truth for every AI consent moment — signed, time-stamped, on the record.</p>
+  <div class="bullets">
+    <div class="bullet"><span><b>Standing instructions</b> per use category: always via my agent · case by case, ask me · never.</span></div>
+    <div class="bullet"><span><b>Six licence types</b> turn one-off negotiations into a clear product menu — from film double to AI avatar.</span></div>
+    <div class="bullet"><span><b>AI training is blocked by default.</b> It can only be opted in by the talent — never requested into existence.</span></div>
+    <div class="bullet"><span><b>Consent that routes itself</b> — requests flow to the agent or the performer under the rules they set.</span></div>
+  </div>
+  <div class="foot"><span>imagevault.ai</span><span>Image ‖ Vault</span></div>
+</div>
+
+<!-- 3 · Chain of Custody -->
+<div class="slide" id="s3">
+  <div class="pillarnum">02</div>
+  <div class="kicker">Pillar Two</div>
+  <h2>Chain of Custody</h2>
+  <p class="sub">A tamper-evident, hash-chained audit ledger. Every event seals the one before it — the record cannot be quietly rewritten.</p>
+  <div class="bullets">
+    <div class="bullet"><span><b>Every consent, approval, transfer and download</b> is appended to the ledger — nothing goes unrecorded.</span></div>
+    <div class="bullet"><span><b>Disputes are settled by evidence,</b> not memory — a system of record, not a folder of PDFs.</span></div>
+    <div class="bullet"><span><b>Geometry fingerprinting:</b> leaked assets trace back to the exact licence that released them.</span></div>
+    <div class="bullet"><span><b>Printable chain-of-custody timeline</b> per scan package, sealed with the ledger tip hash.</span></div>
+  </div>
+  <div class="foot"><span>imagevault.ai</span><span>Image ‖ Vault</span></div>
+</div>
+
+<!-- 4 · Dual-Custody Access -->
+<div class="slide" id="s4">
+  <div class="pillarnum">03</div>
+  <div class="kicker">Pillar Three</div>
+  <h2>Dual-Custody Access</h2>
+  <p class="sub">Two parties, two factors. No single party — the platform included — can release a likeness alone.</p>
+  <div class="bullets">
+    <div class="bullet"><span><b>The licensee confirms with 2FA,</b> then the talent side authorises with their own second factor.</span></div>
+    <div class="bullet"><span><b>Time-limited download tokens</b> — release windows close on their own; every byte of the handover is audited.</span></div>
+    <div class="bullet"><span><b>Structural, not policy:</b> the gate is built into the release mechanics, not written in a handbook.</span></div>
+    <div class="bullet"><span><b>Instant revocation</b> — vault lock and strike lock freeze release at any scope, immediately.</span></div>
+  </div>
+  <div class="foot"><span>imagevault.ai</span><span>Image ‖ Vault</span></div>
+</div>
+
+<!-- 5 · Compliance Surface -->
+<div class="slide" id="s5">
+  <div class="pillarnum">04</div>
+  <div class="kicker">Pillar Four</div>
+  <h2>Compliance Surface</h2>
+  <p class="sub">SAG-AFTRA Article 39 obligations map directly onto ledger events — with a one-click, sealed compliance certificate.</p>
+  <div class="bullets">
+    <div class="bullet"><span><b>Article 39, clause by clause:</b> consent (39.B), biometric isolation (39.E), custody (39.H), union-approved transfer (39.I).</span></div>
+    <div class="bullet"><span><b>Strike lock (39.G):</b> one switch freezes covered use across the platform — and the freeze itself is on the ledger.</span></div>
+    <div class="bullet"><span><b>Scrub attestation:</b> licences end with a signed statement that data was destroyed, not just an expired token.</span></div>
+    <div class="bullet"><span><b>Beyond SAG:</b> GDPR Article 9, Illinois BIPA and EU AI Act transparency in one evidence surface.</span></div>
+  </div>
+  <div class="foot"><span>imagevault.ai</span><span>Image ‖ Vault</span></div>
+</div>
+
+<!-- 6 · Rights Infrastructure -->
+<div class="slide" id="s6">
+  <div class="pillarnum">05</div>
+  <div class="kicker">Pillar Five</div>
+  <h2>Rights Infrastructure</h2>
+  <p class="sub">Beyond storage: the consent, audit and royalty layer for every AI use of a performer's likeness.</p>
+  <div class="bullets">
+    <div class="bullet"><span><b>The live royalty meter:</b> usage-metered licences accrue per generation or render — a likeness earns continuously.</span></div>
+    <div class="bullet"><span><b>Automatic splits</b> across talent, agency and platform on every metered event.</span></div>
+    <div class="bullet"><span><b>Machine-readable consent (RSL):</b> AI companies are routed into the talent's licensing rails, on the talent's terms.</span></div>
+    <div class="bullet"><span><b>Render Bridge DRM:</b> licensed assets behave like licensed software — usable only while the licence is live.</span></div>
+  </div>
+  <div class="foot"><span>imagevault.ai</span><span>Image ‖ Vault</span></div>
+</div>
+
+<!-- 7 · Neutrality -->
+<div class="slide center" id="s7">
+  <div class="kicker">Positioning</div>
+  <h1 style="font-size: 84px;">A neutral custodian<br>for <span class="red">likeness</span>.</h1>
+  <p class="sub" style="margin-top: 44px; max-width: 1050px;">A studio can't hold it — it's the counterparty. A single agency can't — it competes with the rest. The custodian of the industry's biometric data has to be independent of everyone who wants to use it.</p>
+  <div class="chips">
+    <div class="chip"><div class="v"><em>No</em> representation</div><div class="k">We are not your agent</div></div>
+    <div class="chip"><div class="v"><em>No</em> commission</div><div class="k">On the work you book</div></div>
+    <div class="chip"><div class="v"><em>No</em> training</div><div class="k">Your data, no AI models</div></div>
+  </div>
+  <div class="foot"><span>imagevault.ai</span><span>Image ‖ Vault</span></div>
+</div>
+
+<!-- 8 · Closing -->
+<div class="slide center" id="s8">
+  <h1>The industry is scanning.<br><span class="red">Make sure you hold the keys.</span></h1>
+  <div class="chips" style="margin-top: 80px;">
+    <div class="chip"><div class="v">2 × 2FA</div><div class="k">Dual-custody release</div></div>
+    <div class="chip"><div class="v">1 TB</div><div class="k">Scan packages, sealed</div></div>
+    <div class="chip"><div class="v">Art. 39</div><div class="k">Certificate, one click</div></div>
+    <div class="chip"><div class="v">Live</div><div class="k">Royalty metering</div></div>
+  </div>
+  <div class="foot"><span>imagevault.ai</span><span>Your likeness. Your terms.</span></div>
+</div>
+
+</body>
+</html>
