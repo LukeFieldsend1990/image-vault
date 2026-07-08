@@ -356,7 +356,7 @@ const SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "talent",
     headline: "Secure, encrypted vault",
-    body: "Emma Richardson stores her scan packages — encrypted in the browser before upload. Not even the platform can access the files.",
+    body: "Emma Richardson stores her scan packages — encrypted at rest, with every access gated by dual-custody 2FA, time-limited download tokens, and a full audit trail.",
   },
   {
     id: "licence-request",
