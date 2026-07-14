@@ -173,7 +173,7 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
                     </p>
                     {a.coordinatorEmail && (
                       <a
-                        href={`mailto:${a.coordinatorEmail}?subject=${encodeURIComponent(`Licence terms needed for ${a.characterName ?? a.actorName ?? "reserved role"} in ${a.productionName}`)}&body=${encodeURIComponent(`Hi,\n\nBefore I can connect my client to ${a.characterName ?? a.actorName ?? "the reserved role"} on ${a.productionName}, could you add the intended use and licence dates to the role on Image Vault?\n\nThanks.`)}`}
+                        href={`mailto:${a.coordinatorEmail}?subject=${encodeURIComponent(`Licence terms needed for ${a.characterName ?? a.actorName ?? "reserved role"} in ${a.productionName}`)}&body=${encodeURIComponent(`Hi,\n\nBefore I can connect my client to ${a.characterName ?? a.actorName ?? "the reserved role"} on ${a.productionName}, could you add the intended use and licence dates to the role on ImageVault?\n\nThanks.`)}`}
                         className="rounded px-4 py-2 text-xs font-medium text-white shrink-0 no-underline"
                         style={{ background: "var(--color-accent)" }}
                       >

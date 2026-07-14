@@ -305,7 +305,7 @@ describe("email templates", () => {
     ];
     for (const t of templates) {
       expect(t.html).toContain("<!DOCTYPE html>");
-      expect(t.html).toContain("Image Vault");
+      expect(t.html).toContain("ImageVault");
       expect(t.html).toContain("</html>");
     }
   });

@@ -306,7 +306,7 @@ function TalentPreauthSetView({ licenceId, licence }: { licenceId: string; licen
       <div className="rounded border p-5" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <p className="text-sm font-medium mb-1" style={{ color: "var(--color-ink)" }}>Enter your authenticator code to confirm</p>
         <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
-          Open your authenticator app and enter the 6-digit code for Image Vault.
+          Open your authenticator app and enter the 6-digit code for ImageVault.
         </p>
         <input
           type="text"
@@ -674,7 +674,7 @@ export default function TalentAuthoriseClient({
       <div className="rounded border p-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <p className="text-sm font-medium mb-1" style={{ color: "var(--color-ink)" }}>Enter your authenticator code</p>
         <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
-          Open your authenticator app and enter the 6-digit code for Image Vault.
+          Open your authenticator app and enter the 6-digit code for ImageVault.
         </p>
         <input
           type="text"

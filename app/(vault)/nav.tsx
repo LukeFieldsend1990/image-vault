@@ -380,7 +380,7 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
-    // Upcoming productions not yet on Image Vault — same platform-wide grant gate.
+    // Upcoming productions not yet on ImageVault — same platform-wide grant gate.
     href: "/watchlist",
     label: "Watchlist",
     icon: (
@@ -391,7 +391,7 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
-    // Union member roster (CSV upload) — who's on Image Vault. Union watchers only
+    // Union member roster (CSV upload) — who's on ImageVault. Union watchers only
     // (filtered in NavLinks via unionWatcher); one list per union.
     href: "/members",
     label: "Members",

@@ -51,8 +51,8 @@ function editDistance(a: string, b: string): number {
 }
 
 // GET /api/productions/[id]/cast/match?q=<name>
-// Live name-matching for manual cast entry: existing Image Vault talent
-// ("On Image Vault") plus near-name TMDB suggestions ("Did you mean…?").
+// Live name-matching for manual cast entry: existing ImageVault talent
+// ("On ImageVault") plus near-name TMDB suggestions ("Did you mean…?").
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -101,7 +101,7 @@ export async function GET(
 
   const qNorm = q.toLowerCase();
 
-  // PLATFORM MATCHES — existing Image Vault talent.
+  // PLATFORM MATCHES — existing ImageVault talent.
   const allProfiles = await db
     .select({
       userId: talentProfiles.userId,

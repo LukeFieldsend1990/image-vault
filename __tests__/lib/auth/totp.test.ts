@@ -19,7 +19,7 @@ describe("totp", () => {
     const secret = generateTotpSecret();
     const url = buildOtpauthUrl("user@example.com", secret);
     expect(url).toContain("otpauth://totp/");
-    expect(url).toContain("Image%20Vault");
+    expect(url).toContain("ImageVault");
     expect(url).toContain("user%40example.com");
     expect(url).toContain(`secret=${secret}`);
     expect(url).toContain("digits=6");

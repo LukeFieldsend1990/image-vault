@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Wordmark from "@/app/components/wordmark";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function ResetPasswordInner() {
@@ -73,9 +74,7 @@ function ResetPasswordInner() {
       <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
         {/* Wordmark */}
         <div>
-          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-ink]">
-            Image Vault
-          </span>
+          <Wordmark variant="lock" className="text-xs" />
         </div>
 
         {/* Form block */}
@@ -163,7 +162,7 @@ function ResetPasswordInner() {
 
         {/* Footer */}
         <p className="text-xs text-[--color-muted]">
-          &copy; {new Date().getFullYear()} Image Vault. All rights reserved.
+          &copy; {new Date().getFullYear()} ImageVault. All rights reserved.
         </p>
       </div>
 

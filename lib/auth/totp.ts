@@ -7,7 +7,7 @@ export function generateTotpSecret(): string {
 
 export function buildOtpauthUrl(email: string, secret: string): string {
   const totp = new OTPAuth.TOTP({
-    issuer: "Image Vault",
+    issuer: "ImageVault",
     label: email,
     algorithm: "SHA1",
     digits: 6,

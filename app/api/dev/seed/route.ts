@@ -4,7 +4,7 @@ import { users, totpCredentials } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 
 // Hardcoded TOTP secret — add this once to your authenticator app.
-// Label: "Image Vault (dev)", Issuer: "Image Vault"
+// Label: "ImageVault (dev)", Issuer: "ImageVault"
 // otpauth://totp/Image%20Vault:dev@imagevault.test?secret=JBSWY3DPEHPK3PXP&issuer=Image%20Vault&algorithm=SHA1&digits=6&period=30
 const DEV_TOTP_SECRET = "JBSWY3DPEHPK3PXP";
 const DEV_PASSWORD = "devpassword1234!";

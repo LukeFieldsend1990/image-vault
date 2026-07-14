@@ -174,7 +174,7 @@ function AddPanel({ onAdded, onClose, unionId }: { onAdded: () => void; onClose:
                 <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>{TYPE_LABELS[c.type] ?? c.type}</p>
               </div>
               {c.onImageVault ? (
-                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#1a7f37" }}>On Image Vault</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#1a7f37" }}>On ImageVault</span>
               ) : c.onWatchlist ? (
                 <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>On watchlist</span>
               ) : (
@@ -268,12 +268,12 @@ function EntryRow({ entry, onChanged }: { entry: WatchlistEntry; onChanged: () =
                 title={entry.matchedProductionName ? `View “${entry.matchedProductionName}”` : "View production"}
                 className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded inline-block"
                 style={{ color: "#1a7f37", border: "1px solid #1a7f3744", background: "rgba(26,127,55,0.08)" }}>
-                ✓ On Image Vault →
+                ✓ On ImageVault →
               </Link>
             ) : (
               <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
                 style={{ color: "#1a7f37", border: "1px solid #1a7f3744", background: "rgba(26,127,55,0.08)" }}>
-                ✓ On Image Vault
+                ✓ On ImageVault
               </span>
             )
           ) : (
@@ -359,7 +359,7 @@ export default function WatchlistClient() {
         <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>Oversight</p>
         <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-text)" }}>Production watchlist</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Upcoming productions heading into pre-production that aren&apos;t yet on Image Vault. Onboarding isn&apos;t
+          Upcoming productions heading into pre-production that aren&apos;t yet on ImageVault. Onboarding isn&apos;t
           mandated — this is visibility, so the union can ask a production what it&apos;s doing for compliance.
         </p>
       </div>
@@ -402,7 +402,7 @@ export default function WatchlistClient() {
           <button onClick={() => setPendingOnly(false)}
             className="text-[11px] font-semibold px-2 py-1 rounded"
             style={{ color: "#1a7f37", background: "rgba(26,127,55,0.08)", border: "1px solid #1a7f3744" }}>
-            {ratifiedCount} now on Image Vault — review
+            {ratifiedCount} now on ImageVault — review
           </button>
         )}
       </div>
@@ -422,7 +422,7 @@ export default function WatchlistClient() {
         </div>
       ) : shown.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-          {entries.length === 0 ? "Nothing on the watchlist yet — add an upcoming production to start tracking it." : "Every tracked production is now on Image Vault. 🎉"}
+          {entries.length === 0 ? "Nothing on the watchlist yet — add an upcoming production to start tracking it." : "Every tracked production is now on ImageVault. 🎉"}
         </p>
       ) : (
         <div className="space-y-3">

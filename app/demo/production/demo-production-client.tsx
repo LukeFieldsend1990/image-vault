@@ -217,7 +217,7 @@ function DemoSidebar({ role, activeNav }: { role: "production" | "talent"; activ
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%", padding: "2rem 0" }}>
         <div>
           <div style={{ padding: "0 1.5rem", marginBottom: "2.5rem" }}>
-            <div style={{ fontSize: "0.875rem", fontWeight: 500, letterSpacing: "0.05em", color: "#fff" }}>Image Vault</div>
+            <div style={{ fontSize: "0.875rem", fontWeight: 500, letterSpacing: "0.05em", color: "#fff" }}>ImageVault</div>
             <div style={{ marginTop: "0.375rem", height: "1px", width: "1.5rem", background: "#c0392b" }} />
           </div>
           <nav style={{ padding: "0 0.75rem" }}>
@@ -879,7 +879,7 @@ function MobileGate() {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", padding: "2.5rem 2rem", background: "var(--color-bg)", textAlign: "center" }}>
       <div style={{ marginBottom: "2.5rem" }}>
-        <div style={{ fontSize: "0.9375rem", fontWeight: 500, letterSpacing: "0.05em", color: "var(--color-ink)" }}>Image Vault</div>
+        <div style={{ fontSize: "0.9375rem", fontWeight: 500, letterSpacing: "0.05em", color: "var(--color-ink)" }}>ImageVault</div>
         <div style={{ marginTop: "0.375rem", height: "1px", width: "1.5rem", background: "#c0392b", margin: "0.375rem auto 0" }} />
       </div>
       <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.75rem" }}>Best viewed on desktop</h1>

@@ -9,7 +9,7 @@ import { inArray } from "drizzle-orm";
 
 // GET /api/compliance/watchlist/discover?q=<title>&unionId=
 // TMDB candidate search for promoting an upcoming production onto the watchlist.
-// Each candidate is annotated with whether it is already ratified on Image Vault
+// Each candidate is annotated with whether it is already ratified on ImageVault
 // (a production shares its tmdbId) or already on the watchlist for the given
 // union (one union's promotion shouldn't hide a different union's candidate).
 export async function GET(req: NextRequest) {

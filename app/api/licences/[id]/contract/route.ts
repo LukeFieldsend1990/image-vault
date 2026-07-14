@@ -486,7 +486,7 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="cover">
   <div class="cover-header">
-    <div class="cover-wordmark">Changling · Image Vault</div>
+    <div class="cover-wordmark">Changling · ImageVault</div>
     <div class="cover-ref">
       Contract Reference: <strong>${ref}</strong><br>
       Date of Issue: ${today}<br>
@@ -548,7 +548,7 @@ export async function GET(
   <div class="section-title"><span class="section-number">—</span>Recitals</div>
   <p>
     <strong>(A)</strong>&ensp;The Artist is a professional in the entertainment industry whose three-dimensional
-    biometric likeness scan data (the "Licensed Material") is archived on the Changling Image Vault platform,
+    biometric likeness scan data (the "Licensed Material") is archived on the Changling ImageVault platform,
     a secure biometric asset management platform operated by Changling Ltd. ("Platform Operator").
   </p>
   <p>
@@ -584,7 +584,7 @@ export async function GET(
     <tr><td>"Licence Period"</td><td>means the period from ${fmtDate(lic.validFrom)} to ${fmtDate(lic.validTo)} (inclusive).</td></tr>
     <tr><td>"Permitted Use"</td><td>means the specific use described in Clause 3 and Schedule 2 of this Agreement, being a ${licenceTypeLabel} licence.</td></tr>
     <tr><td>"Picture"</td><td>means the production identified as <strong>"${lic.projectName}"</strong> by ${lic.productionCompany}, as further described in Schedule 2.</td></tr>
-    <tr><td>"Platform"</td><td>means the Changling Image Vault platform, operated by Changling Ltd., through which the Licensed Material is accessed and this Agreement is administered.</td></tr>
+    <tr><td>"Platform"</td><td>means the Changling ImageVault platform, operated by Changling Ltd., through which the Licensed Material is accessed and this Agreement is administered.</td></tr>
     <tr><td>"Platform Operator"</td><td>means Changling Ltd., acting as an intermediary and platform service provider and not as a party to the Permitted Use.</td></tr>
     <tr><td>"Platform Fee"</td><td>means the service fee payable to the Platform Operator, being ${fmtUSD(platformFee)} (representing 15% of the Agreed Fee).</td></tr>
     <tr><td>"Producer"</td><td>means the party licensed to use the Biometric Data under this Agreement, being <strong>${lic.productionCompany}</strong>.</td></tr>
@@ -697,7 +697,7 @@ export async function GET(
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="section">
   <div class="section-title"><span class="section-number">8.</span>Intellectual Property Rights</div>
-  <div class="clause"><span class="clause-num">8.1</span><span class="clause-body">The Artist asserts their Moral Rights in respect of the Licensed Material. The Producer shall, where technically feasible, credit the Artist in any productions incorporating the Licensed Material as: "<em>${talentName}</em> (biometric likeness provided via Changling Image Vault)".</span></div>
+  <div class="clause"><span class="clause-num">8.1</span><span class="clause-body">The Artist asserts their Moral Rights in respect of the Licensed Material. The Producer shall, where technically feasible, credit the Artist in any productions incorporating the Licensed Material as: "<em>${talentName}</em> (biometric likeness provided via Changling ImageVault)".</span></div>
   <div class="clause"><span class="clause-num">8.2</span><span class="clause-body">If the Producer becomes aware of any actual or threatened infringement of the Artist's Intellectual Property Rights in the Licensed Material, it shall notify the Artist promptly. The Artist shall have sole control over any enforcement action.</span></div>
   <div class="clause"><span class="clause-num">8.3</span><span class="clause-body">For the avoidance of doubt, ownership of all Biometric Data and the rights of the Artist and Producer in respect of derivative works and studio IP are governed by Clause 9.</span></div>
 </div>
@@ -787,7 +787,7 @@ export async function GET(
     <tr><td>Scan Studio</td><td>${pkg?.studioName ?? "—"}</td></tr>
     <tr><td>Capture Date</td><td>${fmtDate(pkg?.captureDate ?? null)}</td></tr>
     <tr><td>File Count</td><td>${fileCountNum} file${fileCountNum !== 1 ? "s" : ""} (completed uploads)</td></tr>
-    <tr><td>Archive Format</td><td>Delivered as individual files via Changling Image Vault secure download. A ZIP archive is available for all files.</td></tr>
+    <tr><td>Archive Format</td><td>Delivered as individual files via Changling ImageVault secure download. A ZIP archive is available for all files.</td></tr>
     <tr><td>Platform Reference</td><td>Package ID: ${licPackageId}</td></tr>
     <tr><td>Technician Notes</td><td>${pkg?.technicianNotes ?? "None recorded"}</td></tr>
   </table>
@@ -860,8 +860,8 @@ export async function GET(
   </div>
 
   <p style="margin-top:40px;font-size:8pt;color:var(--muted);text-align:center;line-height:1.6">
-    This document was generated by Changling Image Vault · Contract reference: ${ref} · Generated: ${today}<br>
-    For queries regarding this agreement contact the Platform Operator via the Image Vault platform.
+    This document was generated by Changling ImageVault · Contract reference: ${ref} · Generated: ${today}<br>
+    For queries regarding this agreement contact the Platform Operator via the ImageVault platform.
   </p>
 </div>
 

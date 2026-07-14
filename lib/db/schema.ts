@@ -434,7 +434,7 @@ export const productionCountries = sqliteTable("production_countries", {
 });
 
 // Upcoming productions believed to be heading into pre-production that are NOT yet
-// ratified on Image Vault. Gives the union read visibility (and an outreach flag)
+// ratified on ImageVault. Gives the union read visibility (and an outreach flag)
 // without mandating onboarding. "Ratified" is derived at read time by matching
 // tmdbId / name against `productions`, never stored.
 export const productionWatchlist = sqliteTable("production_watchlist", {
@@ -459,7 +459,7 @@ export const productionWatchlist = sqliteTable("production_watchlist", {
 });
 
 // Union member roster: a union's membership list (plain names), so it can see which
-// members are already on Image Vault. Visibility only — onboarding is not mandated.
+// members are already on ImageVault. Visibility only — onboarding is not mandated.
 // "On platform" is derived at read time by matching against talent profiles.
 export const unionMembers = sqliteTable("union_members", {
   id: text("id").primaryKey(),
@@ -1142,7 +1142,7 @@ export const productionCast = sqliteTable("production_cast", {
   addedAt: integer("added_at").notNull(),
   linkedAt: integer("linked_at"),
   // Path C (agent-mediated): a reserved slot can be assigned to a representing
-  // agent. repId = an existing rep on Image Vault; repInviteId = a pending rep
+  // agent. repId = an existing rep on ImageVault; repInviteId = a pending rep
   // signup invite scoped to this slot. The rep then resolves the slot by
   // supplying their client's email.
   repId: text("rep_id").references(() => users.id),

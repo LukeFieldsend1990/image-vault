@@ -1,7 +1,7 @@
 /**
  * Path D — self-heal cast resolution.
  *
- * When a talent organically joins Image Vault (rather than via a cast-scoped
+ * When a talent organically joins ImageVault (rather than via a cast-scoped
  * invite), match them against open placeholder cast rows reserved across all
  * productions, let them claim the role, and notify the production company.
  *
@@ -209,7 +209,7 @@ async function notifyProductionOfClaim(
 
     const href = `/productions/${opts.productionId}`;
     const title = `${opts.talentName} claimed their role`;
-    const body = `${opts.talentName} joined Image Vault and claimed ${opts.characterName ? `the role of ${opts.characterName}` : "their reserved role"} in ${production.name}. Send them a licence request.`;
+    const body = `${opts.talentName} joined ImageVault and claimed ${opts.characterName ? `the role of ${opts.characterName}` : "their reserved role"} in ${production.name}. Send them a licence request.`;
 
     await Promise.all(
       Array.from(recipients).map((userId) =>

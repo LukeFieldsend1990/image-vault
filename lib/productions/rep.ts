@@ -3,7 +3,7 @@
  *
  * A production company often knows the representing agency even when it doesn't
  * have the actor's personal email. Here we let a producer assign a reserved cast
- * slot to a rep (existing on Image Vault, or invited by email), and notify them.
+ * slot to a rep (existing on ImageVault, or invited by email), and notify them.
  * The rep later resolves the slot by supplying their client's email — which goes
  * through the normal promote machinery, with the *producer* as the licensee.
  */
@@ -92,7 +92,7 @@ export async function inviteRepForCast(
   const companyName = await companyNameFor(db, production);
   const rosterUrl = `${opts.baseUrl}/roster`;
 
-  // Existing rep on Image Vault → assign + notify.
+  // Existing rep on ImageVault → assign + notify.
   if (opts.repUserId) {
     const rep = await db.select({ id: users.id, email: users.email, role: users.role, trueRole: users.trueRole }).from(users).where(eq(users.id, opts.repUserId)).get();
     if (!rep || (rep.trueRole ?? rep.role) !== "rep") return { ok: false, message: "That account is not a representative." };

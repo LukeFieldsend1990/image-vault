@@ -110,7 +110,7 @@ export default function ExplainerStandalone() {
         <iframe
           ref={iframeRef}
           src={SRC}
-          title="What Image Vault does — the explainer film"
+          title="What ImageVault does — the explainer film"
           scrolling="no"
           style={{ display: "block", width: "100%", height: "100%", border: 0 }}
         />

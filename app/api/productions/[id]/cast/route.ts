@@ -256,7 +256,7 @@ export async function GET(
 
 interface CastMemberInput {
   email?: string;       // contactable member — onboarded now
-  talentId?: string;    // existing Image Vault talent picked from the matcher (link by id, no email exposed)
+  talentId?: string;    // existing ImageVault talent picked from the matcher (link by id, no email exposed)
   actorName?: string;   // placeholder — recorded by name only, resolve later
   tmdbId?: number;
   sourceNote?: string;
@@ -348,7 +348,7 @@ export async function POST(
     const member = m as Record<string, unknown>;
     const email = typeof member.email === "string" ? member.email.toLowerCase().trim() : "";
     const actorName = typeof member.actorName === "string" ? member.actorName.trim() : "";
-    // talentId: an existing Image Vault talent picked from the matcher. Lets the
+    // talentId: an existing ImageVault talent picked from the matcher. Lets the
     // producer link by id without ever handling the performer's email.
     const talentId = typeof member.talentId === "string" && member.talentId.trim() ? member.talentId.trim() : "";
     // Union affiliation drives the SAG flag. Prefer the explicit union string sent

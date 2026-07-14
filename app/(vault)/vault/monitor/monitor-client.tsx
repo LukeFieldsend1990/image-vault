@@ -753,19 +753,19 @@ export default function MonitorClient({ identity }: Props) {
           {[
             {
               step: "1",
-              text: `Perceptual hash fingerprints derived from ${name}'s scan packages and geometry fingerprints watermarked into licensed deliveries form the reference signature.`,
+              text: `We take a fingerprint of ${name}'s scan — a mathematical signature, not the images themselves.`,
             },
             {
               step: "2",
-              text: "Automated detectors sweep newly indexed short-form content and score each candidate: face-embedding similarity, perceptual hash distance, geometry fingerprint correlation and a synthetic-media classifier.",
+              text: "New public media on each platform is checked against that fingerprint. The scan never leaves the vault.",
             },
             {
               step: "3",
-              text: "The vault's AI reasoning layer — the same cost-tracked stack behind inbox triage — adjudicates every candidate, clearing genuine archival footage and flagging AI-generated misuse with a rationale and risk level.",
+              text: "Anything close gets a second look from the AI review layer, which clears genuine archival footage and flags likely misuse, with its reasoning on the record.",
             },
             {
               step: "4",
-              text: "Confirmed hits alert you and your reps instantly (in-app + email with the content link). You decide: request a takedown or dismiss — nothing is actioned without your say-so.",
+              text: "A confirmed match alerts you and your reps and drafts a takedown or licence request for your approval — nothing is actioned without your say-so.",
             },
           ].map(({ step, text }) => (
             <div key={step} className="flex items-start gap-3">

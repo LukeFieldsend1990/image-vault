@@ -1,5 +1,7 @@
 "use client";
 
+import Wordmark from "@/app/components/wordmark";
+
 const STEPS = ["Welcome", "Password", "2FA", "Terms", "Done"] as const;
 
 /**
@@ -23,9 +25,7 @@ export function AgentShell({
       {/* ── Left panel ── */}
       <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
         <div>
-          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-ink]">
-            Image Vault
-          </span>
+          <Wordmark variant="lock" className="text-xs" />
         </div>
 
         <div className="w-full max-w-sm">
@@ -62,7 +62,7 @@ export function AgentShell({
         </div>
 
         <p className="text-xs text-[--color-muted]">
-          &copy; {new Date().getFullYear()} Image Vault. All rights reserved.
+          &copy; {new Date().getFullYear()} ImageVault. All rights reserved.
         </p>
       </div>
 

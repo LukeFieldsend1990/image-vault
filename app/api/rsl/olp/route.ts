@@ -11,7 +11,7 @@ export function GET() {
   const server = olpServerUrl();
   return NextResponse.json(
     {
-      name: "Image Vault RSL License Server",
+      name: "ImageVault RSL License Server",
       rsl_version: "1.0",
       issuer: baseUrl(),
       token_endpoint: `${server}/token`,

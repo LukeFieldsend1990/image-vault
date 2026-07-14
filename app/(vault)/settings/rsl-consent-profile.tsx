@@ -34,7 +34,7 @@ const LIGHT: Record<Light, { label: string; colour: string; dot: string }> = {
 
 const STATUS_COPY: Record<Status, { text: string; colour: string }> = {
   not_published: { text: "Not published", colour: "var(--color-muted)" },
-  awaiting_approval: { text: "Opted in — awaiting Image Vault admin approval", colour: "#b45309" },
+  awaiting_approval: { text: "Opted in — awaiting ImageVault admin approval", colour: "#b45309" },
   live: { text: "Live", colour: "#166534" },
   blocked_vault_locked: { text: "Hidden — your vault is locked", colour: "#991b1b" },
 };
@@ -114,7 +114,7 @@ export default function RslConsentProfile() {
       <p className="text-xs mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
         Publish a machine-readable AI-consent posture (the RSL standard / Human Consent Registry stoplight) so AI
         systems can read your terms. Your stoplight is set by your Standing Instructions above. Nothing goes public
-        until you opt in <strong>and</strong> an Image Vault admin approves it.
+        until you opt in <strong>and</strong> an ImageVault admin approves it.
       </p>
 
       {/* Posture preview */}
@@ -219,7 +219,7 @@ export default function RslConsentProfile() {
             </button>
             {vm.hcrDiverged && (
               <div className="w-full mt-2 rounded px-3 py-2 text-xs" style={{ background: "rgba(180,83,9,0.08)", border: "1px solid rgba(180,83,9,0.3)", color: "#b45309", lineHeight: 1.5 }}>
-                <strong>Posture mismatch.</strong> Your Image Vault consent posture has changed since you linked this HCR ID. Your listing on the Human Consent Registry may no longer reflect your current stance — please update it at{" "}
+                <strong>Posture mismatch.</strong> Your ImageVault consent posture has changed since you linked this HCR ID. Your listing on the Human Consent Registry may no longer reflect your current stance — please update it at{" "}
                 <a href="https://registry.rslmedia.org/" target="_blank" rel="noopener noreferrer" className="underline">registry.rslmedia.org</a>.
               </div>
             )}

@@ -1,6 +1,6 @@
 // Union member roster. A union uploads its membership as plain comma/newline-
 // separated names; the platform matches each against talent profiles so the union
-// can see who is already on Image Vault and who is not. Visibility only — onboarding
+// can see who is already on ImageVault and who is not. Visibility only — onboarding
 // is never mandated. Match status is derived at read time (never stored) so a member
 // flips to "on platform" the moment they onboard.
 

@@ -232,7 +232,7 @@ export default function InviteManager() {
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Welcome to Image Vault…"
+              placeholder="Welcome to ImageVault…"
               className="w-full rounded border px-3 py-2 text-sm outline-none focus:ring-1"
               style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-ink)" }}
             />

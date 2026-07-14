@@ -12,7 +12,7 @@ describe("contact-forward recipient matching", () => {
   });
 
   it("matches a name-wrapped contact address", () => {
-    expect(isContactRecipient(["Image Vault <Contact@ImageVault.ai>"])).toBe(true);
+    expect(isContactRecipient(["ImageVault <Contact@ImageVault.ai>"])).toBe(true);
   });
 
   it("matches when the contact address is among several recipients", () => {

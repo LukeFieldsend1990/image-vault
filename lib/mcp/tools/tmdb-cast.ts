@@ -159,13 +159,13 @@ async function searchTmdbByTitle(title: string): Promise<TmdbTitleCandidate[] | 
 registerMcpTool({
   name: "suggest_production_cast",
   description:
-    "Fetch the TMDB cast list for a production and show which actors are already on Image Vault. " +
+    "Fetch the TMDB cast list for a production and show which actors are already on ImageVault. " +
     "If the production has no tmdbId set, this tool automatically searches TMDB by the production title " +
     "and returns up to 8 title candidates — the same flow as the webapp's title-search UI. " +
     "Pick the correct candidate and call link_production_tmdb to save its tmdbId, then call this tool again " +
     "to see the cast. Alternatively, pass overrideTmdbId to preview a specific TMDB ID without saving it. " +
     "Platform matching uses both TMDB ID and full name (case-insensitive), mirroring the webapp. " +
-    "Each actor's platformStatus: 'registered' (on Image Vault), 'on_cast' (already added to this production), " +
+    "Each actor's platformStatus: 'registered' (on ImageVault), 'on_cast' (already added to this production), " +
     "or 'not_on_platform'. Pass selected actors to populate_cast_from_tmdb.",
   inputSchema: {
     type: "object",

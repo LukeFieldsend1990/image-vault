@@ -4,7 +4,7 @@ import { VaultMockup, LicenceMockup, InboxMockup, RoyaltiesMockup, ComplianceMoc
 import ExplainerFilm from "./explainer-film";
 
 export const metadata: Metadata = {
-  title: "Image Vault — Your likeness. Your terms.",
+  title: "ImageVault — Your likeness. Your terms.",
   description:
     "A secure vault for actors to store, manage, and license high-fidelity likeness scans. Dual-custody 2FA release, a tamper-evident audit ledger, and SAG-AFTRA Article 39 compliance built in.",
 };
@@ -99,7 +99,7 @@ export default function ProductPage() {
             className="text-xs font-medium tracking-widest uppercase"
             style={{ color: "var(--color-accent)" }}
           >
-            What Image Vault does
+            What ImageVault does
           </p>
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
             A ninety-second tour
@@ -346,8 +346,8 @@ export default function ProductPage() {
                 Nothing goes unrecorded.
               </h2>
               <p className="mt-6 text-base leading-relaxed" style={{ color: "var(--color-sidebar-muted)" }}>
-                A likeness archive is only as trustworthy as its worst day. Image
-                Vault is built on the assumption that insiders go rogue, emails lie,
+                A likeness archive is only as trustworthy as its worst day. ImageVault
+                is built on the assumption that insiders go rogue, emails lie,
                 and assets leak — and is architected so that no single party, the
                 platform included, can release a likeness alone.
               </p>

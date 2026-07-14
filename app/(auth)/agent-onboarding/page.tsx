@@ -98,7 +98,7 @@ function AgentOnboardingInner() {
       <AgentShell
         step={1}
         title={`Welcome to ${agency?.name}`}
-        subtitle="You've been invited to join as an agent on Image Vault."
+        subtitle="You've been invited to join as an agent on ImageVault."
       >
         <div
           className="mb-6 rounded border px-4 py-4 text-sm"

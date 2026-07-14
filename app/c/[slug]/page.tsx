@@ -61,7 +61,7 @@ export default async function ConsentProfilePage({
 
       <div className="mx-auto" style={{ maxWidth: 640 }}>
         <p className="text-[10px] font-semibold uppercase tracking-widest mb-6" style={{ color: "#c0392b" }}>
-          Image Vault · Human Consent
+          ImageVault · Human Consent
         </p>
 
         <h1 className="text-2xl font-semibold tracking-tight mb-1">{name}</h1>
@@ -134,7 +134,7 @@ export default async function ConsentProfilePage({
           >
             <p className="text-sm font-semibold mb-1">Want to license this likeness?</p>
             <p className="text-xs" style={{ color: "#6b7280" }}>
-              AI use is licensed through Image Vault on this person&apos;s terms, with dual-custody consent and
+              AI use is licensed through ImageVault on this person&apos;s terms, with dual-custody consent and
               per-use royalties. Machine clients use the Open License Protocol endpoint:
             </p>
             <code className="block text-[11px] mt-2 px-2 py-1.5 rounded break-all" style={{ background: "#f3f4f6", color: "#374151" }}>
@@ -171,7 +171,7 @@ export default async function ConsentProfilePage({
             Machine-readable license (RSL)
           </a>
           <p className="text-[11px] mt-2" style={{ color: "#9ca3af" }}>
-            Published via Image Vault. Terms are derived from the rights-holder&apos;s standing instructions and
+            Published via ImageVault. Terms are derived from the rights-holder&apos;s standing instructions and
             may change. Anything not explicitly permitted is prohibited.
           </p>
         </div>

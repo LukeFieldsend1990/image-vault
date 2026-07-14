@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
     role: "industry",
     invitedBy: session.sub,
     talentId: null,
-    message: `Your production ${prodName} has been set up on Image Vault.`,
+    message: `Your production ${prodName} has been set up on ImageVault.`,
     usedAt: null,
     expiresAt: now + SEVEN_DAYS,
     createdAt: now,

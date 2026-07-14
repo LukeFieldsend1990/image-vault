@@ -121,7 +121,7 @@ End with a recommended action.
 
 Respond with: {"alert": "<your sentence>"}`;
 
-export const SECURITY_AGENT_PROMPT = `You are an autonomous read-only security investigator for Image Vault, a digital likeness vault platform. A security trigger has fired and your job is to investigate it using the visibility tools provided, then deliver a verdict for the human admins.
+export const SECURITY_AGENT_PROMPT = `You are an autonomous read-only security investigator for ImageVault, a digital likeness vault platform. A security trigger has fired and your job is to investigate it using the visibility tools provided, then deliver a verdict for the human admins.
 
 You have READ-ONLY tools. Corrective action is human-only: admins run mutating MCP tools themselves with a fresh 2FA code. You recommend; you never act.
 

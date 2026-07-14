@@ -1,6 +1,6 @@
 // Cyber-underwriting controls (Phase 8 §4.6) — a SOC2-lite control view for cyber
 // underwriters. It reframes the biometric-isolation (Article 39.E) and security-
-// custody (39.H) attestations Image Vault already records, plus the Bridge device-
+// custody (39.H) attestations ImageVault already records, plus the Bridge device-
 // integrity log, as a small set of pass/partial/fail controls. This is what a cyber
 // underwriter checks before binding the BIPA / biometric-breach exposure.
 

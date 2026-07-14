@@ -1,5 +1,5 @@
 /**
- * Open License Protocol (OLP) core — the engine behind Image Vault as an RSL
+ * Open License Protocol (OLP) core — the engine behind ImageVault as an RSL
  * License Server (https://rslstandard.org/api). OLP is an OAuth 2.0 extension:
  * machine clients acquire RSL licenses as bearer credentials via a token
  * endpoint with grant_type=rsl. This module is transport-agnostic; the routes
@@ -65,7 +65,7 @@ export function offerForUsage(usage: string, contentUrl: string) {
   return {
     payment_type: RSL_PAYMENT_TYPE[usage] ?? "inference",
     terms_url: contentUrl,
-    note: "A licence and fee are established through Image Vault on the rights-holder's terms.",
+    note: "A licence and fee are established through ImageVault on the rights-holder's terms.",
   };
 }
 

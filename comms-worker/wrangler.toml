@@ -31,7 +31,7 @@ binding = "AI"
 # Environment Variables
 # -------------------------------------------------------------------
 [vars]
-RESEND_FROM_EMAIL = "Image Vault <noreply@imagevault.ai>"
+RESEND_FROM_EMAIL = "ImageVault <noreply@imagevault.ai>"
 APP_URL = "https://imagevault.ai"
 
 # -------------------------------------------------------------------

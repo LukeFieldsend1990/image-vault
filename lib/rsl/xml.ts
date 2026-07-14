@@ -2,7 +2,7 @@
  * RSL 1.0 document rendering (https://rslstandard.org/rsl).
  *
  * We emit machine-readable licensing terms that point a non-human agent BACK to
- * Image Vault as the place to license — never any scan bytes or biometric data.
+ * ImageVault as the place to license — never any scan bytes or biometric data.
  * Default-deny: red categories are emitted as explicit <prohibits>; amber/green
  * as <permits>, with amber (permitted-with-terms) carrying a <payment> pointer
  * to our Open License Protocol endpoint (Phase 2).
@@ -51,7 +51,7 @@ export function renderTalentRsl(input: TalentRslInput): string {
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    "<!-- Image Vault — machine-readable AI-use licensing terms for this likeness.",
+    "<!-- ImageVault — machine-readable AI-use licensing terms for this likeness.",
     "     To license, use the Open License Protocol endpoint in the `server` attribute.",
     "     Anything not explicitly permitted below is prohibited (default-deny). -->",
     '<rsl xmlns="https://rslstandard.org/rsl">',
@@ -71,7 +71,7 @@ export function renderTalentRsl(input: TalentRslInput): string {
 export function renderPlatformRsl(input: { siteUrl: string; server: string }): string {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    "<!-- Image Vault platform licensing policy. Content hosted here is licensable",
+    "<!-- ImageVault platform licensing policy. Content hosted here is licensable",
     "     only via the Open License Protocol endpoint below. Default-deny for AI use. -->",
     '<rsl xmlns="https://rslstandard.org/rsl">',
     `  <content url="${esc(input.siteUrl)}" server="${esc(input.server)}">`,

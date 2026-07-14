@@ -118,7 +118,7 @@ export default function MembersClient() {
         <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "var(--color-accent)" }}>Oversight</p>
         <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-text)" }}>Member roster</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Paste your membership list to see who&apos;s already on Image Vault. Visibility only — getting members
+          Paste your membership list to see who&apos;s already on ImageVault. Visibility only — getting members
           onboarded isn&apos;t mandated; this just shows the gap.
         </p>
         {unions.length > 1 && (
@@ -172,7 +172,7 @@ export default function MembersClient() {
               <span className="h-full rounded-full" style={{ width: `${roster.coveragePct}%`, background: roster.coveragePct === 100 ? "#166534" : roster.coveragePct > 50 ? "#b45309" : "#c0392b" }} />
             </span>
             <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--color-text)" }}>{roster.coveragePct}%</span>
-            <span className="text-xs" style={{ color: "var(--color-muted)" }}>on Image Vault ({roster.onPlatform}/{roster.total})</span>
+            <span className="text-xs" style={{ color: "var(--color-muted)" }}>on ImageVault ({roster.onPlatform}/{roster.total})</span>
           </div>
           {missingCount > 0 && (
             <span className="text-[11px] font-semibold px-2 py-1 rounded"
@@ -244,7 +244,7 @@ export default function MembersClient() {
               {m.onPlatform ? (
                 <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded shrink-0"
                   style={{ color: "#1a7f37", border: "1px solid #1a7f3744", background: "rgba(26,127,55,0.08)" }}>
-                  ✓ On Image Vault
+                  ✓ On ImageVault
                 </span>
               ) : (
                 <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded shrink-0"

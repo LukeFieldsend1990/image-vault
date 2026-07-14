@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Wordmark from "@/app/components/wordmark";
 import { useRouter } from "next/navigation";
 import type { TmdbCandidate } from "@/app/api/onboarding/search/route";
 
@@ -222,9 +223,7 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
       <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
         {/* Wordmark */}
         <div>
-          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-ink]">
-            Image Vault
-          </span>
+          <Wordmark variant="lock" className="text-xs" />
         </div>
 
         {/* ── Step: Search ── */}
@@ -367,7 +366,7 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
             </div>
 
             <p className="mb-5 text-xs leading-relaxed" style={{ color: "var(--color-muted)" }}>
-              By confirming, you link your Image Vault account to this industry profile. This
+              By confirming, you link your ImageVault account to this industry profile. This
               helps licensees identify you in the talent directory.
             </p>
 
@@ -499,7 +498,7 @@ export default function OnboardingClient({ isUpdate = false }: { isUpdate?: bool
 
         {/* Footer */}
         <p className="text-xs text-[--color-muted]">
-          &copy; {new Date().getFullYear()} Image Vault. All rights reserved.
+          &copy; {new Date().getFullYear()} ImageVault. All rights reserved.
         </p>
       </div>
 

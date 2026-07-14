@@ -529,7 +529,7 @@ export default function SetupClient() {
               Let&apos;s set up your first production
             </h1>
             <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
-              You&apos;ll have your full cast roster on screen in a few minutes — <strong style={{ color: "var(--color-text)" }}>no need to track down anyone&apos;s email first.</strong> We pull the cast from public data and let the rest fill in over time as talent join Image Vault.
+              You&apos;ll have your full cast roster on screen in a few minutes — <strong style={{ color: "var(--color-text)" }}>no need to track down anyone&apos;s email first.</strong> We pull the cast from public data and let the rest fill in over time as talent join ImageVault.
             </p>
           </div>
           <ul className="space-y-2 text-sm" style={{ color: "var(--color-muted)" }}>
@@ -830,7 +830,7 @@ export default function SetupClient() {
           {!castLoading && tmdbCast.length > 0 && (
             <>
               <div className="flex items-center justify-between text-xs" style={{ color: "var(--color-muted)" }}>
-                <span>{selected.size} of {tmdbCast.length} selected · {tmdbCast.filter((c) => c.matched).length} already on Image Vault</span>
+                <span>{selected.size} of {tmdbCast.length} selected · {tmdbCast.filter((c) => c.matched).length} already on ImageVault</span>
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setSelected(new Set(tmdbCast.map((c) => c.tmdbId)))} style={{ color: "var(--color-accent)" }}>Select all</button>
                   <button type="button" onClick={() => setSelected(new Set())} style={{ color: "var(--color-accent)" }}>Clear</button>
@@ -845,7 +845,7 @@ export default function SetupClient() {
                       {c.character && <span className="text-xs ml-2" style={{ color: "var(--color-muted)" }}>as {c.character}</span>}
                     </div>
                     {c.matched ? (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded shrink-0" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On Image Vault</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded shrink-0" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On ImageVault</span>
                     ) : (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded shrink-0" style={{ background: "var(--color-bg)", color: "var(--color-muted)" }}>Reserved</span>
                     )}
@@ -966,7 +966,7 @@ export default function SetupClient() {
             <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
               {importResult ? (
                 <>You reserved <strong style={{ color: "var(--color-text)" }}>{importResult.imported} role{importResult.imported === 1 ? "" : "s"}</strong>
-                  {importResult.matched > 0 && <> — <strong style={{ color: "var(--color-text)" }}>{importResult.matched}</strong> {importResult.matched === 1 ? "is" : "are"} already on Image Vault and ready to license</>}.
+                  {importResult.matched > 0 && <> — <strong style={{ color: "var(--color-text)" }}>{importResult.matched}</strong> {importResult.matched === 1 ? "is" : "are"} already on ImageVault and ready to license</>}.
                   {" "}We&apos;ll let you know the moment a reserved performer joins.</>
               ) : (
                 <>Your production is ready. Add cast any time from the production page — by name, CSV, or online import.</>

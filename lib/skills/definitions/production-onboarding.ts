@@ -147,7 +147,7 @@ const skill: SkillDefinition = {
     const productionLabel = companyName ? `${productionName} (${companyName})` : productionName;
     const message =
       messageParam ??
-      `You've been invited to manage scan licence access for ${productionLabel} on Image Vault.`;
+      `You've been invited to manage scan licence access for ${productionLabel} on ImageVault.`;
 
     await db.insert(invites).values({
       id: inviteId,

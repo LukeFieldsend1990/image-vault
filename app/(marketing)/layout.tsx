@@ -99,7 +99,7 @@ export default function MarketingLayout({
               Contact
             </Link>
             <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-              &copy; {new Date().getFullYear()} Image Vault
+              &copy; {new Date().getFullYear()} ImageVault
             </span>
           </div>
         </div>

@@ -28,8 +28,9 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Image Vault",
-  description: "Secure likeness archive for talent",
+  title: "ImageVault",
+  description:
+    "Governance for performer likeness data. Consent bound to the scan; access time-limited, audited, and on the record.",
   icons: { icon: "/favicon.svg" },
 };
 

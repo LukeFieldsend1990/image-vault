@@ -18,10 +18,10 @@ interface AgentSummary {
 }
 
 const STEPS: { id: StepId; title: string; sub: string }[] = [
-  { id: "token", title: "Generate connection token", sub: "A one-time token that ties your installed agent to your organisation on Image Vault." },
+  { id: "token", title: "Generate connection token", sub: "A one-time token that ties your installed agent to your organisation on ImageVault." },
   { id: "install", title: "Install the Bridge agent", sub: "Run the container on the machine that hosts your proxy folder, using the token from step 1." },
   { id: "local", title: "Configure local access", sub: "Set up the proxy folder and decide which workstations and render nodes can reach it." },
-  { id: "test", title: "Connectivity test", sub: "Confirm the agent has connected to Image Vault end-to-end before going live." },
+  { id: "test", title: "Connectivity test", sub: "Confirm the agent has connected to ImageVault end-to-end before going live." },
   { id: "attest", title: "Confirm Bridge is live", sub: "Final sign-off. Your status flips to Ready across all connected productions." },
 ];
 
@@ -215,7 +215,7 @@ export default function BridgeSetupChecklist({
         setTestResult("fail");
         setTestFailHint(
           enrolled
-            ? "The agent is enrolled but hasn't sent a heartbeat in the last minute. Check it's running and can reach Image Vault, then test again."
+            ? "The agent is enrolled but hasn't sent a heartbeat in the last minute. Check it's running and can reach ImageVault, then test again."
             : "No agent has connected yet. Make sure step 2 completed, then test again.",
         );
       }
@@ -260,7 +260,7 @@ export default function BridgeSetupChecklist({
           </span>
         </div>
         <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
-          The Bridge is the secure connection between your network and Image Vault. Work through these steps to go live —
+          The Bridge is the secure connection between your network and ImageVault. Work through these steps to go live —
           you can pause and come back at any time.
         </p>
         <div className="flex items-center gap-3">
@@ -400,7 +400,7 @@ export default function BridgeSetupChecklist({
                   {step.id === "test" && (
                     <>
                       <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
-                        Confirm the agent is connected and sending heartbeats to Image Vault before going live.
+                        Confirm the agent is connected and sending heartbeats to ImageVault before going live.
                       </p>
                       {testResult === "pass" && (
                         <div className="rounded p-3 mb-3 text-xs" style={{ background: "rgba(22,101,52,0.08)", border: `1px solid ${GREEN}`, color: "var(--color-ink)" }}>
