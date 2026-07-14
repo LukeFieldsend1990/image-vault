@@ -216,7 +216,7 @@ export default async function SettingsPage({
         aside={
           <div
             className="flex h-12 w-12 items-center justify-center rounded-full text-base font-semibold"
-            style={{ background: "var(--color-accent-tint)", color: "var(--color-ink)" }}
+            style={{ background: "var(--color-salmon)", color: "var(--color-ink)" }}
           >
             {user?.email?.[0]?.toUpperCase() ?? "?"}
           </div>

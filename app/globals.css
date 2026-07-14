@@ -22,6 +22,8 @@
   --color-accent:       #bc3d2c;   /* brick    — figures, rules, emphasis */
   --color-accent-hover: #97301f;   /* red-deep — pressed / hover          */
   --color-accent-tint:  #f2e0da;   /* red-tint — badge / status backgrounds */
+  --color-salmon:       #e8917f;   /* lifted brick — emphasis ON ink panels only
+                                      (brick is too dark on dark); never on paper */
 
   /* ── Slate (functional labels / eyebrows) ── */
   --color-slate:     #5e6970;
