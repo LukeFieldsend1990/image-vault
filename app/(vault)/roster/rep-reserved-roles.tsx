@@ -27,6 +27,16 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
   const [decliningId, setDecliningId] = useState<string | null>(null);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [openTermsIds, setOpenTermsIds] = useState<Set<string>>(new Set());
+
+  function toggleTerms(castId: string) {
+    setOpenTermsIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(castId)) next.delete(castId);
+      else next.add(castId);
+      return next;
+    });
+  }
 
   useEffect(() => {
     fetch("/api/cast/rep-assignments")
@@ -106,8 +116,40 @@ export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: {
 
               {a.hasTerms ? (
                 <>
-                  <div className="mt-4">
-                    <LicenceTermsSummary terms={a.terms} />
+                  {/* Terms start collapsed so the card stays scannable in a long roster. */}
+                  <div
+                    className="mt-4 rounded border"
+                    style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleTerms(a.castId)}
+                      aria-expanded={openTermsIds.has(a.castId)}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left"
+                    >
+                      <span
+                        className="text-xs font-medium tracking-widest uppercase"
+                        style={{ color: "var(--color-muted)" }}
+                      >
+                        Licence terms
+                      </span>
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        aria-hidden="true"
+                        className={`shrink-0 transition-transform ${openTermsIds.has(a.castId) ? "rotate-180" : ""}`}
+                        style={{ color: "var(--color-muted)" }}
+                      >
+                        <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    {openTermsIds.has(a.castId) && (
+                      <div className="px-4 pb-4">
+                        <LicenceTermsSummary terms={a.terms} bare />
+                      </div>
+                    )}
                   </div>
                   <a
                     href={`/consent/cast/${a.castId}`}
