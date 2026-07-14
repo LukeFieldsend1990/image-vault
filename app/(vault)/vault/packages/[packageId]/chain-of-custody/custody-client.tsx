@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import Inlay from "@/app/components/inlay";
 import type { ActivityResponse, CustodyEvent } from "@/app/api/vault/packages/[packageId]/activity/route";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -347,6 +348,20 @@ export default function CustodyClient({ packageId }: { packageId: string }) {
           Print / Export PDF
         </button>
       </div>
+
+      {/* ── Screen-only human framing. The document below is the formal,
+          print-ready evidence; the Inlay never enters the PDF. ── */}
+      {data.events.length > 0 && (
+        <div className="no-print mb-6">
+          <Inlay
+            eyebrow="Chain of custody"
+            gate
+            footnote={`${data.events.length} event${data.events.length !== 1 ? "s" : ""} · Tamper-evident · UTC`}
+          >
+            Every touch on this likeness is <em>on the permanent record.</em>
+          </Inlay>
+        </div>
+      )}
 
       {/* ── Document ── */}
       <div

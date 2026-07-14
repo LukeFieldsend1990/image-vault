@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Inlay from "@/app/components/inlay";
 
 interface StatusData {
   step: string | null;
@@ -594,7 +595,15 @@ export default function TalentAuthoriseClient({
         Back to licences
       </Link>
 
-      <h1 className="text-xl font-semibold mb-2" style={{ color: "var(--color-ink)" }}>Authorise Download</h1>
+      {/* The dual-custody moment — the one Inlay on this page. */}
+      <Inlay
+        eyebrow="Dual-custody authorisation"
+        gate
+        footnote="Production verified · Your key is the last"
+        className="mb-4"
+      >
+        You&apos;re the second key. <em>Nothing moves until you say so.</em>
+      </Inlay>
       <p className="text-sm mb-6" style={{ color: "var(--color-muted)" }}>
         A production company has completed their verification. Review the request and enter your authenticator code to authorise.
       </p>
