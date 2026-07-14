@@ -78,6 +78,13 @@ export default function MarketingLayout({
           </div>
           <div className="flex items-center gap-8">
             <Link
+              href="/product/brief"
+              className="text-xs transition hover:opacity-60"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Studio brief
+            </Link>
+            <Link
               href="/login"
               className="text-xs transition hover:opacity-60"
               style={{ color: "var(--color-muted)" }}
