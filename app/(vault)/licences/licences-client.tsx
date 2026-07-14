@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import LicenceRef from "@/app/components/licence-ref";
+import StatusBadge, { type StatusKind } from "@/app/components/status-badge";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE"
@@ -74,17 +75,33 @@ const BASE_TABS: { label: string; value: LicenceStatus | "ALL" | "SCRUB" }[] = [
   { label: "All", value: "ALL" },
 ];
 
-const STATUS_COLOURS: Record<LicenceStatus, string> = {
-  AWAITING_PACKAGE: "#7c3aed",
-  PENDING: "#b45309",
-  APPROVED: "#166534",
-  DENIED: "#991b1b",
-  REVOKED: "#6b7280",
-  EXPIRED: "#6b7280",
-  SCRUB_PERIOD: "#c0392b",
-  CLOSED: "#374151",
-  OVERDUE: "#991b1b",
-};
+// Where this licence sits in the access lifecycle. Olive/ochre/brick belong
+// exclusively to the lifecycle (active / expiring / closed); request states
+// that carry no access weight stay neutral slate.
+const EXPIRING_WINDOW = 14 * 86400;
+
+function lifecycleOf(l: Licence): { kind: StatusKind; label: string } {
+  switch (l.status) {
+    case "APPROVED": {
+      const now = Math.floor(Date.now() / 1000);
+      if (l.validTo - now < EXPIRING_WINDOW) return { kind: "expiring", label: "Expiring" };
+      return { kind: "active", label: "Active" };
+    }
+    case "REVOKED": return { kind: "revoked", label: "Revoked" };
+    case "SCRUB_PERIOD": return { kind: "revoked", label: "Scrub period" };
+    case "OVERDUE": return { kind: "revoked", label: "Overdue" };
+    case "CLOSED": return { kind: "purged", label: "Purged" };
+    case "EXPIRED": return { kind: "neutral", label: "Expired" };
+    case "DENIED": return { kind: "neutral", label: "Denied" };
+    case "AWAITING_PACKAGE": return { kind: "neutral", label: "Awaiting package" };
+    case "PENDING":
+    default:
+      return { kind: "neutral", label: "Pending" };
+  }
+}
+
+// Closed = the access window is over, however it ended.
+const CLOSED_STATUSES: LicenceStatus[] = ["REVOKED", "EXPIRED", "SCRUB_PERIOD", "CLOSED", "OVERDUE", "DENIED"];
 
 const LICENCE_TYPE_LABELS: Record<string, string> = {
   film_double: "Film / Double",
@@ -130,6 +147,8 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
   const highlightedRef = useRef(false);
   const [uploadingContractId, setUploadingContractId] = useState<string | null>(null);
   const [upcoming, setUpcoming] = useState<UpcomingRole[]>([]);
+  // Full set from the mount fetch — drives the governance stat row across tabs.
+  const [allLicences, setAllLicences] = useState<Licence[]>([]);
 
   const tabs = hasScrub
     ? [{ label: "Scrub", value: "SCRUB" as const }, ...BASE_TABS]
@@ -179,6 +198,7 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
       .then((r) => r.json() as Promise<{ licences?: Licence[] }>)
       .then((d) => {
         const all = d.licences ?? [];
+        setAllLicences(all);
         const scrub = all.some((l) => l.status === "SCRUB_PERIOD" || l.status === "OVERDUE");
         setHasScrub(scrub);
         if (scrub) setTab("SCRUB");
@@ -237,6 +257,50 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
         </Link>
       </div>
 
+      {/* ── Governance stat row (Brand in Practice: product console) ── */}
+      {allLicences.length > 0 && (() => {
+        const now = Math.floor(Date.now() / 1000);
+        const active = allLicences.filter((l) => l.status === "APPROVED").length;
+        const expiring = allLicences.filter(
+          (l) => l.status === "APPROVED" && l.validTo - now < EXPIRING_WINDOW
+        ).length;
+        const closed = allLicences.filter((l) => CLOSED_STATUSES.includes(l.status)).length;
+        const stats: { n: number; label: string; brick?: boolean }[] = [
+          { n: allLicences.length, label: "Under governance" },
+          { n: active, label: "Consent bound · active" },
+          { n: expiring, label: "Expiring within 14 days", brick: expiring > 0 },
+          { n: closed, label: "Access closed" },
+        ];
+        return (
+          <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {stats.map((s) => (
+              <div
+                key={s.label}
+                className="rounded border px-4 py-3"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              >
+                <div
+                  className="text-2xl leading-tight"
+                  style={{
+                    fontFamily: "var(--font-serif)",
+                    fontWeight: 600,
+                    color: s.brick ? "var(--color-accent)" : "var(--color-ink)",
+                  }}
+                >
+                  {s.n}
+                </div>
+                <div
+                  className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest"
+                  style={{ color: "var(--color-slate)" }}
+                >
+                  {s.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Upcoming roles — reserved/invited cast that aren't licences yet */}
       {upcoming.length > 0 && (
         <div className="mb-6 rounded-lg px-5 py-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
@@ -289,14 +353,14 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
               {isScrub && (
                 <span
                   className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: "#c0392b" }}
+                  style={{ background: "var(--color-accent)" }}
                 />
               )}
               {t.label}
               {active && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-0.5"
-                  style={{ background: isScrub ? "#c0392b" : "var(--color-accent)" }}
+                  style={{ background: isScrub ? "var(--color-accent)" : "var(--color-accent)" }}
                 />
               )}
             </button>
@@ -371,15 +435,10 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
                         {l.projectName}
                       </p>
                       <LicenceRef code={l.shortCode} />
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                        style={{
-                          background: `${STATUS_COLOURS[l.status]}18`,
-                          color: STATUS_COLOURS[l.status],
-                        }}
-                      >
-                        {l.status}
-                      </span>
+                      {(() => {
+                        const life = lifecycleOf(l);
+                        return <StatusBadge kind={life.kind}>{life.label}</StatusBadge>;
+                      })()}
                       {l.licenceType && (
                         <span
                           className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
@@ -425,9 +484,47 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
                         </div>
                       );
                     })()}
-                    <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
-                      Licence period: {formatDate(l.validFrom)} – {formatDate(l.validTo)}
-                    </p>
+                    {(() => {
+                      // Access window (console treatment): elapsed bar + time left,
+                      // only once a window is actually running or has run.
+                      const life = lifecycleOf(l);
+                      const windowRan =
+                        l.status === "APPROVED" || CLOSED_STATUSES.includes(l.status);
+                      if (!windowRan || l.validTo <= l.validFrom) {
+                        return (
+                          <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+                            Licence period: {formatDate(l.validFrom)} – {formatDate(l.validTo)}
+                          </p>
+                        );
+                      }
+                      const now = Math.floor(Date.now() / 1000);
+                      const closedNow = l.status !== "APPROVED" || l.validTo <= now;
+                      const pct = closedNow
+                        ? 100
+                        : Math.max(2, Math.min(100, Math.round(((now - l.validFrom) / (l.validTo - l.validFrom)) * 100)));
+                      const daysLeft = Math.max(0, Math.ceil((l.validTo - now) / 86400));
+                      const fill =
+                        life.kind === "active"
+                          ? "var(--color-active)"
+                          : life.kind === "expiring"
+                            ? "var(--color-expiring)"
+                            : "var(--color-slate)";
+                      return (
+                        <div className="mt-1.5 flex items-center gap-2 text-xs" style={{ color: "var(--color-muted)" }}>
+                          <span>{formatDate(l.validFrom)} – {formatDate(l.validTo)}</span>
+                          <span
+                            className="inline-block h-1 w-16 overflow-hidden rounded-full"
+                            style={{ background: "var(--color-border)" }}
+                            aria-hidden
+                          >
+                            <span className="block h-full" style={{ width: `${pct}%`, background: fill }} />
+                          </span>
+                          <span className="font-mono text-[10px] tracking-tight" style={{ color: closedNow ? "var(--color-slate)" : "var(--color-ink)" }}>
+                            {closedNow ? "ended" : `${daysLeft}d left`}
+                          </span>
+                        </div>
+                      );
+                    })()}
                     {feeRef && (
                       <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
                         {l.agreedFee ? "Agreed fee" : "Proposed fee"}: {fmtUSD(feeRef)}
@@ -538,7 +635,7 @@ export default function LicencesClient({ highlight = null }: { highlight?: strin
                       <Link
                         href={`/licences/${l.id}/scrub`}
                         className="rounded px-4 py-2 text-xs font-medium text-white transition"
-                        style={{ background: "#c0392b" }}
+                        style={{ background: "var(--color-accent)" }}
                       >
                         Confirm deletion
                       </Link>

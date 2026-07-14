@@ -174,7 +174,7 @@ function AddPanel({ onAdded, onClose, unionId }: { onAdded: () => void; onClose:
                 <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>{TYPE_LABELS[c.type] ?? c.type}</p>
               </div>
               {c.onImageVault ? (
-                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#1a7f37" }}>On ImageVault</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--color-active)" }}>On ImageVault</span>
               ) : c.onWatchlist ? (
                 <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>On watchlist</span>
               ) : (
@@ -267,12 +267,12 @@ function EntryRow({ entry, onChanged }: { entry: WatchlistEntry; onChanged: () =
               <Link href={`/productions/${entry.matchedProductionId}`}
                 title={entry.matchedProductionName ? `View “${entry.matchedProductionName}”` : "View production"}
                 className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded inline-block"
-                style={{ color: "#1a7f37", border: "1px solid #1a7f3744", background: "rgba(26,127,55,0.08)" }}>
+                style={{ color: "var(--color-active)", border: "1px solid color-mix(in srgb, var(--color-active) 35%, transparent)", background: "var(--color-active-tint)" }}>
                 ✓ On ImageVault →
               </Link>
             ) : (
               <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded"
-                style={{ color: "#1a7f37", border: "1px solid #1a7f3744", background: "rgba(26,127,55,0.08)" }}>
+                style={{ color: "var(--color-active)", border: "1px solid color-mix(in srgb, var(--color-active) 35%, transparent)", background: "var(--color-active-tint)" }}>
                 ✓ On ImageVault
               </span>
             )
@@ -401,7 +401,7 @@ export default function WatchlistClient() {
         {ratifiedCount > 0 && pendingOnly && (
           <button onClick={() => setPendingOnly(false)}
             className="text-[11px] font-semibold px-2 py-1 rounded"
-            style={{ color: "#1a7f37", background: "rgba(26,127,55,0.08)", border: "1px solid #1a7f3744" }}>
+            style={{ color: "var(--color-active)", background: "var(--color-active-tint)", border: "1px solid color-mix(in srgb, var(--color-active) 35%, transparent)" }}>
             {ratifiedCount} now on ImageVault — review
           </button>
         )}

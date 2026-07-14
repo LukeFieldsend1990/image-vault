@@ -124,8 +124,8 @@ const PRODUCTION_STATUS_LABELS: Record<string, string> = {
 
 const PRODUCTION_STATUS_COLOURS: Record<string, string> = {
   development: "#6b7280",
-  pre_production: "#b45309",
-  production: "#166534",
+  pre_production: "#8a5f24",
+  production: "#6e7a4f",
   post_production: "#7c3aed",
   released: "#0891b2",
   cancelled: "#374151",
@@ -133,11 +133,11 @@ const PRODUCTION_STATUS_COLOURS: Record<string, string> = {
 
 const CAST_STATUS_COLOUR: Record<string, string> = {
   placeholder: "#6b7280",
-  invited: "#b45309",
+  invited: "#8a5f24",
   linked: "#1d4ed8",
   scan_uploaded: "#7c3aed",
-  consented: "#166534",
-  declined: "#991b1b",
+  consented: "#6e7a4f",
+  declined: "#97301f",
 };
 
 const CAST_STATUS_LABEL: Record<string, string> = {
@@ -913,10 +913,10 @@ export default function ProductionDetailClient() {
                 <tbody>
                   {licences.map((lic, i) => {
                     const licColour: Record<string, string> = {
-                      APPROVED: "#166534", PENDING: "#b45309", AWAITING_PACKAGE: "#7c3aed",
-                      DENIED: "#991b1b", REVOKED: "#6b7280", EXPIRED: "#6b7280",
+                      APPROVED: "#6e7a4f", PENDING: "#8a5f24", AWAITING_PACKAGE: "#5e6970",
+                      DENIED: "#97301f", REVOKED: "#5e6970", EXPIRED: "#5e6970",
                     };
-                    const colour = licColour[lic.status] ?? "#6b7280";
+                    const colour = licColour[lic.status] ?? "#5e6970";
                     return (
                       <tr key={lic.id} style={{ borderBottom: i < licences.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
                         <td className="px-4 py-3">
@@ -1044,7 +1044,7 @@ export default function ProductionDetailClient() {
               <circle
                 cx="32" cy="32" r="28"
                 fill="none"
-                stroke={pct === 100 ? "#166534" : "var(--color-accent)"}
+                stroke={pct === 100 ? "var(--color-active)" : "var(--color-accent)"}
                 strokeWidth="6"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
@@ -1118,10 +1118,10 @@ export default function ProductionDetailClient() {
                 <tbody>
                   {licences.map((lic, i) => {
                     const licColour: Record<string, string> = {
-                      APPROVED: "#166534", PENDING: "#b45309", AWAITING_PACKAGE: "#7c3aed",
-                      DENIED: "#991b1b", REVOKED: "#6b7280", EXPIRED: "#6b7280",
+                      APPROVED: "#6e7a4f", PENDING: "#8a5f24", AWAITING_PACKAGE: "#5e6970",
+                      DENIED: "#97301f", REVOKED: "#5e6970", EXPIRED: "#5e6970",
                     };
-                    const colour = licColour[lic.status] ?? "#6b7280";
+                    const colour = licColour[lic.status] ?? "#5e6970";
                     return (
                       <tr key={lic.id} style={{ borderBottom: i < licences.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
                         <td className="px-4 py-3">
@@ -1323,7 +1323,7 @@ export default function ProductionDetailClient() {
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{m.name}</span>
                         {m.character && <span className="text-xs ml-2" style={{ color: "var(--color-muted)" }}>as {m.character}</span>}
-                        {m.matched && <span className="text-xs ml-2 px-1.5 py-0.5 rounded" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>Matched</span>}
+                        {m.matched && <span className="text-xs ml-2 px-1.5 py-0.5 rounded" style={{ background: "var(--color-active-tint)", color: "var(--color-active)" }}>Matched</span>}
                       </div>
                       {!m.matched && tmdbSelected.has(m.tmdbId) && (
                         <input
@@ -1377,7 +1377,7 @@ export default function ProductionDetailClient() {
                             <span className="font-medium">{m.name}</span>
                           </span>
                           {m.type === "platform" ? (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On ImageVault</span>
+                            <span className="text-[11px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "var(--color-active-tint)", color: "var(--color-active)" }}>On ImageVault</span>
                           ) : (
                             <span className="text-[11px] shrink-0" style={{ color: "var(--color-muted)" }}>online</span>
                           )}
@@ -1390,7 +1390,7 @@ export default function ProductionDetailClient() {
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Email</label>
                   {manualTalentId ? (
                     <div className="flex items-center gap-2 rounded px-3" style={{ ...inputStyle, display: "flex" }}>
-                      <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On ImageVault</span>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: "var(--color-active-tint)", color: "var(--color-active)" }}>On ImageVault</span>
                       <span className="text-xs" style={{ color: "var(--color-muted)" }}>Linked — no email needed</span>
                     </div>
                   ) : (
@@ -1459,7 +1459,7 @@ export default function ProductionDetailClient() {
               <input ref={csvRef} type="file" accept=".csv,text/csv" onChange={handleCsvUpload} className="text-sm" style={{ color: "var(--color-text)" }} />
               {csvError && <p className="text-xs" style={{ color: "var(--color-accent)" }}>{csvError}</p>}
               {csvRows.length > 0 && (
-                <p className="text-xs" style={{ color: "#166534" }}>{csvRows.length} rows loaded.</p>
+                <p className="text-xs" style={{ color: "var(--color-active)" }}>{csvRows.length} rows loaded.</p>
               )}
             </div>
           )}
@@ -1539,7 +1539,7 @@ export default function ProductionDetailClient() {
                               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--color-surface)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>{cat.regimeTag}</span>
                             )}
                             {cat.sensitive && (
-                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(180,83,9,0.1)", color: "#b45309" }}>sensitive</span>
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "var(--color-expiring-tint)", color: "#8a5f24" }}>sensitive</span>
                             )}
                           </span>
                           <span className="block text-xs mt-1" style={{ color: "var(--color-muted)" }}>{cat.description}</span>
@@ -1673,7 +1673,7 @@ export default function ProductionDetailClient() {
                     {(() => {
                       const union = row.unionAffiliation ?? (row.sagMember ? "SAG-AFTRA" : null);
                       return union ? (
-                        <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>{union}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--color-active-tint)", color: "var(--color-active)" }}>{union}</span>
                       ) : (
                         <span className="text-xs" style={{ color: "var(--color-muted)" }}>—</span>
                       );
@@ -1695,8 +1695,8 @@ export default function ProductionDetailClient() {
                       <span
                         className="text-xs px-1.5 py-0.5 rounded font-medium"
                         style={{
-                          background: row.licence.status === "APPROVED" ? "rgba(22,101,52,0.1)" : row.licence.status === "DENIED" ? "rgba(153,27,27,0.1)" : "rgba(180,83,9,0.1)",
-                          color: row.licence.status === "APPROVED" ? "#166534" : row.licence.status === "DENIED" ? "#991b1b" : "#b45309",
+                          background: row.licence.status === "APPROVED" ? "var(--color-active-tint)" : row.licence.status === "DENIED" ? "var(--color-accent-tint)" : "var(--color-expiring-tint)",
+                          color: row.licence.status === "APPROVED" ? "var(--color-active)" : row.licence.status === "DENIED" ? "var(--color-accent-hover)" : "#8a5f24",
                         }}
                       >
                         {row.licence.status}
@@ -1730,8 +1730,8 @@ export default function ProductionDetailClient() {
                             <span
                               className="text-xs px-1.5 py-0.5 rounded"
                               style={{
-                                background: row.repInvite.accepted ? "rgba(22,101,52,0.08)" : "rgba(180,83,9,0.08)",
-                                color: row.repInvite.accepted ? "#166534" : "#b45309",
+                                background: row.repInvite.accepted ? "var(--color-active-tint)" : "var(--color-expiring-tint)",
+                                color: row.repInvite.accepted ? "var(--color-active)" : "#8a5f24",
                               }}
                               title={row.repInvite.accepted
                                 ? `${row.repInvite.email} accepted — awaiting client connection`
@@ -1869,10 +1869,10 @@ export default function ProductionDetailClient() {
               <tbody>
                 {licences.map((lic, i) => {
                   const licColour: Record<string, string> = {
-                    APPROVED: "#166534", PENDING: "#b45309", AWAITING_PACKAGE: "#7c3aed",
-                    DENIED: "#991b1b", REVOKED: "#6b7280", EXPIRED: "#6b7280",
+                    APPROVED: "#6e7a4f", PENDING: "#8a5f24", AWAITING_PACKAGE: "#5e6970",
+                    DENIED: "#97301f", REVOKED: "#5e6970", EXPIRED: "#5e6970",
                   };
-                  const colour = licColour[lic.status] ?? "#6b7280";
+                  const colour = licColour[lic.status] ?? "#5e6970";
                   return (
                     <tr key={lic.id} style={{ borderBottom: i < licences.length - 1 ? "1px solid var(--color-border)" : "none", background: "var(--color-bg)" }}>
                       <td className="px-4 py-3">
@@ -1929,7 +1929,7 @@ export default function ProductionDetailClient() {
                       </td>
                       <td className="px-4 py-3">
                         {lic.productionIncluded ? (
-                          <span className="text-xs px-2 py-0.5 rounded font-medium" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }} title="Scan produced & paid for as part of this production — no licence fee">
+                          <span className="text-xs px-2 py-0.5 rounded font-medium" style={{ background: "var(--color-active-tint)", color: "var(--color-active)" }} title="Scan produced & paid for as part of this production — no licence fee">
                             Included · $0
                           </span>
                         ) : (
