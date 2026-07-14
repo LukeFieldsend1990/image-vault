@@ -1003,34 +1003,6 @@ export default function DashboardClient() {
         </div>
       )}
 
-      {/* ── The vault's one Inlay — a consent statement, not chrome. Suppressed
-          while the cast-invitation alert is up so only one statement shows. ── */}
-      {!loading && packages.length > 0 && awaitingPackage.length === 0 && (
-        <div className="mx-8 lg:mx-12 mt-5">
-          <Inlay
-            eyebrow="Your control"
-            gate
-            footnote={
-              activeLicences > 0
-                ? `${pendingRequests} pending · Consent bound`
-                : "Consent bound · Time-limited access"
-            }
-          >
-            {activeLicences > 0 ? (
-              <>
-                {activeLicences} production{activeLicences !== 1 ? "s" : ""} hold
-                {activeLicences === 1 ? "s" : ""} a licence to your likeness.{" "}
-                <em>Every access is on your record.</em>
-              </>
-            ) : (
-              <>
-                Your vault. <em>Every touch on the record.</em>
-              </>
-            )}
-          </Inlay>
-        </div>
-      )}
-
       {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
@@ -1088,6 +1060,34 @@ export default function DashboardClient() {
           </div>
         ) : (
           <div className="px-8 lg:px-12 py-6 flex flex-col gap-3">
+            {/* The vault's one Inlay — a consent statement, not chrome. Lives
+                inside the scroll area so it scrolls away with the packages on
+                small screens. Suppressed while the cast-invitation alert is up
+                so only one statement shows. */}
+            {awaitingPackage.length === 0 && (
+              <Inlay
+                className="mb-2"
+                eyebrow="Your control"
+                gate
+                footnote={
+                  activeLicences > 0
+                    ? `${pendingRequests} pending · Consent bound`
+                    : "Consent bound · Time-limited access"
+                }
+              >
+                {activeLicences > 0 ? (
+                  <>
+                    {activeLicences} production{activeLicences !== 1 ? "s" : ""} hold
+                    {activeLicences === 1 ? "s" : ""} a licence to your likeness.{" "}
+                    <em>Every access is on your record.</em>
+                  </>
+                ) : (
+                  <>
+                    Your vault. <em>Every touch on the record.</em>
+                  </>
+                )}
+              </Inlay>
+            )}
             {packages.map((pkg) => (
               <PackageCard
                 key={pkg.id}
