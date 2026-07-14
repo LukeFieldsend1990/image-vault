@@ -53,7 +53,13 @@ const Label = ({ children }: { children: React.ReactNode }) => (
   </p>
 );
 
-export default function LicenceTermsSummary({ terms }: { terms?: LicenceTermsView | null }) {
+export default function LicenceTermsSummary({
+  terms,
+  bare = false,
+}: {
+  terms?: LicenceTermsView | null;
+  bare?: boolean; // no border/background — for embedding inside an existing box (e.g. a disclosure)
+}) {
   if (!terms) return null;
 
   const intendedUse = terms.intendedUse?.trim();
@@ -86,11 +92,15 @@ export default function LicenceTermsSummary({ terms }: { terms?: LicenceTermsVie
 
   return (
     <div
-      className="rounded p-4 space-y-3"
-      style={{
-        border: "1px solid var(--color-border)",
-        background: "var(--color-surface)",
-      }}
+      className={bare ? "space-y-3" : "rounded p-4 space-y-3"}
+      style={
+        bare
+          ? undefined
+          : {
+              border: "1px solid var(--color-border)",
+              background: "var(--color-surface)",
+            }
+      }
     >
       {intendedUse && (
         <div className="space-y-1">
