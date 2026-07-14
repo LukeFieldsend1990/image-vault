@@ -45,11 +45,11 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
       {/* Dropdown — renders above the avatar */}
       {open && (
         <div
-          className="absolute bottom-full mb-2 left-0 right-0 rounded border shadow-lg z-50 overflow-hidden"
-          style={{ background: "var(--color-sidebar)", borderColor: "rgba(255,255,255,0.1)" }}
+          className="absolute bottom-full mb-2 left-0 right-0 border shadow-lg z-50 overflow-hidden"
+          style={{ background: "var(--color-inset)", borderColor: "var(--color-sidebar-border)", borderRadius: "var(--radius-md)" }}
         >
           {/* Identity header */}
-          <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: "var(--color-sidebar-border)" }}>
             {displayName ? (
               <>
                 <p className="text-xs font-semibold" style={{ color: "var(--color-sidebar-fg)" }}>{displayName}</p>
@@ -60,7 +60,7 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
             )}
             <p
               className="mt-1 text-[10px] capitalize font-medium px-1.5 py-0.5 rounded inline-block"
-              style={{ background: "rgba(192,57,43,0.2)", color: "var(--color-accent)" }}
+              style={{ background: "var(--color-accent-tint)", color: "var(--color-accent-hover)" }}
             >
               {role}
             </p>
@@ -71,7 +71,7 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
             <Link
               href="/settings"
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 px-4 py-2.5 text-xs transition hover:bg-white/5"
+              className="flex items-center gap-2.5 px-4 py-2.5 text-xs transition hover:bg-black/[0.04]"
               style={{ color: "var(--color-sidebar-muted)" }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -85,7 +85,7 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
               <Link
                 href="/settings/delegation"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2.5 text-xs transition hover:bg-white/5"
+                className="flex items-center gap-2.5 px-4 py-2.5 text-xs transition hover:bg-black/[0.04]"
                 style={{ color: "var(--color-sidebar-muted)" }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -102,7 +102,7 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
               <Link
                 href="/roster"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2.5 text-xs transition hover:bg-white/5"
+                className="flex items-center gap-2.5 px-4 py-2.5 text-xs transition hover:bg-black/[0.04]"
                 style={{ color: "var(--color-sidebar-muted)" }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -117,11 +117,11 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
           </div>
 
           {/* Logout */}
-          <div className="border-t py-1" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+          <div className="border-t py-1" style={{ borderColor: "var(--color-sidebar-border)" }}>
             <button
               onClick={logout}
               disabled={loggingOut}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs transition hover:bg-white/5 disabled:opacity-50"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs transition hover:bg-black/[0.04] disabled:opacity-50"
               style={{ color: "var(--color-danger)" }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -138,7 +138,7 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
       {/* ── Trigger ── */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 rounded px-3 py-3 transition hover:bg-white/5"
+        className="w-full flex items-center gap-3 rounded px-3 py-3 transition hover:bg-black/[0.04]"
       >
         {/* Avatar — TMDB photo if available, else initials */}
         {photoUrl ? (
@@ -147,7 +147,7 @@ export default function UserWidget({ email, initials, role, identity }: Props) {
             src={photoUrl}
             alt={displayName ?? ""}
             className="h-7 w-7 shrink-0 rounded-full object-cover object-top"
-            style={{ border: "1.5px solid rgba(255,255,255,0.15)" }}
+            style={{ border: "1.5px solid var(--color-sidebar-border)" }}
           />
         ) : (
           <div
