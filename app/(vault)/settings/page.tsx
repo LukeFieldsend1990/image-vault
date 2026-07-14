@@ -13,6 +13,7 @@ import RoyaltyMeterPlatformToggle from "./royalty-meter-platform-toggle";
 import DemoToggleCard from "./demo-toggle-card";
 import BillingFees from "./billing-fees";
 import ShowCodesToggle from "./show-codes-toggle";
+import Inlay from "@/app/components/inlay";
 
 const ADMIN_SECTIONS = [
   { href: "/admin", label: "Overview", description: "Platform-wide stats and health" },
@@ -206,34 +207,35 @@ export default async function SettingsPage({
       {/* ── Account tab ── */}
       {activeTab === "account" && (<>
 
-      {/* Profile card */}
-      <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-        <div className="flex items-center gap-4 mb-4">
+      {/* Account identity — the page's one Inlay (statement). Detail rows follow
+          on paper below, normal pattern. */}
+      <Inlay
+        eyebrow="Account"
+        gate
+        footnote={`${ROLE_LABELS[user?.role ?? "talent"]} · ${user?.email ?? "—"}`}
+        aside={
           <div
-            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-base font-semibold"
-            style={{ background: "var(--color-ink)", color: "#fff" }}
+            className="flex h-12 w-12 items-center justify-center rounded-full text-base font-semibold"
+            style={{ background: "var(--color-accent-tint)", color: "var(--color-ink)" }}
           >
             {user?.email?.[0]?.toUpperCase() ?? "?"}
           </div>
-          <div>
-            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{user?.email ?? "—"}</p>
-            <p
-              className="mt-1 text-[11px] font-medium px-2 py-0.5 rounded inline-block"
-              style={{ background: "rgba(192,57,43,0.1)", color: "var(--color-accent)" }}
-            >
-              {ROLE_LABELS[user?.role ?? "talent"]}
-            </p>
-          </div>
-        </div>
+        }
+        className="mb-6"
+      >
+        Two-factor secured. <em>Every action signed to you.</em>
+      </Inlay>
 
-        <div className="space-y-3 border-t pt-4" style={{ borderColor: "var(--color-border)" }}>
+      {/* Account details — paper */}
+      <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+        <div className="space-y-3">
           <div className="flex justify-between text-xs">
             <span style={{ color: "var(--color-muted)" }}>Email</span>
             <span style={{ color: "var(--color-text)" }}>{user?.email ?? "—"}</span>
           </div>
           <div className="flex justify-between text-xs">
             <span style={{ color: "var(--color-muted)" }}>Two-factor authentication</span>
-            <span className="font-medium" style={{ color: "#166534" }}>Enabled</span>
+            <span className="font-medium" style={{ color: "var(--color-active)" }}>Enabled</span>
           </div>
           <div className="flex justify-between text-xs">
             <span style={{ color: "var(--color-muted)" }}>Role</span>

@@ -7,6 +7,8 @@ import ReservedRolesCard from "./reserved-roles-card";
 import { FadeImage } from "@/app/(vault)/fade-image";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 import CodeTag from "@/app/components/code-tag";
+import Inlay from "@/app/components/inlay";
+import Glyph from "@/app/components/glyph";
 import { formatScan } from "@/lib/codes/codes";
 
 interface AiTag {
@@ -1001,6 +1003,34 @@ export default function DashboardClient() {
         </div>
       )}
 
+      {/* ── The vault's one Inlay — a consent statement, not chrome. Suppressed
+          while the cast-invitation alert is up so only one statement shows. ── */}
+      {!loading && packages.length > 0 && awaitingPackage.length === 0 && (
+        <div className="mx-8 lg:mx-12 mt-5">
+          <Inlay
+            eyebrow="Your control"
+            gate
+            footnote={
+              activeLicences > 0
+                ? `${pendingRequests} pending · Consent bound`
+                : "Consent bound · Time-limited access"
+            }
+          >
+            {activeLicences > 0 ? (
+              <>
+                {activeLicences} production{activeLicences !== 1 ? "s" : ""} hold
+                {activeLicences === 1 ? "s" : ""} a licence to your likeness.{" "}
+                <em>Every access is on your record.</em>
+              </>
+            ) : (
+              <>
+                Your vault. <em>Every touch on the record.</em>
+              </>
+            )}
+          </Inlay>
+        </div>
+      )}
+
       {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
@@ -1022,10 +1052,7 @@ export default function DashboardClient() {
                     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
                 ) : (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
-                    <rect x="3" y="11" width="18" height="11" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
+                  <Glyph name="scan" size={22} strokeWidth={1.5} style={{ color: "var(--color-muted)" }} />
                 )}
               </div>
               <h2 className="text-sm font-semibold text-[--color-ink] mb-2">
