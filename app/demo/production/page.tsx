@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import DemoProductionClient from "./demo-production-client";
 
 export const metadata = {
-  title: "Image Vault — Production & Compliance Tour",
+  title: "ImageVault — Production & Compliance Tour",
 };
 
 export default async function DemoProductionPage() {

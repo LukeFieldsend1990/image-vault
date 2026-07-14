@@ -140,7 +140,7 @@ function PlaceholderCard({ p, onConnected }: { p: Placeholder; onConnected: (cas
           <>
             <p className="text-xs mb-3" style={{ color: "var(--color-muted)" }}>
               {p.companyName} reserved the role of <span className="font-medium" style={{ color: "var(--color-text)" }}>{role}</span> for your client.
-              Enter their email to connect them — if they&apos;re not on Image Vault yet, we&apos;ll send them a signup link.
+              Enter their email to connect them — if they&apos;re not on ImageVault yet, we&apos;ll send them a signup link.
             </p>
             <div className="space-y-2">
               <input

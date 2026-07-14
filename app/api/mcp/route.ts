@@ -30,7 +30,7 @@ const SUPPORTED_PROTOCOL_VERSIONS = ["2025-03-26", "2024-11-05"];
 const SERVER_INFO = { name: "image-vault-admin", version: "1.0.0" };
 
 const SERVER_INSTRUCTIONS =
-  "Image Vault admin MCP server. Image Vault is a secure biometric likeness archive for actors: " +
+  "ImageVault admin MCP server. ImageVault is a secure biometric likeness archive for actors: " +
   "talent stores scan packages and licenses access to production companies via dual-custody 2FA download. " +
   "Call list_concepts / explain_concept first to orient yourself, and get_platform_overview for current state. " +
   "Read tools are safe; mutating tools (marked MUTATING in their descriptions, e.g. user changes, invites, " +

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import ContactForm from "./contact-form";
 
 export const metadata: Metadata = {
-  title: "Contact — Image Vault",
+  title: "Contact — ImageVault",
   description:
-    "Get in touch with the Image Vault team. Questions about likeness licensing, access, or security — we'll be in touch.",
+    "Get in touch with the ImageVault team. Questions about likeness licensing, access, or security — we'll be in touch.",
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -36,7 +36,7 @@ export default function ContactPage() {
             style={{ color: "var(--color-muted)" }}
           >
             Questions about likeness licensing, access for your production company,
-            or how Image Vault keeps talent in control — send us a note and we&apos;ll
+            or how ImageVault keeps talent in control — send us a note and we&apos;ll
             be in touch.
           </p>
 

@@ -1,10 +1,10 @@
 // Production watchlist (union oversight). Upcoming productions believed to be
-// heading into pre-production that are not yet ratified on Image Vault. The union
+// heading into pre-production that are not yet ratified on ImageVault. The union
 // gets read visibility plus an outreach flag — onboarding is not mandated.
 //
 // "Ratified" is never stored: each read matches a watchlist entry against the live
 // `productions` table (by tmdbId first, then normalised name) so an entry flips to
-// "on Image Vault" automatically the moment a matching production is registered.
+// "on ImageVault" automatically the moment a matching production is registered.
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { productionCompanies, productionWatchlist, productions, users } from "@/lib/db/schema";
@@ -37,7 +37,7 @@ export interface WatchlistEntry {
 }
 
 // Exported for tests — the matcher that decides whether a watchlist entry has been
-// ratified onto Image Vault by comparing against a production's name.
+// ratified onto ImageVault by comparing against a production's name.
 export function normaliseName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }

@@ -65,7 +65,7 @@ export interface ScanResult {
 
 // ── AI adjudication ──────────────────────────────────────────────────────────
 
-const ADJUDICATOR_SYSTEM = `You are the likeness-protection adjudicator for Image Vault, a biometric scan archive for actors. You receive candidate social-media content surfaced by automated detectors, each with machine-generated match signals against a protected talent's verified identity anchors (onboarding face embeddings, perceptual hashes from their scan packages, and geometry fingerprint bits embedded in licensed deliveries).
+const ADJUDICATOR_SYSTEM = `You are the likeness-protection adjudicator for ImageVault, a biometric scan archive for actors. You receive candidate social-media content surfaced by automated detectors, each with machine-generated match signals against a protected talent's verified identity anchors (onboarding face embeddings, perceptual hashes from their scan packages, and geometry fingerprint bits embedded in licensed deliveries).
 
 Signal interpretation:
 - faceEmbeddingSimilarity: >0.8 is a strong likeness match; <0.7 is usually a lookalike or unrelated person.

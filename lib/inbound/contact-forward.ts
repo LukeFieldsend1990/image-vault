@@ -30,7 +30,7 @@ export const CONTACT_RECIPIENTS = [
  * send from — imagevault.ai is verified; changling.io is not (Resend rejects it
  * with a 403). Kept explicit so contact mail is unaffected by RESEND_FROM_EMAIL.
  */
-export const CONTACT_FROM = "Image Vault <noreply@imagevault.ai>";
+export const CONTACT_FROM = "ImageVault <noreply@imagevault.ai>";
 
 interface ForwardEnv {
   RESEND_API_KEY?: string;

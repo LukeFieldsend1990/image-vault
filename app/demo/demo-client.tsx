@@ -429,7 +429,7 @@ const REP_SCENES: Scene[] = [
     expandedLic: null,
     sidebarRole: "rep",
     headline: "Revenue tracking",
-    body: "$350K across 2 active licences. The split is 65% to Channing, 20% to United Talent Agency, 15% to Image Vault.",
+    body: "$350K across 2 active licences. The split is 65% to Channing, 20% to United Talent Agency, 15% to ImageVault.",
   },
 ];
 
@@ -889,7 +889,7 @@ function DemoSidebar({
         <div>
           <a href="/demo" style={{ display: "block", padding: "0 1.5rem", marginBottom: "2.5rem", textDecoration: "none" }}>
             <div style={{ fontSize: "0.875rem", fontWeight: 500, letterSpacing: "0.05em", color: "#fff" }}>
-              Image Vault
+              ImageVault
             </div>
             <div style={{ marginTop: "0.375rem", height: "1px", width: "1.5rem", background: "#c0392b" }} />
           </a>
@@ -2557,7 +2557,7 @@ function MobileGate() {
     }}>
       <div style={{ marginBottom: "2.5rem" }}>
         <div style={{ fontSize: "0.9375rem", fontWeight: 500, letterSpacing: "0.05em", color: "var(--color-ink)" }}>
-          Image Vault
+          ImageVault
         </div>
         <div style={{ marginTop: "0.375rem", height: "1px", width: "1.5rem", background: "#c0392b", margin: "0.375rem auto 0" }} />
       </div>

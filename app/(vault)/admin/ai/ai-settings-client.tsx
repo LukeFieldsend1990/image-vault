@@ -213,7 +213,7 @@ export function AiSettingsClient({ initialSettings, initialCosts, repSuggestions
               </p>
               <ToggleRow
                 label="Online Pre-Production Discovery"
-                sublabel="Nightly job that surfaces upcoming productions not yet on Image Vault"
+                sublabel="Nightly job that surfaces upcoming productions not yet on ImageVault"
                 checked={settings["watchlist_discovery_enabled"] !== "false"}
                 saving={saving === "watchlist_discovery_enabled"}
                 onToggle={() => toggleSetting("watchlist_discovery_enabled")}

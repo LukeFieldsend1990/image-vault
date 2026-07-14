@@ -160,9 +160,9 @@ export async function POST(req: NextRequest) {
     const preset = getUnionPreset(ctx.unionId);
     void sendEmail({
       to: email,
-      subject: `You've been added to the ${preset?.shortName ?? "union"} team on Image Vault`,
+      subject: `You've been added to the ${preset?.shortName ?? "union"} team on ImageVault`,
       html: `
-        <p>You now have access to the <strong>${preset?.shortName ?? ctx.unionId}</strong> union team on Image Vault.</p>
+        <p>You now have access to the <strong>${preset?.shortName ?? ctx.unionId}</strong> union team on ImageVault.</p>
         <p><a href="${process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai"}/union-team">View your team</a></p>
       `,
     });
@@ -199,9 +199,9 @@ export async function POST(req: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   void sendEmail({
     to: email,
-    subject: `You've been invited to join ${preset?.shortName ?? "a union"} on Image Vault`,
+    subject: `You've been invited to join ${preset?.shortName ?? "a union"} on ImageVault`,
     html: `
-      <p>You've been invited to join the <strong>${preset?.shortName ?? ctx.unionId}</strong> union team on Image Vault.</p>
+      <p>You've been invited to join the <strong>${preset?.shortName ?? ctx.unionId}</strong> union team on ImageVault.</p>
       <p><a href="${baseUrl}/signup?invite=${inviteId}">Accept invitation</a></p>
       <p>This link expires in 7 days.</p>
       <p style="color:#888;font-size:12px;">You'll create your account after clicking the link.</p>

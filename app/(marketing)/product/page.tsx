@@ -4,7 +4,7 @@ import { VaultMockup, LicenceMockup, InboxMockup, RoyaltiesMockup, ComplianceMoc
 import ExplainerFilm from "./explainer-film";
 
 export const metadata: Metadata = {
-  title: "Image Vault — Your likeness. Your terms.",
+  title: "ImageVault — Your likeness. Your terms.",
   description:
     "A secure vault for actors to store, manage, and license high-fidelity likeness scans. Dual-custody 2FA release, a tamper-evident audit ledger, and SAG-AFTRA Article 39 compliance built in.",
 };
@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p
-      className="mb-3 text-xs font-medium tracking-widest uppercase"
-      style={{ color: "var(--color-accent)" }}
+      className="mb-3 text-xs font-semibold tracking-widest uppercase"
+      style={{ color: "var(--color-slate)" }}
     >
       {children}
     </p>
@@ -26,24 +26,24 @@ export default function ProductPage() {
       {/* ─────────────── Hero ─────────────── */}
       <section className="mx-auto max-w-6xl px-6 pt-14 pb-16 md:pt-20">
         <div className="max-w-3xl">
-          <SectionLabel>The likeness licensing platform</SectionLabel>
+          <SectionLabel>Governance for likeness data</SectionLabel>
           <h1
             className="text-4xl font-semibold leading-tight tracking-tight md:text-6xl"
             style={{ color: "var(--color-ink)" }}
           >
-            Your likeness.
+            Governance,
             <br />
-            Your terms.
+            not storage.
           </h1>
           <p
             className="mt-6 max-w-xl text-base leading-relaxed md:text-lg"
-            style={{ color: "var(--color-muted)" }}
+            style={{ color: "var(--color-text)" }}
           >
-            Productions increasingly need high-fidelity scans of real people — and
-            talent needs control over where their digital likeness goes. Image Vault
-            is the secure middle ground: an encrypted archive where actors store scan
-            packages from 200 GB to a full terabyte, and license access to production
-            companies on their own terms.
+            ImageVault is the gate every party passes through to use a performer&apos;s
+            likeness — consented, audited, and time-bound. Actors store scan packages
+            from 200&nbsp;GB to a full terabyte; productions get time-limited, fully
+            audited access that leaves no copy behind, and the data is verifiably
+            purged when the licence expires.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Link
@@ -99,7 +99,7 @@ export default function ProductPage() {
             className="text-xs font-medium tracking-widest uppercase"
             style={{ color: "var(--color-accent)" }}
           >
-            What Image Vault does
+            What ImageVault does
           </p>
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
             A ninety-second tour
@@ -346,8 +346,8 @@ export default function ProductPage() {
                 Nothing goes unrecorded.
               </h2>
               <p className="mt-6 text-base leading-relaxed" style={{ color: "var(--color-sidebar-muted)" }}>
-                A likeness archive is only as trustworthy as its worst day. Image
-                Vault is built on the assumption that insiders go rogue, emails lie,
+                A likeness archive is only as trustworthy as its worst day. ImageVault
+                is built on the assumption that insiders go rogue, emails lie,
                 and assets leak — and is architected so that no single party, the
                 platform included, can release a likeness alone.
               </p>

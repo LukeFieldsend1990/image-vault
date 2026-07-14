@@ -380,7 +380,7 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
-    // Upcoming productions not yet on Image Vault — same platform-wide grant gate.
+    // Upcoming productions not yet on ImageVault — same platform-wide grant gate.
     href: "/watchlist",
     label: "Watchlist",
     icon: (
@@ -391,7 +391,7 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
-    // Union member roster (CSV upload) — who's on Image Vault. Union watchers only
+    // Union member roster (CSV upload) — who's on ImageVault. Union watchers only
     // (filtered in NavLinks via unionWatcher); one list per union.
     href: "/members",
     label: "Members",
@@ -439,10 +439,12 @@ function NavItem({ item, active, alert }: { item: { href: string; label: string;
   return (
     <Link
       href={item.href}
-      className="flex items-center gap-3 rounded px-3 py-2.5 text-sm transition relative"
+      className="flex items-center gap-3 px-3 py-2.5 text-sm transition relative hover:bg-black/[0.04]"
       style={{
-        color: active ? "#ffffff" : "var(--color-sidebar-muted)",
-        background: active ? "rgba(192,57,43,0.18)" : "transparent",
+        color: active ? "var(--color-ink)" : "var(--color-sidebar-muted)",
+        background: active ? "var(--color-sidebar-active)" : "transparent",
+        fontWeight: active ? 600 : 400,
+        borderRadius: "var(--radius-md)",
       }}
     >
       {active && (
@@ -456,7 +458,7 @@ function NavItem({ item, active, alert }: { item: { href: string; label: string;
         {alert && (
           <span
             className="absolute -top-1 -right-1 w-2 h-2 rounded-full"
-            style={{ background: "#c0392b" }}
+            style={{ background: "var(--color-accent)" }}
           />
         )}
       </span>

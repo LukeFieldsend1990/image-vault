@@ -2,7 +2,7 @@
  * Semantic layer for the admin MCP integration.
  *
  * A curated map of the platform's concepts so an MCP client (Claude) can
- * orient itself before acting. Compiled from the "Image Vault concepts"
+ * orient itself before acting. Compiled from the "ImageVault concepts"
  * Notion workspace docs and the codebase. Exposed via the list_concepts and
  * explain_concept tools.
  *
@@ -24,7 +24,7 @@ export const CONCEPTS: ConceptEntry[] = [
     name: "Product Overview",
     summary: "Secure biometric likeness archive for actors: talent stores scan packages and licenses access to production companies.",
     details:
-      "Image Vault (live at imagevault.ai) is trust + rights infrastructure for AI-native production: Registry → Identity → Licensing → Provenance. " +
+      "ImageVault (live at imagevault.ai) is trust + rights infrastructure for AI-native production: Registry → Identity → Licensing → Provenance. " +
       "Talent uploads scan packages (light stage, photogrammetry, LiDAR…), production companies request licences, and downloads are released only " +
       "through a dual-custody 2FA gate. Pillars: Consent OS, Chain of Custody, Dual-Custody Access, Compliance Surface (SAG-AFTRA 2026 Article 39), Rights Infrastructure.",
     codePaths: ["app/", "lib/"],

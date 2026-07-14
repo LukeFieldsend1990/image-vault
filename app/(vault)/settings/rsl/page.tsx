@@ -36,7 +36,7 @@ export default async function RslSettingsPage() {
       </h1>
       <p className="text-sm mb-8" style={{ color: "var(--color-muted)" }}>
         This is the open <strong>RSL</strong> (Really Simple Licensing) standard + Human Consent Registry — how AI
-        systems may use your likeness, and what it costs. It&apos;s <strong>separate from your Image Vault production
+        systems may use your likeness, and what it costs. It&apos;s <strong>separate from your ImageVault production
         licences</strong> (the scans you license to productions). Set your consent rules, publish your public consent
         profile, link a Human Consent ID, and price AI use. Metered earnings appear in your Royalties dashboard.
       </p>

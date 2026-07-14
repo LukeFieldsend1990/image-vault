@@ -1,5 +1,5 @@
 /**
- * OLP → Image Vault licence funnel. Turns an amber/green OLP request into a real
+ * OLP → ImageVault licence funnel. Turns an amber/green OLP request into a real
  * `licences` row and, on approval, a metered `royaltySources` credential —
  * reusing the same fee (15% platform) + royalty machinery as the human flow.
  * Packageless (likeness-rights) so it can't reuse /api/licences/[id]/approve

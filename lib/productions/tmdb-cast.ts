@@ -18,7 +18,7 @@ export interface MatchedCastMember {
   character: string;
   department: string;        // always "Acting"
   profilePath?: string;
-  matched: boolean;          // true if a talent account already exists on Image Vault
+  matched: boolean;          // true if a talent account already exists on ImageVault
   talentId?: string;
   talentEmail?: string;
 }

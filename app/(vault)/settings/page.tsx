@@ -412,7 +412,7 @@ export default async function SettingsPage({
           </Link>
           <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
             The open <strong>RSL</strong> (Really Simple Licensing) standard for AI use of your likeness — separate from
-            your Image Vault production licences.
+            your ImageVault production licences.
           </p>
         </div>
       )}

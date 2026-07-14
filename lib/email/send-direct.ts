@@ -19,7 +19,7 @@ export async function sendEmailDirect(
   opts?: { db?: Db; waitUntil?: (p: Promise<unknown>) => void }
 ): Promise<void> {
   const apiKey = env.RESEND_API_KEY;
-  const from = env.RESEND_FROM_EMAIL ?? "Image Vault <noreply@imagevault.ai>";
+  const from = env.RESEND_FROM_EMAIL ?? "ImageVault <noreply@imagevault.ai>";
 
   if (!apiKey) {
     console.warn("[email] RESEND_API_KEY not set — skipping email to", payload.to);

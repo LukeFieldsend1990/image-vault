@@ -23,7 +23,7 @@ export default function AgentTermsPage() {
         className="mb-6 max-h-64 overflow-y-auto rounded border px-4 py-4 text-sm leading-relaxed"
         style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-muted)" }}
       >
-        <p className="mb-3 text-[--color-ink] font-medium">As an agent on Image Vault, you agree that:</p>
+        <p className="mb-3 text-[--color-ink] font-medium">As an agent on ImageVault, you agree that:</p>
         <ul className="space-y-2.5">
           <li>
             You act <strong className="text-[--color-ink]">on behalf of</strong> the performers your agency

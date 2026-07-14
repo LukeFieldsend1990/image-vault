@@ -145,7 +145,7 @@ function SidebarRail({ active }: { active: string }) {
         className="mb-4 text-[9px] font-semibold tracking-[0.2em] uppercase"
         style={{ color: "var(--color-sidebar-fg)" }}
       >
-        Image Vault
+        ImageVault
       </span>
       {items.map((item) => {
         const isActive = item === active;
@@ -662,7 +662,7 @@ export function ComplianceMockup() {
               className="text-[8px] font-medium tracking-widest uppercase"
               style={{ color: "var(--color-muted)" }}
             >
-              Marlowe Quinn · Image Vault
+              Marlowe Quinn · ImageVault
             </p>
             <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
               Chain of Custody Record

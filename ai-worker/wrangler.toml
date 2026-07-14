@@ -24,7 +24,7 @@ bucket_name = "image-vault-scans-dev"
 
 [vars]
 APP_URL = "https://imagevault.ai"
-RESEND_FROM_EMAIL = "Image Vault <noreply@imagevault.ai>"
+RESEND_FROM_EMAIL = "ImageVault <noreply@imagevault.ai>"
 
 # Secrets (set via: wrangler secret put SECRET_NAME --config ai-worker/wrangler.toml)
 # ANTHROPIC_API_KEY  - Anthropic API key for Claude Haiku

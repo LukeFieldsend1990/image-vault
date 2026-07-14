@@ -133,7 +133,7 @@ export default function DualCustodyDownloadClient({ licenceId }: { licenceId: st
             Enter your authenticator code
           </p>
           <p className="text-xs mb-4" style={{ color: "var(--color-muted)" }}>
-            Open your authenticator app and enter the 6-digit code for Image Vault.
+            Open your authenticator app and enter the 6-digit code for ImageVault.
           </p>
           <input
             type="text"

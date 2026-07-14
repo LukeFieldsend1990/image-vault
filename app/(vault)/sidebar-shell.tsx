@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import Wordmark from "@/app/components/wordmark";
 
 export default function SidebarShell({ children, homeHref = "/dashboard" }: { children: React.ReactNode; homeHref?: string }) {
   const [open, setOpen] = useState(false);
@@ -22,7 +23,7 @@ export default function SidebarShell({ children, homeHref = "/dashboard" }: { ch
       {/* ── Mobile top bar ── */}
       <div
         className="lg:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 h-12 border-b"
-        style={{ background: "var(--color-sidebar)", borderColor: "rgba(255,255,255,0.08)" }}
+        style={{ background: "var(--color-sidebar)", borderColor: "var(--color-sidebar-border)" }}
       >
         <button
           onClick={() => setOpen(true)}
@@ -37,9 +38,7 @@ export default function SidebarShell({ children, homeHref = "/dashboard" }: { ch
           </svg>
         </button>
         <a href={homeHref}>
-          <div className="text-xs font-medium leading-none tracking-wide" style={{ color: "var(--color-sidebar-fg)" }}>
-            Image Vault
-          </div>
+          <Wordmark variant="lock" tone="ink" className="text-[11px] leading-none" />
         </a>
       </div>
 
@@ -65,6 +64,7 @@ export default function SidebarShell({ children, homeHref = "/dashboard" }: { ch
         style={{
           background: "var(--color-sidebar)",
           color: "var(--color-sidebar-fg)",
+          borderRight: "1px solid var(--color-sidebar-border)",
           flexShrink: 0,
         }}
       >

@@ -69,9 +69,9 @@ export async function POST(
 
   void sendEmail({
     to: body.email.trim(),
-    subject: `You've been invited to join ${org.name} on Image Vault`,
+    subject: `You've been invited to join ${org.name} on ImageVault`,
     html: `
-      <p>You've been invited to join <strong>${org.name}</strong> as a member on Image Vault.</p>
+      <p>You've been invited to join <strong>${org.name}</strong> as a member on ImageVault.</p>
       <p><a href="${joinUrl}">Accept invitation</a></p>
       <p>This link expires in 7 days.</p>
       <p style="color:#888;font-size:12px;">If you don't have an account yet, you'll be able to sign up after clicking the link.</p>

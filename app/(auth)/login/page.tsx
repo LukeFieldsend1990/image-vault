@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Wordmark from "@/app/components/wordmark";
 
 type Step = "credentials" | "totp";
 
@@ -105,9 +106,7 @@ function LoginInner() {
       <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
         {/* Wordmark */}
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-ink]">
-            Image Vault
-          </span>
+          <Wordmark variant="lock" className="text-xs" />
           <a
             href="/product"
             className="text-xs font-medium text-[--color-muted] hover:text-[--color-ink] transition"
@@ -124,7 +123,7 @@ function LoginInner() {
                 Sign in
               </h1>
               <p className="mb-10 text-sm text-[--color-muted]">
-                Access your secure likeness vault.
+                Sign in to your vault.
               </p>
 
               <form className="space-y-5" onSubmit={handleCredentials}>
@@ -256,7 +255,7 @@ function LoginInner() {
 
         {/* Footer */}
         <p className="text-xs text-[--color-muted]">
-          &copy; {new Date().getFullYear()} Image Vault. All rights reserved.
+          &copy; {new Date().getFullYear()} ImageVault. All rights reserved.
         </p>
       </div>
 
@@ -279,9 +278,10 @@ function LoginInner() {
             className="mt-4 text-sm leading-relaxed"
             style={{ color: "var(--color-sidebar-muted)" }}
           >
-            A private, encrypted vault for talent to store, manage, and
-            license high-fidelity likeness scans — with full control over
-            who accesses them and when.
+            ImageVault is the gate every production, vendor, and agent
+            passes through to use your likeness. Consent is bound to your
+            scan, access is time-limited and logged, and you can see exactly
+            who touched it and when.
           </p>
         </div>
         <div
@@ -289,10 +289,9 @@ function LoginInner() {
           style={{ color: "var(--color-sidebar-muted)" }}
         >
           <span className="font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
-            Secured by dual-custody access.
+            Every access is on the record.
           </span>{" "}
-          Files are encrypted at rest and every download is gated by 2FA from
-          both parties, time-limited, and fully audited.
+          Time-bound, approved by both parties, and fully audited.
         </div>
       </div>
     </div>

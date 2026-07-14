@@ -105,7 +105,7 @@ export async function POST(
   // 39.B — talent approving the licence IS giving consent to the replica use.
   //         Additional consents (dubs, territory variants, rescripts) can be added
   //         separately via the compliance dashboard — this covers the base grant.
-  // 39.E — Image Vault's architecture guarantees biometric isolation: producers
+  // 39.E — ImageVault's architecture guarantees biometric isolation: producers
   //         never hold the data independently; it stays in platform R2.
   // 39.H — all delivery is via dual-custody download or bridge; platform IS custody.
   // 39.J — the licence itself (projectName + licenceType) is the recorded business reason.
@@ -125,12 +125,12 @@ export async function POST(
       await appendEvent(db, {
         chainKey: chain, eventType: "biometric.isolation_attested", clauseRef: "39.E",
         licenceId: id, talentId: licence.talentId, actorId: null,
-        payload: { note: "Image Vault platform guarantee — biometric data never leaves R2 custody" },
+        payload: { note: "ImageVault platform guarantee — biometric data never leaves R2 custody" },
       });
       await appendEvent(db, {
         chainKey: chain, eventType: "security.custody_attested", clauseRef: "39.H",
         licenceId: id, talentId: licence.talentId, actorId: null,
-        payload: { note: "Image Vault platform guarantee — all delivery via dual-custody download or bridge" },
+        payload: { note: "ImageVault platform guarantee — all delivery via dual-custody download or bridge" },
       });
       await appendEvent(db, {
         chainKey: chain, eventType: "business_reason.recorded", clauseRef: "39.J",

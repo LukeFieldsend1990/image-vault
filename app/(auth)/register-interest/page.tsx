@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Wordmark from "@/app/components/wordmark";
 
 const COMPANY_TYPES = [
   "Production Company",
@@ -61,9 +62,7 @@ export default function RegisterInterestPage() {
       <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
         {/* Wordmark */}
         <div>
-          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[--color-ink]">
-            Image Vault
-          </span>
+          <Wordmark variant="lock" className="text-xs" />
         </div>
 
         {/* Form block */}
@@ -235,7 +234,7 @@ export default function RegisterInterestPage() {
 
         {/* Footer */}
         <p className="text-xs text-[--color-muted]">
-          &copy; {new Date().getFullYear()} Image Vault. All rights reserved.
+          &copy; {new Date().getFullYear()} ImageVault. All rights reserved.
         </p>
       </div>
 
@@ -258,7 +257,7 @@ export default function RegisterInterestPage() {
             className="mt-4 text-sm leading-relaxed"
             style={{ color: "var(--color-sidebar-muted)" }}
           >
-            Image Vault gives production companies secure, audited access to
+            ImageVault gives production companies secure, audited access to
             talent likeness packages — with dual-custody download controls and
             full chain-of-custody documentation.
           </p>

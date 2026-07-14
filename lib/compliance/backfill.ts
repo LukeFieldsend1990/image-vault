@@ -65,7 +65,7 @@ export async function backfillApprovalEvents(
     await appendEvent(db, {
       chainKey: chain, eventType: "biometric.isolation_attested", clauseRef: "39.E",
       licenceId: licence.id, talentId: licence.talentId, actorId: null,
-      payload: { note: "Image Vault platform guarantee — biometric data never leaves R2 custody — backfilled" },
+      payload: { note: "ImageVault platform guarantee — biometric data never leaves R2 custody — backfilled" },
     });
     appended++;
   }
@@ -73,7 +73,7 @@ export async function backfillApprovalEvents(
     await appendEvent(db, {
       chainKey: chain, eventType: "security.custody_attested", clauseRef: "39.H",
       licenceId: licence.id, talentId: licence.talentId, actorId: null,
-      payload: { note: "Image Vault platform guarantee — all delivery via dual-custody download or bridge — backfilled" },
+      payload: { note: "ImageVault platform guarantee — all delivery via dual-custody download or bridge — backfilled" },
     });
     appended++;
   }

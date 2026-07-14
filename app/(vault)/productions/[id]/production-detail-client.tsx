@@ -285,7 +285,7 @@ export default function ProductionDetailClient() {
   const [manualEmail, setManualEmail] = useState("");
   const [manualCharacter, setManualCharacter] = useState("");
   const [manualTmdbId, setManualTmdbId] = useState<number | null>(null);
-  // Set when an existing Image Vault talent is picked from the matcher — we link
+  // Set when an existing ImageVault talent is picked from the matcher — we link
   // by id without ever exposing their email to the producer.
   const [manualTalentId, setManualTalentId] = useState<string | null>(null);
   // Union affiliation: "SAG-AFTRA" | "Equity" | free text. manualUnionOther flags the
@@ -480,7 +480,7 @@ export default function ProductionDetailClient() {
   // than create a placeholder); a TMDB hit pre-fills the canonical name + tmdbId.
   function pickMatch(m: typeof nameMatches[number]) {
     setManualActorName(m.name);
-    // Existing Image Vault talent → link by id, never surface their email.
+    // Existing ImageVault talent → link by id, never surface their email.
     if (m.type === "platform" && m.talentId) {
       setManualTalentId(m.talentId);
       setManualEmail("");
@@ -581,7 +581,7 @@ export default function ProductionDetailClient() {
       });
       const d = await r.json().catch(() => ({})) as { ok?: boolean; flagged?: boolean; error?: string };
       if (r.ok && d.ok) {
-        if (d.flagged) alert("Marked as included. Note: prior usage was found, so this has been flagged for review by the Image Vault team.");
+        if (d.flagged) alert("Marked as included. Note: prior usage was found, so this has been flagged for review by the ImageVault team.");
         await fetchData();
       } else {
         alert(d.error ?? "Couldn't mark as included.");
@@ -1377,7 +1377,7 @@ export default function ProductionDetailClient() {
                             <span className="font-medium">{m.name}</span>
                           </span>
                           {m.type === "platform" ? (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On Image Vault</span>
+                            <span className="text-[11px] px-1.5 py-0.5 rounded shrink-0" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On ImageVault</span>
                           ) : (
                             <span className="text-[11px] shrink-0" style={{ color: "var(--color-muted)" }}>online</span>
                           )}
@@ -1390,7 +1390,7 @@ export default function ProductionDetailClient() {
                   <label className="text-xs mb-1 block" style={{ color: "var(--color-muted)" }}>Email</label>
                   {manualTalentId ? (
                     <div className="flex items-center gap-2 rounded px-3" style={{ ...inputStyle, display: "flex" }}>
-                      <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On Image Vault</span>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: "rgba(22,101,52,0.1)", color: "#166534" }}>On ImageVault</span>
                       <span className="text-xs" style={{ color: "var(--color-muted)" }}>Linked — no email needed</span>
                     </div>
                   ) : (
@@ -1441,7 +1441,7 @@ export default function ProductionDetailClient() {
                 <div className="rounded p-3 space-y-1.5" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}>
                   {manualQueue.map((m, i) => (
                     <div key={i} className="flex items-center justify-between text-xs" style={{ color: "var(--color-text)" }}>
-                      <span>{m.actorName ?? maskEmail(m.email)}{m.characterName ? ` — ${m.characterName}` : ""}{m.talentId ? " · on Image Vault" : !m.email ? " · reserved" : ""}</span>
+                      <span>{m.actorName ?? maskEmail(m.email)}{m.characterName ? ` — ${m.characterName}` : ""}{m.talentId ? " · on ImageVault" : !m.email ? " · reserved" : ""}</span>
                       <button onClick={() => setManualQueue((q) => q.filter((_, j) => j !== i))} style={{ color: "var(--color-muted)" }}>×</button>
                     </div>
                   ))}

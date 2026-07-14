@@ -1,5 +1,5 @@
 /**
- * Email HTML templates for Image Vault transactional emails.
+ * Email HTML templates for ImageVault transactional emails.
  * Minimal, black/white, typography-led, red accent.
  */
 
@@ -49,12 +49,12 @@ function layout(content: string): string {
 <body>
 <div class="wrap">
   <div class="header">
-    <p class="header-title">Image Vault</p>
+    <p class="header-title">ImageVault</p>
     <div class="accent"></div>
   </div>
   <div class="body">${content}</div>
   <div class="footer">
-    <p>This is an automated notification from Image Vault. Do not reply to this email.</p>
+    <p>This is an automated notification from ImageVault. Do not reply to this email.</p>
   </div>
 </div>
 </body>
@@ -158,7 +158,7 @@ export function licenceRequestedEmail(p: LicenceRequestedParams): { subject: str
         <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${p.intendedUse}</span></div>
         <div class="kv-row"><span class="kv-key">Valid period</span><span class="kv-val">${formatDate(p.validFrom)} – ${formatDate(p.validTo)}</span></div>
       </div>
-      <p>Review and approve or deny this request in Image Vault.</p>
+      <p>Review and approve or deny this request in ImageVault.</p>
       <a class="btn" href="${p.reviewUrl}">Review request</a>
     `),
   };
@@ -210,7 +210,7 @@ export function packageAttachedEmail(p: PackageAttachedParams): { subject: strin
         <div class="kv-row"><span class="kv-key">Project</span><span class="kv-val">${p.projectName}</span></div>
         <div class="kv-row"><span class="kv-key">Package</span><span class="kv-val">${p.packageName}</span></div>
       </div>
-      <a class="btn" href="${p.viewUrl}">Open in Image Vault</a>
+      <a class="btn" href="${p.viewUrl}">Open in ImageVault</a>
     `),
   };
 }
@@ -304,9 +304,9 @@ const ROLE_LABELS: Record<"talent" | "rep" | "industry" | "licensee" | "complian
 export function inviteEmail(p: InviteEmailParams): { subject: string; html: string } {
   const roleLabel = ROLE_LABELS[p.role];
   return {
-    subject: `You've been invited to Image Vault`,
+    subject: `You've been invited to ImageVault`,
     html: layout(`
-      <p>You have been invited to join Image Vault as a <strong>${roleLabel}</strong>.</p>
+      <p>You have been invited to join ImageVault as a <strong>${roleLabel}</strong>.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Invited by</span><span class="kv-val">${p.inviterEmail}</span></div>
         <div class="kv-row"><span class="kv-key">Account type</span><span class="kv-val">${roleLabel}</span></div>
@@ -331,9 +331,9 @@ export interface AgentInviteEmailParams {
 export function agentInviteEmail(p: AgentInviteEmailParams): { subject: string; html: string } {
   const roleWord = p.isFirstAdmin ? "administrator" : "agent";
   return {
-    subject: `You've been invited to ${p.agencyName} on Image Vault`,
+    subject: `You've been invited to ${p.agencyName} on ImageVault`,
     html: layout(`
-      <p>You've been invited to join <strong>${p.agencyName}</strong> as an ${roleWord} on Image Vault.</p>
+      <p>You've been invited to join <strong>${p.agencyName}</strong> as an ${roleWord} on ImageVault.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Agency</span><span class="kv-val">${p.agencyName}</span></div>
         <div class="kv-row"><span class="kv-key">Invited by</span><span class="kv-val">${p.inviterEmail}</span></div>
@@ -418,9 +418,9 @@ export interface PasswordResetParams {
 
 export function passwordResetEmail(p: PasswordResetParams): { subject: string; html: string } {
   return {
-    subject: "Password reset — Image Vault",
+    subject: "Password reset — ImageVault",
     html: layout(`
-      <p>We received a request to reset your Image Vault password.</p>
+      <p>We received a request to reset your ImageVault password.</p>
       <p>Click the button below to choose a new password. This link expires in ${p.expiresInMinutes} minutes.</p>
       <a class="btn" href="${p.resetUrl}">Reset password</a>
       <p class="muted" style="margin-top: 24px;">If you didn't request this, you can safely ignore this email. Your password will not be changed.</p>
@@ -598,7 +598,7 @@ export function productionCastInviteEmail(p: ProductionCastInviteEmailParams): {
         <div class="kv-row"><span class="kv-key">Intended use</span><span class="kv-val">${p.intendedUse}</span></div>
         <div class="kv-row"><span class="kv-key">Valid period</span><span class="kv-val">${formatDate(p.validFrom)} – ${formatDate(p.validTo)}</span></div>
       </div>
-      <p>Create your Image Vault account to accept this invitation, upload your scan package, and manage licence approvals.</p>
+      <p>Create your ImageVault account to accept this invitation, upload your scan package, and manage licence approvals.</p>
       <a class="btn" href="${p.signupUrl}">Accept invitation</a>
       <p class="muted" style="margin-top: 24px;">You can review and decline the licence request at any time from your account. Your likeness data is always under your control.</p>
     `),
@@ -620,7 +620,7 @@ export function insurerInviteEmail(p: InsurerInviteEmailParams): { subject: stri
   const ctaUrl = p.signupUrl ?? p.evidenceUrl ?? "";
   const ctaLabel = isNewAccount ? "Create your account" : "View production";
   return {
-    subject: `You've been granted oversight of ${p.productionName} on Image Vault`,
+    subject: `You've been granted oversight of ${p.productionName} on ImageVault`,
     html: layout(`
       <p>${p.companyName} has added you as an <strong>insurer</strong> on the production <strong>${p.productionName}</strong>.</p>
       <p>You now have read-only oversight of this production's likeness consent and custody evidence — scoped to this production only. You cannot access scan files or any other production.</p>
@@ -632,7 +632,7 @@ export function insurerInviteEmail(p: InsurerInviteEmailParams): { subject: stri
       </div>
       ${
         isNewAccount
-          ? `<p>Create your Image Vault account to view the production's compliance evidence and underwriting view.</p>`
+          ? `<p>Create your ImageVault account to view the production's compliance evidence and underwriting view.</p>`
           : `<p>Sign in to view the production's compliance evidence and underwriting view.</p>`
       }
       <a class="btn" href="${ctaUrl}">${ctaLabel}</a>
@@ -677,7 +677,7 @@ export function productionCastLinkedEmail(p: ProductionCastLinkedEmailParams): {
         ${feeRow}
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Awaiting your approval</span></span></div>
       </div>
-      <p>Review the licence request in Image Vault. You can attach your scan package and approve or deny the request.</p>
+      <p>Review the licence request in ImageVault. You can attach your scan package and approve or deny the request.</p>
       <a class="btn" href="${p.reviewUrl}">Review licence request</a>
       <p class="muted" style="margin-top: 24px;">You remain in full control of your likeness data. You can revoke access at any time.</p>
     `),
@@ -692,7 +692,7 @@ export interface ProductionRoleClaimedEmailParams {
   reviewUrl: string;
 }
 
-// Sent to the production company when a talent organically joins Image Vault and
+// Sent to the production company when a talent organically joins ImageVault and
 // claims a role that was reserved for them (Path D self-heal). We never expose
 // the talent's contact details here — only that the role was claimed.
 export function productionRoleClaimedEmail(p: ProductionRoleClaimedEmailParams): { subject: string; html: string } {
@@ -702,7 +702,7 @@ export function productionRoleClaimedEmail(p: ProductionRoleClaimedEmailParams):
   return {
     subject: `${p.talentName} claimed their role in ${p.productionName}`,
     html: layout(`
-      <p><strong>${p.talentName}</strong> just joined Image Vault and claimed the role you reserved for them in <strong>${p.productionName}</strong>.</p>
+      <p><strong>${p.talentName}</strong> just joined ImageVault and claimed the role you reserved for them in <strong>${p.productionName}</strong>.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Performer</span><span class="kv-val">${p.talentName}</span></div>
         <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
@@ -745,8 +745,8 @@ export function castRepInviteEmail(p: CastRepInviteEmailParams): { subject: stri
       </div>
       <p>${p.existing
         ? "Open your roster to confirm your client's email or link them directly."
-        : "Join Image Vault to confirm your client's email and connect them to this role."}</p>
-      <a class="btn" href="${p.existing ? p.rosterUrl : p.signupUrl}">${p.existing ? "Open my roster" : "Join Image Vault"}</a>
+        : "Join ImageVault to confirm your client's email and connect them to this role."}</p>
+      <a class="btn" href="${p.existing ? p.rosterUrl : p.signupUrl}">${p.existing ? "Open my roster" : "Join ImageVault"}</a>
     `),
   };
 }
@@ -767,7 +767,7 @@ export function inclusionFlaggedEmail(p: InclusionFlaggedEmailParams): { subject
   return {
     subject: `[Review] Production-included claim flagged — ${p.projectName}`,
     html: layout(`
-      <p>A licence was marked as <strong>production-included</strong> (£0 fee, not a re-licence), but the package/talent already has prior usage through Image Vault. No action was blocked — review and decide whether to act.</p>
+      <p>A licence was marked as <strong>production-included</strong> (£0 fee, not a re-licence), but the package/talent already has prior usage through ImageVault. No action was blocked — review and decide whether to act.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Licence</span><span class="kv-val">${p.licenceCode}</span></div>
         <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.projectName}</span></div>
@@ -804,8 +804,8 @@ export function vendorProductionInviteEmail(p: VendorProductionInviteEmailParams
       </div>
       <p>${p.existing
         ? "You're now listed on the production. Access to scan data is granted per licence and requires a passed environment audit."
-        : "Join Image Vault to be set up on the production. Access to scan data is granted per licence and requires a passed environment audit."}</p>
-      <a class="btn" href="${p.existing ? p.productionUrl : p.signupUrl}">${p.existing ? "View production" : "Join Image Vault"}</a>
+        : "Join ImageVault to be set up on the production. Access to scan data is granted per licence and requires a passed environment audit."}</p>
+      <a class="btn" href="${p.existing ? p.productionUrl : p.signupUrl}">${p.existing ? "View production" : "Join ImageVault"}</a>
     `),
   };
 }
@@ -818,16 +818,16 @@ export interface ConciergeProductionInviteEmailParams {
   signupUrl: string;
 }
 
-// Sent when an Image Vault admin has pre-built a production and invites the
+// Sent when an ImageVault admin has pre-built a production and invites the
 // industry user to take it over — they arrive to a mostly-set-up project.
 export function conciergeProductionInviteEmail(p: ConciergeProductionInviteEmailParams): { subject: string; html: string } {
   const castRow = p.castCount > 0
     ? `<div class="kv-row"><span class="kv-key">Cast reserved</span><span class="kv-val">${p.castCount}</span></div>`
     : "";
   return {
-    subject: `Your production ${p.productionName} is ready on Image Vault`,
+    subject: `Your production ${p.productionName} is ready on ImageVault`,
     html: layout(`
-      <p>We've set up <strong>${p.productionName}</strong> for <strong>${p.companyName}</strong> on Image Vault so you can hit the ground running.</p>
+      <p>We've set up <strong>${p.productionName}</strong> for <strong>${p.companyName}</strong> on ImageVault so you can hit the ground running.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Production</span><span class="kv-val">${p.productionName}</span></div>
         <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.companyName}</span></div>
@@ -879,9 +879,9 @@ export function registerInterestEmail(p: RegisterInterestParams): { subject: str
     hour: "2-digit", minute: "2-digit", timeZoneName: "short",
   });
   return {
-    subject: `[Image Vault] New access request — ${p.name} (${p.company})`,
+    subject: `[ImageVault] New access request — ${p.name} (${p.company})`,
     html: layout(`
-      <p>A new access request has been submitted via the Image Vault registration page.</p>
+      <p>A new access request has been submitted via the ImageVault registration page.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Name</span><span class="kv-val">${p.name}</span></div>
         <div class="kv-row"><span class="kv-key">Email</span><span class="kv-val">${p.email}</span></div>
@@ -915,9 +915,9 @@ export function contactEnquiryEmail(p: ContactEnquiryParams): { subject: string;
   const subjectLine = p.subject ? escapeHtml(p.subject) : "";
   const message = escapeHtml(p.message).replace(/\n/g, "<br />");
   return {
-    subject: `[Image Vault] Contact enquiry${subjectLine ? ` — ${subjectLine}` : ""} from ${name}`,
+    subject: `[ImageVault] Contact enquiry${subjectLine ? ` — ${subjectLine}` : ""} from ${name}`,
     html: layout(`
-      <p>A new enquiry has been submitted via the Image Vault contact page.</p>
+      <p>A new enquiry has been submitted via the ImageVault contact page.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Name</span><span class="kv-val">${name}</span></div>
         <div class="kv-row"><span class="kv-key">Email</span><span class="kv-val">${email}</span></div>
@@ -948,7 +948,7 @@ export function contactForwardEmail(p: ContactForwardParams): { subject: string;
   const subjectLine = escapeHtml(subjectText);
   const body = escapeHtml(p.body).replace(/\n/g, "<br />");
   return {
-    subject: `[Image Vault] Contact — ${subjectText} from ${p.fromAddress}`,
+    subject: `[ImageVault] Contact — ${subjectText} from ${p.fromAddress}`,
     html: layout(`
       <p>A message was sent to <strong>contact@imagevault.ai</strong> and forwarded to you. Reply directly to this email to reach the sender.</p>
       <div class="kv">
@@ -1048,7 +1048,7 @@ export function repRepresentationEnquiryEmail(p: RepRepresentationEnquiryParams)
   return {
     subject: `Representation enquiry — ${p.actorName} / ${p.productionName}`,
     html: layout(`
-      <p>We are building the cast list for <strong>${p.productionName}</strong> on Image Vault and are trying to reach <strong>${p.actorName}</strong>.</p>
+      <p>We are building the cast list for <strong>${p.productionName}</strong> on ImageVault and are trying to reach <strong>${p.actorName}</strong>.</p>
       <p>If you represent ${p.actorName}, we'd like to set them up on the platform so they can upload their scan package and manage licence approvals for this production.</p>
       <div class="kv">
         <div class="kv-row"><span class="kv-key">Actor</span><span class="kv-val">${p.actorName}</span></div>
@@ -1057,7 +1057,7 @@ export function repRepresentationEnquiryEmail(p: RepRepresentationEnquiryParams)
         ${characterRow}
         <div class="kv-row"><span class="kv-key">Coordinator</span><span class="kv-val">${p.coordinatorEmail}</span></div>
       </div>
-      <p>If you represent this actor, visit your Image Vault roster to link them. Once linked they'll receive an invitation to join the production.</p>
+      <p>If you represent this actor, visit your ImageVault roster to link them. Once linked they'll receive an invitation to join the production.</p>
       <a class="btn" href="${p.rosterUrl}">Go to my roster</a>
       <p class="muted" style="margin-top: 24px;">If you do not represent ${p.actorName}, no action is needed — please disregard this message.</p>
     `),
@@ -1154,7 +1154,7 @@ export function consentRequestEmail(p: ConsentRequestEmailParams): { subject: st
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-pending">Awaiting your consent</span></span></div>
       </div>
       <a class="btn" href="${p.consentUrl}">Read &amp; confirm consent</a>
-      <p class="muted" style="margin-top: 24px;">No account needed to read it. You can confirm now, and later create a free Image Vault account to take direct control of your data.</p>
+      <p class="muted" style="margin-top: 24px;">No account needed to read it. You can confirm now, and later create a free ImageVault account to take direct control of your data.</p>
     `),
   };
 }
@@ -1181,7 +1181,7 @@ export function consentConfirmedEmail(p: ConsentConfirmedEmailParams): { subject
         <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-approved">Consent recorded</span></span></div>
       </div>
       <p>The consent is recorded with an audit trail. You can proceed within the scope they've consented to.</p>
-      <a class="btn" href="${p.reviewUrl}">View in Image Vault</a>
+      <a class="btn" href="${p.reviewUrl}">View in ImageVault</a>
     `),
   };
 }

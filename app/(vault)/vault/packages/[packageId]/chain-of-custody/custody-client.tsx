@@ -359,7 +359,7 @@ export default function CustodyClient({ packageId }: { packageId: string }) {
           <div className="flex items-start justify-between gap-4 mb-6">
             <div>
               <p className="text-[9px] tracking-[0.25em] uppercase font-bold mb-1" style={{ color: "#888888", fontFamily: "ui-sans-serif, system-ui, sans-serif" }}>
-                {data.package.talentName ?? data.package.talentEmail} · Image Vault
+                {data.package.talentName ?? data.package.talentEmail} · ImageVault
               </p>
               <h1 className="text-xl font-bold tracking-tight" style={{ color: "#000000" }}>
                 Chain of Custody Record
@@ -438,7 +438,7 @@ export default function CustodyClient({ packageId }: { packageId: string }) {
         >
           <p className="font-semibold mb-1" style={{ color: "#333333" }}>Legal Notice</p>
           <p>
-            This document was generated from the Image Vault platform&apos;s tamper-evident activity
+            This document was generated from the ImageVault platform&apos;s tamper-evident activity
             log at {isoUtc(data.generatedAt)}. All timestamps are Coordinated Universal Time (UTC).
             Access events are recorded at the point of authentication and file transfer initiation.
             This record constitutes evidence of the chain of custody for the biometric scan package
@@ -448,7 +448,7 @@ export default function CustodyClient({ packageId }: { packageId: string }) {
             including UK GDPR and the Data Protection Act 2018.
           </p>
           <div className="mt-4 pt-3 border-t flex items-center justify-between" style={{ borderColor: "#e5e5e5" }}>
-            <p className="font-semibold" style={{ color: "#333333" }}>Image Vault — Secure Biometric Asset Management</p>
+            <p className="font-semibold" style={{ color: "#333333" }}>ImageVault — Governance for likeness data</p>
             <p>Document ref: {docRef}</p>
           </div>
         </div>
