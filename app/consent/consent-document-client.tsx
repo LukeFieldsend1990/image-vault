@@ -407,9 +407,11 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // requestedScope can be stale mid-session), otherwise the requested scope.
   const latestPosition: string[] =
     nego?.pendingTalentCounter?.scope ?? nego?.currentOffer.scope ?? requestedScope;
+  // No length guard on the baseline: a production can send an empty ask (no uses
+  // stored on the role or its default terms), and ticking any use against that is
+  // still a change — the guard used to swallow it, leaving the confirm button up.
   const scopeChanged =
     (source.kind === "licence" || source.kind === "cast" || source.kind === "token") &&
-    latestPosition.length > 0 &&
     !(consents.size === latestPosition.length && latestPosition.every((r) => consents.has(r)));
 
   // Ticking straight back to the production's standing offer is an acceptance of

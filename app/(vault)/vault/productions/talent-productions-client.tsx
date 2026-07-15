@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import RepPendingEngagements from "./rep-pending-engagements";
+import RepReservedRoles from "../requests/rep-reserved-roles";
 
 type LicenceStatus =
   | "AWAITING_PACKAGE" | "PENDING" | "APPROVED" | "DENIED"
@@ -515,7 +515,7 @@ export default function TalentProductionsClient({ talentId }: { talentId?: strin
         </p>
       </div>
 
-      <RepPendingEngagements />
+      <RepReservedRoles className="mb-10" />
 
       {loading && (
         <div className="space-y-4">

@@ -6,8 +6,6 @@ import Link from "next/link";
 import UploadModal from "../../upload-modal";
 import { FadeImage } from "@/app/(vault)/fade-image";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
-import MonitorClient from "../../vault/monitor/monitor-client";
-import type { TalentIdentityForMonitor } from "../../vault/monitor/page";
 import ComplianceClient from "../../compliance/compliance-client";
 import TalentProductionsClient from "../../vault/productions/talent-productions-client";
 import { USE_CATEGORIES } from "@/lib/consent/use-categories";
@@ -1274,9 +1272,9 @@ function RevenueTab({ talentId }: { talentId: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-type Tab = "vault" | "licences" | "permissions" | "revenue" | "monitor" | "compliance" | "productions";
+type Tab = "vault" | "licences" | "permissions" | "revenue" | "compliance" | "productions";
 
-const VALID_TABS = new Set<Tab>(["vault", "licences", "productions", "compliance", "permissions", "revenue", "monitor"]);
+const VALID_TABS = new Set<Tab>(["vault", "licences", "productions", "compliance", "permissions", "revenue"]);
 
 export default function RepVaultClient({ talentId }: { talentId: string }) {
   const searchParams = useSearchParams();
@@ -1359,7 +1357,6 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
     { id: "compliance", label: "Compliance" },
     { id: "permissions", label: "Permissions" },
     { id: "revenue", label: "Revenue" },
-    { id: "monitor", label: "DeepScan" },
   ];
 
   return (
@@ -1492,12 +1489,6 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
         {activeTab === "compliance" && <ComplianceClient talentId={talentId} />}
         {activeTab === "permissions" && <PermissionsTab talentId={talentId} />}
         {activeTab === "revenue" && <RevenueTab talentId={talentId} />}
-        {activeTab === "monitor" && (() => {
-          const monitorIdentity: TalentIdentityForMonitor | null = talent?.fullName
-            ? { fullName: talent.fullName, profileImageUrl: talent.profileImageUrl ?? null, knownFor: [] }
-            : null;
-          return <MonitorClient identity={monitorIdentity} canRunScan={false} />;
-        })()}
       </div>
 
       {/* Stats bar — only on vault tab */}
