@@ -401,26 +401,41 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // becomes a proposal the production must agree to (licence mode only; guests have
   // no negotiation pre-account).
   const requestedScope = vm.requestedScope ?? [];
+  // The latest suggested position on the table: the performer's own outstanding
+  // counter if one is open, otherwise the production's current offer (kept live by
+  // refreshNego — a producer counter revises the licence row, so the load-time
+  // requestedScope can be stale mid-session), otherwise the requested scope.
+  const latestPosition: string[] =
+    nego?.pendingTalentCounter?.scope ?? nego?.currentOffer.scope ?? requestedScope;
   const scopeChanged =
     (source.kind === "licence" || source.kind === "cast" || source.kind === "token") &&
-    requestedScope.length > 0 &&
-    !(consents.size === requestedScope.length && requestedScope.every((r) => consents.has(r)));
+    latestPosition.length > 0 &&
+    !(consents.size === latestPosition.length && latestPosition.every((r) => consents.has(r)));
 
-  // The performer is proposing different terms when they've changed the ticked uses,
-  // typed a fee, added a note, or explicitly opened the form. Reverting the uses to
-  // what was requested with an empty fee and note drops straight back to plain confirm.
-  // Suppressed once a proposal is already outstanding (unless they reopen the form to
-  // revise) so the panel can show the "awaiting response" state instead.
+  // Ticking straight back to the production's standing offer is an acceptance of
+  // their terms, not a new proposal — keep the confirm button for that case (it's
+  // the "confirm their current terms instead" path while a counter is outstanding).
+  const matchesCurrentOffer =
+    !!nego &&
+    consents.size === nego.currentOffer.scope.length &&
+    nego.currentOffer.scope.every((r) => consents.has(r));
+
+  // The performer is proposing different terms when they've ticked any use away
+  // from the latest suggested position, typed a fee, added a note, or explicitly
+  // opened the form — the propose panel then replaces the final consent button.
+  // Reverting the uses with an empty fee and note drops straight back to plain
+  // confirm (or, with a counter outstanding, the "awaiting response" state).
   const proposing =
     proposeIntent ||
-    (!nego?.pendingTalentCounter &&
-      (scopeChanged || counterFee.trim() !== "" || counterComment.trim() !== ""));
+    counterFee.trim() !== "" ||
+    counterComment.trim() !== "" ||
+    (scopeChanged && !matchesCurrentOffer);
 
   const cancelPropose = () => {
     setProposeIntent(false);
     setCounterFee("");
     setCounterComment("");
-    setConsents(new Set(requestedScope));
+    setConsents(new Set(latestPosition));
   };
 
   // Counter form (shared by talent and producer). Scope comes from the toggles above.

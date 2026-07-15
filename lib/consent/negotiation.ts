@@ -114,7 +114,11 @@ export async function addNegotiationRound(
 export function latestTalentCounter(rounds: NegotiationRound[]): NegotiationRound | null {
   for (let i = rounds.length - 1; i >= 0; i--) {
     const r = rounds[i];
-    if (r.action === "counter" && (r.party === "talent" || r.party === "rep")) return r;
+    if (r.action === "counter") {
+      // The most recent counter is whoever's position is on the table — a producer
+      // counter-back supersedes the talent's proposal (the ball returns to the talent).
+      return r.party === "talent" || r.party === "rep" ? r : null;
+    }
     if (r.action === "accepted" || r.action === "declined") return null; // thread closed
   }
   return null;
