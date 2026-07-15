@@ -3,27 +3,16 @@ import { getDb } from "@/lib/db";
 import { talentReps, talentLicencePermissions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, and } from "drizzle-orm";
-
-const LICENCE_TYPES = [
-  "commercial",
-  "film_double",
-  "game_character",
-  "ai_avatar",
-  "training_data",
-  "monitoring_reference",
-] as const;
-
-type LicenceType = (typeof LICENCE_TYPES)[number];
-type Permission = "allowed" | "approval_required" | "blocked";
-
-const DEFAULTS: Record<LicenceType, Permission> = {
-  commercial: "approval_required",
-  film_double: "approval_required",
-  game_character: "approval_required",
-  ai_avatar: "approval_required",
-  training_data: "blocked",
-  monitoring_reference: "allowed",
-};
+import {
+  isLicenceType,
+  isLicencePermission,
+  resolveLicencePermissions,
+  permissionToDisposition,
+  LICENCE_TYPE_USE_CATEGORY,
+  type LicenceType,
+  type LicencePermission,
+} from "@/lib/consent/licence-permissions";
+import { loadStandingInstructions, setStandingInstructions } from "@/lib/consent/standing-instructions";
 
 async function assertRepAccess(repId: string, talentId: string) {
   const db = getDb();
@@ -37,8 +26,9 @@ async function assertRepAccess(repId: string, talentId: string) {
 
 /**
  * GET /api/roster/[talentId]/permissions
- * Returns permission setting for all 6 licence types for the given talent.
- * If a row doesn't exist for a type yet, returns the default value.
+ * Returns the effective permission for all 6 licence types for the given
+ * talent. Consent-owned types (training_data ↔ §39G) are derived from the
+ * talent's standing instructions; the rest fall back to stored rows/defaults.
  */
 export async function GET(
   req: NextRequest,
@@ -60,26 +50,24 @@ export async function GET(
   }
 
   const db = getDb();
-  const rows = await db
-    .select({ licenceType: talentLicencePermissions.licenceType, permission: talentLicencePermissions.permission })
-    .from(talentLicencePermissions)
-    .where(eq(talentLicencePermissions.talentId, talentId))
-    .all();
+  const [rows, instructions] = await Promise.all([
+    db
+      .select({ licenceType: talentLicencePermissions.licenceType, permission: talentLicencePermissions.permission })
+      .from(talentLicencePermissions)
+      .where(eq(talentLicencePermissions.talentId, talentId))
+      .all(),
+    loadStandingInstructions(db, talentId),
+  ]);
 
-  const map = Object.fromEntries(rows.map((r) => [r.licenceType, r.permission])) as Record<string, Permission>;
-
-  const permissions = LICENCE_TYPES.map((type) => ({
-    licenceType: type,
-    permission: (map[type] as Permission | undefined) ?? DEFAULTS[type],
-  }));
-
-  return NextResponse.json({ permissions });
+  return NextResponse.json({ permissions: resolveLicencePermissions(rows, instructions) });
 }
 
 /**
  * PUT /api/roster/[talentId]/permissions
  * Body: { licenceType: string, permission: "allowed"|"approval_required"|"blocked" }
- * Upserts a single permission row.
+ * Upserts a single permission. Consent-owned licence types write the mapped
+ * disposition to the standing instruction instead of a permission row, so the
+ * consent model stays the single source of truth.
  */
 export async function PUT(
   req: NextRequest,
@@ -102,14 +90,23 @@ export async function PUT(
   const body = await req.json() as { licenceType?: string; permission?: string };
   const { licenceType, permission } = body;
 
-  if (!LICENCE_TYPES.includes(licenceType as LicenceType)) {
+  if (!isLicenceType(licenceType)) {
     return NextResponse.json({ error: "Invalid licenceType" }, { status: 400 });
   }
-  if (!["allowed", "approval_required", "blocked"].includes(permission as string)) {
+  if (!isLicencePermission(permission)) {
     return NextResponse.json({ error: "Invalid permission" }, { status: 400 });
   }
 
   const db = getDb();
+
+  const useCategoryId = LICENCE_TYPE_USE_CATEGORY[licenceType];
+  if (useCategoryId) {
+    await setStandingInstructions(db, talentId, session.sub, {
+      [useCategoryId]: permissionToDisposition(permission),
+    });
+    return NextResponse.json({ ok: true });
+  }
+
   const now = Math.floor(Date.now() / 1000);
 
   // Check if row exists
@@ -127,14 +124,14 @@ export async function PUT(
   if (existing) {
     await db
       .update(talentLicencePermissions)
-      .set({ permission: permission as Permission, updatedBy: session.sub, updatedAt: now })
+      .set({ permission: permission as LicencePermission, updatedBy: session.sub, updatedAt: now })
       .where(eq(talentLicencePermissions.id, existing.id));
   } else {
     await db.insert(talentLicencePermissions).values({
       id: crypto.randomUUID(),
       talentId,
       licenceType: licenceType as LicenceType,
-      permission: permission as Permission,
+      permission: permission as LicencePermission,
       updatedBy: session.sub,
       updatedAt: now,
     });

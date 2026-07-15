@@ -3,27 +3,8 @@ import { getDb } from "@/lib/db";
 import { users, scanPackages, scanFiles, talentProfiles, talentLicencePermissions } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { eq, sql, and, desc, isNull } from "drizzle-orm";
-
-const LICENCE_TYPES = [
-  "commercial",
-  "film_double",
-  "game_character",
-  "ai_avatar",
-  "training_data",
-  "monitoring_reference",
-] as const;
-
-type LicenceType = (typeof LICENCE_TYPES)[number];
-type Permission = "allowed" | "approval_required" | "blocked";
-
-const PERMISSION_DEFAULTS: Record<LicenceType, Permission> = {
-  commercial: "approval_required",
-  film_double: "approval_required",
-  game_character: "approval_required",
-  ai_avatar: "approval_required",
-  training_data: "blocked",
-  monitoring_reference: "allowed",
-};
+import { resolveLicencePermissions } from "@/lib/consent/licence-permissions";
+import { loadStandingInstructions } from "@/lib/consent/standing-instructions";
 
 // GET /api/talent/[id]/packages — enriched talent profile for licensee view
 export async function GET(
@@ -45,7 +26,7 @@ export async function GET(
 
   if (!talent) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const [profile, permRows, packages] = await Promise.all([
+  const [profile, permRows, instructions, packages] = await Promise.all([
     // TMDB profile
     db.select({
       fullName: talentProfiles.fullName,
@@ -65,6 +46,9 @@ export async function GET(
       .from(talentLicencePermissions)
       .where(eq(talentLicencePermissions.talentId, id))
       .all(),
+
+    // Standing instructions — source of truth for consent-owned licence types
+    loadStandingInstructions(db, id),
 
     // Ready packages with file counts
     db.select({
@@ -88,12 +72,7 @@ export async function GET(
       .all(),
   ]);
 
-  // Build permissions map with defaults
-  const permMap = Object.fromEntries(permRows.map((r) => [r.licenceType, r.permission])) as Record<string, Permission>;
-  const permissions = LICENCE_TYPES.map((type) => ({
-    licenceType: type,
-    permission: (permMap[type] as Permission | undefined) ?? PERMISSION_DEFAULTS[type],
-  }));
+  const permissions = resolveLicencePermissions(permRows, instructions);
 
   // Derive capabilities from file extensions across all packages
   const packageIds = packages.map((p) => p.id);
