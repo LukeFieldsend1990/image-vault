@@ -49,3 +49,6 @@ worker-configuration.d.ts
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated e2e visual reports
+/__tests__/e2e/report/
