@@ -1,10 +1,10 @@
 import RosterClient from "./roster-client";
-import RepReservedRoles from "./rep-reserved-roles";
+import RepReservedRolesBanner from "./rep-reserved-roles-banner";
 
 export default function RosterPage() {
   return (
     <>
-      <RepReservedRoles />
+      <RepReservedRolesBanner />
       <RosterClient />
     </>
   );

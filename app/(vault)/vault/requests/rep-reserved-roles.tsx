@@ -17,9 +17,8 @@ interface Assignment {
 
 // Path C rep surface: reserved roles a production assigned to this agent. The rep
 // supplies their client's email to connect them — the producer remains the licensee.
-// Rendered on both /roster and /vault/requests; `className` tunes the outer padding
-// so it sits flush with each page's content gutter.
-export default function RepReservedRoles({ className = "px-8 lg:px-12 pt-6" }: { className?: string }) {
+// Lives on /vault/requests only; /roster shows a slim banner pointing here.
+export default function RepReservedRoles({ className = "mb-4" }: { className?: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
