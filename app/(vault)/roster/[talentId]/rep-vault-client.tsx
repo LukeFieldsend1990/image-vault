@@ -874,6 +874,12 @@ function PermissionsTab({ talentId }: { talentId: string }) {
 
 // ── Revenue tab ────────────────────────────────────────────────────────────────
 
+// One template shared by the header and every row — with `auto` tracks each row
+// sized its fee/status columns from its own content, so the columns drifted
+// out of alignment down the table.
+const REVENUE_GRID_COLS =
+  "grid-cols-[minmax(0,1fr)_5.5rem_8rem_1rem] sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_5.5rem_8rem_1rem]";
+
 const LICENCE_STATUS_COLOR: Record<string, { bg: string; text: string }> = {
   AWAITING_PACKAGE: { bg: "#7c3aed18", text: "#7c3aed" },
   APPROVED: { bg: "#16653418", text: "#166534" },
@@ -1004,7 +1010,7 @@ function RevenueTab({ talentId }: { talentId: string }) {
           <div className="rounded border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
             {/* Table header */}
             <div
-              className="grid grid-cols-[1fr_auto_auto_auto] sm:grid-cols-[1fr_1fr_auto_auto_auto] gap-3 px-4 py-2.5 text-[10px] uppercase tracking-widest font-semibold border-b"
+              className={`grid ${REVENUE_GRID_COLS} gap-3 px-4 py-2.5 text-[10px] uppercase tracking-widest font-semibold border-b`}
               style={{
                 borderColor: "var(--color-border)",
                 background: "var(--color-surface)",
@@ -1031,7 +1037,7 @@ function RevenueTab({ talentId }: { talentId: string }) {
                 >
                   {/* Clickable summary row */}
                   <div
-                    className="grid grid-cols-[1fr_auto_auto_auto] sm:grid-cols-[1fr_1fr_auto_auto_auto] gap-3 px-4 py-3 items-center cursor-pointer select-none"
+                    className={`grid ${REVENUE_GRID_COLS} gap-3 px-4 py-3 items-center cursor-pointer select-none`}
                     style={{ background: i % 2 === 0 ? "var(--color-bg)" : "var(--color-surface)" }}
                     onClick={() => setExpandedId(expanded ? null : licence.id)}
                   >
@@ -1057,12 +1063,13 @@ function RevenueTab({ talentId }: { talentId: string }) {
                       {fee ? fmtMoney(fee) : "—"}
                     </span>
                     <span
-                      className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded"
+                      className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded justify-self-end whitespace-nowrap"
                       style={{ background: statusStyle.bg, color: statusStyle.text }}
                     >
                       {licence.status}
                     </span>
                     <svg
+                      className="justify-self-end"
                       width="12" height="12" viewBox="0 0 24 24" fill="none"
                       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                       style={{
