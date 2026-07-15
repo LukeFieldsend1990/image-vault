@@ -434,9 +434,11 @@ function HitCard({ hit, onTriage, busy }: {
 
 interface Props {
   identity: TalentIdentityForMonitor | null;
+  /** Hide the manual "Run Scan" control (e.g. rep roster view — visibility only). */
+  canRunScan?: boolean;
 }
 
-export default function MonitorClient({ identity }: Props) {
+export default function MonitorClient({ identity, canRunScan = true }: Props) {
   const [platforms, setPlatforms] = useState<Platform[]>(
     INITIAL_PLATFORMS.map((p) => ({ ...p, status: "idle" as ScanStatus }))
   );
@@ -562,32 +564,34 @@ export default function MonitorClient({ identity }: Props) {
           </p>
         </div>
 
-        <button
-          onClick={runScan}
-          disabled={scanning}
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white transition disabled:opacity-60 shrink-0"
-          style={{
-            background: scanning ? "var(--color-muted)" : "var(--color-ink)",
-            borderRadius: "var(--radius)",
-          }}
-        >
-          {scanning ? (
-            <>
-              <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
-              Scanning…
-            </>
-          ) : (
-            <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              Run Scan
-            </>
-          )}
-        </button>
+        {canRunScan && (
+          <button
+            onClick={runScan}
+            disabled={scanning}
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white transition disabled:opacity-60 shrink-0"
+            style={{
+              background: scanning ? "var(--color-muted)" : "var(--color-ink)",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            {scanning ? (
+              <>
+                <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+                Scanning…
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                Run Scan
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── Identity badge ── */}
@@ -686,8 +690,12 @@ export default function MonitorClient({ identity }: Props) {
             </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
               {newCount > 0
-                ? "Review the flagged content below, or run a fresh sweep."
-                : `Run a scan to check all monitored platforms for unauthorised use of ${name}.`}
+                ? canRunScan
+                  ? "Review the flagged content below, or run a fresh sweep."
+                  : "Review the flagged content below."
+                : canRunScan
+                  ? `Run a scan to check all monitored platforms for unauthorised use of ${name}.`
+                  : `Sweeps checking all monitored platforms for unauthorised use of ${name} will appear here.`}
             </p>
           </div>
         </div>

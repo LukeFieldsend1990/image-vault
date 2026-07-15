@@ -1496,7 +1496,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
           const monitorIdentity: TalentIdentityForMonitor | null = talent?.fullName
             ? { fullName: talent.fullName, profileImageUrl: talent.profileImageUrl ?? null, knownFor: [] }
             : null;
-          return <MonitorClient identity={monitorIdentity} />;
+          return <MonitorClient identity={monitorIdentity} canRunScan={false} />;
         })()}
       </div>
 

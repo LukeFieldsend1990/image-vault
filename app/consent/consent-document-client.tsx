@@ -62,7 +62,6 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const [withdrawn, setWithdrawn] = useState(false);
 
   // Negotiation (registered/licence mode only — guests can't negotiate pre-account)
   const [nego, setNego] = useState<NegotiationState | null>(null);
@@ -92,7 +91,6 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const isPreview = source.kind === "preview";
   const isCast = source.kind === "cast";
   const token = source.kind === "token" ? source.token : null;
-  const licenceId = source.kind === "licence" ? source.id : null;
   const docEndpoint =
     source.kind === "licence"
       ? `/api/consent/${source.id}/document`
@@ -159,23 +157,6 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
       if (!r.ok || !d.ok) { setSubmitError(d.error ?? "Could not accept the counter-offer."); return; }
       await refreshNego();
       if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-    } finally { setNegoBusy(false); }
-  }
-
-  async function withdraw() {
-    if (!licenceId) return;
-    const reason = typeof window !== "undefined"
-      ? window.prompt("Withdraw your consent for this production? This stops new uses going forward. Optionally add a reason:")
-      : "";
-    if (reason === null) return; // cancelled
-    setNegoBusy(true);
-    try {
-      const r = await fetch(`/api/consent/${licenceId}/withdraw`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
-      });
-      if (r.ok) setWithdrawn(true);
     } finally { setNegoBusy(false); }
   }
 
@@ -315,20 +296,6 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const total = USE_CATEGORIES.length;
   const isGuest = source.kind === "token";
 
-  // ── Withdrawn state ─────────────────────────────────────────────────────────
-  if (withdrawn) {
-    return (
-      <Frame>
-        <div className="rounded-xl p-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-          <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Consent withdrawn</h2>
-          <p className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-            Your consent for {vm.productionName} has been withdrawn. This stops new uses going forward; it does not undo lawful past uses. The production has been notified.
-          </p>
-        </div>
-      </Frame>
-    );
-  }
-
   // ── Proposed-different-terms state (unregistered performer) ─────────────────
   if (guestProposed) {
     return (
@@ -347,13 +314,14 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
 
   // ── Document state ──────────────────────────────────────────────────────────
   // The accepted ("done") state renders the full document read-only with a banner
-  // + conversion/withdraw, so the performer always sees the full detail.
+  // + conversion, so the performer always sees the full detail.
   const canAct = data.canAct;
   const isProducer = nego?.party === "producer";
   const canEditScope = (canAct && !done) || (isProducer && counterMode);
 
-  // Done-state footer: a recorded banner, conversion (unregistered guests only),
-  // and withdraw (registered performer/agent). No "register" pitch for registered users.
+  // Done-state footer: a recorded banner and conversion (unregistered guests only).
+  // No "register" pitch for registered users. Withdrawal is deliberately not offered
+  // here for now — it's a consequential, money-implicating step, not a simple click.
   const doneActions = (
     <>
       <div className="rounded-xl p-6 mb-4" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.04)" }}>
@@ -392,7 +360,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
               <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Option 1 — take custody</p>
               <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Set up your account and own your vault.</h2>
               <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-                Register on ImageVault and take ownership — decide who else can access your data, withdraw consent instantly, and set standing
+                Register on ImageVault and take ownership — decide who else can access your data and set standing
                 instructions for every future request. Creating an account is free.
               </p>
               <button type="button" onClick={() => chooseCustody("self")} disabled={custodyBusy} className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: ACCENT }}>
@@ -416,8 +384,8 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
             <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>You&apos;re done</p>
             <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Your consent is recorded. You can leave it there.</h2>
             <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-              Whenever you&apos;re ready, you can register on ImageVault and take ownership of your vault — decide who else can access your data,
-              withdraw consent instantly, and set standing instructions for every future request. Creating an account is free; claiming the vault
+              Whenever you&apos;re ready, you can register on ImageVault and take ownership of your vault — decide who else can access your data
+              and set standing instructions for every future request. Creating an account is free; claiming the vault
               so you can relicense independently is a paid option.
             </p>
             <div className="flex flex-wrap gap-2.5">
@@ -426,41 +394,48 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
             </div>
           </div>
         )
-      ) : (
-        data.canAct && consentedList.length > 0 && !isCast && (
-          <div className="text-center">
-            <button type="button" onClick={withdraw} disabled={negoBusy} className="text-xs" style={{ color: "var(--color-muted)", textDecoration: "underline" }}>
-              {negoBusy ? "Withdrawing…" : "Withdraw consent"}
-            </button>
-          </div>
-        )
-      )}
+      ) : null}
     </>
   );
   // The performer's ticked set differs from what the production requested → confirming
   // becomes a proposal the production must agree to (licence mode only; guests have
   // no negotiation pre-account).
   const requestedScope = vm.requestedScope ?? [];
+  // The latest suggested position on the table: the performer's own outstanding
+  // counter if one is open, otherwise the production's current offer (kept live by
+  // refreshNego — a producer counter revises the licence row, so the load-time
+  // requestedScope can be stale mid-session), otherwise the requested scope.
+  const latestPosition: string[] =
+    nego?.pendingTalentCounter?.scope ?? nego?.currentOffer.scope ?? requestedScope;
   const scopeChanged =
     (source.kind === "licence" || source.kind === "cast" || source.kind === "token") &&
-    requestedScope.length > 0 &&
-    !(consents.size === requestedScope.length && requestedScope.every((r) => consents.has(r)));
+    latestPosition.length > 0 &&
+    !(consents.size === latestPosition.length && latestPosition.every((r) => consents.has(r)));
 
-  // The performer is proposing different terms when they've changed the ticked uses,
-  // typed a fee, added a note, or explicitly opened the form. Reverting the uses to
-  // what was requested with an empty fee and note drops straight back to plain confirm.
-  // Suppressed once a proposal is already outstanding (unless they reopen the form to
-  // revise) so the panel can show the "awaiting response" state instead.
+  // Ticking straight back to the production's standing offer is an acceptance of
+  // their terms, not a new proposal — keep the confirm button for that case (it's
+  // the "confirm their current terms instead" path while a counter is outstanding).
+  const matchesCurrentOffer =
+    !!nego &&
+    consents.size === nego.currentOffer.scope.length &&
+    nego.currentOffer.scope.every((r) => consents.has(r));
+
+  // The performer is proposing different terms when they've ticked any use away
+  // from the latest suggested position, typed a fee, added a note, or explicitly
+  // opened the form — the propose panel then replaces the final consent button.
+  // Reverting the uses with an empty fee and note drops straight back to plain
+  // confirm (or, with a counter outstanding, the "awaiting response" state).
   const proposing =
     proposeIntent ||
-    (!nego?.pendingTalentCounter &&
-      (scopeChanged || counterFee.trim() !== "" || counterComment.trim() !== ""));
+    counterFee.trim() !== "" ||
+    counterComment.trim() !== "" ||
+    (scopeChanged && !matchesCurrentOffer);
 
   const cancelPropose = () => {
     setProposeIntent(false);
     setCounterFee("");
     setCounterComment("");
-    setConsents(new Set(requestedScope));
+    setConsents(new Set(latestPosition));
   };
 
   // Counter form (shared by talent and producer). Scope comes from the toggles above.
