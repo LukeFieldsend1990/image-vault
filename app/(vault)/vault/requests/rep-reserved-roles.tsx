@@ -33,9 +33,10 @@ function fmtDate(unix: number): string {
 
 // Path C rep surface: reserved roles a production assigned to this agent. The rep
 // supplies their client's email to connect them — the producer remains the licensee.
-// Lives on /vault/requests only; /roster shows a slim banner pointing here.
-// Styling mirrors the talent CastRequestCard (dashed = not yet agreed) and the
-// rep PlaceholderCard on /vault/productions, so the request surfaces read as one family.
+// Rendered on /vault/requests and at the top of the productions surface (own page
+// and the roster tab); /roster shows a slim banner pointing to Requests.
+// Styling mirrors the talent CastRequestCard (dashed = not yet agreed), so the
+// request surfaces read as one family.
 export default function RepReservedRoles({ className = "mb-4" }: { className?: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
