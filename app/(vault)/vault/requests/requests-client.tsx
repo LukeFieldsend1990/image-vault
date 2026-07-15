@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FeeGuidanceCard from "./fee-guidance-card";
-import RepReservedRoles from "@/app/(vault)/roster/rep-reserved-roles";
+import RepReservedRoles from "./rep-reserved-roles";
 import { parseUseCategoryIds, getUseCategory } from "@/lib/consent/use-categories";
 
 // Human-readable §39 use categories requested on a licence.
