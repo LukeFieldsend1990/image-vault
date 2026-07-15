@@ -10,7 +10,7 @@ import MonitorClient from "../../vault/monitor/monitor-client";
 import type { TalentIdentityForMonitor } from "../../vault/monitor/page";
 import ComplianceClient from "../../compliance/compliance-client";
 import TalentProductionsClient from "../../vault/productions/talent-productions-client";
-import StandingInstructions from "../../settings/standing-instructions";
+import { USE_CATEGORIES } from "@/lib/consent/use-categories";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -550,21 +550,44 @@ function PackageCard({ pkg, onDelete, onAddFiles, deleting }: { pkg: ScanPackage
 }
 
 // ── Permissions tab ────────────────────────────────────────────────────────────
+//
+// One list, one card UI, three states. The §39 use-category rows ARE the
+// consent model (standing instructions) — they drive auto-resolution and own
+// any overlapping licence type (Training Datasets ≡ Training data for
+// generative AI §39G, so it has no separate row). Licence types with no
+// consent counterpart keep their own rows, rendered identically.
 
+// "Training Datasets" (training_data) is deliberately absent — the §39G
+// standing instruction is its source of truth.
 const LICENCE_TYPE_META: { type: string; label: string; description: string }[] = [
   { type: "commercial", label: "Commercial Ads", description: "TV, digital & out-of-home advertising" },
   { type: "film_double", label: "Digital Stunt Double", description: "De-aging, stunt replacement in film" },
   { type: "game_character", label: "Video Game Character", description: "In-engine game character or NPC" },
   { type: "ai_avatar", label: "AI Avatar", description: "Real-time synthetic likeness use" },
-  { type: "training_data", label: "Training Datasets", description: "AI model training data inclusion" },
   { type: "monitoring_reference", label: "Deepfake Protection", description: "Monitoring / reference use only" },
 ];
 
-const PERMISSION_OPTIONS: { value: Permission["permission"]; label: string; color: string }[] = [
-  { value: "allowed", label: "Allowed", color: "#166534" },
-  { value: "approval_required", label: "Approval Required", color: "#92400e" },
-  { value: "blocked", label: "Blocked", color: "#991b1b" },
+type Disposition = "always" | "case_by_case" | "never";
+
+// Standing-instructions vocabulary, used for every row: the two models come
+// down to the same three states (always↔allowed, ask↔approval, never↔blocked).
+const STATE_OPTIONS: { value: Disposition; label: string; hint: string; color: string }[] = [
+  { value: "always", label: "Always", hint: "Auto-grant — your agent never has to ask", color: "#166534" },
+  { value: "case_by_case", label: "Ask me", hint: "Route every request to you (or your agent)", color: "#92400e" },
+  { value: "never", label: "Never", hint: "Structurally blocked — no one can grant it", color: "#991b1b" },
 ];
+
+const PERMISSION_TO_DISPOSITION: Record<Permission["permission"], Disposition> = {
+  allowed: "always",
+  approval_required: "case_by_case",
+  blocked: "never",
+};
+
+const DISPOSITION_TO_PERMISSION: Record<Disposition, Permission["permission"]> = {
+  always: "allowed",
+  case_by_case: "approval_required",
+  never: "blocked",
+};
 
 // ── Licences tab ──────────────────────────────────────────────────────────────
 
@@ -755,32 +778,79 @@ function LicencesTab({ talentId }: { talentId: string }) {
   );
 }
 
+interface PermissionRow {
+  key: string;
+  title: string;
+  description: string;
+  regimeTag: string | null;
+  sensitive: boolean;
+  current: Disposition | null; // null = consent row not set yet
+}
+
 function PermissionsTab({ talentId }: { talentId: string }) {
-  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [instructions, setInstructions] = useState<Record<string, Disposition>>({});
+  const [permissions, setPermissions] = useState<Record<string, Permission["permission"]>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/roster/${talentId}/permissions`)
-      .then((r) => r.json() as Promise<{ permissions: Permission[] }>)
-      .then((d) => setPermissions(d.permissions ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    Promise.all([
+      fetch(`/api/talent/standing-instructions?talentId=${encodeURIComponent(talentId)}`)
+        .then((r) => r.json() as Promise<{ instructions?: Record<string, Disposition> }>)
+        .catch(() => ({ instructions: {} as Record<string, Disposition> })),
+      fetch(`/api/roster/${talentId}/permissions`)
+        .then((r) => r.json() as Promise<{ permissions?: Permission[] }>)
+        .catch(() => ({ permissions: [] as Permission[] })),
+    ])
+      .then(([si, perms]) => {
+        if (cancelled) return;
+        setInstructions(si.instructions ?? {});
+        setPermissions(Object.fromEntries((perms.permissions ?? []).map((p) => [p.licenceType, p.permission])));
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [talentId]);
 
-  async function update(licenceType: string, permission: Permission["permission"]) {
-    setSaving(licenceType);
-    const prev = [...permissions];
-    setPermissions((ps) => ps.map((p) => p.licenceType === licenceType ? { ...p, permission } : p));
+  // §39 use-category rows — write the standing instruction (the model).
+  async function setInstruction(categoryId: string, disposition: Disposition) {
+    setSaving(`cat:${categoryId}`);
+    setError(null);
+    const prev = instructions;
+    setInstructions((m) => ({ ...m, [categoryId]: disposition }));
+    try {
+      const res = await fetch(`/api/talent/standing-instructions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ talentId, updates: { [categoryId]: disposition } }),
+      });
+      if (!res.ok) { setInstructions(prev); setError("Could not save."); }
+    } catch {
+      setInstructions(prev);
+      setError("Network error.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  // Licence-type rows with no consent counterpart — write the permission row.
+  async function setLicencePermission(licenceType: string, disposition: Disposition) {
+    setSaving(`lt:${licenceType}`);
+    setError(null);
+    const prev = permissions;
+    const permission = DISPOSITION_TO_PERMISSION[disposition];
+    setPermissions((m) => ({ ...m, [licenceType]: permission }));
     try {
       const res = await fetch(`/api/roster/${talentId}/permissions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ licenceType, permission }),
       });
-      if (!res.ok) setPermissions(prev);
+      if (!res.ok) { setPermissions(prev); setError("Could not save."); }
     } catch {
       setPermissions(prev);
+      setError("Network error.");
     } finally {
       setSaving(null);
     }
@@ -796,78 +866,122 @@ function PermissionsTab({ talentId }: { talentId: string }) {
     );
   }
 
-  const permMap = Object.fromEntries(permissions.map((p) => [p.licenceType, p.permission])) as Record<string, Permission["permission"]>;
+  const consentRows: PermissionRow[] = USE_CATEGORIES.map((c) => ({
+    key: `cat:${c.id}`,
+    title: c.name,
+    description: c.description,
+    regimeTag: c.regimeTag,
+    sensitive: c.sensitive,
+    current: instructions[c.id] ?? null,
+  }));
+
+  const licenceRows: PermissionRow[] = LICENCE_TYPE_META.map((m) => ({
+    key: `lt:${m.type}`,
+    title: m.label,
+    description: m.description,
+    regimeTag: null,
+    sensitive: false,
+    current: PERMISSION_TO_DISPOSITION[permissions[m.type] ?? "approval_required"],
+  }));
+
+  const select = (row: PermissionRow, d: Disposition) => {
+    const [kind, id] = [row.key.slice(0, row.key.indexOf(":")), row.key.slice(row.key.indexOf(":") + 1)];
+    return kind === "cat" ? setInstruction(id, d) : setLicencePermission(id, d);
+  };
+
+  const renderRow = (row: PermissionRow) => {
+    const isSaving = saving === row.key;
+    const currentOption = row.current ? STATE_OPTIONS.find((o) => o.value === row.current)! : null;
+
+    return (
+      <div
+        key={row.key}
+        className="rounded border px-5 py-4"
+        style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{row.title}</p>
+              {row.regimeTag && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>
+                  {row.regimeTag}
+                </span>
+              )}
+              {row.sensitive && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(180,83,9,0.1)", color: "#b45309" }}>
+                  sensitive
+                </span>
+              )}
+            </div>
+            <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{row.description}</p>
+          </div>
+
+          {/* Segmented control */}
+          <div
+            className="flex items-center rounded self-start shrink-0 overflow-hidden w-full sm:w-auto"
+            style={{ border: "1px solid var(--color-border)" }}
+          >
+            {STATE_OPTIONS.map((opt, idx) => {
+              const active = row.current === opt.value;
+              const isLast = idx === STATE_OPTIONS.length - 1;
+              return (
+                <button
+                  key={opt.value}
+                  disabled={isSaving}
+                  title={opt.hint}
+                  onClick={() => void select(row, opt.value)}
+                  className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium transition"
+                  style={{
+                    background: active ? `${opt.color}18` : "transparent",
+                    color: active ? opt.color : "var(--color-muted)",
+                    borderRight: isLast ? "none" : "1px solid var(--color-border)",
+                    cursor: isSaving ? "wait" : "pointer",
+                    opacity: isSaving && !active ? 0.5 : 1,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Current state badge */}
+        <div className="mt-2.5 flex items-center gap-1.5">
+          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: currentOption?.color ?? "var(--color-muted)" }} />
+          <span className="text-[11px]" style={{ color: currentOption?.color ?? "#991b1b" }}>
+            {currentOption ? currentOption.label : "Not set — shows as Prohibited on their consent profile until chosen"}
+            {isSaving && " — saving…"}
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="px-4 sm:px-8 py-6">
-      {/* §39 standing instructions — drive auto-resolution of incoming requests. */}
-      <StandingInstructions
-        talentId={talentId}
-        subtitle="As their agent, set a rule per use category. Requests auto-resolve when every requested use is Always (granted) or Never (refused); anything else routes to you. Talent can override these in their own settings."
-      />
+      <h2 className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>
+        Standing Instructions
+      </h2>
+      <p className="text-xs mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
+        As their agent, set a rule per use category. Requests auto-resolve when every requested use is Always (granted) or Never (refused); anything else routes to you. Training data for generative AI (§39G) also sets the Training Datasets licence type. Talent can override these in their own settings.
+      </p>
+      <div className="space-y-3 mb-8">
+        {consentRows.map(renderRow)}
+      </div>
 
-      <p className="text-xs mb-5" style={{ color: "var(--color-muted)" }}>
+      <h2 className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>
+        Licence Types
+      </h2>
+      <p className="text-xs mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>
         Control which licence types can be used for this talent. Reps can set defaults on their behalf — talent can always override in their own settings.
       </p>
       <div className="space-y-3">
-        {LICENCE_TYPE_META.map((meta) => {
-          const current = permMap[meta.type] ?? "approval_required";
-          const isSaving = saving === meta.type;
-          const currentOption = PERMISSION_OPTIONS.find((o) => o.value === current)!;
-
-          return (
-            <div
-              key={meta.type}
-              className="rounded border px-5 py-4"
-              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{meta.label}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{meta.description}</p>
-                </div>
-
-                {/* Segmented control */}
-                <div
-                  className="flex items-center rounded self-start shrink-0 overflow-hidden w-full sm:w-auto"
-                  style={{ border: "1px solid var(--color-border)" }}
-                >
-                  {PERMISSION_OPTIONS.map((opt, idx) => {
-                    const active = current === opt.value;
-                    const isLast = idx === PERMISSION_OPTIONS.length - 1;
-                    return (
-                      <button
-                        key={opt.value}
-                        disabled={isSaving}
-                        onClick={() => void update(meta.type, opt.value)}
-                        className="flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium transition"
-                        style={{
-                          background: active ? `${opt.color}18` : "transparent",
-                          color: active ? opt.color : "var(--color-muted)",
-                          borderRight: isLast ? "none" : "1px solid var(--color-border)",
-                          cursor: isSaving ? "wait" : "pointer",
-                          opacity: isSaving && !active ? 0.5 : 1,
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Current state badge */}
-              <div className="mt-2.5 flex items-center gap-1.5">
-                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: currentOption.color }} />
-                <span className="text-[11px]" style={{ color: currentOption.color }}>
-                  {currentOption.label}
-                  {isSaving && " — saving…"}
-                </span>
-              </div>
-            </div>
-          );
-        })}
+        {licenceRows.map(renderRow)}
       </div>
+
+      {error && <p className="text-xs mt-3" style={{ color: "var(--color-accent)" }}>{error}</p>}
     </div>
   );
 }
