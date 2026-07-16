@@ -153,7 +153,7 @@ The brand's one piece of iconography is **the gate**: two equal-weight brick-red
 **Build a `<Wordmark>` component** (`app/components/wordmark.tsx`) with two variants:
 
 - **`display`** — Newsreader, `Image▕▕Vault`, gate posts rendered as two thin brick bars (the guideline draws them via inset linear-gradients; we can do two `1px`–`2px` `<span>`s or a small inline SVG). For hero, cover, footer.
-- **`lock`** — tracked sans caps `IMAGEVAULT`, `0.30em`, ink. For sidebar, nav chrome, mobile top bar, headers/footers.
+- **`lock`** — tracked sans caps `IMAGE ‖ VAULT`, `0.30em`, ink, with the gate posts between the words. For sidebar, nav chrome, mobile top bar, headers/footers.
 
 Misuse rules to bake into the component (so it can't be set by hand): never stretch, recolour the gate, add shadows, rotate, close the gap, or change weight.
 

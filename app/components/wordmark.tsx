@@ -7,7 +7,8 @@
  *
  * Two variants (see docs/brand-refresh-spec.md §4):
  *   - "display"  Newsreader serif. Hero, cover, footer, large chrome.
- *   - "lock"     Tracked sans caps, 0.30em. Sidebar, nav, headers, UI chrome.
+ *   - "lock"     Tracked sans caps, 0.30em, gate between the words. Sidebar,
+ *                nav, headers, UI chrome.
  *
  * Misuse rules are baked in: the wordmark can't be stretched, recoloured,
  * shadowed, rotated, closed up, or reweighted by callers — only sized and
@@ -44,13 +45,13 @@ function Gate({ tone, gap = "0.14em", post = "0.055em", height = "0.78em" }: {
       style={{
         display: "inline-flex",
         alignItems: "baseline",
-        gap: post,
+        gap: `max(1px, ${post})`,
         margin: `0 ${gap}`,
         transform: "translateY(-0.04em)",
       }}
     >
-      <span style={{ display: "inline-block", width: post, height, background: color }} />
-      <span style={{ display: "inline-block", width: post, height, background: color }} />
+      <span style={{ display: "inline-block", width: `max(1px, ${post})`, height, background: color }} />
+      <span style={{ display: "inline-block", width: `max(1px, ${post})`, height, background: color }} />
     </span>
   );
 }
@@ -69,8 +70,9 @@ export function Wordmark({
   const color = TONE_COLOR[tone];
 
   if (variant === "lock") {
-    // Tracked-cap lockup — IMAGEVAULT in the sans. No gate device at chrome
-    // scale; the wide tracking and weight carry the identity.
+    // Tracked-cap lockup — IMAGE ‖ VAULT in the sans, with the gate device
+    // between the words so chrome headers carry the same mark as the rest
+    // of the site.
     return (
       <span
         className={className}
@@ -81,10 +83,17 @@ export function Wordmark({
           textTransform: "uppercase",
           color,
           whiteSpace: "nowrap",
+          display: "inline-flex",
+          alignItems: "baseline",
           ...style,
         }}
       >
-        Imagevault
+        {/* Browsers render letter-spacing after the trailing E too; pull it
+            back so the gate sits an even 0.3em — one tracking unit — from
+            both words. */}
+        <span style={{ marginRight: "-0.3em" }}>Image</span>
+        <Gate tone={tone} gap="0.3em" height="0.72em" />
+        Vault
       </span>
     );
   }
