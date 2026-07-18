@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import UploadModal from "../../upload-modal";
 import { FadeImage } from "@/app/(vault)/fade-image";
@@ -1278,6 +1278,7 @@ const VALID_TABS = new Set<Tab>(["vault", "licences", "productions", "compliance
 
 export default function RepVaultClient({ talentId }: { talentId: string }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialTab = useMemo<Tab>(() => {
     const t = searchParams.get("tab") as Tab | null;
     return t && VALID_TABS.has(t) ? t : "vault";
@@ -1291,6 +1292,9 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notAllowed, setNotAllowed] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState(false);
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -1327,6 +1331,23 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
       setPackages((prev) => prev.filter((p) => p.id !== packageId));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleLeave() {
+    setLeaving(true);
+    setLeaveError(false);
+    try {
+      const res = await fetch(`/api/roster/${talentId}`, { method: "DELETE" });
+      if (!res.ok) {
+        setLeaveError(true);
+        setLeaving(false);
+        return;
+      }
+      router.push("/roster");
+    } catch {
+      setLeaveError(true);
+      setLeaving(false);
     }
   }
 
@@ -1372,10 +1393,68 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
           <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
         Acting on behalf of <strong>{displayName}</strong>
-        <Link href="/roster" className="ml-auto underline opacity-70 hover:opacity-100">
-          Back to roster
-        </Link>
+        <div className="ml-auto flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => { setLeaveError(false); setLeaveOpen(true); }}
+            className="underline opacity-70 hover:opacity-100"
+          >
+            End representation
+          </button>
+          <Link href="/roster" className="underline opacity-70 hover:opacity-100">
+            Back to roster
+          </Link>
+        </div>
       </div>
+
+      {/* End-representation confirmation */}
+      {leaveOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={() => !leaving && setLeaveOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded border p-6"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-semibold" style={{ color: "var(--color-ink)" }}>
+              End representation of {displayName}?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
+              You&apos;ll immediately lose access to act on their behalf — their vault, licences,
+              and revenue will no longer appear in your roster. {displayName.split(" ")[0]} will be
+              notified. They can re-add you later if you both agree.
+            </p>
+            {leaveError && (
+              <p className="mt-3 text-xs" style={{ color: "var(--color-danger)" }}>
+                Something went wrong. Please try again.
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setLeaveOpen(false)}
+                disabled={leaving}
+                className="rounded border px-4 py-2 text-xs font-medium transition hover:opacity-70 disabled:opacity-40"
+                style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLeave}
+                disabled={leaving}
+                className="rounded px-4 py-2 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                style={{ background: "var(--color-accent)" }}
+              >
+                {leaving ? "Ending…" : "End representation"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Talent identity header */}
       <header className="flex items-center justify-between border-b px-8 py-5 gap-4" style={{ borderColor: "var(--color-border)" }}>

@@ -284,6 +284,29 @@ export function licenceRevokedEmail(p: LicenceRevokedParams): { subject: string;
   };
 }
 
+export interface RepEndedRepresentationParams {
+  talentName: string | null;
+  repEmail: string;
+  endedAt: number; // unix timestamp
+}
+
+export function repEndedRepresentationEmail(p: RepEndedRepresentationParams): { subject: string; html: string } {
+  const greeting = p.talentName ? `Hi ${p.talentName},` : "Hello,";
+  return {
+    subject: "A representative has ended their delegation",
+    html: layout(`
+      <p>${greeting}</p>
+      <p><strong>${p.repEmail}</strong> has ended their representation of your account. They no longer have access to act on your behalf, view your vault, or manage your licences.</p>
+      <div class="kv">
+        <div class="kv-row"><span class="kv-key">Representative</span><span class="kv-val">${p.repEmail}</span></div>
+        <div class="kv-row"><span class="kv-key">Ended</span><span class="kv-val">${formatDate(p.endedAt)}</span></div>
+        <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val"><span class="badge badge-revoked">Ended</span></span></div>
+      </div>
+      <p class="muted">If you'd like to add a new representative, you can do so from your account settings under Delegation.</p>
+    `),
+  };
+}
+
 export interface InviteEmailParams {
   to: string;
   inviterEmail: string;
