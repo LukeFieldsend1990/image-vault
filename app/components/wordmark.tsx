@@ -31,10 +31,19 @@ function gateColor(tone: Tone): string {
     : "var(--color-accent)";
 }
 
-/** The gate — two thin posts between Image and Vault. */
-function Gate({ tone, gap = "0.14em", post = "0.055em", height = "0.78em" }: {
+/**
+ * The gate — two thin posts between Image and Vault.
+ *
+ * Geometry per brand guidelines v1.0 §3: posts 0.055em wide with a 0.09em
+ * inner gap, 0.72em tall, standing on the baseline with no vertical offset.
+ * The side margins are optically balanced so the measured ink gap between
+ * each word and its post is equal — the "e" carries more sidebearing than
+ * the "V", so the left margin tucks in slightly.
+ */
+function Gate({ tone, gapLeft = "0.135em", gapRight = "0.15em", post = "0.055em", height = "0.72em" }: {
   tone: Tone;
-  gap?: string;
+  gapLeft?: string;
+  gapRight?: string;
   post?: string;
   height?: string;
 }) {
@@ -45,9 +54,8 @@ function Gate({ tone, gap = "0.14em", post = "0.055em", height = "0.78em" }: {
       style={{
         display: "inline-flex",
         alignItems: "baseline",
-        gap: `max(1px, ${post})`,
-        margin: `0 ${gap}`,
-        transform: "translateY(-0.04em)",
+        gap: "max(1px, 0.09em)",
+        margin: `0 ${gapRight} 0 ${gapLeft}`,
       }}
     >
       <span style={{ display: "inline-block", width: `max(1px, ${post})`, height, background: color }} />
@@ -89,10 +97,10 @@ export function Wordmark({
         }}
       >
         {/* Browsers render letter-spacing after the trailing E too; pull it
-            back so the gate sits an even 0.3em — one tracking unit — from
-            both words. */}
-        <span style={{ marginRight: "-0.3em" }}>Image</span>
-        <Gate tone={tone} gap="0.3em" height="0.72em" />
+            back (plus the E's sidebearing, ~0.03em) so the measured ink gap
+            sits an even 0.3em — one tracking unit — from both words. */}
+        <span style={{ marginRight: "-0.33em" }}>Image</span>
+        <Gate tone={tone} gapLeft="0.3em" gapRight="0.3em" />
         Vault
       </span>
     );
@@ -104,7 +112,7 @@ export function Wordmark({
       style={{
         fontFamily: "var(--font-serif)",
         fontWeight: 600,
-        letterSpacing: "-0.01em",
+        letterSpacing: "-0.005em",
         color,
         whiteSpace: "nowrap",
         display: "inline-flex",
