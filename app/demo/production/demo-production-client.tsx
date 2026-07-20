@@ -924,7 +924,7 @@ function MobileTopBar({ role }: { role: "production" | "talent" }) {
 // One-line explainer shown before the tour starts. Dismisses on click/tap and
 // auto-fades after a few seconds; the tour holds until it has cleared.
 
-const INTRO_HOLD_MS = 3200;
+const INTRO_HOLD_MS = 6000;
 const INTRO_FADE_MS = 500;
 
 type IntroState = "visible" | "leaving" | "gone";
