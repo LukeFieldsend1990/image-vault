@@ -920,6 +920,63 @@ function MobileTopBar({ role }: { role: "production" | "talent" }) {
   );
 }
 
+// ─── Intro overlay ───────────────────────────────────────────────────────────
+// One-line explainer shown before the tour starts. Dismisses on click/tap and
+// auto-fades after a few seconds; the tour holds until it has cleared.
+
+const INTRO_HOLD_MS = 3200;
+const INTRO_FADE_MS = 500;
+
+type IntroState = "visible" | "leaving" | "gone";
+
+function IntroOverlay({ leaving, onDismiss }: { leaving: boolean; onDismiss: () => void }) {
+  return (
+    <div
+      onClick={onDismiss}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 60,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1.5rem",
+        background: "rgba(0,0,0,0.55)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        opacity: leaving ? 0 : 1,
+        transition: `opacity ${INTRO_FADE_MS}ms ease`,
+        cursor: "pointer",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "26rem",
+          width: "100%",
+          background: "rgba(10,10,10,0.96)",
+          borderRadius: "10px",
+          padding: "2rem 2.25rem",
+          textAlign: "center",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)",
+          animation: "demo-intro-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
+        }}
+      >
+        <div style={{ fontSize: "1rem", fontWeight: 500, letterSpacing: "0.05em", color: "#fff" }}>
+          ImageVault
+        </div>
+        <div style={{ height: "1px", width: "1.5rem", background: "#c0392b", margin: "0.5rem auto 1.25rem" }} />
+        <p style={{ fontSize: "0.9375rem", color: "rgba(255,255,255,0.85)", lineHeight: 1.7, margin: 0 }}>
+          A service where talent has custody of their digital scans and likeness —
+          licensing to productions, and protected against AI misuse.
+        </p>
+        <p style={{ margin: "1.25rem 0 0", fontSize: "0.625rem", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)" }}>
+          Tap anywhere to start the tour
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 const ALL_SCENES: Record<DemoMode, Scene[]> = {
@@ -935,6 +992,7 @@ export default function DemoProductionClient() {
   const [mode, setMode] = useState<DemoMode>("production");
   const [sceneIndex, setSceneIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [intro, setIntro] = useState<IntroState>("visible");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   // Track rotation / resize across the breakpoint.
@@ -946,14 +1004,24 @@ export default function DemoProductionClient() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
+  // Intro overlay: auto-fade after a short hold, then unmount once faded.
+  useEffect(() => {
+    if (intro === "gone") return;
+    const t = setTimeout(
+      () => setIntro(intro === "visible" ? "leaving" : "gone"),
+      intro === "visible" ? INTRO_HOLD_MS : INTRO_FADE_MS
+    );
+    return () => clearTimeout(t);
+  }, [intro]);
+
   const scenes = ALL_SCENES[mode];
   const scene = scenes[sceneIndex];
 
   useEffect(() => {
-    if (isMobile === null || paused) return;
+    if (isMobile === null || paused || intro !== "gone") return;
     const t = setTimeout(() => setSceneIndex((i) => (i + 1) % scenes.length), AUTO_MS);
     return () => clearTimeout(t);
-  }, [sceneIndex, paused, mode, isMobile, scenes.length]);
+  }, [sceneIndex, paused, mode, isMobile, intro, scenes.length]);
 
   if (isMobile === null) return null;
 
@@ -993,13 +1061,24 @@ export default function DemoProductionClient() {
         setPaused(false);
       }}
     >
-      <style>{`.demo-prod-shell { height: 100vh; height: 100dvh; }`}</style>
+      <style>{`
+        .demo-prod-shell { height: 100vh; height: 100dvh; }
+        @keyframes demo-intro-pop {
+          from { opacity: 0; transform: translateY(10px) scale(0.98); }
+          to   { opacity: 1; transform: none; }
+        }
+      `}</style>
+      {intro !== "gone" && (
+        <IntroOverlay leaving={intro === "leaving"} onDismiss={() => setIntro("leaving")} />
+      )}
       {isMobile
         ? <MobileTopBar role={scene.role} />
         : <DemoSidebar role={scene.role} activeNav={scene.activeNav} />}
 
       <main style={{ flex: 1, minHeight: 0, overflow: "hidden", background: "var(--color-bg)", position: "relative", display: "flex", flexDirection: "column" }}>
-        <div key={scene.id} className="demo-view-enter" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {/* Keyed on the intro too, so scene entrance animations replay the
+            moment the overlay clears instead of finishing behind it. */}
+        <div key={`${scene.id}-${intro === "gone"}`} className="demo-view-enter" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           {scene.view === "productions-list" && <ProductionsListView />}
           {scene.view === "add-cast" && <AddCastView />}
           {scene.view === "incoming-request" && <IncomingRequestView />}
