@@ -16,6 +16,22 @@ const COMPANY_TYPES = [
   "Other",
 ] as const;
 
+const PROFESSIONS = [
+  "Actor",
+  "Stunt Performer",
+  "Voice Artist",
+  "Musician / Recording Artist",
+  "Model",
+  "Athlete",
+  "Other",
+] as const;
+
+const SCAN_STATUS = [
+  "Yes — I have scan packages from past productions",
+  "No — I haven't been scanned yet",
+  "Not sure",
+] as const;
+
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {
@@ -24,9 +40,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { name, email, company, companyType, phone, message } = body as Record<string, string>;
+  const {
+    role, name, email, phone, message,
+    company, companyType,
+    profession, representation, existingScans,
+  } = body as Record<string, string>;
 
-  if (!name?.trim() || !email?.trim() || !company?.trim() || !companyType?.trim()) {
+  // Older clients sent no role — those were always production requests.
+  const audience = role === "talent" ? "talent" : "production";
+
+  if (!name?.trim() || !email?.trim()) {
     return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
   }
 
@@ -35,20 +58,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
 
-  if (!COMPANY_TYPES.includes(companyType as typeof COMPANY_TYPES[number])) {
-    return NextResponse.json({ error: "Invalid company type." }, { status: 400 });
+  if (audience === "production") {
+    if (!company?.trim() || !companyType?.trim()) {
+      return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+    }
+    if (!COMPANY_TYPES.includes(companyType as typeof COMPANY_TYPES[number])) {
+      return NextResponse.json({ error: "Invalid company type." }, { status: 400 });
+    }
+  } else {
+    if (!profession?.trim() || !existingScans?.trim()) {
+      return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+    }
+    if (!PROFESSIONS.includes(profession as typeof PROFESSIONS[number])) {
+      return NextResponse.json({ error: "Invalid profession." }, { status: 400 });
+    }
+    if (!SCAN_STATUS.includes(existingScans as typeof SCAN_STATUS[number])) {
+      return NextResponse.json({ error: "Invalid scan status." }, { status: 400 });
+    }
   }
 
   const submittedAt = Math.floor(Date.now() / 1000);
 
   const { subject, html } = registerInterestEmail({
+    role: audience,
     name: name.trim(),
     email: email.trim(),
-    company: company.trim(),
-    companyType,
     phone: phone?.trim() || undefined,
     message: message?.trim() || undefined,
     submittedAt,
+    ...(audience === "production"
+      ? { company: company.trim(), companyType }
+      : {
+          profession,
+          representation: representation?.trim() || undefined,
+          existingScans,
+        }),
   });
 
   // Mirror the contact form: send from the verified imagevault.ai sender and set

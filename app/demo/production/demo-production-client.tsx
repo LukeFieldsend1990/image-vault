@@ -30,7 +30,7 @@ interface Scene {
   body: string;
 }
 
-const AUTO_MS = 7000;
+const AUTO_MS = 11000;
 
 // ─── Fake data ────────────────────────────────────────────────────────────────
 
@@ -242,6 +242,12 @@ function DemoSidebar({ role, activeNav }: { role: "production" | "talent"; activ
           </nav>
         </div>
         <div style={{ padding: "0 1.5rem" }}>
+          <a
+            href="/register-interest"
+            style={{ display: "block", textAlign: "center", marginBottom: "1rem", padding: "0.5rem 0.75rem", background: "#c0392b", color: "#fff", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.04em", borderRadius: "4px", textDecoration: "none" }}
+          >
+            Get access →
+          </a>
           <div style={{ marginBottom: "1rem", display: "inline-block", fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.12em", padding: "0.2rem 0.5rem", background: "rgba(192,57,43,0.15)", color: "#c0392b", borderRadius: "2px", border: "1px solid rgba(192,57,43,0.3)" }}>
             DEMO MODE
           </div>
@@ -898,9 +904,9 @@ function MobileTopBar({ role }: { role: "production" | "talent" }) {
         <div style={{ fontSize: "0.8125rem", fontWeight: 500, letterSpacing: "0.05em", color: "#fff" }}>ImageVault</div>
         <div style={{ marginTop: "0.25rem", height: "1px", width: "1.5rem", background: "#c0392b" }} />
       </div>
-      <div style={{ fontSize: "0.55rem", fontWeight: 700, letterSpacing: "0.12em", padding: "0.2rem 0.45rem", background: "rgba(192,57,43,0.15)", color: "#c0392b", borderRadius: "2px", border: "1px solid rgba(192,57,43,0.3)", whiteSpace: "nowrap" }}>
-        DEMO MODE
-      </div>
+      <a href="/register-interest" style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.03em", padding: "0.375rem 0.75rem", background: "#c0392b", color: "#fff", borderRadius: "4px", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
+        Get access
+      </a>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
         <div style={{ minWidth: 0, textAlign: "right" }}>
           <div style={{ fontSize: "0.6875rem", fontWeight: 500, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</div>
