@@ -15,10 +15,39 @@ const COMPANY_TYPES = [
   "Other",
 ];
 
+const PROFESSIONS = [
+  "Actor",
+  "Stunt Performer",
+  "Voice Artist",
+  "Musician / Recording Artist",
+  "Model",
+  "Athlete",
+  "Other",
+];
+
+const SCAN_STATUS = [
+  "Yes — I have scan packages from past productions",
+  "No — I haven't been scanned yet",
+  "Not sure",
+];
+
+type Audience = "talent" | "production";
+
+const inputClass =
+  "block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent]";
+const labelClass =
+  "block text-xs font-medium tracking-wide uppercase text-[--color-muted] mb-1.5";
+
 export default function RegisterInterestPage() {
+  const [audience, setAudience] = useState<Audience>("talent");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+
+  function switchAudience(a: Audience) {
+    setAudience(a);
+    setError("");
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -26,14 +55,27 @@ export default function RegisterInterestPage() {
     setLoading(true);
 
     const fd = new FormData(e.currentTarget);
-    const body = {
-      name: fd.get("name") as string,
-      email: fd.get("email") as string,
-      company: fd.get("company") as string,
-      companyType: fd.get("companyType") as string,
-      phone: fd.get("phone") as string,
-      message: fd.get("message") as string,
-    };
+    const body =
+      audience === "talent"
+        ? {
+            role: "talent",
+            name: fd.get("name") as string,
+            email: fd.get("email") as string,
+            profession: fd.get("profession") as string,
+            representation: fd.get("representation") as string,
+            existingScans: fd.get("existingScans") as string,
+            phone: fd.get("phone") as string,
+            message: fd.get("message") as string,
+          }
+        : {
+            role: "production",
+            name: fd.get("name") as string,
+            email: fd.get("email") as string,
+            company: fd.get("company") as string,
+            companyType: fd.get("companyType") as string,
+            phone: fd.get("phone") as string,
+            message: fd.get("message") as string,
+          };
 
     try {
       const res = await fetch("/api/auth/register-interest", {
@@ -59,14 +101,45 @@ export default function RegisterInterestPage() {
   return (
     <div className="flex min-h-screen">
       {/* ── Left panel ── */}
-      <div className="flex flex-1 flex-col justify-between px-12 py-12 lg:px-16">
-        {/* Wordmark */}
+      <div className="flex flex-1 flex-col justify-between px-6 py-8 sm:px-12 sm:py-12 lg:px-16">
+        {/* Wordmark + audience toggle */}
         <div>
           <Wordmark variant="lock" className="text-xs" />
+
+          {/* Talent / Production toggle — top middle */}
+          <div className="mt-8 flex justify-center">
+            <div
+              className="inline-flex overflow-hidden border border-[--color-border]"
+              style={{ borderRadius: "var(--radius)" }}
+              role="tablist"
+              aria-label="I am registering as"
+            >
+              {([["talent", "Talent"], ["production", "Production"]] as [Audience, string][]).map(([a, label]) => {
+                const active = audience === a;
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => switchAudience(a)}
+                    className="px-6 py-2 text-xs font-medium tracking-wide uppercase transition"
+                    style={
+                      active
+                        ? { background: "var(--color-accent)", color: "#fff" }
+                        : { background: "transparent", color: "var(--color-muted)" }
+                    }
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Form block */}
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm py-10">
           {submitted ? (
             <div>
               <h1 className="mb-1 text-3xl font-semibold tracking-tight text-[--color-ink]">
@@ -88,15 +161,14 @@ export default function RegisterInterestPage() {
                 Request access
               </h1>
               <p className="mb-10 text-sm text-[--color-muted]">
-                Tell us about your company and we&apos;ll be in touch to get you set up.
+                {audience === "talent"
+                  ? "Tell us a little about yourself and we'll be in touch to get you set up."
+                  : "Tell us about your company and we'll be in touch to get you set up."}
               </p>
 
-              <form className="space-y-5" onSubmit={handleSubmit}>
+              <form key={audience} className="space-y-5" onSubmit={handleSubmit}>
                 <div>
-                  <label
-                    htmlFor="name"
-                    className="block text-xs font-medium tracking-wide uppercase text-[--color-muted] mb-1.5"
-                  >
+                  <label htmlFor="name" className={labelClass}>
                     Full name <span className="text-[--color-accent]">*</span>
                   </label>
                   <input
@@ -106,17 +178,15 @@ export default function RegisterInterestPage() {
                     autoComplete="name"
                     required
                     placeholder="Jane Smith"
-                    className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent]"
+                    className={inputClass}
                     style={{ borderRadius: "var(--radius)" }}
                   />
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="email"
-                    className="block text-xs font-medium tracking-wide uppercase text-[--color-muted] mb-1.5"
-                  >
-                    Work email <span className="text-[--color-accent]">*</span>
+                  <label htmlFor="email" className={labelClass}>
+                    {audience === "talent" ? "Email" : "Work email"}{" "}
+                    <span className="text-[--color-accent]">*</span>
                   </label>
                   <input
                     id="email"
@@ -124,58 +194,108 @@ export default function RegisterInterestPage() {
                     type="email"
                     autoComplete="email"
                     required
-                    placeholder="jane@studio.com"
-                    className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent]"
+                    placeholder={audience === "talent" ? "jane@example.com" : "jane@studio.com"}
+                    className={inputClass}
                     style={{ borderRadius: "var(--radius)" }}
                   />
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="company"
-                    className="block text-xs font-medium tracking-wide uppercase text-[--color-muted] mb-1.5"
-                  >
-                    Company name <span className="text-[--color-accent]">*</span>
-                  </label>
-                  <input
-                    id="company"
-                    name="company"
-                    type="text"
-                    autoComplete="organization"
-                    required
-                    placeholder="Universal Pictures"
-                    className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent]"
-                    style={{ borderRadius: "var(--radius)" }}
-                  />
-                </div>
+                {audience === "talent" ? (
+                  <>
+                    <div>
+                      <label htmlFor="profession" className={labelClass}>
+                        You are <span className="text-[--color-accent]">*</span>
+                      </label>
+                      <select
+                        id="profession"
+                        name="profession"
+                        required
+                        defaultValue=""
+                        className={inputClass}
+                        style={{ borderRadius: "var(--radius)" }}
+                      >
+                        <option value="" disabled>Select one…</option>
+                        {PROFESSIONS.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="representation" className={labelClass}>
+                        Representation{" "}
+                        <span className="text-[--color-muted] normal-case font-normal">(optional)</span>
+                      </label>
+                      <input
+                        id="representation"
+                        name="representation"
+                        type="text"
+                        placeholder="Agency or manager — or self-represented"
+                        className={inputClass}
+                        style={{ borderRadius: "var(--radius)" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="existingScans" className={labelClass}>
+                        Have you been scanned before? <span className="text-[--color-accent]">*</span>
+                      </label>
+                      <select
+                        id="existingScans"
+                        name="existingScans"
+                        required
+                        defaultValue=""
+                        className={inputClass}
+                        style={{ borderRadius: "var(--radius)" }}
+                      >
+                        <option value="" disabled>Select one…</option>
+                        {SCAN_STATUS.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label htmlFor="company" className={labelClass}>
+                        Company name <span className="text-[--color-accent]">*</span>
+                      </label>
+                      <input
+                        id="company"
+                        name="company"
+                        type="text"
+                        autoComplete="organization"
+                        required
+                        placeholder="Universal Pictures"
+                        className={inputClass}
+                        style={{ borderRadius: "var(--radius)" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="companyType" className={labelClass}>
+                        Company type <span className="text-[--color-accent]">*</span>
+                      </label>
+                      <select
+                        id="companyType"
+                        name="companyType"
+                        required
+                        defaultValue=""
+                        className={inputClass}
+                        style={{ borderRadius: "var(--radius)" }}
+                      >
+                        <option value="" disabled>Select a type…</option>
+                        {COMPANY_TYPES.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
 
                 <div>
-                  <label
-                    htmlFor="companyType"
-                    className="block text-xs font-medium tracking-wide uppercase text-[--color-muted] mb-1.5"
-                  >
-                    Company type <span className="text-[--color-accent]">*</span>
-                  </label>
-                  <select
-                    id="companyType"
-                    name="companyType"
-                    required
-                    defaultValue=""
-                    className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] outline-none transition focus:border-[--color-accent]"
-                    style={{ borderRadius: "var(--radius)" }}
-                  >
-                    <option value="" disabled>Select a type…</option>
-                    {COMPANY_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="phone"
-                    className="block text-xs font-medium tracking-wide uppercase text-[--color-muted] mb-1.5"
-                  >
+                  <label htmlFor="phone" className={labelClass}>
                     Phone <span className="text-[--color-muted] normal-case font-normal">(optional)</span>
                   </label>
                   <input
@@ -184,24 +304,25 @@ export default function RegisterInterestPage() {
                     type="tel"
                     autoComplete="tel"
                     placeholder="+44 20 7946 0958"
-                    className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent]"
+                    className={inputClass}
                     style={{ borderRadius: "var(--radius)" }}
                   />
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="message"
-                    className="block text-xs font-medium tracking-wide uppercase text-[--color-muted] mb-1.5"
-                  >
+                  <label htmlFor="message" className={labelClass}>
                     Anything else? <span className="text-[--color-muted] normal-case font-normal">(optional)</span>
                   </label>
                   <textarea
                     id="message"
                     name="message"
                     rows={3}
-                    placeholder="Tell us about your production or what you're looking for…"
-                    className="block w-full border border-[--color-border] bg-white px-4 py-3 text-sm text-[--color-ink] placeholder-[--color-border] outline-none transition focus:border-[--color-accent] resize-none"
+                    placeholder={
+                      audience === "talent"
+                        ? "Tell us about your work, or what you'd like to protect…"
+                        : "Tell us about your production or what you're looking for…"
+                    }
+                    className={`${inputClass} resize-none`}
                     style={{ borderRadius: "var(--radius)" }}
                   />
                 </div>
@@ -244,24 +365,45 @@ export default function RegisterInterestPage() {
         style={{ background: "var(--color-sidebar)" }}
       >
         <div />
-        <div>
-          <p
-            className="text-3xl font-light leading-snug tracking-tight"
-            style={{ color: "var(--color-sidebar-fg)" }}
-          >
-            Licensed access.
-            <br />
-            On your terms.
-          </p>
-          <p
-            className="mt-4 text-sm leading-relaxed"
-            style={{ color: "var(--color-sidebar-muted)" }}
-          >
-            ImageVault gives production companies secure, audited access to
-            talent likeness packages — with dual-custody download controls and
-            full chain-of-custody documentation.
-          </p>
-        </div>
+        {audience === "talent" ? (
+          <div>
+            <p
+              className="text-3xl font-light leading-snug tracking-tight"
+              style={{ color: "var(--color-sidebar-fg)" }}
+            >
+              Your likeness.
+              <br />
+              On your terms.
+            </p>
+            <p
+              className="mt-4 text-sm leading-relaxed"
+              style={{ color: "var(--color-sidebar-muted)" }}
+            >
+              ImageVault gives you a secure archive for your scan packages —
+              every licence approved by you, every download released under
+              dual-custody 2FA, and every access written to an audit trail.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p
+              className="text-3xl font-light leading-snug tracking-tight"
+              style={{ color: "var(--color-sidebar-fg)" }}
+            >
+              Licensed access.
+              <br />
+              On your terms.
+            </p>
+            <p
+              className="mt-4 text-sm leading-relaxed"
+              style={{ color: "var(--color-sidebar-muted)" }}
+            >
+              ImageVault gives production companies secure, audited access to
+              talent likeness packages — with dual-custody download controls and
+              full chain-of-custody documentation.
+            </p>
+          </div>
+        )}
         <div
           className="text-xs"
           style={{ color: "var(--color-sidebar-muted)" }}
@@ -269,9 +411,9 @@ export default function RegisterInterestPage() {
           <span className="font-medium" style={{ color: "var(--color-sidebar-fg)" }}>
             Invite-only platform.
           </span>{" "}
-          Access is granted by talent or their representation. Submit your
-          details and our team will be in touch to verify your company and
-          facilitate introductions.
+          {audience === "talent"
+            ? "Submit your details and our team will be in touch to verify you — or your representation — and set up your vault."
+            : "Access is granted by talent or their representation. Submit your details and our team will be in touch to verify your company and facilitate introductions."}
         </div>
       </div>
     </div>

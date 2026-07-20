@@ -887,13 +887,19 @@ export function clonePackagesEmail(p: ClonePackagesEmailParams): { subject: stri
 }
 
 export interface RegisterInterestParams {
+  role: "talent" | "production";
   name: string;
   email: string;
-  company: string;
-  companyType: string;
   phone?: string;
   message?: string;
   submittedAt: number;
+  // Production requests
+  company?: string;
+  companyType?: string;
+  // Talent requests
+  profession?: string;
+  representation?: string;
+  existingScans?: string;
 }
 
 export function registerInterestEmail(p: RegisterInterestParams): { subject: string; html: string } {
@@ -901,17 +907,36 @@ export function registerInterestEmail(p: RegisterInterestParams): { subject: str
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit", timeZoneName: "short",
   });
+  // Public, unauthenticated form — treat every field as untrusted and escape it.
+  const rows: [string, string | undefined][] = [
+    ["Registering as", p.role === "talent" ? "Talent" : "Production"],
+    ["Name", p.name],
+    ["Email", p.email],
+    ...(p.role === "talent"
+      ? ([
+          ["Profession", p.profession],
+          ["Representation", p.representation],
+          ["Scanned before?", p.existingScans],
+        ] as [string, string | undefined][])
+      : ([
+          ["Company", p.company],
+          ["Company type", p.companyType],
+        ] as [string, string | undefined][])),
+    ["Phone", p.phone],
+    ["Message", p.message],
+  ];
+  const subjectTail = p.role === "talent"
+    ? `${p.name}${p.profession ? ` (${p.profession})` : ""}`
+    : `${p.name} (${p.company ?? ""})`;
   return {
-    subject: `[ImageVault] New access request — ${p.name} (${p.company})`,
+    subject: `[ImageVault] New ${p.role} access request — ${subjectTail}`,
     html: layout(`
-      <p>A new access request has been submitted via the ImageVault registration page.</p>
+      <p>A new ${p.role === "talent" ? "talent" : "production"} access request has been submitted via the ImageVault registration page.</p>
       <div class="kv">
-        <div class="kv-row"><span class="kv-key">Name</span><span class="kv-val">${p.name}</span></div>
-        <div class="kv-row"><span class="kv-key">Email</span><span class="kv-val">${p.email}</span></div>
-        <div class="kv-row"><span class="kv-key">Company</span><span class="kv-val">${p.company}</span></div>
-        <div class="kv-row"><span class="kv-key">Company type</span><span class="kv-val">${p.companyType}</span></div>
-        ${p.phone ? `<div class="kv-row"><span class="kv-key">Phone</span><span class="kv-val">${p.phone}</span></div>` : ""}
-        ${p.message ? `<div class="kv-row"><span class="kv-key">Message</span><span class="kv-val">${p.message}</span></div>` : ""}
+        ${rows
+          .filter(([, v]) => v)
+          .map(([k, v]) => `<div class="kv-row"><span class="kv-key">${k}</span><span class="kv-val">${escapeHtml(v!)}</span></div>`)
+          .join("\n        ")}
         <div class="kv-row"><span class="kv-key">Submitted</span><span class="kv-val">${dt}</span></div>
       </div>
       <p class="muted">Reply directly to this email to follow up with the applicant.</p>

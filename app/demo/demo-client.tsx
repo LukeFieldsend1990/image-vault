@@ -555,7 +555,13 @@ const PRODUCTION_SCENES: Scene[] = [
   },
 ];
 
-const AUTO_MS = 6000;
+// Per-mode auto-advance duration. Production scenes carry the densest views
+// and the longest captions, so they hold noticeably longer.
+const MODE_AUTO_MS: Record<DemoMode, number> = {
+  talent: 9000,
+  rep: 9000,
+  production: 13000,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -933,6 +939,24 @@ function DemoSidebar({
         </div>
 
         <div style={{ padding: "0 1.5rem" }}>
+          <a
+            href="/register-interest"
+            style={{
+              display: "block",
+              textAlign: "center",
+              marginBottom: "1rem",
+              padding: "0.5rem 0.75rem",
+              background: "#c0392b",
+              color: "#fff",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              borderRadius: "4px",
+              textDecoration: "none",
+            }}
+          >
+            Get access →
+          </a>
           <div
             style={{
               marginBottom: "1rem",
@@ -2503,7 +2527,7 @@ function TourCard({
             height: "100%",
             background: "#c0392b",
             width: paused ? "100%" : "0%",
-            animation: paused ? "none" : `demo-progress ${AUTO_MS}ms linear both`,
+            animation: paused ? "none" : `demo-progress ${MODE_AUTO_MS[mode]}ms linear both`,
           }}
         />
       </div>
@@ -2604,19 +2628,20 @@ function MobileTopBar({ role }: { role: SidebarRole }) {
         <div style={{ marginTop: "0.25rem", height: "1px", width: "1.5rem", background: "#c0392b" }} />
       </a>
 
-      <div style={{
-        fontSize: "0.55rem",
-        fontWeight: 700,
-        letterSpacing: "0.12em",
-        padding: "0.2rem 0.45rem",
-        background: "rgba(192,57,43,0.15)",
-        color: "#c0392b",
-        borderRadius: "2px",
-        border: "1px solid rgba(192,57,43,0.3)",
+      <a href="/register-interest" style={{
+        fontSize: "0.6875rem",
+        fontWeight: 600,
+        letterSpacing: "0.03em",
+        padding: "0.375rem 0.75rem",
+        background: "#c0392b",
+        color: "#fff",
+        borderRadius: "4px",
+        textDecoration: "none",
         whiteSpace: "nowrap",
+        flexShrink: 0,
       }}>
-        DEMO MODE
-      </div>
+        Get access
+      </a>
 
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
         <div style={{ minWidth: 0, textAlign: "right" }}>
@@ -2680,7 +2705,7 @@ export default function DemoClient() {
     if (isMobile === null || paused) return;
     const t = setTimeout(() => {
       setSceneIndex((i) => (i + 1) % scenes.length);
-    }, AUTO_MS);
+    }, MODE_AUTO_MS[mode]);
     return () => clearTimeout(t);
   }, [sceneIndex, paused, mode, isMobile, scenes.length]);
 
