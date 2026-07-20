@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -582,6 +582,14 @@ function fmtUSD(cents: number): string {
 
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 
+// True below the desktop breakpoint. Provided once by the root so every scene
+// component can adapt layout without running its own media-query listener.
+const IsMobileContext = createContext(false);
+const useIsMobile = () => useContext(IsMobileContext);
+
+// Scene views must clear the tour card, which is taller on phones.
+const scrollPadBottom = (m: boolean) => (m ? "20rem" : "13rem");
+
 // Number that eases from 0 up to `value` on mount. Because each scene remounts
 // (keyed by scene.id), these replay every time their scene appears.
 function CountUp({
@@ -856,6 +864,13 @@ const REP_NAV = [
   },
 ];
 
+const ROLE_USER: Record<SidebarRole, { initials: string; name: string; subtitle: string }> = {
+  talent: { initials: "ER", name: "Emma Richardson", subtitle: "Talent" },
+  rep: { initials: "AG", name: "Ari Gold", subtitle: "Representative" },
+  production: { initials: "WB", name: "Warner Bros.", subtitle: "Production Co." },
+  licensee: { initials: "WB", name: "Warner Bros.", subtitle: "Licensee" },
+};
+
 function DemoSidebar({
   role,
   activeNavId,
@@ -864,14 +879,7 @@ function DemoSidebar({
   activeNavId: NavId;
 }) {
   const nav = role === "talent" ? TALENT_NAV : role === "rep" ? REP_NAV : role === "production" ? PRODUCTION_NAV : LICENSEE_NAV;
-  const user =
-    role === "talent"
-      ? { initials: "ER", name: "Emma Richardson", subtitle: "Talent" }
-      : role === "rep"
-      ? { initials: "AG", name: "Ari Gold", subtitle: "Representative" }
-      : role === "production"
-      ? { initials: "WB", name: "Warner Bros.", subtitle: "Production Co." }
-      : { initials: "WB", name: "Warner Bros.", subtitle: "Licensee" };
+  const user = ROLE_USER[role];
 
   return (
     <aside
@@ -986,6 +994,7 @@ function PkgCard({
   autoExpand?: boolean;
   files?: FakeFile[];
 }) {
+  const m = useIsMobile();
   const caps = [
     pkg.hasMesh && "Mesh",
     pkg.hasTexture && "Textures",
@@ -1010,7 +1019,7 @@ function PkgCard({
         ...rise(index * 90),
       }}
     >
-      <div style={{ padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+      <div style={{ padding: m ? "0.875rem 1rem" : "1rem 1.25rem", display: "flex", alignItems: "center", gap: m ? "0.75rem" : "1rem" }}>
         <div
           style={{
             flexShrink: 0,
@@ -1061,17 +1070,19 @@ function PkgCard({
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.125rem", flexShrink: 0 }}>
-          {[
-            <svg key="eye" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
-            <svg key="plus" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
-            <svg key="shield" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
-          ].map((icon, i) => (
-            <div key={i} style={{ padding: "0.375rem", color: "var(--color-ink)", opacity: 0.3, cursor: "default" }}>
-              {icon}
-            </div>
-          ))}
-        </div>
+        {!m && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.125rem", flexShrink: 0 }}>
+            {[
+              <svg key="eye" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
+              <svg key="plus" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
+              <svg key="shield" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
+            ].map((icon, i) => (
+              <div key={i} style={{ padding: "0.375rem", color: "var(--color-ink)", opacity: 0.3, cursor: "default" }}>
+                {icon}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Auto-expanding file list (first package only) */}
@@ -1093,7 +1104,7 @@ function PkgCard({
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: "1rem",
-                    padding: "0.625rem 1.25rem 0.625rem 3.5rem",
+                    padding: m ? "0.625rem 1rem 0.625rem 2.25rem" : "0.625rem 1.25rem 0.625rem 3.5rem",
                     borderBottom: i < files.length - 1 ? "1px solid var(--color-border)" : "none",
                     opacity: open ? 1 : 0,
                     transform: open ? "translateY(0)" : "translateY(-6px)",
@@ -1119,11 +1130,12 @@ function PkgCard({
 }
 
 function VaultView() {
+  const m = useIsMobile();
   const totalSize = PACKAGES.reduce((s, p) => s + p.totalSizeBytes, 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--color-border)", padding: "1.25rem 3rem", flexShrink: 0 }}>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", borderBottom: "1px solid var(--color-border)", padding: m ? "1rem" : "1.25rem 3rem", flexShrink: 0 }}>
         <div>
           <h1 style={{ fontSize: "1.125rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>Your Vault</h1>
           <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0.25rem 0 0" }}>{PACKAGES.length} scan packages</p>
@@ -1136,7 +1148,7 @@ function VaultView() {
         </button>
       </header>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 3rem", paddingBottom: "13rem" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: m ? "1rem" : "1.5rem 3rem", paddingBottom: scrollPadBottom(m) }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {PACKAGES.map((pkg, i) => (
             <PkgCard
@@ -1150,6 +1162,7 @@ function VaultView() {
         </div>
       </div>
 
+      {!m && (
       <footer style={{ borderTop: "1px solid var(--color-border)", padding: "1rem 3rem", display: "flex", alignItems: "center", gap: "2rem", flexShrink: 0 }}>
         {[
           { label: "Total scans", value: PACKAGES.length, format: undefined },
@@ -1165,6 +1178,7 @@ function VaultView() {
           </div>
         ))}
       </footer>
+      )}
     </div>
   );
 }
@@ -1172,6 +1186,7 @@ function VaultView() {
 // ─── Licences view ────────────────────────────────────────────────────────────
 
 function LicCard({ lic, expanded, index = 0 }: { lic: FakeLicence; expanded: boolean; index?: number }) {
+  const m = useIsMobile();
   const feeRef = lic.agreedFee ?? lic.proposedFee;
   const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
 
@@ -1199,8 +1214,8 @@ function LicCard({ lic, expanded, index = 0 }: { lic: FakeLicence; expanded: boo
 
   return (
     <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", ...rise(index * 90) }}>
-      <div style={{ padding: "1.25rem" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+      <div style={{ padding: m ? "1rem" : "1.25rem" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: m ? "0.75rem" : "1rem", flexWrap: m ? "wrap" : undefined }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.125rem" }}>
               <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{lic.projectName}</span>
@@ -1308,9 +1323,10 @@ function LicCard({ lic, expanded, index = 0 }: { lic: FakeLicence; expanded: boo
 }
 
 function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expandedId: string | null }) {
+  const m = useIsMobile();
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+    <div style={{ overflowY: "auto", height: "100%", padding: m ? "1.25rem 1rem" : "2rem 3rem", paddingBottom: scrollPadBottom(m) }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
         <div>
           <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>
             My Licences
@@ -1348,6 +1364,7 @@ function LicencesView({ licences, expandedId }: { licences: FakeLicence[]; expan
 // ─── Dual-custody download view ───────────────────────────────────────────────
 
 function DualCustodyDownloadView() {
+  const m = useIsMobile();
   const steps = ["Verify identity", "Talent approval", "Download"];
   const currentStep = 2;
 
@@ -1364,7 +1381,7 @@ function DualCustodyDownloadView() {
   }, []);
 
   return (
-    <div style={{ padding: "2rem 3rem", overflowY: "auto", height: "100%", paddingBottom: "13rem", maxWidth: "42rem" }}>
+    <div style={{ padding: m ? "1.5rem 1rem" : "2rem 3rem", overflowY: "auto", height: "100%", paddingBottom: scrollPadBottom(m), maxWidth: "42rem" }}>
       <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.75rem", color: "var(--color-muted)", cursor: "default" }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
@@ -1479,12 +1496,13 @@ function DualCustodyDownloadView() {
 // ─── Rep: Roster view ─────────────────────────────────────────────────────────
 
 function RosterView() {
+  const m = useIsMobile();
   const ctSizeGB = CT_PACKAGES.reduce((s, p) => s + p.totalSizeBytes, 0) / (1024 ** 3);
 
   return (
-    <div style={{ overflowY: "auto", height: "100%", paddingBottom: "13rem" }}>
+    <div style={{ overflowY: "auto", height: "100%", paddingBottom: scrollPadBottom(m) }}>
       {/* Page header */}
-      <div style={{ padding: "2rem 2.5rem 0" }}>
+      <div style={{ padding: m ? "1.25rem 1rem 0" : "2rem 2.5rem 0" }}>
         <p style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--color-accent)", margin: "0 0 0.375rem" }}>
           Representative
         </p>
@@ -1492,7 +1510,7 @@ function RosterView() {
         <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: "0 0 1.5rem" }}>1 talent</p>
 
         {/* Stat cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.25rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: m ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1.25rem" }}>
           {[
             { label: "Active Licences", value: 1, format: undefined, sub: null, accent: false },
             { label: "Revenue This Quarter", value: 0, format: (n: number) => `$${Math.round(n)}`, sub: "$150,000 lifetime", accent: true },
@@ -1541,7 +1559,7 @@ function RosterView() {
       </div>
 
       {/* Talent grid */}
-      <div style={{ padding: "0 2.5rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "1rem" }}>
+      <div style={{ padding: m ? "0 1rem" : "0 2.5rem", display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${m ? "140px" : "160px"}, 1fr))`, gap: m ? "0.75rem" : "1rem" }}>
         {ROSTER.map((talent, i) => (
           <div key={talent.id} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", overflow: "hidden", ...rise(350 + i * 90) }}>
             {/* Photo area */}
@@ -1592,8 +1610,9 @@ function RosterView() {
 // ─── Rep: detail tab components ───────────────────────────────────────────────
 
 function RepVaultTab() {
+  const m = useIsMobile();
   return (
-    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+    <div style={{ padding: m ? "1rem" : "1.5rem 2rem", paddingBottom: scrollPadBottom(m), overflowY: "auto" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         {CT_PACKAGES.map((pkg, i) => <PkgCard key={pkg.id} pkg={pkg} index={i} />)}
       </div>
@@ -1602,12 +1621,13 @@ function RepVaultTab() {
 }
 
 function RepLicCard({ lic, index = 0 }: { lic: FakeLicence; index?: number }) {
+  const m = useIsMobile();
   const colour = STATUS_COLOUR[lic.status] ?? "#6b7280";
   const feeRef = lic.agreedFee ?? lic.proposedFee;
 
   return (
-    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", padding: "1rem 1.25rem", ...rise(index * 90) }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+    <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", background: "var(--color-surface)", padding: m ? "1rem" : "1rem 1.25rem", ...rise(index * 90) }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: m ? "0.75rem" : "1rem", flexWrap: m ? "wrap" : undefined }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.125rem" }}>
             <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)" }}>{lic.projectName}</span>
@@ -1648,8 +1668,9 @@ function RepLicCard({ lic, index = 0 }: { lic: FakeLicence; index?: number }) {
 }
 
 function RepLicencesTab() {
+  const m = useIsMobile();
   return (
-    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+    <div style={{ padding: m ? "1rem" : "1.5rem 2rem", paddingBottom: scrollPadBottom(m), overflowY: "auto" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         {CT_LICENCES.map((lic, i) => (
           <RepLicCard key={lic.id} lic={lic} index={i} />
@@ -1675,8 +1696,9 @@ function RepPermissionsTab() {
     return { background: "#1a1a1a", color: "#fff", border: "1px solid #1a1a1a", fontWeight: 600 };
   };
 
+  const m = useIsMobile();
   return (
-    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+    <div style={{ padding: m ? "1rem" : "1.5rem 2rem", paddingBottom: scrollPadBottom(m), overflowY: "auto" }}>
       <p style={{ fontSize: "0.8125rem", color: "var(--color-muted)", margin: "0 0 1.25rem", lineHeight: 1.6 }}>
         Control which licence types can be used for this talent. Reps can set defaults on their behalf — talent can always override in their own settings.
       </p>
@@ -1686,9 +1708,10 @@ function RepPermissionsTab() {
             key={p.label}
             style={{
               display: "flex",
-              alignItems: "center",
+              flexDirection: m ? "column" : "row",
+              alignItems: m ? "flex-start" : "center",
               justifyContent: "space-between",
-              gap: "1rem",
+              gap: m ? "0.625rem" : "1rem",
               padding: "0.875rem 1rem",
               borderBottom: i < CT_PERMISSIONS.length - 1 ? "1px solid var(--color-border)" : "none",
               background: "var(--color-surface)",
@@ -1734,6 +1757,7 @@ function fmtUSDk(cents: number): string {
 }
 
 function RepRevenueTab() {
+  const m = useIsMobile();
   const approvedLicences = CT_LICENCES.filter((l) => l.status === "APPROVED");
   const gross = approvedLicences.reduce((s, l) => s + (l.agreedFee ?? 0), 0);
   const talentCut = Math.round(gross * 0.80);
@@ -1755,9 +1779,9 @@ function RepRevenueTab() {
   }, []);
 
   return (
-    <div style={{ padding: "1.5rem 2rem", paddingBottom: "13rem", overflowY: "auto" }}>
+    <div style={{ padding: m ? "1rem" : "1.5rem 2rem", paddingBottom: scrollPadBottom(m), overflowY: "auto" }}>
       {/* Stat cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: m ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
         {statCards.map((c, i) => (
           <div key={c.label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", padding: "0.875rem 1rem", background: "var(--color-surface)", ...rise(i * 80) }}>
             <p style={{ fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.375rem" }}>
@@ -1802,8 +1826,8 @@ function RepRevenueTab() {
       </p>
       <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
         {/* Table header */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "1rem", padding: "0.5rem 1rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-          {["Project", "Type", "Fee", "Status"].map((h) => (
+        <div style={{ display: "grid", gridTemplateColumns: m ? "1fr auto auto" : "1fr 1fr auto auto", gap: "1rem", padding: "0.5rem 1rem", borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          {(m ? ["Project", "Fee", "Status"] : ["Project", "Type", "Fee", "Status"]).map((h) => (
             <p key={h} style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>{h}</p>
           ))}
         </div>
@@ -1819,15 +1843,17 @@ function RepRevenueTab() {
 
           return (
             <div key={lic.id} style={{ borderBottom: i < CT_LICENCES.length - 1 ? "1px solid var(--color-border)" : "none" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "1rem", alignItems: "center", padding: "0.875rem 1rem", background: "var(--color-surface)", cursor: "default" }}>
+              <div style={{ display: "grid", gridTemplateColumns: m ? "1fr auto auto" : "1fr 1fr auto auto", gap: "1rem", alignItems: "center", padding: "0.875rem 1rem", background: "var(--color-surface)", cursor: "default" }}>
                 <div>
                   <p style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)", margin: "0 0 0.125rem" }}>{lic.projectName}</p>
                   <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>{lic.productionCompany.replace(" Pictures", "").replace(" Entertainment", "")}</p>
                 </div>
-                <div>
-                  <p style={{ fontSize: "0.875rem", color: "var(--color-ink)", margin: "0 0 0.125rem" }}>{LICENCE_TYPE_LABEL[lic.licenceType] ?? lic.licenceType}</p>
-                  <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>{lic.territory}</p>
-                </div>
+                {!m && (
+                  <div>
+                    <p style={{ fontSize: "0.875rem", color: "var(--color-ink)", margin: "0 0 0.125rem" }}>{LICENCE_TYPE_LABEL[lic.licenceType] ?? lic.licenceType}</p>
+                    <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>{lic.territory}</p>
+                  </div>
+                )}
                 <p style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-ink)", margin: 0, whiteSpace: "nowrap" }}>{fmtUSDk(fee)}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <span style={{ fontSize: "0.625rem", fontWeight: 600, padding: "0.15rem 0.5rem", borderRadius: "9999px", background: `${colour}18`, color: colour, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -1850,7 +1876,7 @@ function RepRevenueTab() {
                 >
                   <div style={{ overflow: "hidden", minHeight: 0 }}>
                     <div style={{ padding: "0 1rem 1rem", borderTop: "1px solid var(--color-border)", opacity: rowOpen ? 1 : 0, transition: "opacity 0.45s ease 0.12s" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem 2rem", padding: "0.875rem 0", borderBottom: "1px solid var(--color-border)", marginBottom: "0.75rem" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: m ? "1fr" : "1fr 1fr", gap: m ? "0.625rem" : "0.75rem 2rem", padding: "0.875rem 0", borderBottom: "1px solid var(--color-border)", marginBottom: "0.75rem" }}>
                         {[
                           { label: "Licensee", value: "lukefieldsend+licensee@googlemail.com" },
                           { label: "Valid period", value: `${formatDate(lic.validFrom)} – ${formatDate(lic.validTo)}` },
@@ -1889,6 +1915,7 @@ function RepRevenueTab() {
 // ─── Rep: detail layout ───────────────────────────────────────────────────────
 
 function RepDetailLayout({ tab }: { tab: RepTab }) {
+  const m = useIsMobile();
   const TABS: { id: RepTab; label: string }[] = [
     { id: "vault", label: "Vault" },
     { id: "licences", label: "Licences" },
@@ -1904,7 +1931,7 @@ function RepDetailLayout({ tab }: { tab: RepTab }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0.4rem 2rem",
+        padding: m ? "0.4rem 1rem" : "0.4rem 2rem",
         background: "rgba(192,57,43,0.04)",
         borderBottom: "1px solid rgba(192,57,43,0.1)",
         flexShrink: 0,
@@ -1919,7 +1946,7 @@ function RepDetailLayout({ tab }: { tab: RepTab }) {
       </div>
 
       {/* Talent header + tab bar */}
-      <div style={{ padding: "1.25rem 2rem 0", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
+      <div style={{ padding: m ? "1rem 1rem 0" : "1.25rem 2rem 0", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
           <div style={{ width: "2.75rem", height: "2.75rem", borderRadius: "50%", background: "#2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700, color: "#fff", flexShrink: 0 }}>
             CT
@@ -1937,11 +1964,12 @@ function RepDetailLayout({ tab }: { tab: RepTab }) {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "0" }}>
+        <div style={{ display: "flex", gap: "0", overflowX: m ? "auto" : undefined }}>
           {TABS.map((t) => (
             <div key={t.id} style={{
-              padding: "0.625rem 1rem",
-              fontSize: "0.875rem",
+              padding: m ? "0.625rem 0.75rem" : "0.625rem 1rem",
+              fontSize: m ? "0.8125rem" : "0.875rem",
+              whiteSpace: "nowrap",
               fontWeight: tab === t.id ? 600 : 400,
               color: tab === t.id ? "var(--color-ink)" : "var(--color-muted)",
               position: "relative",
@@ -1973,10 +2001,11 @@ function RepDetailLayout({ tab }: { tab: RepTab }) {
 // ─── Production: Productions List ────────────────────────────────────────────
 
 function ProductionsListView() {
+  const m = useIsMobile();
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+    <div style={{ overflowY: "auto", height: "100%", padding: m ? "1.25rem 1rem" : "2rem 3rem", paddingBottom: scrollPadBottom(m) }}>
       <div style={{ maxWidth: "48rem" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "2.5rem" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", marginBottom: m ? "1.5rem" : "2.5rem" }}>
           <div>
             <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-accent)", margin: "0 0 0.25rem" }}>Your Productions</p>
             <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.25rem" }}>Productions</h1>
@@ -1995,7 +2024,7 @@ function ProductionsListView() {
             const castColour = castPct === 100 ? "#166534" : "#b45309";
             return (
               <div key={p.id} style={{ borderRadius: "8px", overflow: "hidden", border: "1px solid var(--color-border)", background: "var(--color-surface)", ...rise(idx * 110) }}>
-                <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
+                <div style={{ padding: m ? "1rem" : "1.25rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                       {p.type && <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)" }}>{p.type}</span>}
@@ -2025,7 +2054,7 @@ function ProductionsListView() {
                     </div>
                   </div>
                 </div>
-                <div style={{ padding: "0.625rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", background: "var(--color-bg)" }}>
+                <div style={{ padding: m ? "0.625rem 1rem" : "0.625rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", background: "var(--color-bg)" }}>
                   <span style={{ fontSize: "0.6875rem", color: "var(--color-muted)" }}>
                     {p.sagNumber ? `SAG-AFTRA · ${p.sagNumber}` : "No SAG-AFTRA project number"}
                   </span>
@@ -2055,16 +2084,17 @@ function ProductionsListView() {
 // ─── Production: Add Cast ─────────────────────────────────────────────────────
 
 function AddCastView() {
+  const m = useIsMobile();
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+    <div style={{ overflowY: "auto", height: "100%", padding: m ? "1.25rem 1rem" : "2rem 3rem", paddingBottom: scrollPadBottom(m) }}>
       <div style={{ maxWidth: "40rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "var(--color-muted)", marginBottom: "1.25rem", cursor: "default" }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           Productions
         </div>
         <div style={{ marginBottom: "1.75rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.375rem" }}>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>Untitled The Batman Sequel</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap", marginBottom: "0.375rem" }}>
+            <h1 style={{ fontSize: m ? "1.25rem" : "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: 0 }}>Untitled The Batman Sequel</h1>
             <span style={{ fontSize: "0.6875rem", fontWeight: 600, padding: "0.15rem 0.5rem", borderRadius: "9999px", background: "rgba(192,57,43,0.1)", color: "var(--color-accent)", border: "1px solid rgba(192,57,43,0.2)" }}>film</span>
           </div>
           <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: 0 }}>Warner Bros · 2027 · Dir. Matt Reeves</p>
@@ -2091,8 +2121,8 @@ function AddCastView() {
             </div>
           </div>
           {BATMAN_CAST.map((actor, i) => (
-            <div key={actor.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.25rem", borderBottom: i < BATMAN_CAST.length - 1 ? "1px solid var(--color-border)" : "none", background: actor.checked ? "rgba(192,57,43,0.025)" : "var(--color-bg)", ...rise(150 + i * 80) }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+            <div key={actor.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: m ? "0.5rem" : undefined, flexWrap: m ? "wrap" : undefined, padding: m ? "0.75rem 1rem" : "0.75rem 1.25rem", borderBottom: i < BATMAN_CAST.length - 1 ? "1px solid var(--color-border)" : "none", background: actor.checked ? "rgba(192,57,43,0.025)" : "var(--color-bg)", ...rise(150 + i * 80) }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flexWrap: m ? "wrap" : undefined }}>
                 <div style={{ width: "1rem", height: "1rem", borderRadius: "3px", border: `2px solid ${actor.checked ? "var(--color-accent)" : "var(--color-border)"}`, background: actor.checked ? "var(--color-accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {actor.checked && <span style={{ display: "inline-flex", animation: `demo-pop-check 0.5s ${EASE} ${500 + i * 80}ms both` }}><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
                 </div>
@@ -2100,7 +2130,7 @@ function AddCastView() {
                 <span style={{ fontSize: "0.875rem", color: "var(--color-muted)" }}>as {actor.character}</span>
               </div>
               {actor.checked && (
-                <div style={{ flexShrink: 0, padding: "0.375rem 0.625rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)", fontSize: "0.8125rem", color: "var(--color-muted)", width: "11rem" }}>
+                <div style={{ flexShrink: 0, padding: "0.375rem 0.625rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-bg)", fontSize: "0.8125rem", color: "var(--color-muted)", width: m ? "100%" : "11rem" }}>
                   Email address
                 </div>
               )}
@@ -2158,20 +2188,21 @@ function AddCastView() {
 // ─── Production: Incoming Request ─────────────────────────────────────────────
 
 function IncomingRequestView() {
+  const m = useIsMobile();
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem" }}>
+    <div style={{ overflowY: "auto", height: "100%", padding: m ? "1.25rem 1rem" : "2rem 3rem", paddingBottom: scrollPadBottom(m) }}>
       <div style={{ maxWidth: "48rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.375rem" }}>Incoming Requests</h1>
+        <h1 style={{ fontSize: m ? "1.25rem" : "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.375rem" }}>Incoming Requests</h1>
         <p style={{ fontSize: "0.9375rem", color: "var(--color-muted)", margin: "0 0 2rem" }}>Review and approve or deny licence requests from production companies.</p>
 
         <div style={{ border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden", background: "var(--color-surface)", ...rise(150) }}>
-          <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+          <div style={{ padding: m ? "1rem" : "1.25rem 1.5rem", borderBottom: "1px solid var(--color-border)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: m ? "wrap" : undefined }}>
               <div>
                 <span style={{ display: "inline-flex", alignItems: "center", padding: "0.25rem 0.75rem", borderRadius: "9999px", background: "var(--color-accent)", color: "#fff", fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.06em", marginBottom: "0.875rem" }}>
                   CAST INVITATION
                 </span>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.25rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
                   <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--color-ink)", margin: 0 }}>Untitled The Batman Sequel</h2>
                   <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "4px", background: "var(--color-bg)", color: "var(--color-muted)", border: "1px solid var(--color-border)" }}>Film / Digital Double</span>
                 </div>
@@ -2187,11 +2218,11 @@ function IncomingRequestView() {
             </div>
           </div>
 
-          <div style={{ padding: "1.25rem 1.5rem", background: "var(--color-bg)" }}>
+          <div style={{ padding: m ? "1rem" : "1.25rem 1.5rem", background: "var(--color-bg)" }}>
             <p style={{ fontSize: "0.875rem", color: "var(--color-muted)", margin: "0 0 1rem", lineHeight: 1.6 }}>
               Attach an existing scan package, or accept and get scanned as part of the production.
             </p>
-            <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem" }}>
+            <div style={{ display: "flex", gap: "0.75rem", flexWrap: m ? "wrap" : undefined, marginBottom: "1.25rem" }}>
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.625rem 0.875rem", border: "1px solid var(--color-border)", borderRadius: "4px", background: "var(--color-surface)", fontSize: "0.9375rem", color: "var(--color-muted)" }}>
                 <span>— select a package —</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -2200,7 +2231,7 @@ function IncomingRequestView() {
                 Attach Package
               </button>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: m ? "0.75rem" : "1.25rem", flexWrap: m ? "wrap" : undefined }}>
               <button style={{ padding: "0.625rem 1.25rem", fontSize: "0.9375rem", fontWeight: 500, color: "#fff", background: "var(--color-accent)", border: "none", borderRadius: "4px", cursor: "default" }}>
                 Accept — get scanned later
               </button>
@@ -2218,6 +2249,7 @@ function IncomingRequestView() {
 // ─── Production: Compliance Dashboard ────────────────────────────────────────
 
 function ComplianceDashboardView({ showModal = false }: { showModal?: boolean }) {
+  const m = useIsMobile();
   const overallScore = 82;
   const overallColor = "#b45309"; // partial — has gaps
   const circ52 = 2 * Math.PI * 52;
@@ -2227,11 +2259,11 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
 
   return (
     <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
-    <div style={{ overflowY: "auto", height: "100%", padding: "2rem 3rem", paddingBottom: "13rem", filter: showModal ? "brightness(0.35)" : "none", transition: "filter 0.2s ease" }}>
+    <div style={{ overflowY: "auto", height: "100%", padding: m ? "1.25rem 1rem" : "2rem 3rem", paddingBottom: scrollPadBottom(m), filter: showModal ? "brightness(0.35)" : "none", transition: "filter 0.2s ease" }}>
       <div style={{ maxWidth: "56rem" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
           <div>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.375rem" }}>Compliance Control Centre</h1>
+            <h1 style={{ fontSize: m ? "1.25rem" : "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.375rem" }}>Compliance Control Centre</h1>
             <p style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-muted)", margin: 0 }}>
               SAG-AFTRA Article 39&nbsp;&nbsp;·&nbsp;&nbsp;2026 TV/Theatrical AI&nbsp;&nbsp;·&nbsp;&nbsp;
               <span style={{ color: "var(--color-accent)" }}>RUMBLE POST +</span>
@@ -2243,7 +2275,7 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
         </div>
 
         {/* Stats */}
-        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", padding: "1.25rem 1.5rem", border: "1px solid var(--color-border)", borderRadius: "8px", background: "var(--color-surface)", marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", flexDirection: m ? "column" : "row", alignItems: "center", gap: m ? "1rem" : "1.5rem", padding: m ? "1rem" : "1.25rem 1.5rem", border: "1px solid var(--color-border)", borderRadius: "8px", background: "var(--color-surface)", marginBottom: "1.5rem" }}>
           <div style={{ flexShrink: 0 }}>
             <svg width="96" height="96" viewBox="0 0 128 128">
               <circle cx="64" cy="64" r="52" fill="none" stroke="var(--color-border)" strokeWidth="8" />
@@ -2252,7 +2284,7 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
               <text x="64" y="78" textAnchor="middle" fontSize="10" fill={overallColor} style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>Partial</text>
             </svg>
           </div>
-          <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: m ? "0.625rem" : "1.25rem", flexWrap: "wrap", justifyContent: m ? "center" : undefined }}>
             {[["11", "Licences"], ["3/3", "Productions"], ["2", "Required Gaps"], ["0", "Active Strikes"], ["1", "Pending Transfers"]].map(([v, l], i) => {
               const warn = (l === "Required Gaps" || l === "Pending Transfers") && v !== "0";
               return (
@@ -2271,16 +2303,18 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
           <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--color-border)", margin: 0 }}>Obligation Progress</p>
           <div style={{ padding: "0 1.25rem" }}>
             {PROD_OBLIGATIONS.map((ob, i) => (
-              <div key={ob.clauseRef} style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "0.625rem 0", borderBottom: "1px solid var(--color-border)", ...rise(300 + i * 70) }}>
-                <span style={{ fontSize: "0.75rem", fontFamily: "monospace", width: "3rem", flexShrink: 0, color: "var(--color-muted)" }}>{ob.clauseRef}</span>
-                <span style={{ fontSize: "0.875rem", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-text)" }}>{ob.title}</span>
-                <div style={{ width: "8rem", flexShrink: 0 }}>
-                  <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
-                    {ob.count !== "—" && ob.pct > 0 && <SplitSegment pct={ob.pct} color={ob.barColor} delay={500 + i * 70} />}
+              <div key={ob.clauseRef} style={{ display: "flex", alignItems: "center", gap: m ? "0.625rem" : "1rem", padding: "0.625rem 0", borderBottom: "1px solid var(--color-border)", ...rise(300 + i * 70) }}>
+                <span style={{ fontSize: "0.75rem", fontFamily: "monospace", width: m ? "2.5rem" : "3rem", flexShrink: 0, color: "var(--color-muted)" }}>{ob.clauseRef}</span>
+                <span style={{ fontSize: m ? "0.8125rem" : "0.875rem", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-text)" }}>{ob.title}</span>
+                {!m && (
+                  <div style={{ width: "8rem", flexShrink: 0 }}>
+                    <div style={{ height: "0.375rem", borderRadius: "9999px", overflow: "hidden", background: "var(--color-border)" }}>
+                      {ob.count !== "—" && ob.pct > 0 && <SplitSegment pct={ob.pct} color={ob.barColor} delay={500 + i * 70} />}
+                    </div>
                   </div>
-                </div>
+                )}
                 <span style={{ fontSize: "0.75rem", width: "2.5rem", textAlign: "right", flexShrink: 0, color: "var(--color-muted)" }}>{ob.count}</span>
-                <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", width: "6rem", textAlign: "right", flexShrink: 0, color: ob.statusColor }}>
+                <span style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", width: m ? "auto" : "6rem", textAlign: "right", flexShrink: 0, color: ob.statusColor }}>
                   {ob.statusLabel}
                 </span>
               </div>
@@ -2292,7 +2326,7 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
         <p style={{ fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--color-muted)", margin: "0 0 0.75rem" }}>
           Productions ({PROD_COMPLIANCE_PRODS.length})
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: m ? "1fr" : "repeat(3, 1fr)", gap: "1rem" }}>
           {PROD_COMPLIANCE_PRODS.map((prod, ci) => {
             const ringOffset = circ22 * (1 - prod.score / 100);
             const castColour = prod.castPct === 100 ? "#1a7f37" : prod.castPct > 50 ? "#b45309" : "#c0392b";
@@ -2346,10 +2380,10 @@ function ComplianceDashboardView({ showModal = false }: { showModal?: boolean })
     </div>
 
     {showModal && (
-      <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ position: "relative", width: "min(92%, 680px)", maxHeight: "82vh", overflowY: "auto", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "10px", padding: "1.5rem", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
+      <div style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: m ? "flex-start" : "center", justifyContent: "center", paddingTop: m ? "1.25rem" : 0 }}>
+        <div style={{ position: "relative", width: m ? "calc(100% - 1.5rem)" : "min(92%, 680px)", maxHeight: m ? "70vh" : "82vh", overflowY: "auto", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "10px", padding: m ? "1rem" : "1.5rem", boxShadow: "0 32px 80px rgba(0,0,0,0.5)" }}>
           {/* Modal header */}
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", flexWrap: m ? "wrap" : undefined, marginBottom: "1.25rem" }}>
             <div>
               <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--color-ink)", margin: "0 0 0.25rem" }}>Aquaman: Deep Dark</h2>
               <p style={{ fontSize: "0.75rem", color: "var(--color-muted)", margin: 0 }}>
@@ -2436,21 +2470,25 @@ function TourCard({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
+  const m = useIsMobile();
   return (
     <div
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      // Hover-pause is desktop-only: on touch devices taps fire synthetic
+      // mouseenter with no mouseleave to follow, which would stick the tour
+      // paused. Phones pause via press-and-hold on the shell instead.
+      onMouseEnter={m ? undefined : onMouseEnter}
+      onMouseLeave={m ? undefined : onMouseLeave}
       style={{
         position: "absolute",
-        bottom: "1.5rem",
+        bottom: m ? "calc(0.625rem + env(safe-area-inset-bottom))" : "1.5rem",
         left: "50%",
         transform: "translateX(-50%)",
-        width: "min(540px, calc(100% - 3rem))",
+        width: m ? "calc(100% - 1.25rem)" : "min(540px, calc(100% - 3rem))",
         background: "rgba(10,10,10,0.92)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         borderRadius: "8px",
-        padding: "1.25rem 1.5rem",
+        padding: m ? "0.875rem 1rem" : "1.25rem 1.5rem",
         color: "#fff",
         boxShadow: "0 24px 64px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.07)",
         zIndex: 40,
@@ -2511,10 +2549,10 @@ function TourCard({
         ))}
       </div>
 
-      <h3 style={{ fontSize: "0.9375rem", fontWeight: 600, margin: "0 0 0.375rem", letterSpacing: "-0.01em" }}>
+      <h3 style={{ fontSize: m ? "0.875rem" : "0.9375rem", fontWeight: 600, margin: "0 0 0.375rem", letterSpacing: "-0.01em", color: "#fff" }}>
         {scene.headline}
       </h3>
-      <p style={{ fontSize: "0.8125rem", color: "rgba(255,255,255,0.6)", margin: "0 0 1rem", lineHeight: 1.65 }}>
+      <p style={{ fontSize: m ? "0.75rem" : "0.8125rem", color: "rgba(255,255,255,0.6)", margin: m ? "0 0 0.75rem" : "0 0 1rem", lineHeight: m ? 1.55 : 1.65 }}>
         {scene.body}
       </p>
 
@@ -2526,8 +2564,8 @@ function TourCard({
           Prev
         </button>
 
-        <span style={{ fontSize: "0.6875rem", color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          {paused ? "Paused" : "Auto-playing"} · {sceneIndex + 1} / {total}
+        <span style={{ fontSize: m ? "0.625rem" : "0.6875rem", color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          {paused ? "Paused" : m ? "Swipe" : "Auto-playing"} · {sceneIndex + 1} / {total}
         </span>
 
         <button onClick={onNext} style={{ fontSize: "0.75rem", fontWeight: 500, padding: "0.375rem 0.875rem", border: "none", borderRadius: "4px", background: "#c0392b", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.375rem" }}>
@@ -2541,41 +2579,67 @@ function TourCard({
   );
 }
 
-// ─── Mobile gate ─────────────────────────────────────────────────────────────
+// ─── Mobile top bar ──────────────────────────────────────────────────────────
+// Phones swap the 14rem sidebar for this compact bar: wordmark, DEMO MODE
+// chip, and the acting-as user for the current scene's role.
 
-function MobileGate() {
+function MobileTopBar({ role }: { role: SidebarRole }) {
+  const user = ROLE_USER[role];
   return (
     <div style={{
+      flexShrink: 0,
       display: "flex",
-      flexDirection: "column",
       alignItems: "center",
-      justifyContent: "center",
-      height: "100vh",
-      padding: "2.5rem 2rem",
-      background: "var(--color-bg)",
-      textAlign: "center",
+      justifyContent: "space-between",
+      gap: "0.75rem",
+      padding: "0.625rem 1rem",
+      paddingTop: "calc(0.625rem + env(safe-area-inset-top))",
+      background: "#0a0a0a",
+      color: "#fff",
     }}>
-      <div style={{ marginBottom: "2.5rem" }}>
-        <div style={{ fontSize: "0.9375rem", fontWeight: 500, letterSpacing: "0.05em", color: "var(--color-ink)" }}>
+      <a href="/demo" style={{ textDecoration: "none", flexShrink: 0 }}>
+        <div style={{ fontSize: "0.8125rem", fontWeight: 500, letterSpacing: "0.05em", color: "#fff" }}>
           ImageVault
         </div>
-        <div style={{ marginTop: "0.375rem", height: "1px", width: "1.5rem", background: "#c0392b", margin: "0.375rem auto 0" }} />
+        <div style={{ marginTop: "0.25rem", height: "1px", width: "1.5rem", background: "#c0392b" }} />
+      </a>
+
+      <div style={{
+        fontSize: "0.55rem",
+        fontWeight: 700,
+        letterSpacing: "0.12em",
+        padding: "0.2rem 0.45rem",
+        background: "rgba(192,57,43,0.15)",
+        color: "#c0392b",
+        borderRadius: "2px",
+        border: "1px solid rgba(192,57,43,0.3)",
+        whiteSpace: "nowrap",
+      }}>
+        DEMO MODE
       </div>
 
-      <div style={{ marginBottom: "1.75rem", color: "var(--color-muted)" }}>
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2" />
-          <line x1="8" y1="21" x2="16" y2="21" />
-          <line x1="12" y1="17" x2="12" y2="21" />
-        </svg>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+        <div style={{ minWidth: 0, textAlign: "right" }}>
+          <div style={{ fontSize: "0.6875rem", fontWeight: 500, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</div>
+          <div style={{ fontSize: "0.5625rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.04em" }}>{user.subtitle}</div>
+        </div>
+        <div style={{
+          width: "1.625rem",
+          height: "1.625rem",
+          borderRadius: "50%",
+          background: "#c0392b",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "0.5rem",
+          fontWeight: 700,
+          color: "#fff",
+          flexShrink: 0,
+          letterSpacing: "0.05em",
+        }}>
+          {user.initials}
+        </div>
       </div>
-
-      <h1 style={{ fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)", margin: "0 0 0.75rem" }}>
-        Best viewed on desktop
-      </h1>
-      <p style={{ fontSize: "0.9375rem", color: "var(--color-muted)", margin: 0, lineHeight: 1.65, maxWidth: "22rem" }}>
-        This product tour is designed for larger screens. Open this link on a laptop or desktop for the full experience.
-      </p>
     </div>
   );
 }
@@ -2593,17 +2657,27 @@ function activeNavId(scene: Scene): NavId {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function DemoClient() {
-  const [isMobile] = useState<boolean | null>(() =>
-    typeof window !== "undefined" ? window.innerWidth < 1024 : null
-  );
+  // Starts null (matching the server render) and resolves in the effect below —
+  // resolving from `window` during hydration would mismatch the server HTML.
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [mode, setMode] = useState<DemoMode>("talent");
   const [sceneIndex, setSceneIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  // Track rotation / resize across the breakpoint.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const scenes = mode === "talent" ? SCENES : mode === "rep" ? REP_SCENES : PRODUCTION_SCENES;
 
   useEffect(() => {
-    if (isMobile !== false || paused) return;
+    if (isMobile === null || paused) return;
     const t = setTimeout(() => {
       setSceneIndex((i) => (i + 1) % scenes.length);
     }, AUTO_MS);
@@ -2611,7 +2685,6 @@ export default function DemoClient() {
   }, [sceneIndex, paused, mode, isMobile, scenes.length]);
 
   if (isMobile === null) return null;
-  if (isMobile) return <MobileGate />;
   const scene = scenes[sceneIndex];
 
   const handleModeChange = (m: DemoMode) => {
@@ -2619,9 +2692,39 @@ export default function DemoClient() {
     setSceneIndex(0);
   };
 
+  const goPrev = () => setSceneIndex((i) => (i - 1 + scenes.length) % scenes.length);
+  const goNext = () => setSceneIndex((i) => (i + 1) % scenes.length);
+
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <IsMobileContext.Provider value={isMobile}>
+    <div
+      className="demo-shell"
+      style={{ display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}
+      // Stories-style touch controls: press-and-hold pauses, a horizontal
+      // swipe steps between scenes.
+      onTouchStart={(e) => {
+        touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        setPaused(true);
+      }}
+      onTouchEnd={(e) => {
+        const start = touchStart.current;
+        touchStart.current = null;
+        setPaused(false);
+        if (!start) return;
+        const dx = e.changedTouches[0].clientX - start.x;
+        const dy = e.changedTouches[0].clientY - start.y;
+        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          if (dx < 0) goNext();
+          else goPrev();
+        }
+      }}
+      onTouchCancel={() => {
+        touchStart.current = null;
+        setPaused(false);
+      }}
+    >
       <style>{`
+        .demo-shell { height: 100vh; height: 100dvh; }
         @keyframes demo-fade-in {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -2657,9 +2760,11 @@ export default function DemoClient() {
         }
       `}</style>
 
-      <DemoSidebar role={scene.sidebarRole} activeNavId={activeNavId(scene)} />
+      {isMobile
+        ? <MobileTopBar role={scene.sidebarRole} />
+        : <DemoSidebar role={scene.sidebarRole} activeNavId={activeNavId(scene)} />}
 
-      <main style={{ flex: 1, overflow: "hidden", background: "var(--color-bg)", position: "relative", display: "flex", flexDirection: "column" }}>
+      <main style={{ flex: 1, minHeight: 0, overflow: "hidden", background: "var(--color-bg)", position: "relative", display: "flex", flexDirection: "column" }}>
         <div key={scene.id} className="demo-view-enter" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           {scene.view === "vault" && <VaultView />}
           {scene.view === "licences" && (
@@ -2682,12 +2787,13 @@ export default function DemoClient() {
           paused={paused}
           mode={mode}
           onModeChange={handleModeChange}
-          onPrev={() => setSceneIndex((i) => (i - 1 + scenes.length) % scenes.length)}
-          onNext={() => setSceneIndex((i) => (i + 1) % scenes.length)}
+          onPrev={goPrev}
+          onNext={goNext}
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
         />
       </main>
     </div>
+    </IsMobileContext.Provider>
   );
 }
