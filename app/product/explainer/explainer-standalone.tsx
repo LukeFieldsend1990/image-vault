@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-const SRC = "/explainer/imagevault-explainer.html";
-
 // Same handshake as the /product embed: the film announces READY once its
 // script is listening and holds its opening frame until it receives PLAY.
 const FILM_READY = "imagevault-explainer:ready";
@@ -35,7 +33,13 @@ type Lock = { w: number; h: number; rotate: number };
  * the OS rotates the browser, keeping the film glued to the physical screen
  * like a native app with a locked orientation.
  */
-export default function ExplainerStandalone() {
+export default function ExplainerStandalone({
+  src = "/explainer/imagevault-explainer.html",
+  filmTitle = "What ImageVault does — the explainer film",
+}: {
+  src?: string;
+  filmTitle?: string;
+}) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const baseRef = useRef<{ w: number; h: number; angle: number } | null>(null);
   const [lock, setLock] = useState<Lock | null>(null);
@@ -109,8 +113,8 @@ export default function ExplainerStandalone() {
       >
         <iframe
           ref={iframeRef}
-          src={SRC}
-          title="What ImageVault does — the explainer film"
+          src={src}
+          title={filmTitle}
           scrolling="no"
           style={{ display: "block", width: "100%", height: "100%", border: 0 }}
         />
