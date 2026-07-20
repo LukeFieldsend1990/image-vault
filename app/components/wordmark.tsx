@@ -39,6 +39,12 @@ function gateColor(tone: Tone): string {
  * The side margins are optically balanced so the measured ink gap between
  * each word and its post is equal — the "e" carries more sidebearing than
  * the "V", so the left margin tucks in slightly.
+ *
+ * Both posts are drawn as the left and right borders of a SINGLE element:
+ * two separate spans snap to the device-pixel grid independently at
+ * fractional zoom / display scaling, which rendered the posts up to ~2
+ * device pixels apart in width. Identical border values on one element get
+ * identical used widths, so the posts can never round apart.
  */
 function Gate({ tone, gapLeft = "0.135em", gapRight = "0.15em", post = "0.055em", height = "0.72em" }: {
   tone: Tone;
@@ -52,15 +58,15 @@ function Gate({ tone, gapLeft = "0.135em", gapRight = "0.15em", post = "0.055em"
     <span
       aria-hidden="true"
       style={{
-        display: "inline-flex",
-        alignItems: "baseline",
-        gap: "max(1px, 0.09em)",
+        display: "inline-block",
+        height,
+        width: "max(1px, 0.09em)",
+        boxSizing: "content-box",
+        borderLeft: `max(1px, ${post}) solid ${color}`,
+        borderRight: `max(1px, ${post}) solid ${color}`,
         margin: `0 ${gapRight} 0 ${gapLeft}`,
       }}
-    >
-      <span style={{ display: "inline-block", width: `max(1px, ${post})`, height, background: color }} />
-      <span style={{ display: "inline-block", width: `max(1px, ${post})`, height, background: color }} />
-    </span>
+    />
   );
 }
 
