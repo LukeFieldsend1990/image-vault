@@ -8,30 +8,22 @@ import { useEffect, useRef, useState } from "react";
 const FILM_READY = "imagevault-explainer:ready";
 const FILM_PLAY = "imagevault-explainer:play";
 
-// Current screen rotation, in degrees counterclockwise from the device's
-// natural orientation (Screen Orientation API, legacy iOS fallback).
-function orientationAngle(): number {
-  if (typeof screen !== "undefined" && screen.orientation) {
-    return screen.orientation.angle;
-  }
-  const legacy = (window as Window & { orientation?: number }).orientation;
-  return typeof legacy === "number" ? (legacy + 360) % 360 : 0;
-}
-
-type Lock = { w: number; h: number; rotate: number };
+type Fit = { w: number; h: number; rotated: boolean };
 
 /**
  * The explainer film filling the whole viewport on its own route. Unlike the
  * /product embed there is no scroll gate — the page *is* the film — so we
  * post PLAY as soon as the film reports READY.
  *
- * Orientation is locked to how the page loaded. The film fits itself to the
- * viewport it starts in (rotating to fill a portrait phone), and re-fitting
- * after an OS rotation letterboxes it behind mobile browser chrome. The web
- * can't lock orientation outside fullscreen (and never on iPhone Safari), so
- * we emulate it: freeze the layout at its loaded size and counter-rotate when
- * the OS rotates the browser, keeping the film glued to the physical screen
- * like a native app with a locked orientation.
+ * The film is locked horizontal, like a landscape-only video player. The
+ * 16:9 stage plain-scales to whatever viewport it gets, so this page always
+ * hands it a landscape one: in a portrait viewport the iframe is sized to
+ * the rotated viewport (width = vh, height = vw) and turned 90°, so the
+ * film reads horizontal across the physical screen; in a landscape viewport
+ * it fills the screen untransformed. Everything is derived from the current
+ * viewport dimensions on every resize — no frozen layouts, no screen-angle
+ * tracking — so repeated device rotations always land the film the right
+ * way up.
  */
 export default function ExplainerStandalone({
   src = "/explainer/imagevault-explainer.html",
@@ -41,8 +33,7 @@ export default function ExplainerStandalone({
   filmTitle?: string;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const baseRef = useRef<{ w: number; h: number; angle: number } | null>(null);
-  const [lock, setLock] = useState<Lock | null>(null);
+  const [fit, setFit] = useState<Fit | null>(null);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -55,43 +46,20 @@ export default function ExplainerStandalone({
   }, []);
 
   useEffect(() => {
-    const fit = () => {
-      const angle = orientationAngle();
+    const update = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      if (!baseRef.current) {
-        baseRef.current = { w: vw, h: vh, angle };
-      }
-      const base = baseRef.current;
-      if (angle === base.angle) {
-        // iOS Safari fires `resize` with the rotated dimensions BEFORE it
-        // updates the orientation angle. An aspect flip while the angle is
-        // unchanged is that mid-rotation window — don't clobber the frozen
-        // base with rotated dimensions; the orientation event that follows
-        // will engage the lock.
-        if (vw >= vh !== base.w >= base.h) return;
-        // Still in the loaded orientation — fill the viewport and track its
-        // size so plain resizes (desktop windows, collapsing URL bars) keep
-        // working as before.
-        base.w = vw;
-        base.h = vh;
-        setLock(null);
-      } else {
-        // Rotated away: pin the frozen layout to the physical screen. The
-        // iframe keeps its pre-rotation size, so the film inside never
-        // re-fits.
-        setLock({ w: base.w, h: base.h, rotate: base.angle - angle });
-      }
+      setFit({ w: vw, h: vh, rotated: vh > vw });
     };
-    fit();
-    window.addEventListener("resize", fit);
-    window.addEventListener("orientationchange", fit);
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
     const so = typeof screen !== "undefined" ? screen.orientation : undefined;
-    so?.addEventListener?.("change", fit);
+    so?.addEventListener?.("change", update);
     return () => {
-      window.removeEventListener("resize", fit);
-      window.removeEventListener("orientationchange", fit);
-      so?.removeEventListener?.("change", fit);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+      so?.removeEventListener?.("change", update);
     };
   }, []);
 
@@ -99,14 +67,14 @@ export default function ExplainerStandalone({
     <div className="fixed inset-0 overflow-hidden" style={{ background: "#FBFAF7" }}>
       <div
         style={
-          lock
+          fit?.rotated
             ? {
                 position: "absolute",
                 left: "50%",
                 top: "50%",
-                width: lock.w,
-                height: lock.h,
-                transform: `translate(-50%, -50%) rotate(${lock.rotate}deg)`,
+                width: fit.h,
+                height: fit.w,
+                transform: "translate(-50%, -50%) rotate(90deg)",
               }
             : { position: "absolute", inset: 0 }
         }
