@@ -35,18 +35,31 @@ interface TmdbCreditsResponse {
   cast: TmdbCastMember[];
 }
 
+export type TmdbMediaType = "movie" | "tv";
+
 export type TmdbCastResult =
   | { ok: true; cast: MatchedCastMember[] }
   | { ok: false; status: number; error: string };
 
+export function isTmdbMediaType(v: unknown): v is TmdbMediaType {
+  return v === "movie" || v === "tv";
+}
+
 /**
  * Fetch a production's TMDB billed cast and tag each member with whether a
  * matching talent account already exists (by tmdbId, falling back to name).
+ *
+ * `mediaType` matters as much as the id: TMDB numbers movies and TV separately,
+ * so /tv/<film id>/credits 404s. When the caller picked a title from search it
+ * passes that title's media type explicitly; otherwise we infer from the
+ * production type and retry the other endpoint on a 404, since a production's
+ * type can legitimately disagree with the title it's linked to.
  */
 export async function fetchTmdbCastWithMatches(
   db: Db,
   production: { type: string | null; tmdbId: number | null },
   overrideTmdbId?: number | null,
+  overrideMediaType?: TmdbMediaType | null,
 ): Promise<TmdbCastResult> {
   const tmdbId = overrideTmdbId ?? production.tmdbId;
   if (!tmdbId) return { ok: false, status: 422, error: "Production isn't linked to an online title" };
@@ -54,17 +67,37 @@ export async function fetchTmdbCastWithMatches(
   const tmdbKey = process.env.TMDB_API_KEY;
   if (!tmdbKey) return { ok: false, status: 503, error: "Online cast lookup not configured" };
 
-  const mediaType = production.type === "tv_series" ? "tv" : "movie";
-  const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/credits?api_key=${tmdbKey}`;
+  const primary: TmdbMediaType = overrideMediaType ?? (production.type === "tv_series" ? "tv" : "movie");
+  // Only guess the other endpoint when the caller didn't tell us the media type.
+  const attempts: TmdbMediaType[] = overrideMediaType
+    ? [primary]
+    : [primary, primary === "tv" ? "movie" : "tv"];
 
-  let tmdbData: TmdbCreditsResponse;
-  try {
-    const res = await fetch(tmdbUrl);
-    if (!res.ok) return { ok: false, status: 502, error: "Online cast lookup failed" };
-    tmdbData = (await res.json()) as TmdbCreditsResponse;
-  } catch {
-    return { ok: false, status: 502, error: "Failed to fetch online credits" };
+  let tmdbData: TmdbCreditsResponse | null = null;
+  let lastError: TmdbCastResult | null = null;
+
+  for (const mediaType of attempts) {
+    const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/credits?api_key=${tmdbKey}`;
+    try {
+      const res = await fetch(tmdbUrl);
+      if (!res.ok) {
+        lastError = {
+          ok: false,
+          status: 502,
+          error: res.status === 404
+            ? `That title isn't on file as a ${mediaType === "tv" ? "TV series" : "film"} — search for the correct title`
+            : "Online cast lookup failed",
+        };
+        continue;
+      }
+      tmdbData = (await res.json()) as TmdbCreditsResponse;
+      break;
+    } catch {
+      lastError = { ok: false, status: 502, error: "Failed to fetch online credits" };
+    }
   }
+
+  if (!tmdbData) return lastError ?? { ok: false, status: 502, error: "Online cast lookup failed" };
 
   const castList = tmdbData.cast ?? [];
   if (castList.length === 0) return { ok: true, cast: [] };
@@ -148,9 +181,10 @@ export async function importTmdbPlaceholders(
     addedBy: string;
     subset?: Set<number> | null;
     overrideTmdbId?: number | null;
+    overrideMediaType?: TmdbMediaType | null;
   },
 ): Promise<ImportPlaceholdersResult | { error: string; status: number }> {
-  const result = await fetchTmdbCastWithMatches(db, opts.production, opts.overrideTmdbId);
+  const result = await fetchTmdbCastWithMatches(db, opts.production, opts.overrideTmdbId, opts.overrideMediaType);
   if (!result.ok) return { error: result.error, status: result.status };
 
   let members = result.cast;

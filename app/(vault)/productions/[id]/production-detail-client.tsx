@@ -279,6 +279,7 @@ export default function ProductionDetailClient() {
   const [tmdbSearchQ, setTmdbSearchQ] = useState("");
   const [tmdbSearchResults, setTmdbSearchResults] = useState<{ id: number; title: string; mediaType: string; year: number | null }[]>([]);
   const [tmdbSearching, setTmdbSearching] = useState(false);
+  const [tmdbError, setTmdbError] = useState("");
 
   // Manual entry
   const [manualActorName, setManualActorName] = useState("");
@@ -372,49 +373,69 @@ export default function ProductionDetailClient() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // TMDB import
-  async function fetchTmdbCast() {
+  // TMDB import. Every lookup lands in the same place: cast on success, an
+  // explicit message on failure — never a blank list that reads as "no cast".
+  async function loadTmdbCast(query: string) {
     setTmdbLoading(true);
+    setTmdbError("");
     try {
-      const r = await fetch(`/api/productions/${id}/cast/tmdb`);
-      const d = await r.json() as { cast?: TmdbCastMember[] };
+      const r = await fetch(`/api/productions/${id}/cast/tmdb${query}`);
+      const d = await r.json() as { cast?: TmdbCastMember[]; error?: string };
+      if (!r.ok) {
+        setTmdbCast([]);
+        setTmdbSelected(new Set());
+        setTmdbError(d.error ?? "Couldn't load the online cast list.");
+        setTmdbFetched(true);
+        return;
+      }
       const members: TmdbCastMember[] = d.cast ?? [];
       setTmdbCast(members);
       // Pre-select matched members
       setTmdbSelected(new Set(members.filter((m) => m.matched).map((m) => m.tmdbId)));
       setTmdbFetched(true);
+    } catch {
+      setTmdbCast([]);
+      setTmdbSelected(new Set());
+      setTmdbError("Couldn't reach the online title database. Please try again.");
+      setTmdbFetched(true);
     } finally {
       setTmdbLoading(false);
     }
+  }
+
+  function fetchTmdbCast() {
+    return loadTmdbCast("");
   }
 
   async function searchTmdbTitles() {
     if (!tmdbSearchQ.trim()) return;
     setTmdbSearching(true);
     setTmdbSearchResults([]);
+    setTmdbError("");
     try {
       const r = await fetch(`/api/productions/${id}/cast/tmdb/search?q=${encodeURIComponent(tmdbSearchQ)}`);
-      const d = await r.json() as { results?: typeof tmdbSearchResults };
-      setTmdbSearchResults(d.results ?? []);
+      const d = await r.json() as { results?: typeof tmdbSearchResults; error?: string };
+      if (!r.ok) {
+        setTmdbError(d.error ?? "Title search failed.");
+        return;
+      }
+      const results = d.results ?? [];
+      setTmdbSearchResults(results);
+      if (results.length === 0) setTmdbError(`No titles found for "${tmdbSearchQ.trim()}".`);
+    } catch {
+      setTmdbError("Couldn't reach the online title database. Please try again.");
     } finally {
       setTmdbSearching(false);
     }
   }
 
-  async function selectTmdbTitle(tmdbId: number) {
+  // mediaType has to travel with the id — TMDB numbers films and TV separately,
+  // so a film id looked up against the TV endpoint just 404s.
+  async function selectTmdbTitle(tmdbId: number, mediaType: string) {
     setTmdbSearchResults([]);
     setTmdbSearchQ("");
-    setTmdbLoading(true);
-    try {
-      const r = await fetch(`/api/productions/${id}/cast/tmdb?overrideTmdbId=${tmdbId}`);
-      const d = await r.json() as { cast?: TmdbCastMember[] };
-      const members: TmdbCastMember[] = d.cast ?? [];
-      setTmdbCast(members);
-      setTmdbSelected(new Set(members.filter((m) => m.matched).map((m) => m.tmdbId)));
-      setTmdbFetched(true);
-    } finally {
-      setTmdbLoading(false);
-    }
+    const mt = mediaType === "tv" ? "tv" : "movie";
+    await loadTmdbCast(`?overrideTmdbId=${tmdbId}&overrideMediaType=${mt}`);
   }
 
   // CSV parse
@@ -1258,7 +1279,7 @@ export default function ProductionDetailClient() {
                     Import cast from online credits. Matched talent will be pre-ticked. You must supply emails for unmatched members.
                   </p>
                   <button
-                    onClick={fetchTmdbCast}
+                    onClick={() => void fetchTmdbCast()}
                     disabled={tmdbLoading}
                     className="rounded px-4 py-2 text-sm font-medium text-white"
                     style={{ background: tmdbLoading ? "var(--color-muted)" : "var(--color-accent)", cursor: tmdbLoading ? "not-allowed" : "pointer" }}
@@ -1268,8 +1289,10 @@ export default function ProductionDetailClient() {
                 </div>
               ) : tmdbCast.length === 0 ? (
                 <div className="space-y-3">
-                  <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-                    No online credits found for this production. Search for the correct title to try again.
+                  <p className="text-sm" style={{ color: tmdbError && !tmdbLoading ? "var(--color-accent)" : "var(--color-muted)" }}>
+                    {tmdbLoading
+                      ? "Fetching credits…"
+                      : tmdbError || "No online credits found for this production. Search for the correct title to try again."}
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -1294,7 +1317,7 @@ export default function ProductionDetailClient() {
                       {tmdbSearchResults.map((r) => (
                         <button
                           key={r.id}
-                          onClick={() => void selectTmdbTitle(r.id)}
+                          onClick={() => void selectTmdbTitle(r.id, r.mediaType)}
                           className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors border-b last:border-0"
                           style={{ borderColor: "var(--color-border)", background: "var(--color-bg)", color: "var(--color-text)" }}
                         >
