@@ -4,7 +4,7 @@ import { productions, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
-import { importTmdbPlaceholders } from "@/lib/productions/tmdb-cast";
+import { importTmdbPlaceholders, isTmdbMediaType } from "@/lib/productions/tmdb-cast";
 import { eq, and } from "drizzle-orm";
 
 // POST /api/productions/[id]/cast/tmdb/import
@@ -62,7 +62,7 @@ export async function POST(
   }
 
   // Optional subset selection + TMDB override.
-  let body: { tmdbIds?: unknown; overrideTmdbId?: unknown } = {};
+  let body: { tmdbIds?: unknown; overrideTmdbId?: unknown; overrideMediaType?: unknown } = {};
   try {
     const text = await req.text();
     if (text) body = JSON.parse(text);
@@ -70,6 +70,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const overrideTmdbId = typeof body.overrideTmdbId === "number" ? Math.floor(body.overrideTmdbId) : undefined;
+  const overrideMediaType = isTmdbMediaType(body.overrideMediaType) ? body.overrideMediaType : undefined;
   const subset = Array.isArray(body.tmdbIds)
     ? new Set(body.tmdbIds.filter((n): n is number => typeof n === "number").map((n) => Math.floor(n)))
     : null;
@@ -80,6 +81,7 @@ export async function POST(
     addedBy: session.sub,
     subset,
     overrideTmdbId,
+    overrideMediaType,
   });
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });

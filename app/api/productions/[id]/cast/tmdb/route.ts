@@ -4,7 +4,7 @@ import { productions, organisationMembers } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { isIndustryRole } from "@/lib/auth/roles";
-import { fetchTmdbCastWithMatches } from "@/lib/productions/tmdb-cast";
+import { fetchTmdbCastWithMatches, isTmdbMediaType } from "@/lib/productions/tmdb-cast";
 import { eq, and } from "drizzle-orm";
 
 // GET /api/productions/[id]/cast/tmdb
@@ -58,10 +58,15 @@ export async function GET(
     }
   }
 
-  const overrideParam = new URL(req.url).searchParams.get("overrideTmdbId");
+  const searchParams = new URL(req.url).searchParams;
+  const overrideParam = searchParams.get("overrideTmdbId");
   const overrideTmdbId = overrideParam ? parseInt(overrideParam) : undefined;
+  // The picked title's own media type — TMDB ids aren't shared between movies
+  // and TV, so without this we'd hit the wrong endpoint and 404.
+  const mediaTypeParam = searchParams.get("overrideMediaType");
+  const overrideMediaType = isTmdbMediaType(mediaTypeParam) ? mediaTypeParam : undefined;
 
-  const result = await fetchTmdbCastWithMatches(db, production, overrideTmdbId);
+  const result = await fetchTmdbCastWithMatches(db, production, overrideTmdbId, overrideMediaType);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
