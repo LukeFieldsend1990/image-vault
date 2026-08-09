@@ -27,6 +27,7 @@ export default function MarketingLayout({
               ["Features", "#features"],
               ["Security", "#security"],
               ["How it works", "#how-it-works"],
+              ["Calculator", "/calculator"],
               ["Contact", "/contact"],
             ].map(([label, href]) => (
               <a
@@ -83,6 +84,13 @@ export default function MarketingLayout({
               style={{ color: "var(--color-muted)" }}
             >
               Studio brief
+            </Link>
+            <Link
+              href="/calculator"
+              className="text-xs transition hover:opacity-60"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Scan calculator
             </Link>
             <Link
               href="/login"
