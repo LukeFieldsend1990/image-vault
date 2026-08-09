@@ -117,11 +117,49 @@ export interface AppendedEvent {
   createdAt: number;
 }
 
+/** How many times a losing racer re-reads the tip before giving up. */
+const APPEND_MAX_ATTEMPTS = 5;
+
+/**
+ * Whether a thrown error is the unique index on (chain_key, seq) rejecting a
+ * racing append. Matched on message because D1 surfaces SQLite's error text
+ * rather than a typed error; deliberately narrow, so anything else propagates.
+ */
+function isSeqCollision(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /UNIQUE constraint failed|SQLITE_CONSTRAINT|constraint failed: compliance_events/i.test(msg);
+}
+
 // Append a new event to a chain. Reads the tip, computes seq + prev_hash, hashes
 // the canonical content, and inserts. The unique index on (chain_key, seq)
-// serialises concurrent appends — a racing duplicate seq throws and the caller
-// retries. Events are human-paced (consent/strike/transfer), so contention is rare.
+// serialises concurrent appends — a racing duplicate seq throws, and the loser
+// re-reads the tip and retries here. Events are human-paced
+// (consent/strike/transfer), so contention is rare and a handful of attempts is
+// ample.
+//
+// The retry lives here rather than in each caller because the losing racer must
+// recompute `prevHash` from the *new* tip: retrying with the original values
+// would chain off an event that is no longer the tip and produce a chain that
+// fails verification. That is not something call sites should have to know.
 export async function appendEvent(db: Db, spec: AppendEventSpec): Promise<AppendedEvent> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < APPEND_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await appendEventOnce(db, spec);
+    } catch (err) {
+      if (!isSeqCollision(err)) throw err;
+      lastErr = err;
+      // Brief, growing pause so simultaneous racers separate rather than
+      // colliding again on the same re-read.
+      await new Promise((r) => setTimeout(r, 8 * (attempt + 1)));
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error(`ledger append failed after ${APPEND_MAX_ATTEMPTS} attempts on ${spec.chainKey}`);
+}
+
+async function appendEventOnce(db: Db, spec: AppendEventSpec): Promise<AppendedEvent> {
   const tip = await db
     .select({ seq: complianceEvents.seq, hash: complianceEvents.hash })
     .from(complianceEvents)

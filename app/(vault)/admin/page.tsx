@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { getDb } from "@/lib/db";
-import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails, productionInclusionRecords, organisations, emailLog } from "@/lib/db/schema";
+import { users, scanPackages, licences, downloadEvents, scanFiles, geometryFingerprints, receivedEmails, productionInclusionRecords, organisations, emailLog, ledgerAppendFailures } from "@/lib/db/schema";
 import { sql, inArray, eq } from "drizzle-orm";
 import { getAllSkills } from "@/lib/skills/registry";
 import "@/lib/skills/definitions";
@@ -54,6 +54,7 @@ export default async function AdminOverviewPage() {
     inboundFailedCount,
     inclusionFlaggedCount,
     emailFailedCount,
+    ledgerFailureCount,
   ] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(users).get(),
     db.select({ n: sql<number>`count(*)` }).from(users).where(sql`role = 'talent'`).get(),
@@ -81,6 +82,7 @@ export default async function AdminOverviewPage() {
     db.select({ n: sql<number>`count(*)` }).from(receivedEmails).where(sql`processing_status IN ('failed', 'processing')`).get(),
     db.select({ n: sql<number>`count(*)` }).from(productionInclusionRecords).where(sql`flagged = 1 AND reviewed_at IS NULL`).get(),
     db.select({ n: sql<number>`count(*)` }).from(emailLog).where(sql`status = 'failed' AND sent_at >= ${Math.floor(Date.now() / 1000) - 7 * 86400}`).get(),
+    db.select({ n: sql<number>`count(*)` }).from(ledgerAppendFailures).where(sql`status = 'unresolved'`).get(),
   ]);
 
   // Resolve emails and filenames for recent downloads
@@ -170,6 +172,14 @@ export default async function AdminOverviewPage() {
       value: String(inclusionFlaggedCount?.n ?? 0),
       sub: "flagged for review",
       href: "/admin/inclusions",
+    },
+    {
+      // A dropped ledger append leaves no trace in the chain itself, so this
+      // count is the only place it surfaces. Non-zero always needs a look.
+      label: "Ledger Failures",
+      value: String(ledgerFailureCount?.n ?? 0),
+      sub: "appends that never landed",
+      href: "/admin/ledger-failures",
     },
     {
       label: "Talent Agencies",
