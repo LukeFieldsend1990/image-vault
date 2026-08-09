@@ -48,6 +48,14 @@ interface RowState {
 
 const EMPTY_ROW: RowState = { fee: "", scanned: false, reshoots: false };
 
+/** The whole exercise, up front, so nobody has to scroll to find out what it is. */
+const HOW_IT_WORKS = [
+  "Find your credits",
+  "Mark which used scans or reshoots",
+  "Estimate your advertising appearances per year",
+  "Work out what's left on the table",
+];
+
 const money = formatMoney;
 
 function toNumber(value: string): number {
@@ -525,9 +533,26 @@ export default function CalculatorClient() {
           </h1>
           <p className="mt-4 max-w-2xl text-base" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
             A scan stays usable for years after the shoot wraps. The next production that scanned you
-            could have licensed it instead of paying to make its own. Mark your last{" "}
-            {assumptions.lookbackYears} years of credits and see what that was worth.
+            could have licensed it instead of paying to make its own.
           </p>
+
+          {/* What the visitor is about to do, before they start doing it. */}
+          <ol className="mt-6 space-y-2.5">
+            {HOW_IT_WORKS.map((step, i) => (
+              <li key={step} className="flex gap-3">
+                <span
+                  className="shrink-0 font-mono text-xs"
+                  style={{ color: "var(--color-accent)", lineHeight: 1.6 }}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
+                  {step}
+                </span>
+              </li>
+            ))}
+          </ol>
+
           <p
             className="mt-4 inline-block px-3 py-1.5 text-xs"
             style={{
