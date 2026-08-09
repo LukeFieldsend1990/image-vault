@@ -63,22 +63,74 @@ describe("calculate — re-licensing a scan the production could have used", () 
     expect(result.credits.find((c) => c.id === "unscanned")?.couldHaveUsedScanId).toBeNull();
   });
 
-  it("pays every scan in a chain except the first", () => {
+  it("pays every scan inside the cycle except the one that opened it", () => {
     const result = calculate(
       [
         credit({ id: "s1", releaseDate: "2019-01-01", scanned: true, fee: 100_000 }),
         credit({ id: "s2", releaseDate: "2020-01-01", scanned: true, fee: 100_000 }),
         credit({ id: "s3", releaseDate: "2021-01-01", scanned: true, fee: 100_000 }),
-        credit({ id: "s4", releaseDate: "2022-06-01", scanned: true, fee: 100_000 }),
       ],
       NO_ADS,
       DEFAULT_ASSUMPTIONS,
       NOW,
     );
 
-    expect(result.relicensableCount).toBe(3);
-    expect(result.relicenceTotal).toBe(15_000);
+    expect(result.cycleCount).toBe(1);
+    expect(result.relicensableCount).toBe(2);
+    expect(result.relicenceTotal).toBe(10_000);
     expect(result.credits.find((c) => c.id === "s1")?.isFirstScanOfCycle).toBe(true);
+  });
+
+  it("anchors the cycle rather than rolling it forward from each scan", () => {
+    // 2020 opens a cycle to 2023. The 2022 scan is inside it. The 2024 scan is
+    // not — and must NOT be carried by the 2022 one, which is what a rolling
+    // look-back would do. It opens a second cycle instead.
+    const result = calculate(
+      [
+        credit({ id: "open", releaseDate: "2020-01-01", scanned: true, fee: 100_000 }),
+        credit({ id: "inside", releaseDate: "2022-01-01", scanned: true, fee: 100_000 }),
+        credit({ id: "after", releaseDate: "2024-01-01", scanned: true, fee: 100_000 }),
+      ],
+      NO_ADS,
+      DEFAULT_ASSUMPTIONS,
+      NOW,
+    );
+
+    expect(result.cycleCount).toBe(2);
+    expect(result.relicensableCount).toBe(1);
+    expect(result.relicenceTotal).toBe(5_000);
+    expect(result.credits.find((c) => c.id === "after")?.isFirstScanOfCycle).toBe(true);
+  });
+
+  it("handles the reported sheet: four re-licences across two cycles", () => {
+    // Apollo opens a cycle to Mar 2025, carrying Top Gun, Hit Man and Twisters.
+    // Chad Powers lands after it and opens a second, carrying The Running Man.
+    const result = calculate(
+      [
+        credit({ id: "apollo", releaseDate: "2022-03-13", scanned: true, fee: 1_000_000, reshoots: true }),
+        credit({ id: "topgun", releaseDate: "2022-05-24", scanned: true, fee: 2_000_000, reshoots: true }),
+        credit({ id: "hitman", releaseDate: "2024-06-07", scanned: true, fee: 2_000_000 }),
+        credit({ id: "twisters", releaseDate: "2024-07-17", scanned: true, fee: 10_000_000, reshoots: true }),
+        credit({ id: "chadpowers", releaseDate: "2025-09-30", scanned: true, fee: 5_000_000 }),
+        credit({ id: "runningman", releaseDate: "2025-11-07", scanned: true, fee: 10_000_000 }),
+        credit({ id: "anyonebutyou", releaseDate: "2023-12-22" }),
+        credit({ id: "devotion", releaseDate: "2022-11-23" }),
+      ],
+      NO_ADS,
+      DEFAULT_ASSUMPTIONS,
+      new Date("2026-08-09T00:00:00Z"),
+    );
+
+    expect(result.cycleCount).toBe(2);
+    expect(result.relicensableCount).toBe(4);
+
+    const relicensed = result.credits.filter((c) => c.couldHaveUsedScanId !== null).map((c) => c.id);
+    expect(relicensed.sort()).toEqual(["hitman", "runningman", "topgun", "twisters"]);
+
+    // 5% of 2m + 2m + 10m + 10m
+    expect(result.relicenceTotal).toBe(1_200_000);
+    // 2% of 1m + 2m + 10m
+    expect(result.reshootTotal).toBe(260_000);
   });
 
   it("starts a fresh cycle when the previous scan has expired", () => {
@@ -126,11 +178,11 @@ describe("calculate — re-licensing a scan the production could have used", () 
     expect(result.credits.find((c) => c.id === "inside")?.relicenceValue).toBe(5_000);
   });
 
-  it("credits the most recent live scan, and charges the re-licence only once", () => {
+  it("credits the scan that opened the cycle, and charges the re-licence once", () => {
     const result = calculate(
       [
-        credit({ id: "older", releaseDate: "2020-01-01", scanned: true, fee: 0 }),
-        credit({ id: "newer", releaseDate: "2021-01-01", scanned: true, fee: 0 }),
+        credit({ id: "opener", releaseDate: "2020-01-01", scanned: true, fee: 0 }),
+        credit({ id: "middle", releaseDate: "2021-01-01", scanned: true, fee: 0 }),
         credit({ id: "target", releaseDate: "2022-01-01", scanned: true, fee: 100_000 }),
       ],
       NO_ADS,
@@ -139,9 +191,30 @@ describe("calculate — re-licensing a scan the production could have used", () 
     );
 
     const target = result.credits.find((c) => c.id === "target");
-    expect(target?.couldHaveUsedScanId).toBe("newer");
+    expect(target?.couldHaveUsedScanId).toBe("opener");
     expect(target?.relicenceValue).toBe(5_000);
     expect(result.relicenceTotal).toBe(5_000);
+  });
+
+  it("opens the fewest cycles it can, which is the most re-licences it can find", () => {
+    // Anchoring on the earliest scan of each group is optimal: any later anchor
+    // ends its cycle sooner and can only cover a subset.
+    const result = calculate(
+      [
+        credit({ id: "a", releaseDate: "2020-01-01", scanned: true, fee: 100_000 }),
+        credit({ id: "b", releaseDate: "2022-11-01", scanned: true, fee: 100_000 }),
+        credit({ id: "c", releaseDate: "2023-02-01", scanned: true, fee: 100_000 }),
+        credit({ id: "d", releaseDate: "2025-10-01", scanned: true, fee: 100_000 }),
+      ],
+      NO_ADS,
+      DEFAULT_ASSUMPTIONS,
+      NOW,
+    );
+
+    // a opens to 2023-01 (covers b); c opens to 2026-02 (covers d). Two cycles,
+    // two re-licences — no grouping does better.
+    expect(result.cycleCount).toBe(2);
+    expect(result.relicensableCount).toBe(2);
   });
 
   it("ignores a scanned credit with no release date, as anchor and as claimant", () => {

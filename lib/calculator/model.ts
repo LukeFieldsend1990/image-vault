@@ -73,6 +73,11 @@ export interface CreditOutcome {
    */
   isFirstScanOfCycle: boolean;
   /**
+   * Which cycle this scan belongs to, 1-based, in date order. Null for a credit
+   * that wasn't scanned or has no date to place it by.
+   */
+  cycleIndex: number | null;
+  /**
    * Id of the live scan this production could have licensed instead of
    * commissioning its own. Null unless this credit was itself scanned.
    */
@@ -93,7 +98,13 @@ export interface CalculatorResult {
   coveredYears: number;
   scannedCount: number;
   /**
-   * Scanned productions that could have licensed one of your existing scans
+   * How many cycles the marked scans fall into. Each one opens with a capture
+   * that genuinely had to happen; everything after it inside the cycle is a
+   * re-licence.
+   */
+  cycleCount: number;
+  /**
+   * Scanned productions that could have licensed the scan opening their cycle
    * instead of commissioning their own.
    */
   relicensableCount: number;
@@ -173,31 +184,45 @@ export function calculate(
     .filter((s): s is { id: string; at: number } => s.at !== null)
     .sort((a, b) => a.at - b.at);
 
+  // Group the scans into cycles. The earliest scan opens the first cycle and is
+  // the capture that had to happen; every scan falling inside that cycle could
+  // have licensed it instead of commissioning its own. The first scan that lands
+  // after the cycle expires opens the next one, and so on.
+  //
+  // The cycle is anchored on its opening scan, not measured backwards from each
+  // scan in turn. A rolling look-back would chain indefinitely — every scan
+  // propping up the next — and a scan captured six years after the first would
+  // still read as a re-licence of something long expired. Anchoring is also what
+  // the licence actually is: one capture, usable for three years from the day it
+  // was taken.
+  //
+  // Anchoring on the earliest scan of each group is not merely the simplest
+  // rule, it is the one that yields the fewest cycles and therefore the most
+  // re-licensable scans: any later anchor would end its cycle sooner and could
+  // only cover a subset.
+  const anchorFor = new Map<string, string>();
+  const cycleIndexFor = new Map<string, number>();
+  const cycleAnchors: Array<{ id: string; at: number }> = [];
+  let cycleEnd = -Infinity;
+  let anchorId: string | null = null;
+
+  for (const scan of scans) {
+    if (scan.at >= cycleEnd) {
+      anchorId = scan.id;
+      cycleEnd = addYears(scan.at, cycleYears);
+      cycleAnchors.push({ id: scan.id, at: scan.at });
+    } else if (anchorId) {
+      anchorFor.set(scan.id, anchorId);
+    }
+    cycleIndexFor.set(scan.id, cycleAnchors.length);
+  }
+
   const outcomes: CreditOutcome[] = credits.map((credit) => {
     const fee = sanitiseMoney(credit.fee);
-    const at = parseDate(credit.releaseDate);
 
-    // Look back a cycle from this production's date. If another production had
-    // already scanned you inside that window, this one didn't need its own
-    // capture — it could have licensed the live scan and paid you for it.
-    //
-    // The most recent qualifying scan is the one credited: it's the scan that
-    // would actually have been offered, and it keeps the attribution to a
-    // single source rather than double-counting overlapping cycles.
-    let couldHaveUsedScanId: string | null = null;
-    if (credit.scanned && at !== null) {
-      const expiresAfter = addYears(at, -cycleYears);
-      for (let i = scans.length - 1; i >= 0; i--) {
-        const scan = scans[i];
-        if (scan.id === credit.id) continue;
-        // Strictly earlier, and not yet out of cycle. A scan exactly a cycle old
-        // expired the moment this production started, so it doesn't count.
-        if (scan.at < at && scan.at > expiresAfter) {
-          couldHaveUsedScanId = scan.id;
-          break;
-        }
-      }
-    }
+    // Only a production that scanned you can re-licence: a job that never
+    // needed a scan had nothing to replace, however live your scan was.
+    const couldHaveUsedScanId = anchorFor.get(credit.id) ?? null;
 
     const relicenceValue = couldHaveUsedScanId ? round2(fee * relicenceRate) : 0;
     // Reshoots are a separate opportunity and apply to any credit the visitor
@@ -210,6 +235,7 @@ export function calculate(
       // The first scan of a cycle: nothing earlier was available to re-use, so
       // this capture was genuinely needed and earns no re-licence.
       isFirstScanOfCycle: credit.scanned && couldHaveUsedScanId === null,
+      cycleIndex: cycleIndexFor.get(credit.id) ?? null,
       couldHaveUsedScanId,
       relicenceValue,
       reshootValue,
@@ -256,6 +282,7 @@ export function calculate(
     credits: outcomes,
     coveredYears,
     scannedCount: credits.filter((c) => c.scanned).length,
+    cycleCount: cycleAnchors.length,
     relicensableCount: outcomes.filter((o) => o.couldHaveUsedScanId !== null).length,
     relicensableWithoutFee: outcomes.filter((o) => o.couldHaveUsedScanId !== null && o.fee <= 0).length,
     reshootCount: outcomes.filter((o) => o.reshootValue > 0).length,

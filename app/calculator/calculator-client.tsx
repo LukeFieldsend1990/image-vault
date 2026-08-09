@@ -84,8 +84,11 @@ function plural(n: number, one: string, many: string): string {
  * beside £0 reads as a broken calculator. Say which rows are still missing a fee
  * instead of leaving the reader to work it out.
  */
-function relicenceNote(relicensable: number, withoutFee: number): string {
-  const base = `${plural(relicensable, "scan", "scans")} that could have used an earlier one`;
+function relicenceNote(relicensable: number, withoutFee: number, cycles: number): string {
+  const base =
+    relicensable === 0
+      ? "no scans could have used an earlier one"
+      : `${plural(relicensable, "re-licence", "re-licences")} across ${plural(cycles, "scan cycle", "scan cycles")}`;
   if (relicensable === 0 || withoutFee === 0) return base;
   if (withoutFee === relicensable) {
     return `${base} — none have a fee yet`;
@@ -693,7 +696,7 @@ export default function CalculatorClient() {
             <StepHeading
               step="two"
               title="Which jobs scanned you, and what you were paid"
-              hint={`Tick Scanned for every production that took a body or face scan, and put your fee on that job — if a scan of yours was already live from another job in the previous ${assumptions.scanCycleYears} years, that production could have licensed it instead of making its own, and owed you ${(assumptions.relicenceRate * 100).toFixed(1)}% of your fee. Tick Reshoots where a job went back for pickups. Fees stay on this page.`}
+              hint={`Tick Scanned for every production that took a body or face scan, and put your fee on that job. Your earliest scan opens a ${assumptions.scanCycleYears}-year cycle: every scan inside it could have licensed that one instead of making its own, and owed you ${(assumptions.relicenceRate * 100).toFixed(1)}% of your fee. Tick Reshoots where a job went back for pickups. Fees stay on this page.`}
             />
 
             {/* bulk controls */}
@@ -825,10 +828,19 @@ export default function CalculatorClient() {
                 return (
                   <div
                     key={credit.id}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 pr-3"
                     style={{
                       borderTop: index === 0 ? "none" : "1px solid var(--color-border)",
                       background: row.scanned ? "var(--color-surface)" : "var(--color-inset)",
+                      // A solid rule marks the capture that opens a cycle; the
+                      // scans it carries get a lighter one, so a cycle reads as a
+                      // block down the left edge of the grid.
+                      paddingLeft: "calc(0.75rem - 3px)",
+                      borderLeft: outcome?.isFirstScanOfCycle
+                        ? "3px solid var(--color-accent)"
+                        : outcome?.couldHaveUsedScanId
+                          ? "3px solid var(--color-accent-tint)"
+                          : "3px solid transparent",
                     }}
                   >
                     <span
@@ -847,6 +859,25 @@ export default function CalculatorClient() {
                           </span>
                         )}
                       </span>
+                      {outcome?.cycleIndex !== null && outcome?.cycleIndex !== undefined && (
+                        <span
+                          className="mt-0.5 inline-block text-xs font-medium tracking-wide uppercase"
+                          style={{
+                            color: outcome.isFirstScanOfCycle
+                              ? "var(--color-accent)"
+                              : "var(--color-muted)",
+                          }}
+                          title={
+                            outcome.isFirstScanOfCycle
+                              ? `This scan opens cycle ${outcome.cycleIndex}. Nothing was live when it was taken, so the capture was genuinely needed and earns no re-licence.`
+                              : `Inside cycle ${outcome.cycleIndex} — this production could have licensed the scan that opened it.`
+                          }
+                        >
+                          {outcome.isFirstScanOfCycle
+                            ? `◆ Opens cycle ${outcome.cycleIndex}`
+                            : `Cycle ${outcome.cycleIndex}`}
+                        </span>
+                      )}
                       {credit.character && (
                         <span className="block truncate text-xs" style={{ color: "var(--color-muted)" }}>
                           {credit.character}
@@ -918,6 +949,19 @@ export default function CalculatorClient() {
                 );
               })}
             </div>
+
+            {/* Why some scanned rows earn nothing. Without this the anchors read
+                as a bug rather than as the capture that had to happen. */}
+            {result.cycleCount > 0 && (
+              <p className="mt-2.5 text-xs" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+                <span style={{ color: "var(--color-accent)" }}>◆</span> opens a cycle — the capture
+                that genuinely had to happen, so it earns nothing. Every scan inside that cycle could
+                have licensed it instead.{" "}
+                {result.cycleCount === 1
+                  ? `Your scans form one ${assumptions.scanCycleYears}-year cycle.`
+                  : `Your scans form ${result.cycleCount} cycles: each starts when the one before it lapsed.`}
+              </p>
+            )}
 
             {dropped.size > 0 && (
               <button
@@ -1018,16 +1062,17 @@ export default function CalculatorClient() {
                 }}
               >
                 <p className="mb-4 text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
-                  A scan stays usable for a cycle of {assumptions.scanCycleYears} years. A production
-                  that scanned you is a production that needed a scan — so when one of yours was
-                  already live, captured on another job inside the previous{" "}
-                  {assumptions.scanCycleYears} years, that production could have licensed the
-                  existing scan rather than commissioning its own, and owed you{" "}
-                  {(assumptions.relicenceRate * 100).toFixed(1)}% of your fee on that job. The first
-                  scan of a cycle earns nothing: there was nothing to re-use, so the capture was
-                  genuinely needed. Reshoots are a second call on the same scan, at{" "}
-                  {(assumptions.reshootRate * 100).toFixed(1)}%. These are illustrative rates, not
-                  quoted terms — change them and watch the number move.
+                  Your earliest scan opens a cycle that runs {assumptions.scanCycleYears} years from
+                  the day it was taken. A production that scanned you is a production that needed a
+                  scan — so every scan falling inside that cycle could have licensed the one already
+                  live rather than commissioning its own, and owed you{" "}
+                  {(assumptions.relicenceRate * 100).toFixed(1)}% of your fee on that job. The scan
+                  that opens a cycle earns nothing: there was nothing to re-use, so that capture was
+                  genuinely needed. Once the cycle lapses the next scan opens a fresh one. Reshoots
+                  are a second call on the same scan, at{" "}
+                  {(assumptions.reshootRate * 100).toFixed(1)}%, and advertising counts for as long
+                  as any scan of yours was live. These are illustrative rates, not quoted terms —
+                  change them and watch the number move.
                 </p>
                 <div className="flex flex-wrap gap-5">
                   <label className="block">
@@ -1121,7 +1166,11 @@ export default function CalculatorClient() {
                   {
                     label: `Re-licensing (${(assumptions.relicenceRate * 100).toFixed(1)}%)`,
                     value: result.relicenceTotal,
-                    note: relicenceNote(result.relicensableCount, result.relicensableWithoutFee),
+                    note: relicenceNote(
+                      result.relicensableCount,
+                      result.relicensableWithoutFee,
+                      result.cycleCount,
+                    ),
                   },
                   {
                     label: `Reshoots (${(assumptions.reshootRate * 100).toFixed(1)}%)`,
