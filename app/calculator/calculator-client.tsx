@@ -15,7 +15,7 @@
  * therefore carries the fees that were typed, and the share panel says so.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
@@ -200,12 +200,10 @@ export default function CalculatorClient() {
   const [assumptions, setAssumptions] = useState<CalculatorAssumptions>(DEFAULT_ASSUMPTIONS);
   const [showAssumptions, setShowAssumptions] = useState(false);
 
-  // Reveal + share
-  const [revealed, setRevealed] = useState(false);
+  // Share
   const [copied, setCopied] = useState<"link" | "message" | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [origin, setOrigin] = useState("");
-  const resultsRef = useRef<HTMLDivElement | null>(null);
 
   // True when this sheet arrived pre-filled from someone else's share link.
   const [fromSharedLink, setFromSharedLink] = useState(false);
@@ -256,7 +254,6 @@ export default function CalculatorClient() {
       setPeople([]);
       setQuery(picked.name);
       setError("");
-      setRevealed(false);
       setFromSharedLink(false);
       setLoadingCredits(true);
       try {
@@ -323,7 +320,6 @@ export default function CalculatorClient() {
           ),
         );
         setDropped(new Set(shared.credits.filter((c) => c.dropped).map((c) => c.id)));
-        setRevealed(true);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't open that shared link");
       } finally {
@@ -345,7 +341,6 @@ export default function CalculatorClient() {
     setCredits([]);
     setRows({});
     setDropped(new Set());
-    setRevealed(false);
     setError("");
   }
 
@@ -419,15 +414,6 @@ export default function CalculatorClient() {
     () => new Map(result.credits.map((c) => [c.id, c])),
     [result],
   );
-
-  const hasSomethingToShow = result.total > 0;
-
-  function reveal() {
-    setRevealed(true);
-    requestAnimationFrame(() => {
-      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
 
   /* ── sharing ──
    *
@@ -527,7 +513,7 @@ export default function CalculatorClient() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-5 pb-40 pt-12">
+      <main className="mx-auto max-w-4xl px-5 pb-16 pt-12">
         {/* ── hero ── */}
         <section className="mb-12">
           <Eyebrow>The scan value calculator</Eyebrow>
@@ -538,11 +524,9 @@ export default function CalculatorClient() {
             What is your scan actually worth?
           </h1>
           <p className="mt-4 max-w-2xl text-base" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
-            You were scanned on a job. That scan didn&apos;t stop working when the shoot wrapped — it
-            stayed usable for years, and the next production that scanned you could have licensed it
-            instead of paying to make its own. Pull your last {assumptions.lookbackYears} years of
-            credits, mark the ones that scanned you, and see what re-licensing on your terms would
-            have been worth.
+            A scan stays usable for years after the shoot wraps. The next production that scanned you
+            could have licensed it instead of paying to make its own. Mark your last{" "}
+            {assumptions.lookbackYears} years of credits and see what that was worth.
           </p>
           <p
             className="mt-4 inline-block px-3 py-1.5 text-xs"
@@ -552,9 +536,7 @@ export default function CalculatorClient() {
               borderRadius: "var(--radius-sm)",
             }}
           >
-            Nothing you type here is sent to us or stored. No account, no cookie, no record — close
-            the tab and it&apos;s gone. If you share your sheet, the figures travel inside the link
-            itself.
+            Nothing you type is sent to us or stored. Close the tab and it&apos;s gone.
           </p>
         </section>
 
@@ -585,8 +567,7 @@ export default function CalculatorClient() {
               Someone filled this in for you.
             </p>
             <p className="mt-1 text-xs" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-              The credits, fees and markings below came from the link you opened — none of it is
-              ours and none of it is saved. Change anything that looks wrong and the number updates.
+              The figures below came from the link you opened. Change anything that looks wrong.
             </p>
           </div>
         )}
@@ -596,7 +577,7 @@ export default function CalculatorClient() {
           <StepHeading
             step="one"
             title="Your acting name"
-            hint="We match it to the public credits database. Pick yourself from the list."
+            hint="Pick yourself from the list to load your credits."
           />
 
           <div className="relative">
@@ -696,7 +677,7 @@ export default function CalculatorClient() {
             <StepHeading
               step="two"
               title="Which jobs scanned you, and what you were paid"
-              hint={`Tick Scanned for every production that took a body or face scan, and put your fee on that job. Your earliest scan opens a ${assumptions.scanCycleYears}-year cycle: every scan inside it could have licensed that one instead of making its own, and owed you ${(assumptions.relicenceRate * 100).toFixed(1)}% of your fee. Tick Reshoots where a job went back for pickups. Fees stay on this page.`}
+              hint={`Tick Scanned where a body or face scan was taken, and add your fee. Your earliest scan opens a ${assumptions.scanCycleYears}-year cycle — every scan inside it could have licensed that one instead, at ${(assumptions.relicenceRate * 100).toFixed(1)}% of your fee. Tick Reshoots for pickups.`}
             />
 
             {/* bulk controls */}
@@ -797,12 +778,9 @@ export default function CalculatorClient() {
                 }}
               >
                 <p className="text-xs" style={{ color: "var(--color-accent)", lineHeight: 1.5 }}>
-                  {plural(result.relicensableWithoutFee, "scanned job", "scanned jobs")} could have
-                  licensed a scan you already had, but {result.relicensableWithoutFee === 1 ? "has" : "have"} no
-                  fee on {result.relicensableWithoutFee === 1 ? "it" : "them"}. The re-licence is a
-                  share of that job&apos;s own fee, so{" "}
-                  {result.relicensableWithoutFee === 1 ? "it earns" : "they earn"} nothing until you
-                  price {result.relicensableWithoutFee === 1 ? "it" : "them"}.
+                  {plural(result.relicensableWithoutFee, "scan", "scans")} could have re-licensed but
+                  {result.relicensableWithoutFee === 1 ? " has" : " have"} no fee. The re-licence is a
+                  share of that job&apos;s fee, so add one.
                 </p>
                 {bulkFee.trim() && (
                   <button
@@ -954,12 +932,12 @@ export default function CalculatorClient() {
                 as a bug rather than as the capture that had to happen. */}
             {result.cycleCount > 0 && (
               <p className="mt-2.5 text-xs" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-                <span style={{ color: "var(--color-accent)" }}>◆</span> opens a cycle — the capture
-                that genuinely had to happen, so it earns nothing. Every scan inside that cycle could
-                have licensed it instead.{" "}
+                <span style={{ color: "var(--color-accent)" }}>◆</span> opens a cycle — nothing was
+                live when it was taken, so it earns nothing. Every scan inside that cycle could have
+                licensed it instead.{" "}
                 {result.cycleCount === 1
-                  ? `Your scans form one ${assumptions.scanCycleYears}-year cycle.`
-                  : `Your scans form ${result.cycleCount} cycles: each starts when the one before it lapsed.`}
+                  ? `Your scans form one cycle.`
+                  : `Your scans form ${result.cycleCount} cycles.`}
               </p>
             )}
 
@@ -995,7 +973,7 @@ export default function CalculatorClient() {
             <StepHeading
               step="three"
               title="Advertising and branded content"
-              hint="Campaigns and content that could run off an existing scan with no shoot day. Your estimate, per year."
+              hint="Work that could run off an existing scan, with no shoot day. Your estimate, per year."
             />
             <div className="flex flex-wrap gap-6">
               <label className="block">
@@ -1034,8 +1012,7 @@ export default function CalculatorClient() {
               </label>
             </div>
             <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>
-              Counted only for the {formatYears(result.coveredYears)} a scan of yours was live —
-              mark more productions as scanned and this grows.
+              Counted for the {formatYears(result.coveredYears)} a scan of yours was live.
             </p>
           </section>
         )}
@@ -1062,17 +1039,13 @@ export default function CalculatorClient() {
                 }}
               >
                 <p className="mb-4 text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
-                  Your earliest scan opens a cycle that runs {assumptions.scanCycleYears} years from
-                  the day it was taken. A production that scanned you is a production that needed a
-                  scan — so every scan falling inside that cycle could have licensed the one already
-                  live rather than commissioning its own, and owed you{" "}
-                  {(assumptions.relicenceRate * 100).toFixed(1)}% of your fee on that job. The scan
-                  that opens a cycle earns nothing: there was nothing to re-use, so that capture was
-                  genuinely needed. Once the cycle lapses the next scan opens a fresh one. Reshoots
-                  are a second call on the same scan, at{" "}
+                  Your earliest scan opens a cycle running {assumptions.scanCycleYears} years from
+                  the day it was taken. Every scan inside that cycle could have licensed it instead
+                  of commissioning its own, at {(assumptions.relicenceRate * 100).toFixed(1)}% of
+                  your fee for that job. The scan that opens a cycle earns nothing; once the cycle
+                  lapses, the next scan opens a fresh one. Reshoots pay{" "}
                   {(assumptions.reshootRate * 100).toFixed(1)}%, and advertising counts for as long
-                  as any scan of yours was live. These are illustrative rates, not quoted terms —
-                  change them and watch the number move.
+                  as any scan was live. Illustrative rates, not quoted terms.
                 </p>
                 <div className="flex flex-wrap gap-5">
                   <label className="block">
@@ -1131,9 +1104,11 @@ export default function CalculatorClient() {
           </section>
         )}
 
-        {/* ── results ── */}
-        {revealed && (
-          <section ref={resultsRef} className="mb-12 scroll-mt-24">
+        {/* ── result ──
+            No running total and no reveal: one figure, in place, updating as
+            the sheet is filled in. */}
+        {person && activeCredits.length > 0 && (
+          <section className="mb-12">
             <div
               className="px-6 py-8"
               style={{
@@ -1155,10 +1130,9 @@ export default function CalculatorClient() {
                 {money(result.total, currency)}
               </p>
               <p className="mt-3 max-w-xl text-sm" style={{ color: "rgba(255,255,255,0.72)", lineHeight: 1.6 }}>
-                What re-licensing your own scans could have earned over the last{" "}
-                {assumptions.lookbackYears} years, on top of the{" "}
-                {money(result.feeTotal, currency)} you were already paid
-                {result.upliftPercent !== null && ` — an uplift of ${result.upliftPercent.toFixed(1)}%`}.
+                Over {assumptions.lookbackYears} years, on top of the{" "}
+                {money(result.feeTotal, currency)} you were paid
+                {result.upliftPercent !== null && ` — up ${result.upliftPercent.toFixed(1)}%`}.
               </p>
 
               <dl className="mt-7 grid gap-5 sm:grid-cols-3">
@@ -1215,9 +1189,8 @@ export default function CalculatorClient() {
                 None of that reaches you unless the scan is yours to license.
               </h3>
               <p className="mt-2 max-w-2xl text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
-                ImageVault puts your scan packages behind your own gate: you hold them, productions
-                request access, and every download is time-limited, dual-approved and on the record.
-                That is what turns the number above from a hypothetical into a line item.
+                ImageVault puts your scan packages behind your own gate — you hold them, productions
+                request access, and every download is on the record.
               </p>
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <Link
@@ -1237,8 +1210,7 @@ export default function CalculatorClient() {
                 </button>
               </div>
               <p className="mt-4 text-xs" style={{ color: "var(--color-muted)" }}>
-                Talent accounts are invite-only while we onboard. Requesting access takes a minute
-                and your figures above are not sent with it.
+                Talent accounts are invite-only while we onboard.
               </p>
             </div>
 
@@ -1260,9 +1232,8 @@ export default function CalculatorClient() {
                   Pass it on, filled in
                 </h4>
                 <p className="mt-1 max-w-xl text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
-                  The link below carries this whole sheet — every credit you marked, every fee you
-                  typed, and the rates you set. Whoever opens it lands on this number and can change
-                  anything they disagree with.
+                  The link carries this whole sheet. Whoever opens it lands on this number and can
+                  change anything they disagree with.
                 </p>
 
                 <div className="mt-5 flex flex-col gap-6 sm:flex-row sm:items-start">
@@ -1286,7 +1257,7 @@ export default function CalculatorClient() {
                       )}
                     </div>
                     <p className="mt-2 max-w-[190px] text-xs" style={{ color: "var(--color-muted)" }}>
-                      Point a phone camera at this to open the sheet on their device.
+                      Point a phone camera at this.
                     </p>
                   </div>
 
@@ -1327,9 +1298,8 @@ export default function CalculatorClient() {
                     </div>
 
                     <p className="mt-4 text-xs" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-                      We still store none of this — the figures live in the link, not on our servers.
-                      That cuts both ways: anyone holding the link can read the fees in it, so treat
-                      it as private and send it to one person.
+                      The figures live in the link, so anyone holding it can read your fees. Send it
+                      to one person.
                     </p>
                   </div>
                 </div>
@@ -1340,51 +1310,11 @@ export default function CalculatorClient() {
 
         {/* ── footnote ── */}
         <p className="text-xs" style={{ color: "var(--color-faint)", lineHeight: 1.7 }}>
-          Credits come from the public TMDB database and may be incomplete — remove anything that
-          isn&apos;t yours. Every figure here is an illustration built from rates you can change, not
-          an offer, a valuation, or advice. ImageVault stores nothing you enter on this page; a share
-          link carries your figures in the link itself, so treat one as private.
+          Credits are drawn from public listings and may be incomplete — remove anything that
+          isn&apos;t yours. Every figure is an illustration built from rates you can change, not an
+          offer, a valuation, or advice.
         </p>
       </main>
-
-      {/* ── sticky running total ── */}
-      {person && activeCredits.length > 0 && (
-        <div
-          className="fixed bottom-0 left-0 right-0 z-40 border-t"
-          style={{
-            borderColor: "var(--color-border)",
-            background: "rgba(255,255,255,0.95)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-          }}
-        >
-          <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
-                Running total
-              </p>
-              <p
-                className="font-mono text-xl"
-                style={{ color: hasSomethingToShow ? "var(--color-accent)" : "var(--color-faint)" }}
-              >
-                {money(result.total, currency)}
-              </p>
-            </div>
-            <p className="hidden text-xs sm:block" style={{ color: "var(--color-muted)" }}>
-              {result.scannedCount} scanned · {result.relicensableCount} re-licensable ·{" "}
-              {formatYears(result.coveredYears)} covered
-            </p>
-            <button
-              type="button"
-              onClick={reveal}
-              disabled={!hasSomethingToShow}
-              className="btn-accent ml-auto px-5 py-2.5 text-xs font-medium tracking-wide uppercase text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {revealed ? "Jump to the breakdown" : "Show my breakdown"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

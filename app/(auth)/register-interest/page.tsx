@@ -206,8 +206,7 @@ function RegisterInterestForm() {
                   </p>
                   <p className="mt-1 text-2xl font-semibold text-[--color-ink]">{handover.estimate}</p>
                   <p className="mt-1 text-xs text-[--color-muted]">
-                    Shown for your reference — your figures stayed on the calculator page and are not
-                    sent with this request.
+                    Shown for your reference. Your figures aren&apos;t sent with this request.
                   </p>
                 </div>
               )}
