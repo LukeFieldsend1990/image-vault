@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Wordmark from "@/app/components/wordmark";
 
 const COMPANY_TYPES = [
@@ -38,7 +39,33 @@ const inputClass =
 const labelClass =
   "block text-xs font-medium tracking-wide uppercase text-[--color-muted] mb-1.5";
 
-export default function RegisterInterestPage() {
+const CURRENCY_SYMBOLS: Record<string, string> = { GBP: "£", USD: "$", EUR: "€" };
+
+/**
+ * The /calculator applet hands visitors over here with their name and the
+ * headline figure it showed them. Only those two things travel, in the URL —
+ * the calculator stores nothing, and the estimate is shown back for context
+ * rather than submitted with the enquiry.
+ */
+function useCalculatorHandover() {
+  const params = useSearchParams();
+  if (params.get("from") !== "calculator") return null;
+
+  const estimate = Number(params.get("est"));
+  const currency = params.get("currency") ?? "GBP";
+  const symbol = CURRENCY_SYMBOLS[currency] ?? "";
+
+  return {
+    name: params.get("name")?.slice(0, 200) ?? "",
+    estimate:
+      Number.isFinite(estimate) && estimate > 0
+        ? `${symbol}${Math.round(estimate).toLocaleString("en-GB")}`
+        : null,
+  };
+}
+
+function RegisterInterestForm() {
+  const handover = useCalculatorHandover();
   const [audience, setAudience] = useState<Audience>("talent");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -160,11 +187,30 @@ export default function RegisterInterestPage() {
               <h1 className="mb-1 text-3xl font-semibold tracking-tight text-[--color-ink]">
                 Request access
               </h1>
-              <p className="mb-10 text-sm text-[--color-muted]">
+              <p className={handover?.estimate ? "mb-5 text-sm text-[--color-muted]" : "mb-10 text-sm text-[--color-muted]"}>
                 {audience === "talent"
                   ? "Tell us a little about yourself and we'll be in touch to get you set up."
                   : "Tell us about your company and we'll be in touch to get you set up."}
               </p>
+
+              {handover?.estimate && (
+                <div
+                  className="mb-10 px-4 py-3"
+                  style={{
+                    background: "var(--color-accent-tint)",
+                    borderRadius: "var(--radius)",
+                  }}
+                >
+                  <p className="text-xs font-medium tracking-wide uppercase text-[--color-accent]">
+                    Your calculator estimate
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-[--color-ink]">{handover.estimate}</p>
+                  <p className="mt-1 text-xs text-[--color-muted]">
+                    Shown for your reference — your figures stayed on the calculator page and are not
+                    sent with this request.
+                  </p>
+                </div>
+              )}
 
               <form key={audience} className="space-y-5" onSubmit={handleSubmit}>
                 <div>
@@ -177,6 +223,7 @@ export default function RegisterInterestPage() {
                     type="text"
                     autoComplete="name"
                     required
+                    defaultValue={handover?.name || undefined}
                     placeholder="Jane Smith"
                     className={inputClass}
                     style={{ borderRadius: "var(--radius)" }}
@@ -417,5 +464,13 @@ export default function RegisterInterestPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterInterestPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterInterestForm />
+    </Suspense>
   );
 }

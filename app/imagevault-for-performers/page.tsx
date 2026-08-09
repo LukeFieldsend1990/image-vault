@@ -109,6 +109,17 @@ export default async function PerformerExplainerPage() {
             </Link>
           </div>
         )}
+
+        {/* Calculator — the low-commitment way in: no account, nothing stored. */}
+        <div className="mt-6 rounded-xl p-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>What is your scan worth?</h2>
+          <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+            Pull your last ten years of credits, mark the jobs that scanned you, and see what re-licensing those scans would have been worth. No account, and nothing you enter is stored.
+          </p>
+          <Link href="/calculator" className="inline-block rounded px-4 py-2 text-sm font-medium" style={{ border: "1px solid var(--color-text)", color: "var(--color-text)" }}>
+            Open the calculator
+          </Link>
+        </div>
       </div>
     </div>
   );
