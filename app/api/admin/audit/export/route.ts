@@ -4,6 +4,7 @@ import {
   downloadEvents,
   bridgeEvents,
   bridgeGrants,
+  complianceEvents,
   users,
   licences,
   scanPackages,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { ledgerEventLabel, ledgerSeverity } from "@/lib/compliance/labels";
 import { desc, sql, and, gte, lte } from "drizzle-orm";
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
@@ -117,6 +119,7 @@ export async function GET(req: NextRequest) {
     inviteRows,
     pwResetRows,
     suspendRows,
+    complianceRows,
   ] = await Promise.all([
     db
       .select({
@@ -295,6 +298,33 @@ export async function GET(req: NextRequest) {
         sql`${users.suspendedAt} IS NOT NULL AND ${users.suspendedAt} >= ${fromTs} AND ${users.suspendedAt} <= ${toTs}`
       )
       .all(),
+
+    // The hash-chained consent ledger. This is the export that leaves the
+    // building, so the ledger position travels with each row — a CSV line that
+    // cites chain, sequence and hash can be reconciled against a printed record.
+    db
+      .select({
+        id: complianceEvents.id,
+        createdAt: complianceEvents.createdAt,
+        eventType: complianceEvents.eventType,
+        clauseRef: complianceEvents.clauseRef,
+        chainKey: complianceEvents.chainKey,
+        seq: complianceEvents.seq,
+        hash: complianceEvents.hash,
+        ip: complianceEvents.ipAddress,
+        email: sql<string | null>`(SELECT email FROM users WHERE id = ${complianceEvents.actorId})`,
+        project: sql<string | null>`(SELECT project_name FROM licences WHERE id = ${complianceEvents.licenceId})`,
+      })
+      .from(complianceEvents)
+      .where(
+        and(
+          gte(complianceEvents.createdAt, fromTs),
+          lte(complianceEvents.createdAt, toTs)
+        )
+      )
+      .orderBy(desc(complianceEvents.createdAt))
+      .limit(LIMIT)
+      .all(),
   ]);
 
   // ── Build unified events ──────────────────────────────────────────────────
@@ -461,6 +491,22 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Apply filters ─────────────────────────────────────────────────────────
+
+  for (const e of complianceRows) {
+    events.push({
+      timestamp: e.createdAt,
+      category: "compliance",
+      severity: ledgerSeverity(e.eventType),
+      actor: e.email,
+      event: `${ledgerEventLabel(e.eventType)}${e.project ? ` — ${e.project}` : ""}`,
+      details: [
+        `${e.chainKey} #${e.seq}`,
+        e.clauseRef ? `clause ${e.clauseRef}` : "",
+        `hash ${e.hash}`,
+        e.ip ?? "",
+      ].filter(Boolean).join(" · "),
+    });
+  }
 
   let filtered = events.sort((a, b) => b.timestamp - a.timestamp);
 

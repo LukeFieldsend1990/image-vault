@@ -36,6 +36,11 @@ const TALENT_ONLY_WHITELIST: Record<string, string> = {
   "monitor/route.ts": "talent's own likeness monitor config — reps are alerted on hits but triage is an identity decision",
   "monitor/scan/route.ts": "talent runs likeness scans over their own biometric identity anchors",
   "monitor/hits/[id]/route.ts": "talent personally confirms/dismisses likeness hits ('is this me?' is an identity decision)",
+  // Not an authorisation gate at all: this is the public, unauthenticated
+  // waitlist form, and `role === "talent"` there only selects which email
+  // template audience to use. No account exists yet, so there is no talent for
+  // a rep to act on behalf of.
+  "auth/register-interest/route.ts": "public pre-signup interest form — the role string picks an email template, not an access decision",
 };
 
 const API_DIR = join(process.cwd(), "app", "api");

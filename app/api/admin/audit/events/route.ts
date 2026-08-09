@@ -4,6 +4,7 @@ import {
   downloadEvents,
   bridgeEvents,
   bridgeGrants,
+  complianceEvents,
   users,
   licences,
   scanPackages,
@@ -12,9 +13,21 @@ import {
 } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { ledgerEventLabel, ledgerSeverity } from "@/lib/compliance/labels";
 import { desc, sql } from "drizzle-orm";
 
-type EventCategory = "download" | "licence" | "auth" | "bridge" | "vault" | "invite" | "admin";
+type EventCategory =
+  | "download"
+  | "licence"
+  | "auth"
+  | "bridge"
+  | "vault"
+  | "invite"
+  | "admin"
+  // The hash-chained consent ledger: grants, withdrawals, dual-custody legs,
+  // attestations, transfers. The most legally significant events in the system,
+  // and until now absent from the log that exists to surface them.
+  | "compliance";
 
 type AuditEvent = {
   id: string;
@@ -100,6 +113,7 @@ export async function GET(req: NextRequest) {
     inviteRows,
     pwResetRows,
     suspendRows,
+    complianceRows,
   ] = await Promise.all([
     db.select({
       id: downloadEvents.id,
@@ -187,6 +201,22 @@ export async function GET(req: NextRequest) {
       email: users.email,
       suspendedAt: users.suspendedAt,
     }).from(users).where(sql`${users.suspendedAt} IS NOT NULL`).all(),
+
+    // The hash-chained ledger. `seq` and `hash` come along because an audit
+    // entry that cites its ledger position can be tied back to the printed
+    // record; without them this would just be a prettier activity feed.
+    db.select({
+      id: complianceEvents.id,
+      createdAt: complianceEvents.createdAt,
+      eventType: complianceEvents.eventType,
+      clauseRef: complianceEvents.clauseRef,
+      chainKey: complianceEvents.chainKey,
+      seq: complianceEvents.seq,
+      hash: complianceEvents.hash,
+      ip: complianceEvents.ipAddress,
+      email: sql<string | null>`(SELECT email FROM users WHERE id = ${complianceEvents.actorId})`,
+      project: sql<string | null>`(SELECT project_name FROM licences WHERE id = ${complianceEvents.licenceId})`,
+    }).from(complianceEvents).orderBy(desc(complianceEvents.createdAt)).limit(LIMIT).all(),
   ]);
 
   const events: AuditEvent[] = [];
@@ -365,6 +395,25 @@ export async function GET(req: NextRequest) {
         severity: "info",
       });
     }
+  }
+
+  for (const e of complianceRows) {
+    events.push({
+      id: `cmp-${e.id}`,
+      category: "compliance",
+      timestamp: e.createdAt,
+      actor: e.email,
+      detail: `${ledgerEventLabel(e.eventType)}${e.project ? ` — ${e.project}` : ""}`,
+      // The ledger position is the point of the entry: it is what lets an admin
+      // find this same event on a printed custody record or consent receipt.
+      meta: [
+        `${e.chainKey} #${e.seq}`,
+        e.clauseRef ? `§${e.clauseRef}` : "",
+        e.hash.slice(0, 12) + "…",
+        e.ip ?? "",
+      ].filter(Boolean).join(" · ") || null,
+      severity: ledgerSeverity(e.eventType),
+    });
   }
 
   events.sort((a, b) => b.timestamp - a.timestamp);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Inlay from "@/app/components/inlay";
 import Wordmark from "@/app/components/wordmark";
 import { DocEnd, DocMeta, DocRule, HashQuads, TamperSeal } from "@/app/components/seal";
+import { ledgerEventLabel } from "@/lib/compliance/labels";
 import {
   DOC,
   DOC_PRINT_CSS,
@@ -22,6 +23,7 @@ import type {
   ActivityResponse,
   CustodyEvent,
 } from "@/app/api/vault/packages/[packageId]/activity/route";
+import type { LiveAccess } from "@/lib/vault/liveAccess";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -115,38 +117,9 @@ const EVENT_ICON: Record<CustodyEvent["type"], React.ReactNode> = {
   ),
 };
 
-/** Human names for the hash-chained compliance-ledger event types. */
-const LEDGER_LABEL: Record<string, string> = {
-  "download.initiated": "Download initiated",
-  "custody.licensee_verified": "Dual custody — licensee 2FA verified",
-  "custody.talent_verified": "Dual custody — performer 2FA verified",
-  "consent.granted": "Consent granted",
-  "consent.dub_language_granted": "Dub-language consent granted",
-  "consent.counter_proposed": "Counter-terms proposed",
-  "consent.revoked": "Consent withdrawn",
-  "licence.denied": "Licence denied",
-  "licence.revoked": "Licence revoked",
-  "biometric.isolation_attested": "Biometric-isolation attestation",
-  "security.custody_attested": "Custody controls attested",
-  "replica.scrub_attested": "Scrub and deletion attested",
-  "transfer.requested": "Third-party transfer requested",
-  "transfer.approved": "Third-party transfer approved",
-  "transfer.denied": "Third-party transfer denied",
-  "business_reason.recorded": "Business reason recorded",
-  "training.notice_filed": "AI-training notice filed",
-  "strike.declared": "Strike declared",
-  "strike.lifted": "Strike lifted",
-  "use.blocked": "Use blocked",
-  "use.blocked_by_strike": "Use blocked by strike",
-  "use.metered": "Metered use recorded",
-  "package.attached": "Scan package attached to licence",
-};
-
 function eventLabel(e: CustodyEvent): string {
   if (e.type !== "compliance_event") return EVENT_LABEL[e.type];
-  const t = e.complianceEventType;
-  if (!t) return "Ledger entry";
-  return LEDGER_LABEL[t] ?? t.replace(/[._]/g, " ");
+  return ledgerEventLabel(e.complianceEventType);
 }
 
 // ── Chain rail ─────────────────────────────────────────────────────────────────
@@ -505,6 +478,152 @@ function PartiesTable({ parties }: { parties: Party[] }) {
   );
 }
 
+// ── Live access ────────────────────────────────────────────────────────────────
+
+/**
+ * "Who can reach this right now" — the counterpart to the record below it.
+ *
+ * Read-only by design. Revocation already has a home (the per-grant control on
+ * the bridge settings surface); putting a destructive action on a page people
+ * open casually is how accidents happen. This tells you what is open and where
+ * to go about it.
+ */
+function LiveAccessPanel({ packageId }: { packageId: string }) {
+  const [data, setData] = useState<LiveAccess | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/vault/packages/${packageId}/access`)
+      .then((r) => (r.ok ? (r.json() as Promise<LiveAccess>) : Promise.reject(new Error(String(r.status)))))
+      .then(setData)
+      .catch(() => setFailed(true));
+  }, [packageId]);
+
+  // A failure here must not distract from the record, which is the page's job.
+  if (failed || !data) return null;
+
+  const s = data.summary;
+  const totalOpen = s.liveGrants + s.activePreauths + s.openHandshakes;
+  const tone = totalOpen > 0 ? "var(--color-expiring)" : "var(--color-active)";
+  const tint = totalOpen > 0 ? "var(--color-expiring-tint)" : "var(--color-active-tint)";
+
+  return (
+    <div className="rounded" style={{ border: `1px solid ${tone}`, background: tint, borderRadius: "var(--radius)" }}>
+      <div className="px-5 py-4">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <p
+            className="uppercase"
+            style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", color: tone, margin: 0 }}
+          >
+            Access right now
+          </p>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--color-muted)" }}>
+            checked {isoUtc(data.checkedAt)}
+          </span>
+        </div>
+
+        <p className="text-sm mt-2" style={{ color: "var(--color-ink)", lineHeight: 1.6 }}>
+          {totalOpen === 0 ? (
+            <>
+              Nobody can currently open this scan. {s.licencesInForce > 0
+                ? `${s.licencesInForce} licence${s.licencesInForce === 1 ? " is" : "s are"} in force, but no vendor session, pre-authorisation or download handshake is open.`
+                : "No licence is in force."}
+            </>
+          ) : (
+            <>
+              <strong>{totalOpen}</strong> open route{totalOpen === 1 ? "" : "s"} to this scan
+              {s.outstandingTokens > 0 ? `, and ${s.outstandingTokens} download token${s.outstandingTokens === 1 ? "" : "s"} already issued` : ""}.
+            </>
+          )}
+        </p>
+      </div>
+
+      {data.licences.some((l) => l.openPaths > 0) && (
+        <div style={{ borderTop: `1px solid ${tone}` }}>
+          {data.licences
+            .filter((l) => l.openPaths > 0)
+            .map((l) => (
+              <div key={l.licenceId} className="px-5 py-3.5" style={{ borderBottom: `1px solid var(--color-border)` }}>
+                <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                  <span className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                    {l.projectName}
+                    <span style={{ color: "var(--color-muted)", fontWeight: 400 }}> — {l.productionCompany}</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {l.shortCode && (
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--color-muted)" }}>
+                        {l.shortCode}
+                      </span>
+                    )}
+                    <span
+                      className="uppercase"
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        letterSpacing: "0.1em",
+                        color: l.inForce ? "var(--color-active)" : "var(--color-danger)",
+                      }}
+                    >
+                      {l.inForce ? "in force" : l.status.replace(/_/g, " ")}
+                    </span>
+                  </span>
+                </div>
+
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {l.grants.map((g) => (
+                    <div key={g.grantId} className="flex items-baseline justify-between gap-3 flex-wrap">
+                      <span className="text-xs" style={{ color: "var(--color-text)" }}>
+                        <span style={{ color: "var(--color-ink)", fontWeight: 500 }}>{g.userEmail ?? "Unknown user"}</span>
+                        {" · "}{g.tool}
+                        {g.deviceName ? ` · ${g.deviceName}` : ""}
+                        {g.purgeRequestedAt ? " · purge requested" : ""}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--color-muted)" }}>
+                        until {isoUtc(g.expiresAt).slice(0, 16)}
+                        {g.purgeGrace ? ` · offline ${g.purgeGrace}` : ""}
+                      </span>
+                    </div>
+                  ))}
+
+                  {l.preauthUntil && (
+                    <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                      <span className="text-xs" style={{ color: "var(--color-text)" }}>
+                        Pre-authorised download — the performer&apos;s second factor is waived
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--color-muted)" }}>
+                        until {isoUtc(l.preauthUntil).slice(0, 16)}
+                      </span>
+                    </div>
+                  )}
+
+                  {l.handshake && (
+                    <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                      <span className="text-xs" style={{ color: "var(--color-text)" }}>
+                        Download handshake in progress — {l.handshake.step.replace(/_/g, " ")}
+                        {l.handshake.tokenCount > 0
+                          ? `, ${l.handshake.tokenCount} token${l.handshake.tokenCount === 1 ? "" : "s"} issued`
+                          : ""}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--color-muted)" }}>
+                        expires {isoUtc(l.handshake.expiresAt).slice(0, 16)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+          <div className="px-5 py-2.5">
+            <Link href="/settings/bridge" className="text-xs font-medium" style={{ color: "var(--color-accent)" }}>
+              Manage vendor sessions →
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function CustodyClient({ packageId }: { packageId: string }) {
@@ -616,6 +735,13 @@ export default function CustodyClient({ packageId }: { packageId: string }) {
           </Inlay>
         </div>
       )}
+
+      {/* ── Present tense, above the retrospective record. Screen only: live
+          state changes between load and print, so it has no business on a
+          document that is meant to be a fixed extract. ── */}
+      <div className="no-print mb-6">
+        <LiveAccessPanel packageId={packageId} />
+      </div>
 
       {/* ── The document ── */}
       <div

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { AuditFilters } from "./audit-shell";
 
-type EventCategory = "download" | "licence" | "auth" | "bridge" | "vault" | "invite" | "admin";
+type EventCategory = "download" | "licence" | "auth" | "bridge" | "vault" | "invite" | "admin" | "compliance";
 
 export type AuditEvent = {
   id: string;
@@ -25,6 +25,8 @@ const CATEGORY_CONFIG: Record<EventCategory, { label: string; color: string }> =
   vault:    { label: "Vault",    color: "#b45309" },
   invite:   { label: "Invite",   color: "#6d28d9" },
   admin:    { label: "Admin",    color: "#dc2626" },
+  // Brick, matching the accent the printed evidence documents use for the ledger.
+  compliance: { label: "Compliance", color: "#bc3d2c" },
 };
 
 const SEVERITY_DOT: Record<string, string> = {

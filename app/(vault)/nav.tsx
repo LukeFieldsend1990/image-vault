@@ -7,6 +7,22 @@ import type { OrgType } from "@/lib/organisations/orgTypes";
 
 type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
 
+// A performer's likeness history across every production. Talent only in the
+// rail — reps reach the same view per client from the roster. The glyph is a
+// history dial, deliberately not the compliance shield: this is the record of
+// what happened, not a statement about whether it complied.
+const CUSTODY_NAV_ITEM = {
+  href: "/vault/custody",
+  label: "Custody",
+  icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3 4 3 9 8 9" />
+      <polyline points="12 8 12 12 15 14" />
+    </svg>
+  ),
+};
+
 // Leak trace-back. Talent and reps only — a licensee holds files, so whose a
 // given hash belongs to is not theirs to ask (the page and API both enforce it).
 const TRACE_NAV_ITEM = {
@@ -101,6 +117,7 @@ const TALENT_NAV = [
     ),
   },
   TRANSFERS_NAV_ITEM,
+  CUSTODY_NAV_ITEM,
   TRACE_NAV_ITEM,
   {
     href: "/bookings",
