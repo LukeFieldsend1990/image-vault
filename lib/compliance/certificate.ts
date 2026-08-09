@@ -6,6 +6,7 @@
 // chain and compares — a mismatch means the ledger was altered after issuance.
 
 import { eq, inArray } from "drizzle-orm";
+import { DOC, DOC_CSS_VARS, quads } from "@/lib/documents/palette";
 import { canonicalJson, sha256Hex, verifyChain, licenceChain } from "./ledger";
 import { evaluateObligations } from "./registry";
 import "./regimes"; // ensure regimes are registered
@@ -506,9 +507,14 @@ const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
 
 function statusBadge(status: string): string {
-  const map: Record<string, string> = { met: "#1a7f37", gap: "#c0392b", "n/a": "#888", pending: "#2563eb" };
+  const map: Record<string, string> = {
+    met: DOC.olive,
+    gap: DOC.brick,
+    "n/a": DOC.muted,
+    pending: DOC.ochre,
+  };
   const label: Record<string, string> = { met: "✓ MET", gap: "⚠ GAP", "n/a": "N/A", pending: "⏳ PENDING" };
-  return `<span style="color:${map[status] ?? "#888"};font-weight:600">${label[status] ?? status}</span>`;
+  return `<span style="color:${map[status] ?? DOC.muted};font-weight:600">${label[status] ?? status}</span>`;
 }
 
 function fmtDate(unix: number): string {
@@ -564,14 +570,14 @@ function evidenceDetailHtml(o: ObligationResult, events: LedgerRow[]): string {
     const ev = findEvidenceEvent(o, events);
     if (!ev) return "";
     const scopeStr = fmtScope(ev.scope);
-    return `<br><small style="color:#1a7f37;font-family:ui-monospace,monospace;font-size:11px">${esc(fmtEventLabel(ev.eventType))} · seq ${ev.seq} · ${esc(fmtDate(ev.createdAt))} · ${esc(ev.hash.slice(0, 12))}…</small>${scopeStr ? `<br><small style="color:#999;font-size:11px">${esc(scopeStr)}</small>` : ""}`;
+    return `<br><small style="color:${DOC.olive};font-family:${DOC.mono};font-size:11px">${esc(fmtEventLabel(ev.eventType))} · seq ${ev.seq} · ${esc(fmtDate(ev.createdAt))} · ${esc(quads(ev.hash.slice(0, 12)))}…</small>${scopeStr ? `<br><small style="color:${DOC.muted};font-size:11px">${esc(scopeStr)}</small>` : ""}`;
   }
   if (o.status === "gap") {
     const needed = o.satisfiedBy.map(fmtEventLabel).join(" or ");
-    return `<br><small style="color:#c0392b;font-size:11px">Requires: ${esc(needed)} — no matching event in ledger</small>`;
+    return `<br><small style="color:${DOC.brick};font-size:11px">Requires: ${esc(needed)} — no matching event in ledger</small>`;
   }
   if (o.status === "pending") {
-    return `<br><small style="color:#2563eb;font-size:11px">Not yet required — obligation triggered on licence expiry</small>`;
+    return `<br><small style="color:${DOC.ochre};font-size:11px">Not yet required — obligation triggered on licence expiry</small>`;
   }
   return "";
 }
@@ -589,7 +595,7 @@ function renderLicenceSection(lb: LicenceBreakdown): string {
   const eventRows = lb.events
     .map((e) => {
       const scopeStr = fmtScope(e.scope);
-      return `<tr><td>${e.seq}</td><td>${esc(fmtDate(e.createdAt))}</td><td>${esc(fmtEventLabel(e.eventType))}</td><td>${esc(e.clauseRef ?? "")}</td><td>${scopeStr ? `<span style="color:#777">${esc(scopeStr)}</span>` : ""}</td><td><code>${esc(e.hash.slice(0, 12))}…</code></td></tr>`;
+      return `<tr><td>${e.seq}</td><td>${esc(fmtDate(e.createdAt))}</td><td>${esc(fmtEventLabel(e.eventType))}</td><td>${esc(e.clauseRef ?? "")}</td><td>${scopeStr ? `<span style="color:${DOC.muted}">${esc(scopeStr)}</span>` : ""}</td><td><code>${esc(quads(e.hash.slice(0, 12)))}…</code></td></tr>`;
     })
     .join("");
 
@@ -603,7 +609,7 @@ function renderLicenceSection(lb: LicenceBreakdown): string {
       <tr><th>Bridge cache purged</th><td>${sa.bridgeCachePurged ? "✓ Yes" : "No"}</td></tr>
       ${sa.additionalNotes ? `<tr><th>Additional notes</th><td>${esc(sa.additionalNotes)}</td></tr>` : ""}
     </table>
-    <p style="font-size:11px;color:#555;background:#fafafa;padding:8px 10px;border-left:2px solid #ddd;margin:0">${esc(sa.attestationText)}</p>
+    <p style="font-size:11px;color:${DOC.text};background:${DOC.inset};padding:8px 10px;border-left:2px solid ${DOC.rule};margin:0">${esc(sa.attestationText)}</p>
   </div>` : "";
 
   return `
@@ -666,7 +672,7 @@ function renderCertificateHtml(d: {
   const eventRows = d.events
     .map(
       (e) =>
-        `<tr><td>${e.seq}</td><td>${esc(e.eventType)}</td><td>${esc(e.clauseRef ?? "")}</td><td><code>${esc(e.hash.slice(0, 16))}…</code></td></tr>`,
+        `<tr><td>${e.seq}</td><td>${esc(fmtEventLabel(e.eventType))}</td><td>${esc(e.clauseRef ?? "")}</td><td><code>${esc(quads(e.hash.slice(0, 16)))}…</code></td></tr>`,
     )
     .join("");
   const strikes = d.events.filter((e) => e.eventType.startsWith("strike.") || e.eventType === "use.blocked_by_strike");
@@ -674,19 +680,23 @@ function renderCertificateHtml(d: {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <title>Compliance Certificate ${esc(d.id)}</title>
 <style>
-  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;max-width:900px;margin:40px auto;padding:0 24px;line-height:1.5}
-  h1{font-size:22px;margin:0 0 4px} h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#666;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid #e5e5e5}
-  .muted{color:#777;font-size:13px} table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
-  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eee} th{color:#888;font-weight:600;font-size:11px;text-transform:uppercase}
-  .seal{margin-top:24px;padding:12px;border:1px solid #ddd;border-radius:6px;background:#fafafa;font-size:12px}
-  code{font-family:ui-monospace,monospace;font-size:12px} .accent{color:#c0392b}
+  ${DOC_CSS_VARS}
+  body{font-family:var(--doc-sans);color:var(--doc-text);max-width:900px;margin:40px auto;padding:0 24px;line-height:1.55;background:var(--doc-paper)}
+  h1{font-family:var(--doc-serif);font-size:24px;font-weight:600;letter-spacing:-0.01em;color:var(--doc-ink);margin:0 0 4px}
+  h2{font-size:9px;text-transform:uppercase;letter-spacing:.25em;font-weight:700;color:var(--doc-muted);margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--doc-rule)}
+  .muted{color:var(--doc-muted);font-size:13px} table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--doc-rule)} th{color:var(--doc-muted);font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:.1em}
+  .seal{margin-top:24px;padding:14px;border:1px solid var(--doc-rule);border-left:3px solid var(--doc-olive);border-radius:6px;background:var(--doc-olive-tint);font-size:12px}
+  .seal-hash{display:block;margin:6px 0;font-family:var(--doc-mono);font-size:11px;letter-spacing:.02em;color:var(--doc-olive);word-break:break-word}
+  code{font-family:var(--doc-mono);font-size:11.5px} .accent{color:var(--doc-brick)}
   .prod-group{margin:0 0 24px}
-  .prod-header{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px;background:#f5f5f5;border-left:3px solid #c0392b;margin-bottom:0}
-  .licence-block{padding:12px 12px 16px;border:1px solid #eee;border-top:none;margin-bottom:8px}
-  .licence-title{font-size:12px;font-weight:600;margin:0 0 8px;color:#333}
-  .licence-meta{font-weight:400;color:#777}
-  .sub-header{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#999;margin:12px 0 4px}
-  .scrub-block{margin-top:12px;padding:10px 12px;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:4px}
+  .prod-header{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--doc-ink);padding:10px 12px;background:var(--doc-inset);border-left:3px solid var(--doc-brick);margin-bottom:0}
+  .licence-block{padding:12px 12px 16px;border:1px solid var(--doc-rule);border-top:none;margin-bottom:8px}
+  .licence-title{font-size:12px;font-weight:600;margin:0 0 8px;color:var(--doc-ink)}
+  .licence-meta{font-weight:400;color:var(--doc-muted)}
+  .sub-header{font-size:9px;text-transform:uppercase;letter-spacing:.2em;font-weight:700;color:var(--doc-muted);margin:14px 0 4px}
+  .scrub-block{margin-top:12px;padding:10px 12px;background:var(--doc-inset);border:1px solid var(--doc-rule);border-radius:4px}
+  @media print{ @page{size:A4;margin:18mm 16mm 20mm} .licence-block,.seal,tr{break-inside:avoid} }
 </style></head><body>
 <h1>SAG-AFTRA Compliance Certificate</h1>
 <p class="muted">${esc(d.regime)} · ${esc(d.scope)} ${esc(d.talentName ?? d.scopeId)}${d.licenceCount > 1 ? ` · ${d.licenceCount} licences` : ""} · generated ${esc(when)}</p>
@@ -707,8 +717,11 @@ ${d.breakdown ? renderBreakdownSection(d.breakdown) : `
 <tbody>${eventRows || '<tr><td colspan="4" class="muted">No ledger events.</td></tr>'}</tbody></table>`}
 
 <div class="seal">
-  <strong>Tamper seal.</strong> Ledger tip hash: <code class="accent">${esc(d.ledgerTipHash || "(empty)")}</code><br/>
-  Verify integrity at <code>/api/compliance/verify?certificateId=${esc(d.id)}</code>. Any post-issuance change to the ledger breaks this hash.
+  <strong>Tamper seal.</strong> Every event above is written to an append-only ledger in which each
+  record carries the hash of the one before it. Altering, reordering, or removing any event changes
+  the sealed hash below.
+  <span class="seal-hash">${esc(quads(d.ledgerTipHash) || "(empty chain)")}</span>
+  Verify at <code>/api/compliance/verify?certificateId=${esc(d.id)}</code>
 </div>
 </body></html>`;
 }

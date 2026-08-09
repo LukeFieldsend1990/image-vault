@@ -1539,6 +1539,26 @@ export const likenessHits = sqliteTable("likeness_hits", {
   detectedAt: integer("detected_at").notNull(),
 });
 
+// Seals bind a printed evidence document to a live integrity check. `ref` is the
+// opaque capability encoded in the document's QR code; `subjectLabel` is
+// deliberately limited to initials + a short code because /verify/{ref} is
+// public and must not disclose who the document is about.
+export const documentSeals = sqliteTable("document_seals", {
+  id: text("id").primaryKey(), // UUID
+  ref: text("ref").notNull().unique(), // opaque URL-safe token
+  kind: text("kind", { enum: ["custody_record", "consent_receipt", "certificate"] }).notNull(),
+  subjectType: text("subject_type", { enum: ["package", "licence", "cast", "talent"] }).notNull(),
+  subjectId: text("subject_id").notNull(),
+  subjectLabel: text("subject_label"), // initials + short code ONLY — never a name or email
+  chainKeysJson: text("chain_keys_json").notNull().default("[]"),
+  chainSummaryJson: text("chain_summary_json").notNull().default("[]"), // [{chainKey, seq, tipHash, eventCount}]
+  sealHash: text("seal_hash").notNull(), // SHA-256 over the sorted chain tips
+  eventCount: integer("event_count").notNull().default(0),
+  issuedBy: text("issued_by").references(() => users.id),
+  issuedAt: integer("issued_at").notNull(), // unix seconds
+  revokedAt: integer("revoked_at"),
+});
+
 export const emailLog = sqliteTable("email_log", {
   id: text("id").primaryKey(), // UUID
   toAddress: text("to_address").notNull(), // comma-separated if multiple recipients

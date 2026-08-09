@@ -1234,6 +1234,65 @@ export function consentConfirmedEmail(p: ConsentConfirmedEmailParams): { subject
   };
 }
 
+// ── Consent receipt (to the performer) ───────────────────────────────────────
+
+export interface ConsentReceiptEmailParams {
+  performerName: string;
+  productionName: string;
+  companyName: string;
+  granted: string[];
+  withheld: string[];
+  /** Set when an agent confirmed on the performer's behalf. */
+  confirmedByAgent?: string | null;
+  receiptUrl: string;
+  reference: string;
+}
+
+/**
+ * The performer's own copy. Deliberately leads with what was withheld as well as
+ * what was granted — this is the only message they receive about a decision that
+ * governs their likeness, and the refusals are the half that matters if it is
+ * ever disputed.
+ */
+export function consentReceiptEmail(p: ConsentReceiptEmailParams): { subject: string; html: string } {
+  const list = (items: string[], empty: string) =>
+    items.length === 0
+      ? `<p style="margin:6px 0 0;color:#807b70;font-style:italic">${escapeHtml(empty)}</p>`
+      : `<ul style="margin:6px 0 0;padding-left:18px">${items
+          .map((i) => `<li style="margin:2px 0">${escapeHtml(i)}</li>`)
+          .join("")}</ul>`;
+
+  return {
+    subject: `Your consent receipt — ${p.productionName} (${p.reference})`,
+    html: layout(`
+      <p>Hello ${escapeHtml(p.performerName)},</p>
+      <p>
+        This is your record of the consent
+        ${p.confirmedByAgent ? `${escapeHtml(p.confirmedByAgent)} confirmed on your behalf` : "you confirmed"}
+        for <strong>${escapeHtml(p.productionName)}</strong> (${escapeHtml(p.companyName)}). Keep it — it
+        states exactly what you agreed to and what you did not.
+      </p>
+
+      <p style="margin:18px 0 0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6e7a4f">
+        You consented to (${p.granted.length})
+      </p>
+      ${list(p.granted, "Nothing — consent was refused in full.")}
+
+      <p style="margin:18px 0 0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#807b70">
+        You did not consent to (${p.withheld.length})
+      </p>
+      ${list(p.withheld, "Nothing — you consented to every use on the document.")}
+
+      <p style="margin-top:20px">
+        You can withdraw any of this at any time. Withdrawal stops new uses from that point; it does
+        not undo uses that were already within scope.
+      </p>
+      <a class="btn" href="${p.receiptUrl}">View or print your receipt</a>
+      <p style="font-size:12px;color:#807b70">Receipt reference ${escapeHtml(p.reference)}</p>
+    `),
+  };
+}
+
 // ── Likeness monitor hit alert ───────────────────────────────────────────────
 
 export interface LikenessHitAlertParams {
