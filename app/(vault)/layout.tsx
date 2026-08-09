@@ -285,7 +285,11 @@ export default async function VaultLayout({
     : isIndustryRole(role) ? "/productions" : role === "rep" ? "/roster" : "/dashboard";
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    /* app-shell / app-main are hooks for the print rules in globals.css. The
+       viewport clamp here (h-screen + overflow-hidden) is what lets the sidebar
+       and the content scroll independently on screen — and it must be released
+       for print, or every document truncates to a single page. */
+    <div className="app-shell flex h-screen overflow-hidden">
       <SidebarShell homeHref={homeHref}>
         {/* Logo */}
         <div className="flex flex-col justify-between h-full py-8">
@@ -311,7 +315,7 @@ export default async function VaultLayout({
       </SidebarShell>
 
       {/* ── Main ── */}
-      <main className="flex flex-1 flex-col overflow-y-auto bg-[--color-bg] pt-12 lg:pt-0">
+      <main className="app-main flex flex-1 flex-col overflow-y-auto bg-[--color-bg] pt-12 lg:pt-0">
         <CodesProvider show={showCodes}>{children}</CodesProvider>
       </main>
     </div>
