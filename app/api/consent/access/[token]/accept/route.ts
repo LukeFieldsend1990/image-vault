@@ -9,7 +9,8 @@ import { getCastOffer } from "@/lib/consent/cast-offer";
 import { loadConsentDocByCast } from "@/lib/consent/load";
 import { createNotification } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
-import { consentConfirmedEmail } from "@/lib/email/templates";
+import { consentConfirmedEmail, consentReceiptEmail } from "@/lib/email/templates";
+import { buildConsentReceipt } from "@/lib/consent/receipt";
 import { listUseCategories, normaliseUseCategoryIds } from "@/lib/consent/use-categories";
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
@@ -116,6 +117,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         });
         await sendEmail({ to: coordinator.email, subject, html });
       }
+    } catch { /* best-effort */ }
+  })();
+
+  // The unregistered performer's own copy. There is no account yet, so the email
+  // is the only place this record reaches them — which makes it more important
+  // here, not less. The receipt itself notes that the ledger entry follows at
+  // registration.
+  void (async () => {
+    try {
+      const receipt = await buildConsentReceipt(db, result.acceptanceId);
+      if (!receipt || !receipt.performerEmail) return;
+      const base = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
+      const { subject, html } = consentReceiptEmail({
+        performerName: receipt.performerName,
+        productionName: receipt.productionName,
+        companyName: receipt.companyName,
+        granted: receipt.granted.map((u) => u.name),
+        withheld: receipt.withheld.map((u) => u.name),
+        confirmedByAgent: null,
+        // Guests have no session, so the receipt is reached back through the
+        // consent link they already hold rather than the authenticated route.
+        receiptUrl: `${base}/consent/access/${token}`,
+        reference: receipt.reference,
+      });
+      await sendEmail({ to: receipt.performerEmail, subject, html });
     } catch { /* best-effort */ }
   })();
 

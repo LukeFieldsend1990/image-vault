@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { scanPackages, scanFiles, licences, downloadEvents, users, talentProfiles, complianceEvents } from "@/lib/db/schema";
+import { scanPackages, scanFiles, licences, downloadEvents, users, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { formatChainCode } from "@/lib/codes/codes";
 import { hasRepAccess } from "@/lib/auth/repAccess";
+import { licenceChain, talentChain } from "@/lib/compliance/ledger";
+import { getOrMintSeal, loadChainEvents, verifyChainSet } from "@/lib/compliance/seal";
 import { eq, inArray, sql } from "drizzle-orm";
 
 export type CustodyEventType =
@@ -44,6 +46,12 @@ export interface CustodyEvent {
   // compliance_event (hash-chained ledger: consent, custody legs, attestations, transfers…)
   complianceEventType?: string;
   clauseRef?: string | null;
+  // Ledger position. Present only on `compliance_event` — these are what make
+  // the record a chain rather than a list, and the document renders them.
+  chainKey?: string;
+  seq?: number;
+  hash?: string;
+  prevHash?: string;
 }
 
 export interface CustodyPackage {
@@ -57,9 +65,39 @@ export interface CustodyPackage {
   chainCode: string;
 }
 
+/** One file under custody, with the fingerprint of the bytes actually stored. */
+export interface CustodyFile {
+  filename: string;
+  sizeBytes: number;
+  sha256: string | null;
+  completedAt: number | null;
+}
+
+/** Per-chain integrity result, shown in the record's tamper seal. */
+export interface CustodyChain {
+  chainKey: string;
+  eventCount: number;
+  tipHash: string;
+  ok: boolean;
+  brokenAtSeq?: number;
+  reason?: string;
+}
+
 export interface ActivityResponse {
   package: CustodyPackage;
   events: CustodyEvent[];
+  files: CustodyFile[];
+  chains: CustodyChain[];
+  /** SHA-256 over every chain tip in scope — the record's tamper seal. */
+  recordHash: string;
+  /** False when any chain failed verification. */
+  chainsOk: boolean;
+  /** Human line naming the first break, when there is one. */
+  chainBreak: string | null;
+  /** Opaque ref for the public verification page (/verify/{ref}). */
+  sealRef: string;
+  /** Absolute verification URL, printed on the document and encoded in its QR. */
+  verifyUrl: string;
   generatedAt: number;
 }
 
@@ -109,7 +147,9 @@ export async function GET(
       packageId: scanFiles.packageId,
       filename: scanFiles.filename,
       sizeBytes: scanFiles.sizeBytes,
+      sha256: scanFiles.sha256,
       createdAt: scanFiles.createdAt,
+      completedAt: scanFiles.completedAt,
     }).from(scanFiles).where(eq(scanFiles.packageId, packageId)).all(),
     db.select({
       id: licences.id,
@@ -128,26 +168,21 @@ export async function GET(
     }).from(licences).where(eq(licences.packageId, packageId)).all(),
   ]);
 
-  // Hash-chained compliance-ledger events for every licence on this package —
-  // consent grants/withdrawals, dual-custody legs, attestations, transfers, etc.
+  // Hash-chained compliance-ledger events for every chain touching this package
+  // — consent grants/withdrawals, dual-custody legs, attestations, transfers.
   // These live in the append-only ledger, not on the licence columns, so the
   // chain-of-custody document would otherwise omit them entirely.
-  const licenceChainKeys = licenceRows.map((l) => `licence:${l.id}`);
-  const ledgerEvents = licenceChainKeys.length > 0
-    ? await db
-        .select({
-          licenceId: complianceEvents.licenceId,
-          eventType: complianceEvents.eventType,
-          clauseRef: complianceEvents.clauseRef,
-          actorId: complianceEvents.actorId,
-          ipAddress: complianceEvents.ipAddress,
-          userAgent: complianceEvents.userAgent,
-          createdAt: complianceEvents.createdAt,
-        })
-        .from(complianceEvents)
-        .where(inArray(complianceEvents.chainKey, licenceChainKeys))
-        .all()
-    : [];
+  //
+  // The talent chain is included alongside the licence chains: talent-scoped
+  // events (strikes, platform-level attestations) are part of this package's
+  // custody story and used to be dropped from the record entirely.
+  const chainKeys = [...licenceRows.map((l) => licenceChain(l.id)), talentChain(pkg.talentId)];
+  const eventsByChain = await loadChainEvents(db, chainKeys);
+  const ledgerEvents = [...eventsByChain.values()].flat();
+
+  // Re-run the hash chain now, at read time, rather than trusting a stored flag.
+  // This is what the record's tamper seal attests to.
+  const verification = await verifyChainSet(db, chainKeys);
 
   // Collect all user IDs we need emails for
   const userIdSet = new Set<string>();
@@ -328,11 +363,31 @@ export async function GET(
       actor: e.actorId ? (userMap.get(e.actorId) ?? "Unknown") : undefined,
       ip: e.ipAddress,
       userAgent: e.userAgent,
+      chainKey: e.chainKey,
+      seq: e.seq,
+      hash: e.hash,
+      prevHash: e.prevHash,
     });
   }
 
-  // Sort chronologically
-  events.sort((a, b) => a.at - b.at);
+  // Sort chronologically. Ties break on ledger seq so two events recorded in the
+  // same second still read in the order they were chained.
+  events.sort((a, b) => a.at - b.at || (a.seq ?? -1) - (b.seq ?? -1));
+
+  const talentName = talentProfile?.fullName ?? null;
+
+  // The seal is what makes the printed record checkable by someone who does not
+  // have an account. `subjectLabel` is shown on the PUBLIC page, so it carries
+  // initials and the vault code only — never the performer's name or email.
+  const chainCode = formatChainCode({ actorCode: talentUser?.shortCode, scanNumber: pkg.scanNumber });
+  const seal = await getOrMintSeal(db, {
+    kind: "custody_record",
+    subjectType: "package",
+    subjectId: pkg.id,
+    subjectLabel: `${initials(talentName)} · ${chainCode}`,
+    chainKeys,
+    issuedBy: session.sub,
+  });
 
   const response: ActivityResponse = {
     package: {
@@ -341,13 +396,52 @@ export async function GET(
       captureDate: pkg.captureDate ?? null,
       studioName: pkg.studioName ?? null,
       talentEmail: talentUser?.email ?? "Unknown",
-      talentName: talentProfile?.fullName ?? null,
+      talentName,
       createdAt: pkg.createdAt,
-      chainCode: formatChainCode({ actorCode: talentUser?.shortCode, scanNumber: pkg.scanNumber }),
+      chainCode,
     },
     events,
+    files: files
+      .slice()
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((f) => ({
+        filename: f.filename,
+        sizeBytes: f.sizeBytes,
+        sha256: f.sha256,
+        completedAt: f.completedAt,
+      })),
+    chains: verification.chains.map((c) => ({
+      chainKey: c.chainKey,
+      eventCount: c.eventCount,
+      tipHash: c.tipHash,
+      ok: c.ok,
+      brokenAtSeq: c.brokenAtSeq,
+      reason: c.reason,
+    })),
+    recordHash: verification.setHash,
+    chainsOk: verification.ok,
+    chainBreak: verification.firstBreak
+      ? `${verification.firstBreak.chainKey} failed at entry ${verification.firstBreak.brokenAtSeq ?? "?"}: ${
+          verification.firstBreak.reason ?? "content altered"
+        }`
+      : null,
+    sealRef: seal.ref,
+    // Built server-side from the canonical host, not the browser's origin — a
+    // printed document must carry the address that works for whoever holds it.
+    verifyUrl: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai"}/verify/${seal.ref}`,
     generatedAt: Math.floor(Date.now() / 1000),
   };
 
   return NextResponse.json(response);
+}
+
+/** Initials only — the public verification page must not disclose the name. */
+function initials(name: string | null): string {
+  if (!name) return "—";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "—";
+  return parts
+    .slice(0, 3)
+    .map((p) => p[0]!.toUpperCase())
+    .join("");
 }
