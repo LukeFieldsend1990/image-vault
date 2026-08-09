@@ -108,6 +108,86 @@ describe("calculate — re-licensing inside the scan cycle", () => {
   });
 });
 
+describe("calculate — covered credits with no fee", () => {
+  /**
+   * The failure this guards against: an actor prices only the jobs that scanned
+   * them, because that is what the page asked for. Those rows are the scan
+   * origins, which earn no re-licence — so the biggest component reads £0 while
+   * its own caption says a dozen credits qualify.
+   */
+  it("reports how many covered credits are still missing a fee", () => {
+    const result = calculate(
+      [
+        credit({ id: "scan", releaseDate: "2021-01-01", scanned: true, fee: 9_000_000 }),
+        credit({ id: "priced", releaseDate: "2022-01-01", fee: 100_000 }),
+        credit({ id: "blank-1", releaseDate: "2022-06-01" }),
+        credit({ id: "blank-2", releaseDate: "2023-01-01" }),
+      ],
+      NO_ADS,
+      DEFAULT_ASSUMPTIONS,
+      NOW,
+    );
+
+    expect(result.relicensableCount).toBe(3);
+    expect(result.relicensableWithoutFee).toBe(2);
+    expect(result.relicenceTotal).toBe(5_000);
+  });
+
+  it("flags every covered credit when fees went only on the scanned rows", () => {
+    const credits = [credit({ id: "scan", releaseDate: "2021-01-01", scanned: true, fee: 9_000_000 })];
+    for (let i = 0; i < 3; i++) {
+      credits.push(credit({ id: `blank-${i}`, releaseDate: `2022-0${i + 1}-01` }));
+    }
+
+    const result = calculate(credits, NO_ADS, DEFAULT_ASSUMPTIONS, NOW);
+
+    expect(result.relicenceTotal).toBe(0);
+    expect(result.relicensableCount).toBe(3);
+    expect(result.relicensableWithoutFee).toBe(3);
+  });
+
+  it("counts nothing as missing once every covered credit is priced", () => {
+    const result = calculate(
+      [
+        credit({ id: "scan", releaseDate: "2021-01-01", scanned: true, fee: 100_000 }),
+        credit({ id: "later", releaseDate: "2022-01-01", fee: 100_000 }),
+      ],
+      NO_ADS,
+      DEFAULT_ASSUMPTIONS,
+      NOW,
+    );
+
+    expect(result.relicensableWithoutFee).toBe(0);
+    expect(result.relicenceTotal).toBe(5_000);
+  });
+
+  it("does not count a blank credit that no scan cycle reaches", () => {
+    const result = calculate(
+      [
+        credit({ id: "scan", releaseDate: "2021-01-01", scanned: true, fee: 100_000 }),
+        credit({ id: "far-future", releaseDate: "2025-01-01" }),
+      ],
+      NO_ADS,
+      DEFAULT_ASSUMPTIONS,
+      NOW,
+    );
+
+    expect(result.relicensableCount).toBe(0);
+    expect(result.relicensableWithoutFee).toBe(0);
+  });
+
+  it("does not count the scan origin itself, priced or not", () => {
+    const result = calculate(
+      [credit({ id: "scan", releaseDate: "2021-01-01", scanned: true })],
+      NO_ADS,
+      DEFAULT_ASSUMPTIONS,
+      NOW,
+    );
+
+    expect(result.relicensableWithoutFee).toBe(0);
+  });
+});
+
 describe("calculate — reshoots", () => {
   it("pays 2% of the credit's own fee", () => {
     const result = calculate(

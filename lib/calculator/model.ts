@@ -82,6 +82,14 @@ export interface CalculatorResult {
   scannedCount: number;
   /** Credits that a live scan could have been re-licensed to. */
   relicensableCount: number;
+  /**
+   * How many of those have no fee on them yet.
+   *
+   * A re-licence is charged against the *later* job's fee, so a covered credit
+   * with a blank fee contributes nothing — which reads as a broken calculator
+   * when the count beside it is non-zero. The UI uses this to say why.
+   */
+  relicensableWithoutFee: number;
   reshootCount: number;
   relicenceTotal: number;
   reshootTotal: number;
@@ -219,6 +227,7 @@ export function calculate(
     coveredYears,
     scannedCount: scanOriginIds.size,
     relicensableCount: outcomes.filter((o) => o.coveredByScanId !== null).length,
+    relicensableWithoutFee: outcomes.filter((o) => o.coveredByScanId !== null && o.fee <= 0).length,
     reshootCount: outcomes.filter((o) => o.reshootValue > 0).length,
     relicenceTotal,
     reshootTotal,

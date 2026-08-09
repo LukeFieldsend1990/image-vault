@@ -73,6 +73,26 @@ async function fetchSheet(
   };
 }
 
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * The re-licensing caption.
+ *
+ * A covered credit with a blank fee earns nothing, so a non-zero count sitting
+ * beside £0 reads as a broken calculator. Say which rows are still missing a fee
+ * instead of leaving the reader to work it out.
+ */
+function relicenceNote(relicensable: number, withoutFee: number): string {
+  const base = `${plural(relicensable, "credit", "credits")} inside a live scan cycle`;
+  if (relicensable === 0 || withoutFee === 0) return base;
+  if (withoutFee === relicensable) {
+    return `${base} — none have a fee yet`;
+  }
+  return `${base} — ${withoutFee} still ${withoutFee === 1 ? "needs" : "need"} a fee`;
+}
+
 /** "3 years" / "2.4 years" — whole numbers stay whole. */
 function formatYears(years: number): string {
   const rounded = Math.round(years * 10) / 10;
@@ -671,8 +691,8 @@ export default function CalculatorClient() {
           <section className="mb-12">
             <StepHeading
               step="two"
-              title="Mark the jobs that scanned you, and what you were paid"
-              hint="Tick Scanned for any production that took a body or face scan. Tick Reshoots if it went back for pickups. Fees stay on this page."
+              title="What you were paid, and which jobs scanned you"
+              hint="Put a fee on every credit, not just the scanned ones — a re-licence is charged against the later job's fee, so blank rows earn nothing. Then tick Scanned wherever a body or face scan was taken, and Reshoots where it went back for pickups. Fees stay on this page."
             />
 
             {/* bulk controls */}
@@ -761,6 +781,35 @@ export default function CalculatorClient() {
               </span>
             </div>
 
+            {/* The single biggest way to understate the number: marking scans but
+                only pricing those rows. Say it, and make the fix one click. */}
+            {result.relicensableWithoutFee > 0 && (
+              <div
+                className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5"
+                style={{
+                  border: "1px solid var(--color-accent)",
+                  background: "var(--color-accent-tint)",
+                  borderRadius: "var(--radius-md)",
+                }}
+              >
+                <p className="text-xs" style={{ color: "var(--color-accent)", lineHeight: 1.5 }}>
+                  {plural(result.relicensableWithoutFee, "credit falls", "credits fall")} inside a
+                  live scan cycle with no fee on {result.relicensableWithoutFee === 1 ? "it" : "them"}.
+                  A re-licence is charged against that job&apos;s fee, so {result.relicensableWithoutFee === 1 ? "it earns" : "they earn"} nothing until you price {result.relicensableWithoutFee === 1 ? "it" : "them"}.
+                </p>
+                {bulkFee.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => applyBulkFee(true)}
+                    className="ml-auto shrink-0 px-3 py-1.5 text-xs font-medium tracking-wide uppercase transition hover:opacity-70"
+                    style={{ ...inputStyle, color: "var(--color-ink)" }}
+                  >
+                    Fill them with {money(toNumber(bulkFee), currency)}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* grid */}
             <div
               className="overflow-hidden"
@@ -830,14 +879,26 @@ export default function CalculatorClient() {
                       title="This production went back for pickups or reshoots"
                     />
 
-                    <span
-                      className="w-24 shrink-0 text-right font-mono text-xs"
-                      style={{
-                        color: outcome && outcome.total > 0 ? "var(--color-accent)" : "var(--color-faint)",
-                      }}
-                    >
-                      {outcome && outcome.total > 0 ? `+${money(outcome.total, currency)}` : "—"}
-                    </span>
+                    {/* A covered row with no fee is the one leaving money on the
+                        table, so it says so rather than showing a bare dash. */}
+                    {outcome && outcome.total === 0 && outcome.coveredByScanId && outcome.fee <= 0 ? (
+                      <span
+                        className="w-24 shrink-0 text-right text-xs"
+                        style={{ color: "var(--color-accent)" }}
+                        title={`This job falls inside a live scan cycle — add your fee and it earns ${(assumptions.relicenceRate * 100).toFixed(1)}%.`}
+                      >
+                        Add fee
+                      </span>
+                    ) : (
+                      <span
+                        className="w-24 shrink-0 text-right font-mono text-xs"
+                        style={{
+                          color: outcome && outcome.total > 0 ? "var(--color-accent)" : "var(--color-faint)",
+                        }}
+                      >
+                        {outcome && outcome.total > 0 ? `+${money(outcome.total, currency)}` : "—"}
+                      </span>
+                    )}
 
                     <button
                       type="button"
@@ -1052,7 +1113,7 @@ export default function CalculatorClient() {
                   {
                     label: `Re-licensing (${(assumptions.relicenceRate * 100).toFixed(1)}%)`,
                     value: result.relicenceTotal,
-                    note: `${result.relicensableCount} ${result.relicensableCount === 1 ? "credit" : "credits"} inside a live scan cycle`,
+                    note: relicenceNote(result.relicensableCount, result.relicensableWithoutFee),
                   },
                   {
                     label: `Reshoots (${(assumptions.reshootRate * 100).toFixed(1)}%)`,
