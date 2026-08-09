@@ -5,12 +5,20 @@
  *
  * Everything here runs in the browser on state the visitor types. The only
  * network calls are two anonymous GETs that proxy TMDB for names and credits —
- * no fees, no scan markings and no totals ever leave the page. That promise is
- * the reason a working actor will try this, so it is stated on the page too.
+ * no fees, no scan markings and no totals are ever sent to us or stored. That
+ * promise is the reason a working actor will try this, so it is stated on the
+ * page too.
+ *
+ * Sharing works within that constraint rather than around it: a filled-in sheet
+ * is packed into the link itself (lib/calculator/share.ts) so an agent can hand
+ * the performer a QR code and have them land on the finished number. The link
+ * therefore carries the fees that were typed, and the share panel says so.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import Wordmark from "@/app/components/wordmark";
 import {
   calculate,
@@ -18,17 +26,19 @@ import {
   type CalculatorAssumptions,
   type CreditInput,
 } from "@/lib/calculator/model";
+import {
+  CURRENCIES,
+  currencySymbol,
+  formatMoney,
+  type CurrencyCode,
+} from "@/lib/calculator/currency";
+import {
+  SHARE_PARAM,
+  buildShareUrl,
+  decodeShareState,
+  type ShareState,
+} from "@/lib/calculator/share";
 import type { CalculatorCredit, CalculatorPerson } from "@/lib/calculator/tmdb";
-
-type CurrencyCode = "GBP" | "USD" | "EUR";
-
-// Each currency is formatted in a locale that renders its own symbol bare —
-// en-GB spells USD "US$67,000", which reads as a conversion rather than a fee.
-const CURRENCIES: Array<{ code: CurrencyCode; symbol: string; locale: string }> = [
-  { code: "GBP", symbol: "£", locale: "en-GB" },
-  { code: "USD", symbol: "$", locale: "en-US" },
-  { code: "EUR", symbol: "€", locale: "en-IE" },
-];
 
 interface RowState {
   fee: string;
@@ -38,18 +48,29 @@ interface RowState {
 
 const EMPTY_ROW: RowState = { fee: "", scanned: false, reshoots: false };
 
-function money(amount: number, currency: CurrencyCode): string {
-  const locale = CURRENCIES.find((c) => c.code === currency)?.locale ?? "en-GB";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+const money = formatMoney;
 
 function toNumber(value: string): number {
   const parsed = Number(value.replace(/[^0-9.]/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** One person's credit sheet. Throws with the API's own message on failure. */
+async function fetchSheet(
+  personId: number,
+  years: number,
+): Promise<{ person: CalculatorPerson; credits: CalculatorCredit[] }> {
+  const res = await fetch(`/api/calculator/credits?personId=${personId}&years=${years}`);
+  const data = (await res.json()) as {
+    person?: CalculatorPerson;
+    credits?: CalculatorCredit[];
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error ?? "Couldn't load credits");
+  return {
+    person: data.person ?? { id: personId, name: "", profileImageUrl: null, knownFor: [] },
+    credits: data.credits ?? [],
+  };
 }
 
 /** "3 years" / "2.4 years" — whole numbers stay whole. */
@@ -131,6 +152,8 @@ const inputStyle: React.CSSProperties = {
 /* ────────────────────────────────── page ───────────────────────────────────── */
 
 export default function CalculatorClient() {
+  const searchParams = useSearchParams();
+
   // Identity
   const [query, setQuery] = useState("");
   const [people, setPeople] = useState<CalculatorPerson[]>([]);
@@ -154,12 +177,21 @@ export default function CalculatorClient() {
   const [assumptions, setAssumptions] = useState<CalculatorAssumptions>(DEFAULT_ASSUMPTIONS);
   const [showAssumptions, setShowAssumptions] = useState(false);
 
-  // Reveal
+  // Reveal + share
   const [revealed, setRevealed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"link" | "message" | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [origin, setOrigin] = useState("");
   const resultsRef = useRef<HTMLDivElement | null>(null);
 
-  const symbol = CURRENCIES.find((c) => c.code === currency)?.symbol ?? "£";
+  // True when this sheet arrived pre-filled from someone else's share link.
+  const [fromSharedLink, setFromSharedLink] = useState(false);
+
+  const symbol = currencySymbol(currency);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   /* ── search ── */
 
@@ -202,14 +234,10 @@ export default function CalculatorClient() {
       setQuery(picked.name);
       setError("");
       setRevealed(false);
+      setFromSharedLink(false);
       setLoadingCredits(true);
       try {
-        const res = await fetch(
-          `/api/calculator/credits?personId=${picked.id}&years=${DEFAULT_ASSUMPTIONS.lookbackYears}`,
-        );
-        const data = (await res.json()) as { credits?: CalculatorCredit[]; error?: string };
-        if (!res.ok) throw new Error(data.error ?? "Couldn't load credits");
-        const loaded = data.credits ?? [];
+        const { credits: loaded } = await fetchSheet(picked.id, DEFAULT_ASSUMPTIONS.lookbackYears);
         setCredits(loaded);
         setRows(Object.fromEntries(loaded.map((c) => [c.id, { ...EMPTY_ROW }])));
         setDropped(new Set());
@@ -223,10 +251,74 @@ export default function CalculatorClient() {
     [],
   );
 
+  /* ── restore a shared sheet ──
+   *
+   * Credits are re-fetched rather than carried in the link: only the markings
+   * need to travel. Anything the sharer marked that TMDB no longer returns is
+   * dropped, and anything new since they shared arrives blank — the recipient
+   * sees a live sheet with the sharer's work on it, not a frozen snapshot. */
+
+  const shared = useMemo(
+    () => decodeShareState(searchParams.get(SHARE_PARAM)),
+    [searchParams],
+  );
+
+  useEffect(() => {
+    if (!shared) return;
+    let cancelled = false;
+
+    void (async () => {
+      setLoadingCredits(true);
+      setFromSharedLink(true);
+      setCurrency(shared.currency);
+      setAssumptions(shared.assumptions);
+      setAdsPerYear(shared.advertising.engagementsPerYear ? String(shared.advertising.engagementsPerYear) : "");
+      setAdFee(shared.advertising.averageFee ? String(shared.advertising.averageFee) : "");
+
+      try {
+        const { person: loadedPerson, credits: loaded } = await fetchSheet(
+          shared.personId,
+          shared.assumptions.lookbackYears,
+        );
+        if (cancelled) return;
+
+        const marks = new Map(shared.credits.map((c) => [c.id, c]));
+        setPerson(loadedPerson);
+        setQuery(loadedPerson.name);
+        setCredits(loaded);
+        setRows(
+          Object.fromEntries(
+            loaded.map((credit) => {
+              const mark = marks.get(credit.id);
+              return [
+                credit.id,
+                mark
+                  ? { fee: mark.fee > 0 ? String(mark.fee) : "", scanned: mark.scanned, reshoots: mark.reshoots }
+                  : { ...EMPTY_ROW },
+              ];
+            }),
+          ),
+        );
+        setDropped(new Set(shared.credits.filter((c) => c.dropped).map((c) => c.id)));
+        setRevealed(true);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't open that shared link");
+      } finally {
+        if (!cancelled) setLoadingCredits(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shared]);
+
   function startOver() {
     setPerson(null);
     setQuery("");
     setPeople([]);
+    setShareOpen(false);
+    setFromSharedLink(false);
     setCredits([]);
     setRows({});
     setDropped(new Set());
@@ -314,16 +406,67 @@ export default function CalculatorClient() {
     });
   }
 
-  async function shareResult() {
-    const text = `Over the last ${assumptions.lookbackYears} years, re-licensing my scans would have been worth ${money(result.total, currency)}. Work out yours: https://imagevault.ai/calculator`;
+  /* ── sharing ──
+   *
+   * The whole sheet rides in the link, so an agent can fill it in and hand the
+   * performer a QR code that opens on the finished number. */
+
+  const shareState: ShareState | null = useMemo(() => {
+    if (!person) return null;
+    return {
+      personId: person.id,
+      currency,
+      advertising: { engagementsPerYear: toNumber(adsPerYear), averageFee: toNumber(adFee) },
+      assumptions,
+      credits: credits.map((credit) => {
+        const row = rows[credit.id] ?? EMPTY_ROW;
+        return {
+          id: credit.id,
+          fee: toNumber(row.fee),
+          scanned: row.scanned,
+          reshoots: row.reshoots,
+          dropped: dropped.has(credit.id),
+        };
+      }),
+    };
+  }, [person, currency, adsPerYear, adFee, assumptions, credits, rows, dropped]);
+
+  // Empty until the origin lands after mount, which keeps the server render and
+  // the first client render identical.
+  const shareUrl = useMemo(
+    () => (origin && shareState ? buildShareUrl(origin, shareState) : ""),
+    [origin, shareState],
+  );
+
+  const shareMessage = useMemo(
+    () =>
+      `I worked out what ${person?.name ? "your" : "my"} scans would have been worth over the last ` +
+      `${assumptions.lookbackYears} years: ${money(result.total, currency)}. ` +
+      `Here are the figures — you can change any of them: ${shareUrl}`,
+    [person, assumptions.lookbackYears, result.total, currency, shareUrl],
+  );
+
+  function flashCopied(what: "link" | "message") {
+    setCopied(what);
+    setTimeout(() => setCopied((c) => (c === what ? null : c)), 2500);
+  }
+
+  async function copyToClipboard(text: string, what: "link" | "message") {
+    try {
+      await navigator.clipboard.writeText(text);
+      flashCopied(what);
+    } catch {
+      /* clipboard blocked — the link is on screen and selectable anyway */
+    }
+  }
+
+  async function shareNatively() {
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "What is my scan worth?", text });
+        await navigator.share({ title: "What is your scan worth?", text: shareMessage, url: shareUrl });
         return;
       }
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      await copyToClipboard(shareMessage, "message");
     } catch {
       /* visitor dismissed the share sheet — nothing to recover from */
     }
@@ -385,8 +528,9 @@ export default function CalculatorClient() {
               borderRadius: "var(--radius-sm)",
             }}
           >
-            Nothing you type here is stored. No account, no cookie, no record — close the tab and
-            it&apos;s gone.
+            Nothing you type here is sent to us or stored. No account, no cookie, no record — close
+            the tab and it&apos;s gone. If you share your sheet, the figures travel inside the link
+            itself.
           </p>
         </section>
 
@@ -401,6 +545,25 @@ export default function CalculatorClient() {
             }}
           >
             {error}
+          </div>
+        )}
+
+        {fromSharedLink && (
+          <div
+            className="mb-8 px-4 py-3"
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "var(--color-surface)",
+              borderRadius: "var(--radius-md)",
+            }}
+          >
+            <p className="text-sm" style={{ color: "var(--color-ink)" }}>
+              Someone filled this in for you.
+            </p>
+            <p className="mt-1 text-xs" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+              The credits, fees and markings below came from the link you opened — none of it is
+              ours and none of it is saved. Change anything that looks wrong and the number updates.
+            </p>
           </div>
         )}
 
@@ -947,11 +1110,12 @@ export default function CalculatorClient() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => void shareResult()}
+                  onClick={() => setShareOpen((v) => !v)}
+                  aria-expanded={shareOpen}
                   className="px-6 py-3 text-xs font-medium tracking-wide uppercase transition hover:opacity-70"
                   style={{ ...inputStyle, color: "var(--color-ink)" }}
                 >
-                  {copied ? "Copied" : "Share your number"}
+                  {shareOpen ? "Hide share options" : "Share this sheet"}
                 </button>
               </div>
               <p className="mt-4 text-xs" style={{ color: "var(--color-muted)" }}>
@@ -959,6 +1123,100 @@ export default function CalculatorClient() {
                 and your figures above are not sent with it.
               </p>
             </div>
+
+            {/* ── share panel ── */}
+            {shareOpen && (
+              <div
+                className="mt-4 px-6 py-6"
+                style={{
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius)",
+                  background: "var(--color-inset)",
+                }}
+              >
+                <Eyebrow>Hand this over</Eyebrow>
+                <h4
+                  className="mt-1 text-lg font-medium"
+                  style={{ color: "var(--color-ink)", fontFamily: "var(--font-serif)" }}
+                >
+                  Pass it on, filled in
+                </h4>
+                <p className="mt-1 max-w-xl text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
+                  The link below carries this whole sheet — every credit you marked, every fee you
+                  typed, and the rates you set. Whoever opens it lands on this number and can change
+                  anything they disagree with.
+                </p>
+
+                <div className="mt-5 flex flex-col gap-6 sm:flex-row sm:items-start">
+                  {/* QR */}
+                  <div className="shrink-0">
+                    <div
+                      className="inline-block p-3"
+                      style={{ background: "#ffffff", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)" }}
+                    >
+                      {shareUrl ? (
+                        <QRCodeSVG
+                          value={shareUrl}
+                          size={168}
+                          level="M"
+                          bgColor="#ffffff"
+                          fgColor="#2d2b26"
+                          title="Scan to open this calculator sheet"
+                        />
+                      ) : (
+                        <div style={{ width: 168, height: 168 }} />
+                      )}
+                    </div>
+                    <p className="mt-2 max-w-[190px] text-xs" style={{ color: "var(--color-muted)" }}>
+                      Point a phone camera at this to open the sheet on their device.
+                    </p>
+                  </div>
+
+                  {/* Link + actions */}
+                  <div className="min-w-0 flex-1">
+                    <label
+                      className="mb-1.5 block text-xs font-medium tracking-wide uppercase"
+                      style={{ color: "var(--color-muted)" }}
+                    >
+                      Share link
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareUrl}
+                      onFocus={(e) => e.currentTarget.select()}
+                      aria-label="Share link for this calculator sheet"
+                      className="w-full px-3 py-2.5 font-mono text-xs outline-none"
+                      style={inputStyle}
+                    />
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void copyToClipboard(shareUrl, "link")}
+                        className="btn-accent px-4 py-2.5 text-xs font-medium tracking-wide uppercase text-white transition"
+                      >
+                        {copied === "link" ? "Link copied" : "Copy link"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void shareNatively()}
+                        className="px-4 py-2.5 text-xs font-medium tracking-wide uppercase transition hover:opacity-70"
+                        style={{ ...inputStyle, color: "var(--color-ink)" }}
+                      >
+                        {copied === "message" ? "Message copied" : "Send with a message"}
+                      </button>
+                    </div>
+
+                    <p className="mt-4 text-xs" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+                      We still store none of this — the figures live in the link, not on our servers.
+                      That cuts both ways: anyone holding the link can read the fees in it, so treat
+                      it as private and send it to one person.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -966,7 +1224,8 @@ export default function CalculatorClient() {
         <p className="text-xs" style={{ color: "var(--color-faint)", lineHeight: 1.7 }}>
           Credits come from the public TMDB database and may be incomplete — remove anything that
           isn&apos;t yours. Every figure here is an illustration built from rates you can change, not
-          an offer, a valuation, or advice. ImageVault does not store anything you enter on this page.
+          an offer, a valuation, or advice. ImageVault stores nothing you enter on this page; a share
+          link carries your figures in the link itself, so treat one as private.
         </p>
       </main>
 
@@ -1003,7 +1262,7 @@ export default function CalculatorClient() {
               disabled={!hasSomethingToShow}
               className="btn-accent ml-auto px-5 py-2.5 text-xs font-medium tracking-wide uppercase text-white transition disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {revealed ? "Back to the breakdown" : "Show my breakdown"}
+              {revealed ? "Jump to the breakdown" : "Show my breakdown"}
             </button>
           </div>
         </div>

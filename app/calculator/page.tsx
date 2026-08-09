@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import CalculatorClient from "./calculator-client";
 
 const TITLE = "What is your scan worth? — ImageVault";
@@ -22,5 +23,11 @@ export const metadata: Metadata = {
 };
 
 export default function CalculatorPage() {
-  return <CalculatorClient />;
+  // Suspense boundary: the client reads a shared sheet out of the query string,
+  // and useSearchParams needs one to keep the shell statically prerenderable.
+  return (
+    <Suspense fallback={null}>
+      <CalculatorClient />
+    </Suspense>
+  );
 }
