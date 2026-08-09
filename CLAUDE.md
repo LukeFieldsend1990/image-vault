@@ -14,6 +14,8 @@ npm run deploy           # build + opennextjs-cloudflare deploy (production Work
 npm test                 # vitest run
 npm run test:watch       # vitest watch mode
 npm run lint             # eslint
+npm run seed:custody     # seed a long chain-of-custody fixture into local D1
+npm run check:print      # headless-browser print check of the custody record
 npm run cf-typegen       # regenerate CloudflareEnv types from wrangler.toml
 npm run deploy:worker    # deploy pipeline-worker
 npm run deploy:ai-worker # deploy ai-worker
@@ -247,7 +249,7 @@ MCP server at `/api/mcp` (Streamable HTTP, stateless JSON-RPC) gives whitelisted
 - **Local dev**: `.dev.vars` file (gitignored) for secrets
 - **Production**: `wrangler secret put SECRET_NAME`
 - **Non-secret config**: `[vars]` section in `wrangler.toml`
-- **Binding access**: `getCloudflareContext().env` (from `@opennextjs/cloudflare`) — with fallback to `process.env` for local dev
+- **Binding access**: `getCloudflareContext().env` (from `@opennextjs/cloudflare`). There is **no** `process.env` fallback — `lib/db/index.ts` reads the binding and nothing else, and `initOpenNextCloudflareForDev` does not populate `process.env`. Anything read through `process.env` (notably `middleware.ts`, which runs outside the Cloudflare context) needs the value in `.env.local` **as well as** `.dev.vars`. A `JWT_SECRET` that differs between the two mints cookies that pass middleware and then fail in the route handler.
 
 Key secrets: `JWT_SECRET`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `TMDB_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `BRIDGE_SIGNING_KEY_JWK`, `ENCRYPTION_MASTER_KEY`, `RESEND_WEBHOOK_SECRET`
 

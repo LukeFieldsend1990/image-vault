@@ -11,6 +11,8 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "seed:custody": "vitest run --config vitest.seed.config.ts",
+    "check:print": "node scripts/print-custody-check.mjs",
     "lint": "eslint",
     "cf-typegen": "wrangler types",
     "deploy:worker": "wrangler deploy --config pipeline-worker/wrangler.toml",
