@@ -6,14 +6,20 @@
  * It is exported so the same model can be unit-tested and, later, reused
  * server-side without dragging the UI along.
  *
- * The model in one paragraph: a scan captured on a production stays commercially
- * usable for a cycle (three years by default). Any *other* credit that lands
- * inside that cycle could have been served by re-licensing the existing scan
- * instead of commissioning a fresh capture, and pays a percentage of that
- * credit's fee (5%). A credit flagged as having reshoots is a second, smaller
- * bite at the same apple (2%). Separately, advertising and content engagements
- * can run entirely off a live scan, so they pay their full average fee for every
- * year the scan was live.
+ * The model in one paragraph: a scan stays commercially usable for a cycle
+ * (three years by default). A production that scanned you is a production that
+ * *needed* a scan — so if one of yours was already live, captured on another
+ * production inside the preceding cycle, that production could have licensed
+ * the existing scan instead of commissioning its own, and would have paid you a
+ * percentage of your fee on that job (5%). The demand is what matters, which is
+ * why the opportunity attaches to the scanned credits: a job that never scanned
+ * you never needed a scan, so there was nothing there to re-licence. A credit
+ * flagged as having reshoots is a second, smaller bite at the same apple (2%).
+ * Separately, advertising and content engagements can run entirely off a live
+ * scan, so they pay their full average fee for every year the scan was live.
+ *
+ * The first scan in a cycle earns nothing: there was no earlier scan to use, so
+ * that capture was genuinely necessary and the full fee already covered it.
  *
  * These are illustrative rates, not quoted terms — the UI says so plainly and
  * lets the visitor change every one of them.
@@ -61,10 +67,16 @@ export interface AdvertisingInput {
 export interface CreditOutcome {
   id: string;
   fee: number;
-  /** True when this credit is where a scan was captured. */
-  isScanOrigin: boolean;
-  /** Id of the scan whose cycle covers this credit, if any. */
-  coveredByScanId: string | null;
+  /**
+   * A scanned credit with no earlier scan to fall back on — the capture that
+   * genuinely had to happen. Earns no re-licence.
+   */
+  isFirstScanOfCycle: boolean;
+  /**
+   * Id of the live scan this production could have licensed instead of
+   * commissioning its own. Null unless this credit was itself scanned.
+   */
+  couldHaveUsedScanId: string | null;
   relicenceValue: number;
   reshootValue: number;
   total: number;
@@ -80,14 +92,17 @@ export interface CalculatorResult {
    */
   coveredYears: number;
   scannedCount: number;
-  /** Credits that a live scan could have been re-licensed to. */
+  /**
+   * Scanned productions that could have licensed one of your existing scans
+   * instead of commissioning their own.
+   */
   relicensableCount: number;
   /**
    * How many of those have no fee on them yet.
    *
-   * A re-licence is charged against the *later* job's fee, so a covered credit
-   * with a blank fee contributes nothing — which reads as a broken calculator
-   * when the count beside it is non-zero. The UI uses this to say why.
+   * A re-licence is charged against that production's own fee, so one with a
+   * blank fee contributes nothing — which reads as a broken calculator when the
+   * count beside it is non-zero. The UI uses this to say why.
    */
   relicensableWithoutFee: number;
   reshootCount: number;
@@ -149,41 +164,53 @@ export function calculate(
   const reshootRate = Math.max(0, assumptions.reshootRate);
   const lookbackYears = Math.max(1, Math.floor(assumptions.lookbackYears));
 
-  // Scan cycles. A scanned credit with no release date still counts as a scan
-  // (it shows up in scannedCount) but can't anchor a window in time.
-  const windows = credits
+  // Every scan the visitor marked, oldest first. A scanned credit with no
+  // release date still counts as a scan (it shows up in scannedCount) but can't
+  // be placed in time, so it neither anchors a cycle nor claims one.
+  const scans = credits
     .filter((c) => c.scanned)
-    .map((c) => ({ id: c.id, start: parseDate(c.releaseDate) }))
-    .filter((w): w is { id: string; start: number } => w.start !== null)
-    .map((w) => ({ id: w.id, start: w.start, end: addYears(w.start, cycleYears) }));
-
-  const scanOriginIds = new Set(credits.filter((c) => c.scanned).map((c) => c.id));
+    .map((c) => ({ id: c.id, at: parseDate(c.releaseDate) }))
+    .filter((s): s is { id: string; at: number } => s.at !== null)
+    .sort((a, b) => a.at - b.at);
 
   const outcomes: CreditOutcome[] = credits.map((credit) => {
     const fee = sanitiseMoney(credit.fee);
-    const isScanOrigin = credit.scanned;
     const at = parseDate(credit.releaseDate);
 
-    // A scan can be re-licensed to any *other* credit inside its cycle. The
-    // origin production already paid a full fee, so it never earns a relicence.
-    // First matching window wins — a credit inside two cycles is still one
-    // re-licence, not two.
-    let coveredByScanId: string | null = null;
-    if (!isScanOrigin && at !== null) {
-      const match = windows.find((w) => at >= w.start && at < w.end);
-      coveredByScanId = match ? match.id : null;
+    // Look back a cycle from this production's date. If another production had
+    // already scanned you inside that window, this one didn't need its own
+    // capture — it could have licensed the live scan and paid you for it.
+    //
+    // The most recent qualifying scan is the one credited: it's the scan that
+    // would actually have been offered, and it keeps the attribution to a
+    // single source rather than double-counting overlapping cycles.
+    let couldHaveUsedScanId: string | null = null;
+    if (credit.scanned && at !== null) {
+      const expiresAfter = addYears(at, -cycleYears);
+      for (let i = scans.length - 1; i >= 0; i--) {
+        const scan = scans[i];
+        if (scan.id === credit.id) continue;
+        // Strictly earlier, and not yet out of cycle. A scan exactly a cycle old
+        // expired the moment this production started, so it doesn't count.
+        if (scan.at < at && scan.at > expiresAfter) {
+          couldHaveUsedScanId = scan.id;
+          break;
+        }
+      }
     }
 
-    const relicenceValue = coveredByScanId ? round2(fee * relicenceRate) : 0;
+    const relicenceValue = couldHaveUsedScanId ? round2(fee * relicenceRate) : 0;
     // Reshoots are a separate opportunity and apply to any credit the visitor
-    // flags, including the one the scan came from.
+    // flags, including the first capture in a cycle.
     const reshootValue = credit.reshoots ? round2(fee * reshootRate) : 0;
 
     return {
       id: credit.id,
       fee,
-      isScanOrigin,
-      coveredByScanId,
+      // The first scan of a cycle: nothing earlier was available to re-use, so
+      // this capture was genuinely needed and earns no re-licence.
+      isFirstScanOfCycle: credit.scanned && couldHaveUsedScanId === null,
+      couldHaveUsedScanId,
       relicenceValue,
       reshootValue,
       total: round2(relicenceValue + reshootValue),
@@ -197,8 +224,11 @@ export function calculate(
   const lookbackStart = Date.UTC(currentYear - lookbackYears + 1, 0, 1);
   const nowTs = Date.UTC(currentYear, now.getUTCMonth(), now.getUTCDate());
 
-  const clipped = windows
-    .map((w) => ({ start: Math.max(w.start, lookbackStart), end: Math.min(w.end, nowTs) }))
+  const clipped = scans
+    .map((s) => ({
+      start: Math.max(s.at, lookbackStart),
+      end: Math.min(addYears(s.at, cycleYears), nowTs),
+    }))
     .filter((w) => w.end > w.start)
     .sort((a, b) => a.start - b.start);
 
@@ -225,9 +255,9 @@ export function calculate(
   return {
     credits: outcomes,
     coveredYears,
-    scannedCount: scanOriginIds.size,
-    relicensableCount: outcomes.filter((o) => o.coveredByScanId !== null).length,
-    relicensableWithoutFee: outcomes.filter((o) => o.coveredByScanId !== null && o.fee <= 0).length,
+    scannedCount: credits.filter((c) => c.scanned).length,
+    relicensableCount: outcomes.filter((o) => o.couldHaveUsedScanId !== null).length,
+    relicensableWithoutFee: outcomes.filter((o) => o.couldHaveUsedScanId !== null && o.fee <= 0).length,
     reshootCount: outcomes.filter((o) => o.reshootValue > 0).length,
     relicenceTotal,
     reshootTotal,

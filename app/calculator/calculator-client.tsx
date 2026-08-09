@@ -80,12 +80,12 @@ function plural(n: number, one: string, many: string): string {
 /**
  * The re-licensing caption.
  *
- * A covered credit with a blank fee earns nothing, so a non-zero count sitting
+ * A qualifying scan with a blank fee earns nothing, so a non-zero count sitting
  * beside £0 reads as a broken calculator. Say which rows are still missing a fee
  * instead of leaving the reader to work it out.
  */
 function relicenceNote(relicensable: number, withoutFee: number): string {
-  const base = `${plural(relicensable, "credit", "credits")} inside a live scan cycle`;
+  const base = `${plural(relicensable, "scan", "scans")} that could have used an earlier one`;
   if (relicensable === 0 || withoutFee === 0) return base;
   if (withoutFee === relicensable) {
     return `${base} — none have a fee yet`;
@@ -535,10 +535,11 @@ export default function CalculatorClient() {
             What is your scan actually worth?
           </h1>
           <p className="mt-4 max-w-2xl text-base" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
-            You were scanned on a job. That scan didn&apos;t stop working when the shoot wrapped —
-            it stayed usable for years, on productions you were never asked about. Pull your last{" "}
-            {assumptions.lookbackYears} years of credits, mark the ones that scanned you, and see
-            what re-licensing that scan on your terms would have been worth.
+            You were scanned on a job. That scan didn&apos;t stop working when the shoot wrapped — it
+            stayed usable for years, and the next production that scanned you could have licensed it
+            instead of paying to make its own. Pull your last {assumptions.lookbackYears} years of
+            credits, mark the ones that scanned you, and see what re-licensing on your terms would
+            have been worth.
           </p>
           <p
             className="mt-4 inline-block px-3 py-1.5 text-xs"
@@ -691,8 +692,8 @@ export default function CalculatorClient() {
           <section className="mb-12">
             <StepHeading
               step="two"
-              title="What you were paid, and which jobs scanned you"
-              hint="Put a fee on every credit, not just the scanned ones — a re-licence is charged against the later job's fee, so blank rows earn nothing. Then tick Scanned wherever a body or face scan was taken, and Reshoots where it went back for pickups. Fees stay on this page."
+              title="Which jobs scanned you, and what you were paid"
+              hint={`Tick Scanned for every production that took a body or face scan, and put your fee on that job — if a scan of yours was already live from another job in the previous ${assumptions.scanCycleYears} years, that production could have licensed it instead of making its own, and owed you ${(assumptions.relicenceRate * 100).toFixed(1)}% of your fee. Tick Reshoots where a job went back for pickups. Fees stay on this page.`}
             />
 
             {/* bulk controls */}
@@ -793,9 +794,12 @@ export default function CalculatorClient() {
                 }}
               >
                 <p className="text-xs" style={{ color: "var(--color-accent)", lineHeight: 1.5 }}>
-                  {plural(result.relicensableWithoutFee, "credit falls", "credits fall")} inside a
-                  live scan cycle with no fee on {result.relicensableWithoutFee === 1 ? "it" : "them"}.
-                  A re-licence is charged against that job&apos;s fee, so {result.relicensableWithoutFee === 1 ? "it earns" : "they earn"} nothing until you price {result.relicensableWithoutFee === 1 ? "it" : "them"}.
+                  {plural(result.relicensableWithoutFee, "scanned job", "scanned jobs")} could have
+                  licensed a scan you already had, but {result.relicensableWithoutFee === 1 ? "has" : "have"} no
+                  fee on {result.relicensableWithoutFee === 1 ? "it" : "them"}. The re-licence is a
+                  share of that job&apos;s own fee, so{" "}
+                  {result.relicensableWithoutFee === 1 ? "it earns" : "they earn"} nothing until you
+                  price {result.relicensableWithoutFee === 1 ? "it" : "them"}.
                 </p>
                 {bulkFee.trim() && (
                   <button
@@ -881,11 +885,11 @@ export default function CalculatorClient() {
 
                     {/* A covered row with no fee is the one leaving money on the
                         table, so it says so rather than showing a bare dash. */}
-                    {outcome && outcome.total === 0 && outcome.coveredByScanId && outcome.fee <= 0 ? (
+                    {outcome && outcome.total === 0 && outcome.couldHaveUsedScanId && outcome.fee <= 0 ? (
                       <span
                         className="w-24 shrink-0 text-right text-xs"
                         style={{ color: "var(--color-accent)" }}
-                        title={`This job falls inside a live scan cycle — add your fee and it earns ${(assumptions.relicenceRate * 100).toFixed(1)}%.`}
+                        title={`A scan of yours was already live when this production scanned you — add your fee and it earns ${(assumptions.relicenceRate * 100).toFixed(1)}%.`}
                       >
                         Add fee
                       </span>
@@ -1014,12 +1018,16 @@ export default function CalculatorClient() {
                 }}
               >
                 <p className="mb-4 text-sm" style={{ color: "var(--color-text)", lineHeight: 1.6 }}>
-                  A scan taken on one production stays usable for a cycle of{" "}
-                  {assumptions.scanCycleYears} years. Any other credit inside that cycle could have
-                  been served by re-licensing it rather than commissioning a new capture, at{" "}
-                  {(assumptions.relicenceRate * 100).toFixed(1)}% of your fee on that job. Reshoots
-                  are a second call on the same scan, at {(assumptions.reshootRate * 100).toFixed(1)}%.
-                  These are illustrative rates, not quoted terms — change them and watch the number move.
+                  A scan stays usable for a cycle of {assumptions.scanCycleYears} years. A production
+                  that scanned you is a production that needed a scan — so when one of yours was
+                  already live, captured on another job inside the previous{" "}
+                  {assumptions.scanCycleYears} years, that production could have licensed the
+                  existing scan rather than commissioning its own, and owed you{" "}
+                  {(assumptions.relicenceRate * 100).toFixed(1)}% of your fee on that job. The first
+                  scan of a cycle earns nothing: there was nothing to re-use, so the capture was
+                  genuinely needed. Reshoots are a second call on the same scan, at{" "}
+                  {(assumptions.reshootRate * 100).toFixed(1)}%. These are illustrative rates, not
+                  quoted terms — change them and watch the number move.
                 </p>
                 <div className="flex flex-wrap gap-5">
                   <label className="block">
