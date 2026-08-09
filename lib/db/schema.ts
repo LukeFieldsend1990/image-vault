@@ -1539,6 +1539,26 @@ export const likenessHits = sqliteTable("likeness_hits", {
   detectedAt: integer("detected_at").notNull(),
 });
 
+// Dead-letter record for the fire-and-forget ledger emitter. A dropped append is
+// undetectable after the fact — `seq` is assigned from the tip at write time, so
+// an event that was never written leaves a chain that is shorter than it should
+// be but still verifies. The moment of failure is the only place that knowledge
+// exists, so it is written down here.
+export const ledgerAppendFailures = sqliteTable("ledger_append_failures", {
+  id: text("id").primaryKey(), // UUID
+  chainKey: text("chain_key").notNull(),
+  eventType: text("event_type").notNull(),
+  specJson: text("spec_json").notNull(), // the full AppendEventSpec, for replay
+  errorMessage: text("error_message"),
+  attempts: integer("attempts").notNull().default(1),
+  status: text("status", { enum: ["unresolved", "replayed", "dismissed"] }).notNull().default("unresolved"),
+  replayedAt: integer("replayed_at"),
+  replayedSeq: integer("replayed_seq"),
+  resolvedBy: text("resolved_by").references(() => users.id),
+  note: text("note"),
+  createdAt: integer("created_at").notNull(), // unix seconds
+});
+
 // Seals bind a printed evidence document to a live integrity check. `ref` is the
 // opaque capability encoded in the document's QR code; `subjectLabel` is
 // deliberately limited to initials + a short code because /verify/{ref} is

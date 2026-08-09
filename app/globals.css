@@ -152,3 +152,33 @@ input, textarea, select {
   font-family: inherit;
   font-size: inherit;
 }
+
+/* ─────────────────────────────────────────────
+   Print — release the app shell's viewport clamp.
+
+   On screen the shell is `h-screen overflow-hidden` with the content pane
+   scrolling inside it, so the sidebar stays put while the page scrolls. In
+   print that clamp is fatal: the page box is one viewport tall with overflow
+   hidden, so anything below the fold is discarded and every document — the
+   chain-of-custody record most visibly — comes out as a single truncated page.
+
+   Print is the one context where the page must be exactly as tall as its
+   content, so the clamp is lifted here rather than in any single document's
+   styles. `!important` is needed on body because the mobile drawer sets
+   `overflow: hidden` inline (app/(vault)/sidebar-shell.tsx).
+   ───────────────────────────────────────────── */
+@media print {
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .app-shell {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .app-main {
+    display: block !important;
+    overflow: visible !important;
+  }
+}

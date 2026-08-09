@@ -35,6 +35,9 @@ Per `CLAUDE.md`: the platform is **not** zero-knowledge, not zero-trust, and not
 | 0.5 | **Public verification.** `/verify/{ref}` — unauthenticated, PII-free, recomputes the chains live and returns `intact` / `appended` / `broken` / `revoked`. Distinguishes ledger *growth* (normal on an append-only chain) from *tampering*, which most naive hash-seal implementations conflate. | `app/verify/[ref]/page.tsx`, `app/api/verify/[ref]/route.ts` |
 | 0.6 | **Consent document, restyled.** Brand tokens throughout (the pre-refresh `rgba(192,57,43,…)` literals are gone), serif title, numbered mono gutter, the two sensitive uses (§39E replica, §39G training) framed apart behind a second explicit confirmation, and a live decision rail showing **Consenting to** and **Withholding** side by side while the performer reads. | `app/consent/consent-document-client.tsx` |
 | 0.7 | **The Consent Receipt.** The artifact the performer keeps: granted and withheld enumerated exhaustively, the attestation verbatim with its document version, the evidence block (acceptance id, UTC timestamp, IP/UA digests), ledger `seq` and `hash` per grant, seal + QR, and the §39 / UK GDPR Art 7(3) withdrawal notice. Emailed to the performer (and the agent, when the agent confirmed on their behalf). | `lib/consent/receipt.ts`, `app/consent/receipt/[acceptanceId]/`, `lib/email/templates.ts` |
+| 0.8 | **Ledger appends survive a race.** `appendEvent` now retries on a `UNIQUE(chain_key, seq)` collision, re-reading the tip so the retried event chains off the *new* tip. The module's own comment claimed "a racing duplicate seq throws and the caller retries" — no caller retried, so the documented concurrency strategy was never implemented. Retry lives in `appendEvent` rather than at call sites because the loser must recompute `prevHash`; retrying with the original values would produce a chain that fails verification. | `lib/compliance/ledger.ts` |
+| 0.9 | **Dropped appends are recorded instead of discarded.** `appendEventBg` still never throws into its caller — an audit write must not fail a download — but a failure now lands in `ledger_append_failures` with the full spec, ready to replay onto the chain's current tip. Surfaced as an admin tile and a page, because a count that nobody sees is the same as no count. Replay appends at the tip (an append-only chain cannot take an insertion) and stamps the original failure time into the payload so the record stays honest about when the event occurred. | `drizzle/migrations/0103_ledger_append_failures.sql`, `lib/compliance/failures.ts`, `app/(vault)/admin/ledger-failures/` |
+| 0.10 | **Leak trace-back** (was 2.1). Paste a SHA-256 or a recovered watermark payload and get the scan, the recipient, and every recorded release. Two routes in: content hash for a byte-identical copy, geometry watermark for a re-exported one. The two are held apart deliberately — a hash match names the *file* (any recipient could be the source), a watermark match names the *recipient*, and every result states which it is. | `lib/forensics/trace.ts`, `app/api/forensics/trace/`, `app/(vault)/trace/` |
 
 ---
 
@@ -42,19 +45,17 @@ Per `CLAUDE.md`: the platform is **not** zero-knowledge, not zero-trust, and not
 
 Everything in this phase is built on data already being written. Estimates are rough engineering days.
 
-### 1.1 Nightly chain monitor — **fixes a live hole**
+> **Correction (2026-08).** The first version of this spec proposed a nightly chain monitor and seq-gap detection as the fix for dropped ledger appends. **Both were wrong about what they achieve**, and the reasoning is worth keeping because it is easy to get wrong twice:
+>
+> `appendEvent` assigns `seq` from the chain's current tip *at write time*. So an append that never happened leaves a chain that is one event shorter than it should be — with every `prevHash` matching, every hash recomputing, and `verifyChain` passing. **There is no gap and no break to find.** Seq gaps only arise from deleting a row that was written, and `verifyChain` already catches those (`e.seq !== i`), so seq-gap detection was near-redundant with the check we already run.
+>
+> A dropped append is therefore unrecoverable after the fact by any amount of scanning. The only moment it is knowable is the moment it fails — which is what 1.1 below now does. See "Shipped" 0.8–0.9.
+>
+> The residual case for a periodic monitor is **detection latency** for tampering with rows that *were* written: chains are verified today only when someone opens a record, so a deletion could sit unnoticed until the dispute that makes it matter. That is real but speculative at current scale, and it was deprioritised in favour of leak trace-back. Revisit alongside external anchoring (2.3), which is what would make periodic verification independently meaningful.
 
-`appendEventBg()` in `lib/compliance/emit-bg.ts` swallows append failures by design ("audit event, best-effort"). A consent grant can therefore be lost today with **no signal at all** — and because a missing tail is indistinguishable from a short chain, the certificate still reports a clean verification.
+### 1.1 ~~Nightly chain monitor~~ → **Durable ledger appends** (shipped, see 0.8–0.9)
 
-Add a scheduled pass in `ai-cron-worker` that re-runs `verifyChainSet` over every chain, and alerts on a break. Then say the thing that follows from it: *we check our own evidence every night, and we will tell you when it fails.* No competitor claims that because no competitor can.
-
-**Effort:** 1–2 days. **Reuses:** `lib/compliance/seal.ts`, `ai-cron-worker`, `lib/ai/security-alerts.ts`.
-
-### 1.2 Seq-gap detection
-
-`seq` is monotonic per chain, so a missing entry is provably detectable — but nothing looks. Fold into 1.1: report `expected N, found M` per chain. This is the check that catches 1.1's dropped writes after the fact.
-
-**Effort:** half a day on top of 1.1.
+### 1.2 ~~Seq-gap detection~~ — dropped, see the correction above
 
 ### 1.3 Admin audit reads the ledger
 
@@ -84,15 +85,13 @@ Before a performer withdraws, show exactly what stops: which licences, which ven
 
 ## Phase 2 — Differentiators
 
-### 2.1 Leak trace-back — *the demo*
+### 2.1 ~~Leak trace-back~~ — **shipped, see 0.10**
 
-Paste a suspect file's SHA-256, or its extracted fingerprint bits, and get back the exact download event, licensee, licence, and timestamp that released it.
+One follow-up is worth naming, because the shipped version has a real limit: the watermark route needs the payload to have been recovered already. `POST /api/admin/geometry-fingerprints/detect` does that, but it requires a `packageId` up front — which is precisely what you do not have when a file turns up in the wild.
 
-Both halves already exist: `scanFiles.sha256` for the stored object, and `geometryFingerprints` (`fingerprintPayloadHash`, `fingerprintBits`, HMAC over `{fileId, licenceId, licenseeId, packageId}`) for a watermarked derivative. Nothing joins them to `downloadEvents` and puts a search box on top.
+**2.1a — blind watermark detection.** Run a suspect file against every issued fingerprint rather than one package's. Expensive (it streams each candidate original from R2 to establish vertex indices), so it needs a narrowing step first — file size, vertex count, or a talent hint — before it fans out. Until that exists, the watermark route is only usable when the investigator can already guess the package, and the content-hash route carries most of the practical load.
 
-This is the single best live demonstration available in the product, and it converts the chain of custody from a record into an enforcement tool.
-
-**Effort:** 3–5 days. **Reuses:** `lib/geo-fingerprint/payload.ts`, `downloadEvents`, `lib/crypto/hash.ts`.
+**Effort:** 3–4 days.
 
 ### 2.2 Comprehension telemetry
 
@@ -144,9 +143,12 @@ The `talent:{id}` chain is now included in package records (0.3) but has no view
 
 ## Sequencing recommendation
 
-**Do 1.1 + 1.2 + 1.3 first**, as one piece of work. They are small, they close a real correctness hole rather than adding surface, and together they produce a claim — *continuous self-verification of the evidence chain* — that is both true and unusual.
+Durable appends (0.8–0.9) and leak trace-back (0.10) are done. What follows, in order:
 
-**Then 2.1 (leak trace-back)**, because it is the demo that makes the chain of custody feel like a weapon rather than a filing cabinet, and because both halves of the data already exist.
+1. **2.1a — blind watermark detection.** Trace-back's content-hash route works today; the watermark route only works when you can already guess the package. Closing that is what makes the feature hold up when the file has been re-exported, which is the case that actually arises.
+2. **1.3 — admin audit reads the ledger.** One day. Consent grants, withdrawals, custody legs and transfers are still invisible in the admin audit log, which is the log that exists to surface exactly those.
+3. **1.6 — standing-instruction auto-answer**, then **1.4 — withdrawal impact preview.** Both make the consent surface act on data it already holds.
+4. **2.3 — external anchoring**, when there is an external party who needs to distrust us and be satisfied anyway. This is also the point at which periodic chain verification becomes worth revisiting: anchoring gives a monitor something independent to check against, which on its own it does not have.
 
 Everything else can follow demand.
 

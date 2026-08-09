@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 
-const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin", "/inbox", "/evidence"];
+const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin", "/inbox", "/evidence", "/trace"];
 const AUTH_PAGES = ["/login", "/signup", "/setup-2fa", "/register-interest"];
 
 function getSecret(): Uint8Array {
@@ -43,8 +43,8 @@ function getTokenPayload(req: NextRequest): { email: string | null; role: string
 
 // Routes each role is allowed to access
 const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
-  talent: ["/dashboard", "/vault", "/licences", "/settings", "/onboarding", "/inbox", "/bookings"],
-  rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences", "/talent", "/productions"],
+  talent: ["/dashboard", "/vault", "/licences", "/settings", "/onboarding", "/inbox", "/bookings", "/trace"],
+  rep: ["/roster", "/vault/requests", "/vault/licences", "/vault/authorise", "/settings", "/inbox", "/licences", "/talent", "/productions", "/trace"],
   licensee: ["/directory", "/talent", "/licences", "/settings", "/inbox", "/productions"],
   industry: ["/directory", "/talent", "/licences", "/settings", "/inbox", "/productions"],
   // Read-only watcher: evidence + account settings only. Everything else redirects to /evidence.
@@ -155,6 +155,7 @@ export const config = {
     "/admin/:path*",
     "/inbox/:path*",
     "/evidence/:path*",
+    "/trace/:path*",
     "/login",
     "/signup",
     "/setup-2fa",

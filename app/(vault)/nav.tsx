@@ -7,6 +7,21 @@ import type { OrgType } from "@/lib/organisations/orgTypes";
 
 type Role = "talent" | "rep" | "industry" | "licensee" | "compliance" | "admin";
 
+// Leak trace-back. Talent and reps only — a licensee holds files, so whose a
+// given hash belongs to is not theirs to ask (the page and API both enforce it).
+const TRACE_NAV_ITEM = {
+  href: "/trace",
+  label: "Trace",
+  icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="16.5" y1="16.5" x2="21" y2="21" />
+      <line x1="11" y1="8" x2="11" y2="12" />
+      <line x1="11" y1="14" x2="11" y2="14.01" />
+    </svg>
+  ),
+};
+
 const TRANSFERS_NAV_ITEM = {
   href: "/transfers",
   label: "Transfers",
@@ -86,6 +101,7 @@ const TALENT_NAV = [
     ),
   },
   TRANSFERS_NAV_ITEM,
+  TRACE_NAV_ITEM,
   {
     href: "/bookings",
     label: "Bookings",
@@ -285,6 +301,7 @@ const REP_NAV = [
     ),
   },
   TRANSFERS_NAV_ITEM,
+  TRACE_NAV_ITEM,
   {
     href: "/compliance",
     label: "Compliance",
