@@ -9,7 +9,8 @@ import { listNegotiationRounds, addNegotiationRound } from "@/lib/consent/negoti
 import { loadConsentDocByLicence } from "@/lib/consent/load";
 import { createNotification } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
-import { consentConfirmedEmail } from "@/lib/email/templates";
+import { consentConfirmedEmail, consentReceiptEmail } from "@/lib/email/templates";
+import { buildConsentReceipt } from "@/lib/consent/receipt";
 import { listUseCategories, parseUseCategoryIds, normaliseUseCategoryIds } from "@/lib/consent/use-categories";
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
@@ -133,6 +134,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           reviewUrl: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai"}/licences/${id}`,
         });
         await sendEmail({ to: licensee.email, subject, html });
+      }
+    } catch { /* best-effort */ }
+  })();
+
+  // The performer's own copy of what they just agreed to — and what they didn't.
+  // Sent to the performer, and to the agent when the agent confirmed on their
+  // behalf, so the person whose likeness it is always holds the record.
+  void (async () => {
+    try {
+      const receipt = await buildConsentReceipt(db, result.acceptanceId);
+      if (!receipt) return;
+      const base = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
+      const { subject, html } = consentReceiptEmail({
+        performerName: receipt.performerName,
+        productionName: receipt.productionName,
+        companyName: receipt.companyName,
+        granted: receipt.granted.map((u) => u.name),
+        withheld: receipt.withheld.map((u) => u.name),
+        confirmedByAgent: receipt.onBehalf ? receipt.acceptedByEmail : null,
+        receiptUrl: `${base}/consent/receipt/${receipt.id}`,
+        reference: receipt.reference,
+      });
+      const to = [receipt.performerEmail, receipt.onBehalf ? receipt.acceptedByEmail : null].filter(
+        (e): e is string => Boolean(e),
+      );
+      for (const address of [...new Set(to)]) {
+        await sendEmail({ to: address, subject, html });
       }
     } catch { /* best-effort */ }
   })();

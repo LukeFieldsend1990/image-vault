@@ -53,6 +53,25 @@ function scopeNames(ids: string[]): string {
 }
 
 const ACCENT = "var(--color-accent)";
+// Brand tokens, replacing the pre-refresh `rgba(192,57,43,…)` literals this file
+// used to hardcode. See docs/brand-refresh-spec.md.
+const TINT = "var(--color-accent-tint)"; // brick tint — selected / attention
+const OLIVE = "var(--color-active)"; // consent live
+const OLIVE_TINT = "var(--color-active-tint)";
+const OCHRE = "var(--color-expiring)"; // elevated-risk uses (§39E, §39G)
+const OCHRE_TINT = "var(--color-expiring-tint)";
+const SERIF = "var(--font-serif)";
+
+/**
+ * The two `sensitive` categories — digital replica (§39E) and generative-AI
+ * training (§39G) — are the ones a performer is most likely to regret, and the
+ * ones a union lawyer looks hardest at. They are separated out of the ordinary
+ * list below and require a second, explicit confirmation before they can be
+ * ticked. Un-ticking never needs confirmation: withdrawing should always be
+ * easier than granting.
+ */
+const ORDINARY_CATEGORIES = USE_CATEGORIES.filter((c) => !c.sensitive);
+const SENSITIVE_CATEGORIES = USE_CATEGORIES.filter((c) => c.sensitive);
 
 export default function ConsentDocumentClient({ source }: { source: Source }) {
   const [data, setData] = useState<DocResponse | null>(null);
@@ -62,6 +81,10 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  // Set on a fresh acceptance so the performer can go straight to their receipt.
+  // Absent when the page loads onto an already-accepted document — the accept
+  // response is the only place the id is returned.
+  const [acceptanceId, setAcceptanceId] = useState<string | null>(null);
 
   // Negotiation (registered/licence mode only — guests can't negotiate pre-account)
   const [nego, setNego] = useState<NegotiationState | null>(null);
@@ -85,6 +108,10 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // Token mode: the unregistered performer ticked a different set than requested,
   // so confirming proposed different terms instead of finalising consent.
   const [guestProposed, setGuestProposed] = useState(false);
+
+  // A sensitive use the performer has tapped but not yet confirmed. Only one can
+  // be open at a time, so the confirmation is always unambiguous.
+  const [pendingSensitive, setPendingSensitive] = useState<string | null>(null);
 
   // Preview mode: a reserved-role agent reads the document before connecting their
   // client. Read-only — no acceptance, no negotiation, no account exists yet.
@@ -247,6 +274,10 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
 
   const vm = data?.document;
   const consentedList = useMemo(() => USE_CATEGORIES.filter((c) => consents.has(c.id)), [consents]);
+  // The negative record. Rendered as prominently as the positive one — what a
+  // performer refused is the half that matters in a dispute, and it has never
+  // been shown anywhere in this product.
+  const withheldList = useMemo(() => USE_CATEGORIES.filter((c) => !consents.has(c.id)), [consents]);
 
   const submit = useCallback(async () => {
     if (!attested) return;
@@ -258,8 +289,9 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uses: [...consents], attested: true }),
       });
-      const d = (await r.json()) as { ok?: boolean; error?: string; countered?: boolean };
+      const d = (await r.json()) as { ok?: boolean; error?: string; countered?: boolean; acceptanceId?: string };
       if (!r.ok || !d.ok) { setSubmitError(d.error ?? "Could not record your consent."); return; }
+      if (d.acceptanceId) setAcceptanceId(d.acceptanceId);
       if (d.countered) {
         // Scope differed from the request → sent to the production as a proposal.
         if (source.kind === "token") {
@@ -300,8 +332,8 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   if (guestProposed) {
     return (
       <Frame>
-        <div className="rounded-xl p-6" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.04)" }}>
-          <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Your proposal has been sent</h2>
+        <div className="rounded-xl p-6" style={{ border: `1px solid ${ACCENT}`, background: TINT }}>
+          <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: SERIF }}>Your proposal has been sent</h2>
           <p className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
             You changed the uses {vm.companyName} requested, so this is a proposal of different terms rather than consent. {vm.companyName}
             {vm.repName ? ` and your agent ${firstName(vm.repName)}` : ""} will review it and respond — consent isn&apos;t recorded until the terms match.
@@ -324,15 +356,35 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // here for now — it's a consequential, money-implicating step, not a simple click.
   const doneActions = (
     <>
-      <div className="rounded-xl p-6 mb-4" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.04)" }}>
+      <div className="rounded-xl p-6 mb-4" style={{ border: `1px solid ${ACCENT}`, background: TINT }}>
         <div className="flex items-start gap-3">
           <CheckCircle />
           <div>
-            <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Consent recorded</h2>
+            <h2 className="text-lg font-medium mb-1" style={{ color: "var(--color-text)", fontFamily: SERIF }}>Consent recorded</h2>
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
               {firstName(vm.performerName)} consented to <strong style={{ color: "var(--color-text)" }}>{consentedList.length}</strong> of{" "}
               <strong style={{ color: "var(--color-text)" }}>{total}</strong> uses on {vm.productionName}. The production has been notified.
             </p>
+
+            {/* The performer's copy. Emailed either way; linked here when the
+                acceptance was just made in this session. */}
+            <div className="mt-3">
+              {!isGuest && acceptanceId ? (
+                <Link
+                  href={`/consent/receipt/${acceptanceId}`}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium"
+                  style={{ color: ACCENT }}
+                >
+                  View and print your consent receipt
+                  <span aria-hidden>→</span>
+                </Link>
+              ) : (
+                <p className="text-xs" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+                  A receipt listing the uses consented to and the uses withheld has been emailed to
+                  {vm.performerName ? ` ${firstName(vm.performerName)}` : " you"}.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -341,7 +393,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
           // Performer elected to leave the role production-held, managed by their rep.
           <div className="rounded-xl p-6" style={{ border: "2px solid var(--color-text)", background: "var(--color-bg)" }}>
             <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>You&apos;re done</p>
-            <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>
+            <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: SERIF }}>
               {vm.repName ? `${firstName(vm.repName)} will keep managing this for you.` : "Your agent will keep managing this for you."}
             </h2>
             <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
@@ -356,9 +408,9 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         ) : vm.repName ? (
           // Two-way custody fork — take ownership now, or leave it with the agent.
           <div className="space-y-3">
-            <div className="rounded-xl p-6" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.04)" }}>
+            <div className="rounded-xl p-6" style={{ border: `1px solid ${ACCENT}`, background: TINT }}>
               <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Option 1 — take custody</p>
-              <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Set up your account and own your vault.</h2>
+              <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: SERIF }}>Set up your account and own your vault.</h2>
               <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
                 Register on ImageVault and take ownership — decide who else can access your data and set standing
                 instructions for every future request. Creating an account is free.
@@ -369,7 +421,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
             </div>
             <div className="rounded-xl p-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
               <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Option 2 — leave it with your agent</p>
-              <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>You can leave it there.</h2>
+              <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: SERIF }}>You can leave it there.</h2>
               <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
                 {vm.companyName} holds your vault for {vm.productionName}, with the access you just consented to and nothing more, and
                 {vm.repName ? ` ${firstName(vm.repName)}` : " your agent"} continues to manage it on your behalf. No account needed right now.
@@ -382,7 +434,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         ) : (
           <div className="rounded-xl p-6" style={{ border: "2px solid var(--color-text)", background: "var(--color-bg)" }}>
             <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>You&apos;re done</p>
-            <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>Your consent is recorded. You can leave it there.</h2>
+            <h2 className="text-xl font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: SERIF }}>Your consent is recorded. You can leave it there.</h2>
             <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
               Whenever you&apos;re ready, you can register on ImageVault and take ownership of your vault — decide who else can access your data
               and set standing instructions for every future request. Creating an account is free; claiming the vault
@@ -455,7 +507,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         value={counterComment} onChange={(e) => setCounterComment(e.target.value)} placeholder="Add a note (optional)" rows={3}
         className="w-full mb-3 rounded px-3 py-2 text-sm" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
       />
-      {submitError && <p className="text-xs mb-3 rounded px-3 py-2" style={{ background: "rgba(192,57,43,0.08)", color: ACCENT, border: "1px solid rgba(192,57,43,0.2)" }}>{submitError}</p>}
+      {submitError && <p className="text-xs mb-3 rounded px-3 py-2" style={{ background: TINT, color: ACCENT, border: `1px solid ` }}>{submitError}</p>}
       <div className="flex items-center gap-2">
         <button type="button" onClick={sendCounter} disabled={negoBusy} className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: negoBusy ? "var(--color-muted)" : ACCENT }}>
           {negoBusy ? "Sending…" : isProducer ? "Send counter" : "Send counter-offer"}
@@ -468,7 +520,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   return (
     <Frame>
       {isPreview && (
-        <div className="rounded-lg p-3.5 mb-5 flex items-start gap-2.5" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.05)" }}>
+        <div className="rounded-lg p-3.5 mb-5 flex items-start gap-2.5" style={{ border: `1px solid ${ACCENT}`, background: TINT }}>
           <span style={{ color: ACCENT }}>◆</span>
           <p className="text-xs" style={{ color: "var(--color-text)", lineHeight: 1.55 }}>
             <strong>Preview.</strong> This is the consent document <strong>{firstName(vm.performerName)}</strong> will receive once you connect them — including the production detail and the uses being requested. Nothing has been sent yet. To send it, add your client&apos;s email on the reserved role and connect them.
@@ -486,12 +538,22 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         </div>
       )}
 
-      <header className="mb-7">
-        <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>{vm.copy.kicker}</p>
-        <h1 className="text-2xl font-medium mb-3" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)", lineHeight: 1.2 }}>
+      <header className="mb-9">
+        <p className="text-[11px] font-semibold tracking-widest uppercase mb-3" style={{ color: ACCENT }}>{vm.copy.kicker}</p>
+        <h1
+          className="mb-4"
+          style={{
+            fontFamily: SERIF,
+            fontSize: "clamp(28px, 5vw, 38px)",
+            fontWeight: 600,
+            letterSpacing: "-0.018em",
+            lineHeight: 1.12,
+            color: "var(--color-ink)",
+          }}
+        >
           {vm.copy.title}
         </h1>
-        <p className="text-sm mb-5" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>{vm.copy.lead}</p>
+        <p className="text-[15px] mb-6" style={{ color: "var(--color-text)", lineHeight: 1.7, maxWidth: "58ch" }}>{vm.copy.lead}</p>
         <div className="grid grid-cols-2 gap-y-3 gap-x-6 rounded-lg p-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
           <Meta k="Sent to" v={vm.performerName} />
           <Meta k="Production" v={vm.productionName} />
@@ -504,64 +566,120 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
 
       {/* Interactive consent picker */}
       <section className="mb-7">
-        <p className="text-xs font-mono uppercase tracking-wider mb-1" style={{ color: "var(--color-muted)" }}>Section {vm.copy.consentSection.num}</p>
-        <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>{vm.copy.consentSection.heading}</h2>
-        <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>{vm.copy.consentSection.intro}</p>
+        <SectionHead num={vm.copy.consentSection.num} heading={vm.copy.consentSection.heading} />
+        <p className="text-sm mb-5" style={{ color: "var(--color-muted)", lineHeight: 1.65 }}>{vm.copy.consentSection.intro}</p>
+
         <div className="space-y-2.5">
-          {USE_CATEGORIES.map((c) => {
-            const on = consents.has(c.id);
-            const requested = vm.requestedScope.includes(c.id);
-            return (
-              <button
+          {ORDINARY_CATEGORIES.map((c) => (
+            <UseCard
+              key={c.id}
+              category={c}
+              on={consents.has(c.id)}
+              requested={vm.requestedScope.includes(c.id)}
+              editable={canEditScope}
+              onToggle={() => toggle(c.id)}
+            />
+          ))}
+        </div>
+
+        {/* Elevated-risk uses. Framed apart, and gated behind a second tap — the
+            friction is the point, and it should be visible that it exists. */}
+        <div
+          className="mt-6 pl-4"
+          style={{ borderLeft: `3px solid ${OCHRE}` }}
+        >
+          <p
+            className="text-[11px] font-semibold tracking-widest uppercase mb-1.5"
+            style={{ color: OCHRE }}
+          >
+            These two go further
+          </p>
+          <p className="text-sm mb-4" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+            The uses below let your likeness perform things you never filmed, or
+            teach a model to generate new performances. They are the two people
+            most often wish they had thought harder about. Each needs a separate
+            confirmation, and you can withdraw either at any time.
+          </p>
+          <div className="space-y-2.5">
+            {SENSITIVE_CATEGORIES.map((c) => (
+              <UseCard
                 key={c.id}
-                type="button"
-                disabled={!canEditScope}
-                onClick={() => canEditScope && toggle(c.id)}
-                className="w-full flex items-start gap-3 rounded-lg p-3.5 text-left transition"
-                style={{
-                  border: `1px solid ${on ? ACCENT : "var(--color-border)"}`,
-                  background: on ? "rgba(192,57,43,0.04)" : "var(--color-bg)",
-                  cursor: canEditScope ? "pointer" : "default",
-                  opacity: canEditScope ? 1 : 0.85,
+                category={c}
+                on={consents.has(c.id)}
+                requested={vm.requestedScope.includes(c.id)}
+                editable={canEditScope}
+                pendingConfirm={pendingSensitive === c.id}
+                onToggle={() => {
+                  if (consents.has(c.id)) {
+                    // Withdrawing is never gated.
+                    toggle(c.id);
+                    setPendingSensitive(null);
+                    return;
+                  }
+                  setPendingSensitive((p) => (p === c.id ? null : c.id));
                 }}
-              >
-                <span
-                  className="mt-0.5 flex items-center justify-center rounded shrink-0"
-                  style={{ width: 18, height: 18, border: `1px solid ${on ? ACCENT : "var(--color-border)"}`, background: on ? ACCENT : "transparent", color: "white", fontSize: 12 }}
-                >
-                  {on ? "✓" : ""}
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>{c.name}</span>
-                    {c.regimeTag && <Pill bg="var(--color-surface)" color="var(--color-muted)" border>{c.regimeTag}</Pill>}
-                    {c.sensitive && <Pill bg="rgba(180,83,9,0.1)" color="#b45309">sensitive</Pill>}
-                    {requested && <Pill bg="rgba(192,57,43,0.1)" color="var(--color-accent)">requested</Pill>}
-                  </span>
-                  <span className="block text-sm mt-1" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>{c.description}</span>
-                  <span className="block text-xs mt-1.5 italic" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>{c.example}</span>
-                </span>
-              </button>
-            );
-          })}
+                onConfirm={() => {
+                  toggle(c.id);
+                  setPendingSensitive(null);
+                }}
+                onCancelConfirm={() => setPendingSensitive(null)}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
       {vm.copy.after.map((s) => <DocSection key={s.num} s={s} />)}
 
-      {/* Dynamic summary */}
+      {/* Dynamic summary — both halves of the decision, weighted equally. */}
       <div className="rounded-xl p-5 mb-6" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-        <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>In summary</p>
-        <p className="text-sm mb-1" style={{ color: "var(--color-text)" }}>
-          You are about to consent to <strong>{consentedList.length}</strong> of <strong>{total}</strong> uses on {vm.productionName}:
+        <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>In summary</p>
+        <p className="text-sm mb-4" style={{ color: "var(--color-ink)", lineHeight: 1.6 }}>
+          {done ? "You consented to" : "You are about to consent to"}{" "}
+          <strong>{consentedList.length}</strong> of <strong>{total}</strong> uses on {vm.productionName}.
         </p>
-        {consentedList.length > 0 ? (
-          <ul className="list-disc pl-5 mt-2 space-y-0.5">
-            {consentedList.map((c) => <li key={c.id} className="text-sm" style={{ color: "var(--color-text)" }}>{c.name}</li>)}
-          </ul>
-        ) : (
-          <p className="text-sm italic mt-1" style={{ color: "var(--color-muted)" }}>No uses ticked. You can confirm with nothing ticked to refuse consent entirely.</p>
-        )}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-[10px] font-semibold tracking-widest uppercase mb-1.5" style={{ color: OLIVE }}>
+              Consenting to
+            </p>
+            {consentedList.length > 0 ? (
+              <ul className="space-y-1">
+                {consentedList.map((c) => (
+                  <li key={c.id} className="text-sm flex gap-2" style={{ color: "var(--color-ink)" }}>
+                    <span style={{ color: OLIVE }}>✓</span>
+                    <span>{c.name}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm italic" style={{ color: "var(--color-muted)" }}>
+                Nothing. Confirming with nothing ticked refuses consent entirely — which is a valid answer.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-[10px] font-semibold tracking-widest uppercase mb-1.5" style={{ color: "var(--color-muted)" }}>
+              Withholding
+            </p>
+            {withheldList.length > 0 ? (
+              <ul className="space-y-1">
+                {withheldList.map((c) => (
+                  <li key={c.id} className="text-sm flex gap-2" style={{ color: "var(--color-muted)" }}>
+                    <span>—</span>
+                    <span>{c.name}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm italic" style={{ color: "var(--color-muted)" }}>
+                Nothing — you are consenting to every use on this document.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Negotiation history */}
@@ -669,7 +787,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
             <>
               <p className="text-xs font-medium tracking-widest uppercase mb-2" style={{ color: "var(--color-muted)" }}>Manage on behalf of {firstName(vm.performerName)}</p>
               {nego?.pendingTalentCounter ? (
-                <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.05)", color: "var(--color-text)" }}>
+                <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: TINT, color: "var(--color-text)" }}>
                   You&apos;ve proposed new terms — <strong>awaiting the production&apos;s response.</strong> You can still send for consent on the current terms, or revise your proposal.
                 </div>
               ) : (
@@ -693,7 +811,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         // accept endpoint records it as a counter on the cast negotiation thread.
         <div className="rounded-xl p-5" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
           {scopeChanged && (
-            <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.05)", color: "var(--color-text)" }}>
+            <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: TINT, color: "var(--color-text)" }}>
               You&apos;ve changed the uses {vm.companyName} requested. Confirming now <strong>proposes these different terms</strong> — {vm.companyName}
               {vm.repName ? ` and your agent ${firstName(vm.repName)}` : ""} must agree before consent is recorded.{" "}
               <button type="button" onClick={() => setConsents(new Set(requestedScope))} className="font-medium underline" style={{ color: ACCENT }}>Reset to requested</button>
@@ -719,7 +837,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
           ) : (
             <>
               {nego?.pendingTalentCounter && (
-                <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: "rgba(192,57,43,0.05)", color: "var(--color-text)" }}>
+                <div className="rounded-lg p-3 mb-4 text-xs" style={{ border: `1px solid ${ACCENT}`, background: TINT, color: "var(--color-text)" }}>
                   You&apos;ve proposed new terms — <strong>awaiting the production&apos;s response.</strong> You can revise your proposal, or confirm their current terms instead.
                 </div>
               )}
@@ -744,6 +862,9 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
           This consent has already been confirmed.
         </div>
       )}
+
+      {/* Live decision rail — only while the performer is still deciding. */}
+      {canEditScope && <DecisionRail granted={consentedList} withheld={withheldList} />}
     </Frame>
   );
 }
@@ -753,7 +874,39 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
 function Frame({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ background: "var(--color-bg)", minHeight: "100vh" }}>
-      <div className="mx-auto px-5 py-10" style={{ maxWidth: 720 }}>{children}</div>
+      {/* Bottom padding clears the fixed decision rail. */}
+      <div className="mx-auto px-5 pt-12 pb-32" style={{ maxWidth: 720 }}>{children}</div>
+    </div>
+  );
+}
+
+/**
+ * A numbered heading with the numeral hanging in a mono gutter, so the document
+ * reads as a numbered instrument rather than a web form.
+ */
+function SectionHead({ num, heading }: { num: string; heading: string }) {
+  return (
+    <div className="flex gap-4 mb-3">
+      <span
+        className="shrink-0 pt-1.5 text-right"
+        style={{ width: 22, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-faint)" }}
+      >
+        {num}
+      </span>
+      <h2
+        className="min-w-0"
+        style={{
+          fontFamily: SERIF,
+          fontSize: 21,
+          fontWeight: 600,
+          letterSpacing: "-0.01em",
+          lineHeight: 1.25,
+          color: "var(--color-ink)",
+          margin: 0,
+        }}
+      >
+        {heading}
+      </h2>
     </div>
   );
 }
@@ -761,17 +914,182 @@ function Frame({ children }: { children: React.ReactNode }) {
 function DocSection({ s }: { s: { num: string; heading: string; paragraphs: string[]; emphasis?: string } }) {
   return (
     <section className="mb-7">
-      <p className="text-xs font-mono uppercase tracking-wider mb-1" style={{ color: "var(--color-muted)" }}>Section {s.num}</p>
-      <h2 className="text-lg font-medium mb-2" style={{ color: "var(--color-text)", fontFamily: "var(--font-display, inherit)" }}>{s.heading}</h2>
+      <SectionHead num={s.num} heading={s.heading} />
       {s.paragraphs.map((p, i) => (
-        <p key={i} className="text-sm mb-2" style={{ color: "var(--color-muted)", lineHeight: 1.65 }}>{p}</p>
+        <p key={i} className="text-sm mb-2.5" style={{ color: "var(--color-text)", lineHeight: 1.7 }}>{p}</p>
       ))}
       {s.emphasis && (
-        <div className="rounded-lg p-3.5 mt-2 text-sm" style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)", lineHeight: 1.6 }}>
+        <div
+          className="rounded-lg p-4 mt-3 text-sm"
+          style={{
+            background: "var(--color-surface)",
+            borderLeft: `3px solid ${ACCENT}`,
+            color: "var(--color-ink)",
+            lineHeight: 1.65,
+          }}
+        >
           {s.emphasis}
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * One use category. Ordinary uses toggle on a single tap; sensitive ones open an
+ * inline confirmation instead, and only commit when it is accepted.
+ */
+function UseCard({
+  category: c,
+  on,
+  requested,
+  editable,
+  pendingConfirm,
+  onToggle,
+  onConfirm,
+  onCancelConfirm,
+}: {
+  category: (typeof USE_CATEGORIES)[number];
+  on: boolean;
+  requested: boolean;
+  editable: boolean;
+  pendingConfirm?: boolean;
+  onToggle: () => void;
+  onConfirm?: () => void;
+  onCancelConfirm?: () => void;
+}) {
+  const edge = on ? OLIVE : pendingConfirm ? OCHRE : "var(--color-border)";
+  const fill = on ? OLIVE_TINT : pendingConfirm ? OCHRE_TINT : "var(--color-bg)";
+
+  return (
+    <div
+      className="rounded-lg overflow-hidden transition"
+      style={{ border: `1px solid ${edge}`, background: fill, opacity: editable ? 1 : 0.85 }}
+    >
+      <button
+        type="button"
+        disabled={!editable}
+        onClick={() => editable && onToggle()}
+        aria-pressed={on}
+        className="w-full flex items-start gap-3 p-3.5 text-left"
+        style={{ cursor: editable ? "pointer" : "default" }}
+      >
+        <span
+          className="mt-0.5 flex items-center justify-center rounded shrink-0"
+          style={{
+            width: 18,
+            height: 18,
+            border: `1px solid ${on ? OLIVE : "var(--color-border)"}`,
+            background: on ? OLIVE : "transparent",
+            color: "white",
+            fontSize: 12,
+          }}
+        >
+          {on ? "✓" : ""}
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{c.name}</span>
+            {c.regimeTag && <Pill bg="var(--color-surface)" color="var(--color-muted)" border>{c.regimeTag}</Pill>}
+            {c.sensitive && <Pill bg={OCHRE_TINT} color={OCHRE}>needs extra care</Pill>}
+            {requested && <Pill bg={TINT} color={ACCENT}>requested</Pill>}
+          </span>
+          <span className="block text-sm mt-1" style={{ color: "var(--color-text)", lineHeight: 1.55 }}>{c.description}</span>
+          <span className="block text-xs mt-1.5 italic" style={{ color: "var(--color-muted)", lineHeight: 1.5 }}>{c.example}</span>
+        </span>
+      </button>
+
+      {pendingConfirm && (
+        <div className="px-3.5 pb-3.5 pt-0.5" style={{ borderTop: `1px solid ${OCHRE}` }}>
+          <p className="text-xs mt-3 mb-3" style={{ color: "var(--color-ink)", lineHeight: 1.6 }}>
+            Consenting to <strong>{c.name.toLowerCase()}</strong> {c.regimeTag ? `(${c.regimeTag}) ` : ""}
+            means {c.example.charAt(0).toLowerCase()}{c.example.slice(1).replace(/\.$/, "")}. Confirm only if
+            you are comfortable with that.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="rounded px-3 py-1.5 text-xs font-medium text-white"
+              style={{ background: OCHRE }}
+            >
+              Yes — I consent to this
+            </button>
+            <button
+              type="button"
+              onClick={onCancelConfirm}
+              className="text-xs"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Not this one
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The decision rail. Pinned to the bottom of the viewport so both halves of the
+ * decision — what is being granted and what is being refused — stay in front of
+ * the performer while they read, rather than only appearing in a summary they
+ * may scroll past.
+ */
+function DecisionRail({
+  granted,
+  withheld,
+}: {
+  granted: { id: string; name: string }[];
+  withheld: { id: string; name: string }[];
+}) {
+  return (
+    <div
+      className="fixed left-0 right-0 bottom-0 z-40"
+      style={{
+        background: "var(--color-bg)",
+        borderTop: "1px solid var(--color-border)",
+        boxShadow: "0 -6px 18px rgba(45,43,38,0.06)",
+      }}
+    >
+      <div className="mx-auto px-5 py-3" style={{ maxWidth: 720 }}>
+        <div className="flex items-start gap-5 flex-wrap">
+          <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
+            <p
+              className="text-[10px] font-semibold tracking-widest uppercase mb-1 flex items-center gap-1.5"
+              style={{ color: OLIVE }}
+            >
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: OLIVE, display: "inline-block" }} />
+              Consenting to {granted.length}
+            </p>
+            <p className="text-xs truncate" style={{ color: "var(--color-text)" }}>
+              {granted.length ? granted.map((c) => c.name).join(", ") : "Nothing yet"}
+            </p>
+          </div>
+          <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
+            <p
+              className="text-[10px] font-semibold tracking-widest uppercase mb-1 flex items-center gap-1.5"
+              style={{ color: "var(--color-muted)" }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  border: "1.5px solid var(--color-muted)",
+                  display: "inline-block",
+                  boxSizing: "border-box",
+                }}
+              />
+              Withholding {withheld.length}
+            </p>
+            <p className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
+              {withheld.length ? withheld.map((c) => c.name).join(", ") : "Nothing — you are consenting to all uses"}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -804,7 +1122,7 @@ function firstName(name: string): string {
 }
 
 function ErrLine({ msg }: { msg: string }) {
-  return <p className="text-xs mb-3 rounded px-3 py-2" style={{ background: "rgba(192,57,43,0.08)", color: ACCENT, border: "1px solid rgba(192,57,43,0.2)" }}>{msg}</p>;
+  return <p className="text-xs mb-3 rounded px-3 py-2" style={{ background: TINT, color: ACCENT, border: `1px solid ` }}>{msg}</p>;
 }
 
 function OfferBox({ scope, fee, comment }: { scope: string[]; fee: number | null; comment?: string | null }) {

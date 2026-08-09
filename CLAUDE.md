@@ -51,14 +51,19 @@ lib/
   skills/          # MCP-pattern skill system (see "Extending Skills" below)
   mcp/             # Admin MCP server: tool registry, semantic layer, audit (see "Admin MCP Integration" below)
   crypto/          # Encryption utilities
+  compliance/      # Hash-chained ledger, seals, certificates, regimes, scorecard
+  consent/         # Use-category taxonomy, document copy, acceptance, receipt, negotiation
+  documents/       # palette.ts — shared print grammar for every evidence document
 drizzle/
-  migrations/      # Sequential SQL: 0000_auth.sql through 0030_soft_delete_packages.sql
+  migrations/      # Sequential SQL: 0000_auth.sql onwards (latest: 0102_document_seals.sql)
 pipeline-worker/   # Cloudflare Worker for scan processing (validate, classify, assemble, bundle)
 ai-worker/         # AI processing worker (Anthropic integration)
 ai-cron-worker/    # Scheduled AI batch processing (suggestions)
 comms-worker/      # Communication worker (email intake → triage)
-themes/            # Per-agency UI themes (CSS variables per subdomain)
 ```
+
+Styling lives entirely in `app/globals.css` (Tailwind v4, `@theme inline`). There is no
+`themes/` directory and no `tailwind.config.*`.
 
 ## Key Patterns
 
@@ -120,9 +125,10 @@ export async function GET(
 - Pattern: `page.tsx` (server, auth check, data fetch) imports `*-client.tsx` (interactive UI)
 - **Styling**: Tailwind classes for layout/spacing + inline `style` objects for dynamic/themed colors
 - **CSS variables**: `--color-text`, `--color-muted`, `--color-bg`, `--color-surface`, `--color-border`, `--color-accent`
-- **Design language**: United Agents aesthetic — minimal, black/white, red accent (#c0392b), typography-led, sans-serif
+- **Design language**: "the gate, not the safe" — warm paper + ink, a single brick-red accent (`#bc3d2c`), editorial serif headlines (Newsreader) over Hanken Grotesk body and JetBrains Mono data. Full system and usage ratios in `docs/brand-refresh-spec.md`; tokens are defined once in `app/globals.css`. Do not hardcode the pre-refresh `#c0392b` / `rgba(192,57,43,…)` — use `var(--color-accent)`.
 - **Section headers**: `text-xs font-medium tracking-widest uppercase` with `color: var(--color-muted)`
 - **Cards**: `rounded p-4` with `border: 1px solid var(--color-border)` and `background: var(--color-surface)`
+- **Printed documents** (custody record, consent receipt, compliance certificate, licence contract) share one grammar in `lib/documents/palette.ts` + `app/components/seal.tsx`. They use colour literals rather than CSS variables because two of them are rendered server-side as standalone HTML strings.
 
 ### Fire-and-Forget Async Work
 
