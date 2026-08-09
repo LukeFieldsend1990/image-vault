@@ -12,6 +12,7 @@ const CATEGORIES = [
   { value: "vault", label: "Vault" },
   { value: "invite", label: "Invite" },
   { value: "admin", label: "Admin" },
+  { value: "compliance", label: "Compliance" },
 ];
 
 const EMPTY: AuditFilters = { from: "", to: "", users: "", category: "" };
