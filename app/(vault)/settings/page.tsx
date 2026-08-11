@@ -32,6 +32,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/storage", label: "Storage", description: "Per-talent storage usage" },
   { href: "/admin/bridge", label: "Bridge", description: "Active Bridge sessions and tamper event log" },
   { href: "/admin/ai", label: "AI Features", description: "AI settings, cost tracking and batch controls" },
+  { href: "/admin/monitor", label: "Likeness Monitor", description: "Apify discovery spend ceiling and run ledger" },
   { href: "/admin/skills", label: "Triage", description: "Whitelisted email triage skills" },
   { href: "/admin/compliance", label: "Compliance", description: "Art. 39 strikes, transfers and certificates" },
   { href: "/admin/compliance-roles", label: "Compliance Roles", description: "Union presets, insurer cover, watcher grants and access control" },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { TalentIdentityForMonitor } from "./page";
 
 // ── Types (mirror /api/monitor payloads) ────────────────────────────────────
@@ -57,8 +58,11 @@ interface MonitorState {
 
 interface ScanResponse {
   scanId: string;
+  status: "running" | "complete" | "error";
+  error?: string | null;
   platformsChecked: number;
   candidatesAnalysed: number;
+  hitsFound?: number;
   newHits: LikenessHit[];
   aiProvider: string;
 }
@@ -476,30 +480,45 @@ export default function MonitorClient({ identity }: Props) {
     setScanError(null);
     setPlatforms(INITIAL_PLATFORMS.map((p) => ({ ...p, status: "idle" as ScanStatus })));
 
-    // Kick off the real sweep; the per-platform animation plays while the
-    // server crawls candidates and the AI adjudicator scores them.
-    const request = fetch("/api/monitor/scan", { method: "POST" })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(body.error ?? "Scan failed");
-        }
-        return (await res.json()) as ScanResponse;
-      });
+    // Kick off the sweep. Discovery runs against live platforms and takes
+    // minutes, so the POST only opens the scan — the result arrives by polling.
+    // The per-platform animation runs alongside as progress texture, but it no
+    // longer decides when the scan is finished.
+    const request = (async () => {
+      const res = await fetch("/api/monitor/scan", { method: "POST" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Scan failed");
+      }
+      const { scanId } = (await res.json()) as { scanId: string };
 
-    for (const platform of INITIAL_PLATFORMS) {
-      setPlatforms((prev) =>
-        prev.map((p) => (p.id === platform.id ? { ...p, status: "checking" } : p))
-      );
-      await new Promise((r) => setTimeout(r, platform.checkDuration));
-      setPlatforms((prev) =>
-        prev.map((p) => (p.id === platform.id ? { ...p, status: "clear" } : p))
-      );
-      await new Promise((r) => setTimeout(r, 180));
-    }
+      // Up to ~5 minutes: an Apify run is 1-3, and a sweep chains several.
+      for (let attempt = 0; attempt < 100; attempt++) {
+        await new Promise((r) => setTimeout(r, attempt < 5 ? 1_000 : 3_000));
+        const poll = await fetch(`/api/monitor/scans/${scanId}`);
+        if (!poll.ok) continue;
+        const scan = (await poll.json()) as ScanResponse;
+        if (scan.status === "complete") return scan;
+        if (scan.status === "error") throw new Error(scan.error ?? "Scan failed");
+      }
+      throw new Error("Scan timed out — it may still be running; refresh in a minute.");
+    })();
+
+    const animation = (async () => {
+      for (const platform of INITIAL_PLATFORMS) {
+        setPlatforms((prev) =>
+          prev.map((p) => (p.id === platform.id ? { ...p, status: "checking" } : p))
+        );
+        await new Promise((r) => setTimeout(r, platform.checkDuration));
+        setPlatforms((prev) =>
+          prev.map((p) => (p.id === platform.id ? { ...p, status: "clear" } : p))
+        );
+        await new Promise((r) => setTimeout(r, 180));
+      }
+    })();
 
     try {
-      const result = await request;
+      const [result] = await Promise.all([request, animation]);
       const hitPlatforms = new Set(result.newHits.map((h) => h.platform));
       setPlatforms((prev) =>
         prev.map((p) => (hitPlatforms.has(p.id) ? { ...p, status: "flagged" } : p))
@@ -560,6 +579,13 @@ export default function MonitorClient({ identity }: Props) {
             AI-adjudicated scanning of public platforms for unauthorised use of{" "}
             <span className="font-medium" style={{ color: "var(--color-ink)" }}>{name}</span>.
           </p>
+          <Link
+            href="/vault/monitor/accounts"
+            className="mt-2 inline-block text-xs font-medium underline underline-offset-2"
+            style={{ color: "var(--color-muted)" }}
+          >
+            View accounts →
+          </Link>
         </div>
 
         <button

@@ -4057,16 +4057,227 @@ Talent's verified identity anchors — TMDB profile + filmography (onboarding), 
 
 The simulated crawler (`generateCandidates()` in `lib/monitor/candidates.ts`) is the **only** fictional stage — the adjudicator, signal vocabulary, hit schema, dedupe, alerts, triage and MCP surface all consume the same `CandidateContent` shape and survive the swap unchanged. Going real means replacing that one function with three vendor-backed stages:
 
-#### Stage 1 — Discovery (Apify)
+#### Stage 1 — Discovery (Apify) — Phase 1 build spec
 
 There is no official route: the Instagram Graph API has no reels search/firehose and hashtag search is crippled (business accounts, 30 hashtags/week). Commercial scraping infrastructure is how every real player operates (Vermillio, Loti).
 
-- **Vendor**: Apify — maintained actors `apify/instagram-search-scraper` / `apify/instagram-hashtag-scraper`, driven via REST (start run → poll → fetch dataset JSON).
-- **Yield per item**: reel URL, author handle, caption, view/like counts, **thumbnail + video URLs** (feeds Stage 2).
-- **Search terms from existing anchors**: TMDB name + modifiers (`"{name}" ai`, `"{name}" deepfake`), hashtag sweeps (`#aivideo`, `#deepfake`) filtered by name-in-caption, knownFor titles.
-- **Cost**: ~$0.50–2.50 / 1,000 results; a 100–200-reel sweep per talent is pennies.
+- **Vendor**: Apify — maintained actors driven via REST (start run → poll → fetch dataset JSON).
+- **Cost**: ~$0.50–2.50 / 1,000 results.
 - **Secret**: `APIFY_TOKEN`.
 - ⚠️ Scraping violates Meta ToS — Apify carries operational risk, but adopting it is a knowing business decision.
+
+##### Strategy: make protected talent unprofitable to target
+
+Individual takedowns are whack-a-mole and always will be — a synthetic reel costs minutes to make and seconds to repost. The winnable game is economic, not custodial. Accounts farming a celebrity likeness are running a business: view accumulation → platform creator payouts, link-in-bio generator funnels, follower resale. Every one of those needs **sustained reach on a single account**. So the monitor optimises for the metric that breaks the business model:
+
+> **Time-to-takedown, weighted by reach** — not hits found.
+
+Four consequences, each of which changes the build:
+
+- **Track accounts, not just posts.** A handle that has posted eleven Tom Hardy recasts is one enforcement target, not eleven hits. Aggregation is what turns a hit feed into a case file.
+- **Prioritise by velocity and reach.** A 200-view reel from a 40-follower account is noise; the same reel on a 400k account with a generator link in bio is the target. The triage queue ranks on projected reach, not per-post severity.
+- **Cross-talent correlation is the escalation trigger.** One account hitting several ImageVault-protected talent is a commercial operation, and evidence of pattern is what moves platform trust-and-safety teams off per-post reporting forms and onto partner channels.
+- **The deterrent is the product.** Once these accounts learn that protected talent get killed inside 48 hours, the roster becomes the cohort not worth farming. That is the promise to talent — not "we will find every reel".
+
+##### Why discovery must be AI-biased at the query layer
+
+`"tom hardy"` on Instagram returns tens of thousands of items a week and ~99% of it is fan edits, red-carpet clips and press. Sweeping the bare name and *then* paying per-item for a face match and a deepfake classifier to discover that is the wrong funnel: it spends the entire per-item budget on benign content and buries the talent in noise. Discovery biases toward AI intent **before** any paid detector runs.
+
+Two sweep modes, both run every scan:
+
+**Mode A — term sweep (finds new accounts).** Instagram has **no free-text caption search** — its search surface is hashtags, users and places, so queries must be expressed in those terms rather than as phrases:
+
+| Query mode | Examples for Tom Hardy |
+|---|---|
+| Name-slug hashtags | `#tomhardyai`, `#tomhardydeepfake`, `#tomhardyaiedit`, `#tomhardyfaceswap` |
+| knownFor cross | `#venomai`, `#madmaxfuryroadai` |
+| User search | handles matching `tomhardy` — surfaces dedicated impersonator accounts before they build volume |
+| Roster-wide hashtags | `#aivideo`, `#deepfake`, `#aiactor`, `#faceswap`, `#syntheticmedia` — swept **once for the whole roster** and name-matched against every monitored talent |
+
+The bare `#tomhardy` is deliberately excluded: it is ~99% fan content and would consume the sweep budget to find nothing.
+
+That last row is the main cost lever: it amortises across the roster, so it gets cheaper per talent as the roster grows.
+
+**Mode B — account watch (harvests known offenders).** Every handle with a confirmed hit joins the watchlist; each sweep pulls its recent posts in profile mode. Cheap, high precision, and it catches the repost-after-takedown pattern that term sweeps systematically miss. This is the mode that does the actual enforcement work.
+
+Because hashtags are concatenated, AI-intent detection needs two tests, not one: a word-boundary match for prose (`"made with AI"`) and a token-position match for tags (`#tomhardyai` ends in `ai`; `#portrait` must not match). The query that surfaced an item counts as intent evidence in its own right — a post pulled out of `#tomhardydeepfake` has declared itself even if its caption is bare.
+
+##### Apify mechanics
+
+| Actor | Mode | Input |
+|---|---|---|
+| `apify/instagram-search-scraper` | term sweep | `{ search, searchType: "hashtag" \| "user", resultsLimit }` |
+| `apify/instagram-hashtag-scraper` | roster hashtag sweep | `{ hashtags: [...], resultsLimit }` |
+| `apify/instagram-scraper` | account watch | `{ directUrls: [profileUrl], resultsType: "posts", resultsLimit }` |
+
+Run lifecycle (1–3 min, hence async):
+
+1. `POST /v2/acts/{actor}/runs?token=$APIFY_TOKEN` with the input JSON → `{ data: { id, defaultDatasetId } }`
+2. Poll `GET /v2/actor-runs/{id}` until `status` is `SUCCEEDED` (`FAILED` / `TIMED-OUT` / `ABORTED` → write the reason to `monitor_scans.error`)
+3. `GET /v2/datasets/{datasetId}/items?clean=true` → the item array
+
+Do **not** use the `run-sync-get-dataset-items` convenience endpoint — it blocks for up to five minutes and would hold a Worker request open for the whole run.
+
+Item → `CandidateContent` mapping:
+
+| Apify field | Maps to |
+|---|---|
+| `url` | `contentUrl` |
+| `ownerUsername`, `ownerId` | `authorHandle`, offender-account key |
+| `caption`, `hashtags[]` | `caption`, pre-filter + adjudicator context |
+| `timestamp` | `signals.postedDaysAgo` |
+| `videoPlayCount ?? videoViewCount ?? likesCount` | `signals.viewCount` |
+| `displayUrl` | `media.thumbnailUrl` — **Stage 2 + 3 input** |
+| `videoUrl` | `media.videoUrl` — Stage 3, later frame sampling |
+
+The media block carries no consumer in Phase 1 and is populated anyway: it is the seam Stages 2 and 3 plug into without touching the ingest layer again.
+
+##### The cheap pre-filter
+
+Between Apify and the (paid, per-item) detectors sits a pure-code gate. Nothing that fails it costs a cent beyond its discovery.
+
+1. **Name presence** — talent name or a known variant in caption, handle or hashtags. Term sweeps mostly guarantee this; roster hashtag sweeps do not.
+2. **AI-intent markers** — `ai`, `deepfake`, `faceswap`, `synthetic`, `generated`, `sora`, `veo`, `made with`, plus generator-tool vocabulary, in caption or hashtags. **Mandatory when scope is `ai_only`.**
+3. **Allowlist** — the talent's own verified account, their agency, studio and distributor handles, established press outlets. Seeded per talent, editable. Flagging a studio's own trailer is the single most damaging failure mode this feature has.
+4. **Seen-before** — URL already in `likeness_hits`, or previously dismissed for this talent. The existing dedupe, moved earlier so it saves detector spend rather than just suppressing UI rows.
+
+Expected attrition on a Tom Hardy sweep: ~800 discovered → ~100–150 adjudicated.
+
+##### Cost per sweep
+
+| Line | Volume | Rate | Cost |
+|---|---|---|---|
+| Term sweep (8 queries × 100) | 800 items | ~$1.50 / 1k | ~$1.20 |
+| Roster hashtag sweep | amortised across monitored talent | — | ~$0.02 / talent |
+| Account watch (12 handles × 24 posts) | ~290 items | ~$1.50 / 1k | ~$0.45 |
+
+≈ **$1.70 per talent per full sweep.** Daily sweeps are therefore ~$50/talent/month — real money at roster scale, which makes cadence a product decision rather than a default: **weekly baseline, daily while a confirmed hit is open, on-demand always available.**
+
+##### What Phase 1 can and cannot conclude
+
+With Apify alone the adjudicator sees caption, handle, hashtags, reach, recency and the query that surfaced the item — no face match, no classifier. That is genuinely strong on the *"is this claiming to be AI"* axis (these accounts advertise it; it is their marketing) and genuinely weak on *"is this actually Tom Hardy"*. Phase 1 is therefore built to be honest rather than confident:
+
+- Likeness `confidence` is **capped at 60** while face matching is unavailable, and hits carry an explicit `identity_unverified` match signal.
+- `aiGeneratedLikelihood` is unconstrained — it is the axis Phase 1 can actually read.
+- The UI states it: *"Identity match unavailable — flagged from caption, handle and account history."*
+- Detector signals become **nullable rather than fake**. `faceEmbeddingSimilarity` and `syntheticMediaScore` are `null` until Stages 2 and 3 land; both the adjudicator prompt and `heuristicAdjudicate()` must read null as *unavailable*, never as zero.
+
+##### Scope: AI-generated use only
+
+Talent monitoring for *synthetic* misuse do not want a hit every time a fan posts a red-carpet clip. `likeness_monitors` gains `scope`, defaulting to **`ai_only`**:
+
+- **`ai_only`** — the AI-intent pre-filter is mandatory, and no hit is recorded below an `aiGeneratedLikelihood` floor (60) regardless of likeness confidence.
+- **`all_likeness`** — current behaviour: any unauthorised likeness use is flaggable.
+
+Orthogonal to `sensitivity` (strict/balanced/relaxed), which keeps moving the flagging thresholds *within* whichever scope is set.
+
+##### Schema (migration `0104_monitor_true_signal.sql`)
+
+- `likeness_monitors` — add `scope` (`ai_only | all_likeness`, default `ai_only`), `cadence` (`manual | weekly | daily`), `allowlist_json`.
+- `likeness_hits` — add `thumbnail_url`, `discovery_source` (which query or watched account surfaced it — shown in the UI, and the tuning signal for query weighting), `account_id`.
+- **New `monitor_accounts`** — the offender case file: `id`, `platform`, `handle`, `platform_user_id`, `display_name`, `follower_count`, `first_seen_at`, `last_seen_at`, `hit_count`, `cumulative_views`, `talent_affected_count`, `status` (`watchlist | reported | suspended | cleared`), `notes`. Unique on (`platform`, `handle`). Written on every hit; drives Mode B and the reach-ranked triage queue.
+
+##### Findings from live Apify output (2026-08-10)
+
+First real runs against `apify/instagram-hashtag-scraper`, via `scripts/apify-smoke.mjs`. Four things the docs did not tell us:
+
+1. **`usageTotalUsd` is `0` on a freshly-succeeded run.** Apify computes usage asynchronously, so the figure is not populated at the moment the run reports `SUCCEEDED`. Booking it literally would have recorded every run at zero and the ceiling would never have tripped — a spend limit that silently does nothing. `effectiveRunCost()` now believes a zero only when the run returned no items, and estimates otherwise.
+2. **Hashtag sweeps return stills, not just video.** Items carry `type: "Video" | "Image" | "Sidecar"`; the mapper had hard-coded `"reel"`. A carousel of stills is a materially different claim from a synthetic clip, so `contentTypeFor()` now reads the field.
+3. **Empty or private hashtags yield a sentinel item**, not an empty array: `{ url, error: "no_items", errorDescription }` with no owner. `mapInstagramItem()` already dropped these (no `ownerUsername`), now covered by a test.
+4. **`followersCount` and `isVerified` are absent from hashtag and search results** — they are profile-level fields, returned only by the account-watch actor. The priority score does not use them (it ranks on `cumulativeViews`), so ranking is unaffected; the follower line in the case-file UI stays blank until an account watch fills it in. Reach for non-video posts falls back to `likesCount`.
+
+##### Discovery strategy, revised on evidence (2026-08-10)
+
+Two real examples, both found by a human typing "tom hardy ai" into the Instagram app, overturned the original query design:
+
+| Example | Account | Tags | Says "AI"? |
+|---|---|---|---|
+| Synthetic *Venom 4* trailer, 27k plays | `@leakingai` | **none** | yes, in caption |
+| *Venom 4: King in Black* concept trailer | `@ultimatestudiosofficial` | `#venom4 #tomhardy #tomholland #knull` | **no** — "FAN MADE CONCEPT TRAILER" |
+
+Three consequences, each now implemented:
+
+1. **Sweep the bare name tag, not AI-suffixed ones.** `#tomhardyai` was empty; the second example sat under `#tomhardy`. Obvious in hindsight — these accounts tag for *reach*, and the audience is under the actor's name. AI intent moved out of the query and into the pre-filter.
+2. **The AI-intent vocabulary cannot be AI words only.** The second example never says "AI" anywhere. `AI_INTENT_MARKERS` gained synthetic-content vocabulary (`concept trailer`, `fan made`, `what if`, `reimagined`, `unofficial`). The pre-filter is a cheap recall gate; precision belongs to the adjudicator.
+3. **Untagged content is only reachable by account.** The first example carries no hashtags at all. `lib/monitor/ingest/seeds.ts` seeds the watchlist with the AI-content accounts found by hand, and their harvests are name-matched against the whole roster.
+
+**Apify cannot reach Instagram's free-text post search.** Probed directly (`scripts/apify-search-probe.mjs`): every free-text combination across `instagram-scraper` and `instagram-search-scraper` returns `no_items`. `user_search` is no longer planned — it spent money for nothing.
+
+**Instagram profile listing works after all.** The `not_found` that looked like a broken actor was a handle that did not exist: `reveal.aii` was read off branding burnt into a video, while the posting account was `leakingai`. Re-run against confirmed handles (`scripts/apify-profile-matrix.mjs`), three of six routes work, and the input shape already shipped for account watch is one of them:
+
+| Route | Result |
+|---|---|
+| `instagram-scraper` · `directUrls`(profile) + `resultsType: posts` | ✓ **in use** |
+| `instagram-post-scraper` · `username[]` | ✓ viable fallback |
+| `instagram-profile-scraper` · `usernames[]` | ✓ profile metadata (followers, bio, verified) |
+| `instagram-scraper` · `username[]` | ✗ `no_items` |
+| `instagram-reel-scraper` · `username[]` | ✗ HTTP 400 |
+
+Account watch is therefore **not blocked**. The lasting lesson is about watchlist hygiene rather than actors: a handle that does not exist is swept every cycle, costs a query each time, returns nothing, and quietly implies coverage that was never happening. So `lib/monitor/ingest/profiles.ts` + `POST /api/admin/monitor/accounts/verify` check every watchlist handle against the platform in one batched run — filling in follower counts and display names (absent from hashtag sweeps entirely) and reporting handles that do not resolve. Pruning is opt-in, never automatic, and never touches an account with recorded hits: an actor hiccup must not be able to empty a curated list, and a vanished handle with hits against it is still evidence.
+
+##### Additional discovery surfaces (prepared, unmeasured)
+
+Built so the primary source can be chosen on evidence rather than assumption:
+
+- **YouTube (`lib/monitor/ingest/youtube.ts`)** — likely the better primary. Real free-text search over titles and descriptions, which is the exact capability Apify cannot reach on Instagram; it is the *official* API, so no ToS exposure; and AI concept trailers are a YouTube-native genre that Instagram largely reposts. Costs quota (10k units/day, 100/search ≈ 100 searches) rather than money, so it runs even when the Apify ceiling is spent. Needs `YOUTUBE_API_KEY`.
+- **TikTok (`lib/monitor/ingest/tiktok.ts`)** — Apify's TikTok actors *do* accept free-text keywords, unlike Instagram's. Shares the Apify client, so it shares the spend ceiling and ledger.
+- **Seeded accounts (`lib/monitor/ingest/seeds.ts`)** — cheapest per useful hit, and the only route to untagged content. Blocked on the profile-actor problem above.
+
+`scripts/discovery-bakeoff.mjs` runs all four surfaces side by side and scores them on synthetic hits found, so the query budget can be allocated on measured yield.
+
+##### Curation account → watchlist (`/admin/monitor`)
+
+The route around the search problem. Instagram's own search finds this content in seconds and exposes that capability to nobody; so a person does the finding, from a dedicated account, by **following** each offender they come across. That following list is then imported as the watchlist.
+
+It puts each side on what it is good at: judgement ("is this a synthetic-likeness account?") stays with a human using a native UI, while volume ("harvest every post from these 200 accounts, forever, name-matched against the whole roster") goes to the machine. Because harvests are matched against every monitored talent, the cost divides across the roster rather than multiplying.
+
+- **Import is a preview, never a write.** The admin reviews and selects; an import that silently wrote whatever a scraper returned would put the watchlist one bad response away from junk.
+- **Paste is the always-available path.** `parseHandleList()` accepts `@handle`, bare handles or profile URLs, deduplicates across spellings, rejects pasted *post* links (so nothing ends up watching an account called "reel"), and reports what it could not parse. Re-running the same paste is safe — existing entries are skipped, not duplicated.
+- **Curated entries carry no hits**, and talent-facing views only ever show accounts that have hit *them*, so nothing on this list reaches a talent until a sweep proves it should.
+- **Removal is guarded**: an account with recorded hits is evidence, so it is marked `cleared` rather than deleted.
+- The follows actor is a **runtime setting** (`apify_follows_actor`), not a constant — two Instagram actors have already changed behaviour under us, and swapping one should not need a deploy. Following lists are semi-private and typically need an authenticated session, so this path should be assumed fragile and the paste box treated as the primary.
+
+##### Enforced spend ceiling (`/admin/monitor`)
+
+Discovery is the first thing in the codebase that spends real money per request against a third-party API we do not meter ourselves, so it gets a gate rather than a dashboard. Mirrors `lib/ai/cost-tracker.ts`: settings in the shared `ai_settings` key-value store, spend summed from an `apify_usage` ledger, check as a precondition.
+
+Two properties make it a limit rather than an estimate:
+
+1. **Cost is Apify's own `usageTotalUsd`** read off the finished run, so the number we sum is the number they bill. A per-item estimate (`$2.50/1k`, deliberately pessimistic) is the fallback when a run reports no usage, flagged as `cost_estimated`.
+2. **The gate is re-checked before every run, not once per sweep.** A sweep issues up to a dozen runs; checking only at the top would let one sweep overshoot by eleven. A sweep that crosses the ceiling stops where it is and reports partial coverage.
+
+Runs that start and then fail are booked too — Apify bills compute on a dead run, so an unbooked failure would be spend the ceiling cannot see.
+
+**Degradation is deliberate.** Exhausted budget errors the scan; it does **not** fall back to the simulated crawler. Returning invented candidates because we ran out of money would report a clean sweep that never happened.
+
+Defaults: ceiling **$5.00**, discovery enabled. Admin controls: ceiling, kill switch, and a counter reset that moves the window forward while keeping the ledger intact for audit.
+
+> This is a second line of defence. The authoritative cap is the max-spend setting in the Apify console, enforced by the party holding the card. This one stops the app from asking.
+
+##### Offender case file (`/vault/monitor/accounts`)
+
+The surface where the demonetisation thesis becomes visible to talent. Accounts are ranked by a priority score (`lib/monitor/accounts.ts`) built from what actually breaks the business model, not from per-post severity:
+
+| Component | Weight | Why |
+|---|---|---|
+| Reach (log-scaled cumulative views) | 0–50 | The thing being monetised. Log-scaled because 1k→10k matters more than 900k→1M. |
+| Recency of last post | 0–25 | Payouts accrue while content is live, so early removal recovers the most value. |
+| Open hits for this talent | 0–15 | Unfinished business. |
+| Cross-talent breadth | 0–10 | An account farming several protected talent is an operation, not a hobbyist. |
+
+Every card states its own reason ("1.2M views across flagged posts · posted in the last 48h · targeting 3 protected talent") so the ranking is legible rather than an oracle. Closed cases score 0 and drop out of the queue.
+
+**Scoping.** `monitor_accounts` rows are roster-wide, so the read is filtered to accounts with at least one hit against the requesting talent, and `updateOffenderAccount()` re-checks that link before writing — otherwise one talent could clear an account actively targeting someone else. The cross-talent figure is exposed as a bare count; the identities behind it are not the requesting talent's business.
+
+##### Build order
+
+1. `lib/monitor/types.ts` — lift `CandidateContent` / `CandidateSignals` out of `candidates.ts`, make the three detector signals nullable, add the `media` block and `discoverySource`. Nothing downstream changes shape.
+2. `lib/monitor/ingest/queries.ts` — term builder from the identity anchor (name variants × AI modifiers × knownFor), roster hashtag set, watchlist expansion.
+3. `lib/monitor/ingest/apify.ts` — run/poll/fetch REST client, typed actor inputs, timeout and failure mapping.
+4. `lib/monitor/ingest/instagram.ts` — actor item → `CandidateContent`, plus the pre-filter.
+5. Async scan: `POST /api/monitor/scan` returns `{ scanId }` immediately, processing continues in `ctx.waitUntil()`, `GET /api/monitor/scans/:id` polls. Replace the fixed-length platform animation in `monitor-client.tsx` with real progress; surface `monitor_scans.error`.
+6. `monitor_accounts` aggregation on hit write, plus the account case-file view and reach-ranked queue.
+7. Adjudicator prompt: null-signal candour, scope awareness, confidence cap.
 
 #### Stage 2 — Face matching (AWS Rekognition)
 
@@ -4108,11 +4319,29 @@ Recommended order: **Apify first** — real discovery with partial signals beats
 #### Status
 
 - [x] Plan agreed (2026-07-02) — waiting on account/key acquisition: `APIFY_TOKEN`, AWS Rekognition key pair, `HIVE_API_KEY`
-- [ ] Build `lib/monitor/ingest/instagram.ts` (Apify client + term builder)
+- [x] Phase 1 build spec agreed (2026-08-10) — demonetisation strategy, AI-biased discovery, `ai_only` scope, offender-account model
+
+**Phase 1 — Apify discovery** (built 2026-08-10; live behaviour blocked on `APIFY_TOKEN`)
+
+- [x] `lib/monitor/types.ts` — nullable detector signals, `media` block, `discoverySource`
+- [x] `lib/monitor/ingest/queries.ts` — hashtag/user-search planner, roster hashtag set, watchlist expansion, dual AI-intent tests
+- [x] `lib/monitor/ingest/apify.ts` — run/poll/fetch REST client, typed failure reasons, run abort on timeout
+- [x] `lib/monitor/ingest/instagram.ts` — item mapping + pre-filter (allowlist / name / AI-intent / seen-before)
+- [x] Migration `0104` — `scope` + `cadence` + `allowlist_json`, hit `thumbnail_url` / `discovery_source` / `account_id`, new `monitor_accounts`
+- [x] Async scan + client polling (`GET /api/monitor/scans/:id`); `monitor_scans.error` surfaced
+- [x] Adjudicator prompt: missing-signal candour, scope awareness, confidence cap at 60
+- [x] Offender account aggregation on hit write (`recordOffenderAccount`)
+- [x] Enforced spend ceiling ($5 default) — migration `0105`, `lib/monitor/ingest/budget.ts`, `/admin/monitor`
+- [x] Offender case-file view + reach-ranked triage queue — `/vault/monitor/accounts`, `lib/monitor/accounts.ts`, `GET /api/monitor/accounts`, `PATCH /api/monitor/accounts/:id`
+- [ ] Talent-facing controls for `scope` / `cadence` / allowlist (columns exist; settings UI not built)
+- [ ] Roster-level hashtag sweep driven by a cron worker (`rosterHashtagQueries()` unused until then)
+- [x] Live validation against real Apify output (2026-08-10, `scripts/apify-smoke.mjs`) — see findings below
+- [ ] Full sweep against a real talent profile, with the ledger open
+
+**Phase 2 / 3 — detectors**
+
 - [ ] Build `lib/monitor/detectors/face.ts` (Rekognition via aws4fetch) + collection seeding job
 - [ ] Build `lib/monitor/detectors/synthetic.ts` (Hive)
-- [ ] Flip scan to async + client polling; surface `monitor_scans.error` in the UI
-- [ ] Extend adjudicator prompt for missing-signal candour ("face match unavailable — verdict from caption/metadata only")
 
 ### 18.5 Deferred
 

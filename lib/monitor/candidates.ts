@@ -10,35 +10,11 @@
  */
 
 import type { HitContentType, MonitorPlatformId } from "./platforms";
+import type { CandidateContent, CandidateSignals, TalentIdentityAnchor } from "./types";
 
-export interface CandidateSignals {
-  /** Cosine similarity of detected face embedding vs onboarding reference (0-1). */
-  faceEmbeddingSimilarity: number;
-  /** Hamming distance of perceptual hash vs scan-derived reference hashes (0-64, lower = closer). */
-  perceptualHashDistance: number;
-  /** Correlation vs the talent's geometry fingerprint bits (0-1); null when no fingerprints exist. */
-  geometryFingerprintCorrelation: number | null;
-  /** Output of the synthetic-media classifier on the clip itself (0-1). */
-  syntheticMediaScore: number;
-  postedDaysAgo: number;
-  viewCount: number;
-}
-
-export interface CandidateContent {
-  platform: MonitorPlatformId;
-  contentType: HitContentType;
-  contentUrl: string;
-  authorHandle: string;
-  caption: string;
-  signals: CandidateSignals;
-}
-
-export interface TalentIdentityAnchor {
-  fullName: string;
-  knownForTitles: string[];
-  scanPackageCount: number;
-  geometryFingerprintCount: number;
-}
+// The candidate vocabulary now lives in ./types so the real Apify ingest and
+// this simulator can both satisfy it. Re-exported here for existing callers.
+export type { CandidateContent, CandidateSignals, TalentIdentityAnchor };
 
 // ── Random helpers ───────────────────────────────────────────────────────────
 
@@ -140,7 +116,15 @@ function makeCandidate(anchor: TalentIdentityAnchor, suspicious: boolean): Candi
         viewCount: intBetween(500, 90_000),
       };
 
-  return { platform, contentType: type, contentUrl: url, authorHandle: `@${handle}`, caption, signals };
+  return {
+    platform,
+    contentType: type,
+    contentUrl: url,
+    authorHandle: `@${handle}`,
+    caption,
+    signals,
+    discoverySource: { mode: "simulated", query: "simulated crawler" },
+  };
 }
 
 /**
