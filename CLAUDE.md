@@ -244,12 +244,14 @@ MCP server at `/api/mcp` (Streamable HTTP, stateless JSON-RPC) gives whitelisted
 
 ## Environment & Secrets
 
-- **Local dev**: `.dev.vars` file (gitignored) for secrets
+- **Local dev**: `.env.local` (gitignored) — this is the live one, read by `next dev` into `process.env`. A stale `.dev.vars` also exists; it is only read by workerd under `npm run preview`, so keep secrets in `.env.local` unless you are specifically testing the preview runtime.
 - **Production**: `wrangler secret put SECRET_NAME`
 - **Non-secret config**: `[vars]` section in `wrangler.toml`
 - **Binding access**: `getCloudflareContext().env` (from `@opennextjs/cloudflare`) — with fallback to `process.env` for local dev
 
-Key secrets: `JWT_SECRET`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `TMDB_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `BRIDGE_SIGNING_KEY_JWK`, `ENCRYPTION_MASTER_KEY`, `RESEND_WEBHOOK_SECRET`
+Key secrets: `JWT_SECRET`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `TMDB_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `BRIDGE_SIGNING_KEY_JWK`, `ENCRYPTION_MASTER_KEY`, `RESEND_WEBHOOK_SECRET`, `APIFY_TOKEN`
+
+`APIFY_TOKEN` is optional and gates the likeness monitor's real discovery: absent, `lib/monitor/scan.ts` falls back to the simulated crawler (`lib/monitor/candidates.ts`) and the monitor behaves exactly as it did before. Present, sweeps hit live Instagram via Apify actors and cost money per run.
 
 ## Workers
 

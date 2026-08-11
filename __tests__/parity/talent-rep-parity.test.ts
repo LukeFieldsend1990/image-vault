@@ -35,6 +35,9 @@ const TALENT_ONLY_WHITELIST: Record<string, string> = {
   "cast/dismiss/route.ts": "talent personally dismisses a 'Not me' cast-claim suggestion for their own identity",
   "monitor/route.ts": "talent's own likeness monitor config — reps are alerted on hits but triage is an identity decision",
   "monitor/scan/route.ts": "talent runs likeness scans over their own biometric identity anchors",
+  "monitor/scans/[id]/route.ts": "poll status for a scan the talent started — same identity boundary as monitor/scan",
+  "monitor/accounts/route.ts": "offender case files derived from the talent's own likeness hits — same identity boundary as monitor/hits",
+  "monitor/accounts/[id]/route.ts": "talent personally decides whether an account targeting them is reported or cleared",
   "monitor/hits/[id]/route.ts": "talent personally confirms/dismisses likeness hits ('is this me?' is an identity decision)",
 };
 

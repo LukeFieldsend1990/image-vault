@@ -1497,10 +1497,74 @@ export const likenessMonitors = sqliteTable("likeness_monitors", {
   talentId: text("talent_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
   status: text("status", { enum: ["active", "paused"] }).notNull().default("active"),
   sensitivity: text("sensitivity", { enum: ["strict", "balanced", "relaxed"] }).notNull().default("balanced"),
+  // What the talent is asking us to find. Defaults to synthetic misuse only —
+  // a real red-carpet clip is not what anyone signed up to be alerted about.
+  scope: text("scope", { enum: ["ai_only", "all_likeness"] }).notNull().default("ai_only"),
+  cadence: text("cadence", { enum: ["manual", "weekly", "daily"] }).notNull().default("weekly"),
+  // Handles that can never be flagged: the talent's own account, their agency,
+  // studios, distributors, press. JSON string[].
+  allowlistJson: text("allowlist_json").notNull().default("[]"),
   lastScanAt: integer("last_scan_at"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+/**
+ * Every billed Apify run, one row.
+ *
+ * `costUsd` is the platform's own `usageTotalUsd` for the run, not an estimate
+ * from item counts — which is what makes the ceiling in lib/monitor/ingest/budget.ts
+ * an actual spend limit rather than a guess that drifts from the invoice.
+ */
+export const apifyUsage = sqliteTable("apify_usage", {
+  id: text("id").primaryKey(),
+  runId: text("run_id"),
+  actorId: text("actor_id").notNull(),
+  mode: text("mode"), // hashtag | user_search | account
+  query: text("query"),
+  talentId: text("talent_id").references(() => users.id, { onDelete: "set null" }),
+  scanId: text("scan_id"),
+  itemCount: integer("item_count").notNull().default(0),
+  costUsd: real("cost_usd").notNull().default(0),
+  /** true when costUsd came from item counts because the run reported none. */
+  costEstimated: integer("cost_estimated", { mode: "boolean" }).notNull().default(false),
+  status: text("status").notNull().default("succeeded"), // succeeded | failed
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+});
+
+/**
+ * The offender case file.
+ *
+ * Individual takedowns are whack-a-mole; the durable unit of enforcement is the
+ * account, because that is what has to accumulate reach to monetise. Eleven
+ * synthetic reels from one handle are one target, and an account farming
+ * several protected talent is evidence of a commercial operation — which is
+ * what moves platform trust-and-safety off per-post forms.
+ */
+export const monitorAccounts = sqliteTable(
+  "monitor_accounts",
+  {
+    id: text("id").primaryKey(),
+    platform: text("platform").notNull(), // instagram | tiktok | youtube | x
+    handle: text("handle").notNull(), // without leading '@'
+    platformUserId: text("platform_user_id"),
+    displayName: text("display_name"),
+    followerCount: integer("follower_count"),
+    firstSeenAt: integer("first_seen_at").notNull(),
+    lastSeenAt: integer("last_seen_at").notNull(),
+    hitCount: integer("hit_count").notNull().default(0),
+    cumulativeViews: integer("cumulative_views").notNull().default(0),
+    talentAffectedCount: integer("talent_affected_count").notNull().default(0),
+    status: text("status", {
+      enum: ["watchlist", "reported", "suspended", "cleared"],
+    }).notNull().default("watchlist"),
+    notes: text("notes"),
+  },
+  (t) => ({
+    uniqHandle: unique().on(t.platform, t.handle),
+  })
+);
 
 export const monitorScans = sqliteTable("monitor_scans", {
   id: text("id").primaryKey(),
@@ -1531,6 +1595,12 @@ export const likenessHits = sqliteTable("likeness_hits", {
   riskLevel: text("risk_level", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
   matchSignalsJson: text("match_signals_json").notNull().default("[]"), // JSON string[]
   aiRationale: text("ai_rationale"),
+  // Stage 2/3 input, captured at discovery so the detectors need no re-fetch.
+  thumbnailUrl: text("thumbnail_url"),
+  // Which query surfaced this — shown to the talent, and the tuning signal for
+  // query weighting ("#tomhardyai finds 8x what #tomhardyfaceswap does").
+  discoverySource: text("discovery_source"),
+  accountId: text("account_id").references(() => monitorAccounts.id),
   status: text("status", {
     enum: ["new", "confirmed", "dismissed", "takedown_requested", "resolved"],
   }).notNull().default("new"),
