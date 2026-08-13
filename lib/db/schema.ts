@@ -1675,6 +1675,29 @@ export const emailLog = sqliteTable("email_log", {
 });
 
 /**
+ * Additional actors identified in a hit's media.
+ *
+ * A single AI concept trailer often features several actors. Rather than
+ * re-processing the same media once per talent whose monitor might catch it,
+ * we detect all faces on first pass and stack them against the hit here.
+ * `talent_id` fills in for onboarded actors; `tmdb_id` (+ cached name and
+ * profile URL) fills in for the rest.
+ */
+export const hitSecondaryActors = sqliteTable("hit_secondary_actors", {
+  id: text("id").primaryKey(),
+  hitId: text("hit_id").notNull().references(() => likenessHits.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").references(() => users.id, { onDelete: "set null" }),
+  tmdbId: integer("tmdb_id"),
+  tmdbName: text("tmdb_name"),
+  tmdbProfileUrl: text("tmdb_profile_url"),
+  confidence: integer("confidence").notNull(),
+  source: text("source", {
+    enum: ["face_embedding", "vision_caption", "manual"],
+  }).notNull(),
+  detectedAt: integer("detected_at").notNull(),
+});
+
+/**
  * Every platform takedown report we send. One row per submission; a hit can
  * accumulate multiple submissions if a first report is rejected and re-filed.
  *

@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
+interface SecondaryActor {
+  talentId: string | null;
+  name: string;
+  profileImageUrl: string | null;
+  confidence: number;
+  source: string;
+  onboarded: boolean;
+}
+
 interface OffenderHit {
   id: string;
   contentUrl: string;
@@ -14,6 +23,7 @@ interface OffenderHit {
   riskLevel: string;
   status: string;
   detectedAt: number;
+  secondaryActors?: SecondaryActor[];
 }
 
 interface OffenderAccount {
@@ -89,6 +99,48 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
         <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
           {hint}
         </p>
+      )}
+    </div>
+  );
+}
+
+/** Tiny round headshot used in the accounts view; smaller than the monitor
+ *  view's SecondaryAvatar to fit alongside a thumbnail without crowding.
+ *  Onboarded actors get an accent ring; non-onboarded get a soft border. */
+function MiniAvatar({ actor }: { actor: SecondaryActor }) {
+  const initials = actor.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+  const ring = actor.onboarded ? "var(--color-accent)" : "var(--color-border)";
+  const label = actor.onboarded
+    ? `${actor.name} — on ImageVault (${actor.confidence}%)`
+    : `${actor.name} — not on ImageVault (${actor.confidence}%)`;
+  return (
+    <div
+      title={label}
+      className="relative h-5 w-5 rounded-full overflow-hidden"
+      style={{
+        border: `1.5px solid var(--color-bg)`,
+        boxShadow: `0 0 0 1px ${ring}`,
+      }}
+    >
+      {actor.profileImageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={actor.profileImageUrl}
+          alt={actor.name}
+          className="h-full w-full object-cover"
+          style={{ opacity: actor.onboarded ? 1 : 0.85 }}
+        />
+      ) : (
+        <div
+          className="flex h-full w-full items-center justify-center text-[8px] font-semibold"
+          style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}
+        >
+          {initials || "?"}
+        </div>
       )}
     </div>
   );
@@ -293,6 +345,30 @@ function AccountCard({
                     <p className="text-xs mt-1 line-clamp-2" style={{ color: "var(--color-text)" }}>
                       {hit.caption}
                     </p>
+                  )}
+                  {hit.secondaryActors && hit.secondaryActors.length > 0 && (
+                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                      <div className="flex -space-x-1.5">
+                        {hit.secondaryActors.slice(0, 5).map((actor, i) => (
+                          <MiniAvatar key={i} actor={actor} />
+                        ))}
+                        {hit.secondaryActors.length > 5 && (
+                          <div
+                            className="flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold"
+                            style={{
+                              background: "var(--color-surface)",
+                              border: "1.5px solid var(--color-bg)",
+                              color: "var(--color-muted)",
+                            }}
+                          >
+                            +{hit.secondaryActors.length - 5}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+                        also in this content
+                      </span>
+                    </div>
                   )}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <a
