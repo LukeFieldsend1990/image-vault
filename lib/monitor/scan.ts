@@ -43,6 +43,7 @@ import { checkApifyBudget, logApifyUsage } from "./ingest/budget";
 import { discoverYouTube, youtubeApiKey } from "./ingest/youtube";
 import { discoverTikTok } from "./ingest/tiktok";
 import { seedHandlesFor } from "./ingest/seeds";
+import { verifyCandidatesIdentity } from "./identity-check";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -715,6 +716,25 @@ export async function runLikenessScan(
       .set({ status: "error", error: discoveryError, completedAt: Math.floor(Date.now() / 1000) })
       .where(eq(monitorScans.id, scanId));
     throw new Error(discoveryError);
+  }
+
+  // Phase 2: LLaVA identity verification. Runs before the adjudicator so the
+  // faceEmbeddingSimilarity signal is a real number instead of null on every
+  // candidate — the adjudicator prompt already knows how to weight >=0.8 as
+  // a strong match and <0.7 as weak. Non-fatal: if the AI binding is missing
+  // or every candidate lacks a thumbnail, we keep going with null signals
+  // and the pre-Phase-2 heuristic path takes over as before.
+  const ai = (env as unknown as { AI?: Ai }).AI;
+  if (ai && candidates.length) {
+    try {
+      const stats = await verifyCandidatesIdentity(ai, candidates, anchor.fullName);
+      console.log(
+        `[monitor] identity check for ${opts.talentId}: ${stats.checked} of ${candidates.length} ` +
+          `checked (${stats.confirmed} confirmed, ${stats.uncertain} uncertain, ${stats.denied} denied, ${stats.errors} errored)`
+      );
+    } catch (err) {
+      console.warn(`[monitor] identity check failed: ${(err as Error).message}`);
+    }
   }
 
   // Fight fire with fire: the same AI stack that powers triage adjudicates
