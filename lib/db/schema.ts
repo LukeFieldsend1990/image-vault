@@ -231,6 +231,21 @@ export const talentProfiles = sqliteTable("talent_profiles", {
   onboardedAt: integer("onboarded_at").notNull(), // unix timestamp
   pitchVignettesEnabled: integer("pitch_vignettes_enabled", { mode: "boolean" }).notNull().default(false),
   unionAffiliation: text("union_affiliation"), // self-declared: "SAG-AFTRA", "Equity", free text, or null
+  // Gate for filing platform takedowns on this talent's behalf. Meta rejects
+  // reports from non-authorised third parties, so we refuse to send without
+  // the signed agent-of-record document + ID scan on file. Flipped by admin
+  // after paperwork is verified.
+  enforcementAuthorizationOnFile: integer("enforcement_authorization_on_file", { mode: "boolean" }).notNull().default(false),
+  // R2 keys for the docs backing the flag above. Paths look like
+  // monitor-legal/<talentId>/agent-letter-<uuid>.pdf. Never publicly exposed.
+  agentLetterKey: text("agent_letter_key"),
+  agentLetterUploadedAt: integer("agent_letter_uploaded_at"),
+  idDocumentKey: text("id_document_key"),
+  idDocumentUploadedAt: integer("id_document_uploaded_at"),
+  // self_declared | verified | rejected. Admin-verified is what a mature
+  // rollout should require before filing takedowns at scale; self_declared
+  // is the pre-launch default and unblocks testing.
+  authorizationReviewStatus: text("authorization_review_status").notNull().default("self_declared"),
 });
 
 export const invites = sqliteTable("invites", {
@@ -1657,4 +1672,32 @@ export const emailLog = sqliteTable("email_log", {
   errorCode: integer("error_code"), // HTTP status from Resend; null on success
   errorBody: text("error_body"), // Resend error response body or fetch exception message
   sentAt: integer("sent_at").notNull(), // unix seconds
+});
+
+/**
+ * Every platform takedown report we send. One row per submission; a hit can
+ * accumulate multiple submissions if a first report is rejected and re-filed.
+ *
+ * `bodyHtml` is stored verbatim rather than regenerated on demand because the
+ * letter template will drift as we learn what Meta accepts — reprinting an
+ * old report should show what Meta actually received, not what today's
+ * template would produce.
+ */
+export const takedownSubmissions = sqliteTable("takedown_submissions", {
+  id: text("id").primaryKey(),
+  hitId: text("hit_id").notNull().references(() => likenessHits.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  platform: text("platform").notNull(), // instagram | tiktok | youtube | x
+  method: text("method", { enum: ["email", "form"] }).notNull(), // v1 is email-only
+  recipient: text("recipient").notNull(),
+  subject: text("subject").notNull(),
+  bodyHtml: text("body_html").notNull(),
+  sentBy: text("sent_by").notNull().references(() => users.id),
+  sentAt: integer("sent_at").notNull(),
+  platformReference: text("platform_reference"),
+  platformStatus: text("platform_status", {
+    enum: ["submitted", "acknowledged", "actioned", "rejected"],
+  }).notNull().default("submitted"),
+  platformStatusUpdatedAt: integer("platform_status_updated_at"),
+  notes: text("notes"),
 });

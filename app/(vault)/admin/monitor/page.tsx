@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import ApifyBudgetClient from "./apify-budget-client";
 import WatchlistClient from "./watchlist-client";
+import TakedownsClient from "./takedowns-client";
 
 export default async function AdminMonitorPage() {
   await requireAdmin();
@@ -26,6 +27,10 @@ export default async function AdminMonitorPage() {
       </div>
 
       <ApifyBudgetClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
+
+      <TakedownsClient />
 
       <hr style={{ borderColor: "var(--color-border)" }} />
 
