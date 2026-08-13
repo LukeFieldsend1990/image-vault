@@ -217,15 +217,33 @@ export function heuristicAdjudicate(candidates: CandidateContent[]): Adjudicatio
     const synthetic = haveSynthetic ? s.syntheticMediaScore! >= 0.7 : declaresAi;
     const flag = haveFace ? likenessMatch && synthetic : declaresAi;
 
-    const confidence = haveFace
-      ? clampScore(
-          s.faceEmbeddingSimilarity! * 70 +
-            (1 - (s.perceptualHashDistance ?? 64) / 64) * 20 +
-            (s.geometryFingerprintCorrelation ?? 0) * 10
-        )
-      : // No face reading: confidence reflects textual association only, and is
-        // capped centrally further down. Deliberately modest.
-        clampScore(declaresAi ? 45 : 20);
+    // Confidence: weighted mean over the signals that actually reported. The
+    // earlier formula summed weighted contributions directly, which capped
+    // face-only cases at 70 (`face_similarity × 70`) and produced the
+    // Phase 2 shipping bug where a confirmed identity match maxed at 63%.
+    // Normalising by the total weight of reporting signals lets Phase 2 stand
+    // on face verification alone until pHash (Stage 3) and fingerprint bits
+    // (delivery watermarking) start reporting alongside it.
+    let confidence: number;
+    if (haveFace) {
+      let sum = 0;
+      let weight = 0;
+      sum += s.faceEmbeddingSimilarity! * 70;
+      weight += 70;
+      if (s.perceptualHashDistance !== null) {
+        sum += (1 - s.perceptualHashDistance / 64) * 20;
+        weight += 20;
+      }
+      if (s.geometryFingerprintCorrelation !== null) {
+        sum += s.geometryFingerprintCorrelation * 10;
+        weight += 10;
+      }
+      confidence = clampScore((sum / weight) * 100);
+    } else {
+      // No face reading at all: confidence reflects textual association only,
+      // capped centrally further down. Deliberately modest.
+      confidence = clampScore(declaresAi ? 45 : 20);
+    }
 
     const riskLevel: AdjudicationVerdict["riskLevel"] = !flag
       ? "low"
