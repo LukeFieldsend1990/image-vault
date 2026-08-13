@@ -1730,3 +1730,58 @@ export const takedownSubmissions = sqliteTable("takedown_submissions", {
   platformStatusUpdatedAt: integer("platform_status_updated_at"),
   notes: text("notes"),
 });
+
+/**
+ * Per-talent decision to stop surfacing hits from a given account.
+ *
+ * Deliberately per-talent, not global on monitor_accounts. An account
+ * Tom Hardy has personally approved is still an offender against every
+ * other protected talent that shows up in its feed. Global `cleared`
+ * on monitor_accounts covers the cross-talent case (admin blessed a
+ * licensed production studio); this table captures individual talent
+ * judgement calls, with a structured reason so admin can aggregate
+ * what's being whitelisted and why.
+ */
+export const talentAccountWhitelist = sqliteTable(
+  "talent_account_whitelist",
+  {
+    id: text("id").primaryKey(),
+    talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull().references(() => monitorAccounts.id, { onDelete: "cascade" }),
+    reason: text("reason", {
+      enum: ["false_positive", "fan_fluff", "talent_approved", "other"],
+    }).notNull(),
+    notes: text("notes"),
+    addedBy: text("added_by").notNull().references(() => users.id),
+    addedAt: integer("added_at").notNull(),
+  },
+  (t) => ({
+    uniqTalentAccount: unique().on(t.talentId, t.accountId),
+  })
+);
+
+/**
+ * Outreach log. The eventual product is a licensing bridge — accounts
+ * posting AI content get offered a revenue-splitting licence path
+ * instead of a takedown — but the negotiation happens on the platform's
+ * DM surface, not through us. What we can do is compose the message,
+ * deep-link the sender to the platform's compose window, and log that
+ * outreach happened so we know not to spam the same account twice.
+ */
+export const accountOutreach = sqliteTable("account_outreach", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull().references(() => monitorAccounts.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  initiatedBy: text("initiated_by").notNull().references(() => users.id),
+  method: text("method", { enum: ["dm", "email", "manual"] }).notNull(),
+  purpose: text("purpose", {
+    enum: ["licence_offer", "consent_request", "takedown_request", "other"],
+  }).notNull(),
+  messageBody: text("message_body").notNull(),
+  status: text("status", {
+    enum: ["sent", "responded", "converted", "declined", "ignored"],
+  }).notNull().default("sent"),
+  firstContactAt: integer("first_contact_at").notNull(),
+  lastStatusAt: integer("last_status_at").notNull(),
+  notes: text("notes"),
+});

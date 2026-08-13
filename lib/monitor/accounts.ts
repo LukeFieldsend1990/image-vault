@@ -14,7 +14,7 @@
  */
 
 import { getDb } from "@/lib/db";
-import { likenessHits, monitorAccounts, hitSecondaryActors, talentProfiles } from "@/lib/db/schema";
+import { likenessHits, monitorAccounts, hitSecondaryActors, talentProfiles, talentAccountWhitelist } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 
 type Db = ReturnType<typeof getDb>;
@@ -123,13 +123,30 @@ export function formatCompact(n: number): string {
 
 /** Accounts that have hit this talent, reach-ranked, each with its hits. */
 export async function listOffenderAccounts(db: Db, talentId: string): Promise<OffenderAccount[]> {
+  // Whitelist first: fetch once, filter downstream. Any account this talent
+  // whitelisted is excluded from the returned list entirely — hits still
+  // exist in the DB but the operator never sees them again unless the
+  // whitelist is lifted. Cheaper than filtering after building the response.
+  const whitelistedRows = await db
+    .select({ accountId: talentAccountWhitelist.accountId })
+    .from(talentAccountWhitelist)
+    .where(eq(talentAccountWhitelist.talentId, talentId))
+    .all();
+  const whitelisted = new Set(whitelistedRows.map((r) => r.accountId));
+
   const hits = await db
     .select()
     .from(likenessHits)
     .where(eq(likenessHits.talentId, talentId))
     .all();
 
-  const accountIds = [...new Set(hits.map((h) => h.accountId).filter((id): id is string => !!id))];
+  const accountIds = [
+    ...new Set(
+      hits
+        .map((h) => h.accountId)
+        .filter((id): id is string => !!id && !whitelisted.has(id))
+    ),
+  ];
   if (!accountIds.length) return [];
 
   const accounts = await db

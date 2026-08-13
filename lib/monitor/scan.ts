@@ -20,8 +20,9 @@ import {
   geometryFingerprints,
   users,
   hitSecondaryActors,
+  talentAccountWhitelist,
 } from "@/lib/db/schema";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { callAi } from "@/lib/ai/providers";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
@@ -957,6 +958,27 @@ export async function getMonitorState(db: Db, talentId: string) {
   // early data before Mode B seeded the offender file) still surface —
   // NULL cumulative_views sorts last with sql`... IS NULL, ...`. Recency is
   // the tiebreaker within the same account.
+  // Whitelisted account ids for this talent. Fetched once, threaded into the
+  // hit query as a NOT IN filter so we never load hits we'd only throw away.
+  const whitelistedRows = await db
+    .select({ accountId: talentAccountWhitelist.accountId })
+    .from(talentAccountWhitelist)
+    .where(eq(talentAccountWhitelist.talentId, talentId))
+    .all();
+  const whitelistedIds = whitelistedRows.map((r) => r.accountId);
+
+  const hitWhere = whitelistedIds.length
+    ? and(
+        eq(likenessHits.talentId, talentId),
+        // Hits with null accountId still surface — they're the pre-Mode-B
+        // orphans, not whitelisted content.
+        sql`(${likenessHits.accountId} IS NULL OR ${likenessHits.accountId} NOT IN (${sql.join(
+          whitelistedIds.map((id) => sql`${id}`),
+          sql`, `
+        )}))`
+      )
+    : eq(likenessHits.talentId, talentId);
+
   const [hitRows, scans] = await Promise.all([
     db
       .select({
@@ -965,7 +987,7 @@ export async function getMonitorState(db: Db, talentId: string) {
       })
       .from(likenessHits)
       .leftJoin(monitorAccounts, eq(monitorAccounts.id, likenessHits.accountId))
-      .where(eq(likenessHits.talentId, talentId))
+      .where(hitWhere)
       .orderBy(
         sql`${monitorAccounts.cumulativeViews} IS NULL`,
         desc(monitorAccounts.cumulativeViews),
