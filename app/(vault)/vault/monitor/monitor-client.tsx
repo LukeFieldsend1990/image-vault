@@ -17,6 +17,15 @@ interface Platform {
   checkDuration: number;
 }
 
+interface SecondaryActor {
+  talentId: string | null;
+  name: string;
+  profileImageUrl: string | null;
+  confidence: number;
+  source: string;
+  onboarded: boolean;
+}
+
 interface LikenessHit {
   id: string;
   platform: string;
@@ -31,6 +40,7 @@ interface LikenessHit {
   aiRationale: string | null;
   status: string;
   detectedAt: number;
+  secondaryActors?: SecondaryActor[];
 }
 
 interface ScanRecord {
@@ -325,6 +335,92 @@ function ConfidenceBar({ value, label }: { value: number; label: string }) {
   );
 }
 
+/**
+ * Row of small round headshots for every additional actor identified in a
+ * hit's media. Onboarded actors get an accent-coloured ring so a talent
+ * skimming the list sees at a glance "someone we represent is also here."
+ * Non-onboarded actors carry a subtle dashed ring and a "not on platform"
+ * hover cue instead. When no image URL is available (rare — TMDB usually
+ * has one) we fall back to initials on a grey chip.
+ */
+function SecondaryActorStack({ actors }: { actors: SecondaryActor[] }) {
+  const onboarded = actors.filter((a) => a.onboarded);
+  const otherLabel = onboarded.length
+    ? `${onboarded.length} on ImageVault · ${actors.length - onboarded.length} other${actors.length - onboarded.length === 1 ? "" : "s"}`
+    : `${actors.length} other actor${actors.length === 1 ? "" : "s"} identified`;
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <p
+        className="text-[10px] uppercase tracking-widest font-semibold"
+        style={{ color: "var(--color-muted)" }}
+      >
+        Also in this content
+      </p>
+      <div className="flex -space-x-2">
+        {actors.slice(0, 6).map((actor, i) => (
+          <SecondaryAvatar key={i} actor={actor} />
+        ))}
+        {actors.length > 6 && (
+          <div
+            className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold"
+            style={{
+              background: "var(--color-surface)",
+              border: "2px solid var(--color-bg)",
+              color: "var(--color-muted)",
+            }}
+          >
+            +{actors.length - 6}
+          </div>
+        )}
+      </div>
+      <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>
+        {otherLabel}
+      </span>
+    </div>
+  );
+}
+
+function SecondaryAvatar({ actor }: { actor: SecondaryActor }) {
+  const initials = actor.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+  const ring = actor.onboarded ? "var(--color-accent)" : "var(--color-border)";
+  const label = actor.onboarded
+    ? `${actor.name} — on ImageVault (${actor.confidence}%)`
+    : `${actor.name} — not on ImageVault (${actor.confidence}%)`;
+
+  return (
+    <div
+      title={label}
+      className="relative h-7 w-7 rounded-full overflow-hidden"
+      style={{
+        border: `2px solid var(--color-bg)`,
+        boxShadow: `0 0 0 1.5px ${ring}`,
+      }}
+    >
+      {actor.profileImageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={actor.profileImageUrl}
+          alt={actor.name}
+          className="h-full w-full object-cover"
+          style={{ opacity: actor.onboarded ? 1 : 0.85 }}
+        />
+      ) : (
+        <div
+          className="flex h-full w-full items-center justify-center text-[10px] font-semibold"
+          style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}
+        >
+          {initials || "?"}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HitCard({ hit, onTriage, busy }: {
   hit: LikenessHit;
   onTriage: (id: string, status: string) => void;
@@ -368,6 +464,10 @@ function HitCard({ hit, onTriage, busy }: {
         <ConfidenceBar value={hit.confidence} label="Likeness match" />
         <ConfidenceBar value={hit.aiGeneratedLikelihood} label="AI-generated" />
       </div>
+
+      {hit.secondaryActors && hit.secondaryActors.length > 0 && (
+        <SecondaryActorStack actors={hit.secondaryActors} />
+      )}
 
       {hit.matchSignals.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

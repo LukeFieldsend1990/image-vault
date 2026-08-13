@@ -14,12 +14,21 @@
  */
 
 import { getDb } from "@/lib/db";
-import { likenessHits, monitorAccounts } from "@/lib/db/schema";
+import { likenessHits, monitorAccounts, hitSecondaryActors, talentProfiles } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 
 type Db = ReturnType<typeof getDb>;
 
 export type OffenderStatus = "watchlist" | "reported" | "suspended" | "cleared";
+
+export interface SecondaryActorSummary {
+  talentId: string | null;
+  name: string;
+  profileImageUrl: string | null;
+  confidence: number;
+  source: string;
+  onboarded: boolean;
+}
 
 export interface OffenderHit {
   id: string;
@@ -32,6 +41,7 @@ export interface OffenderHit {
   riskLevel: string;
   status: string;
   detectedAt: number;
+  secondaryActors: SecondaryActorSummary[];
 }
 
 export interface OffenderAccount {
@@ -128,6 +138,41 @@ export async function listOffenderAccounts(db: Db, talentId: string): Promise<Of
     .where(inArray(monitorAccounts.id, accountIds))
     .all();
 
+  // Stack secondary actors on every hit at once — the same query pattern as
+  // getMonitorState. Skipping this join would leave the accounts UI without
+  // the avatar row that the main monitor view now shows.
+  const hitIds = hits.map((h) => h.id);
+  const secondaries = hitIds.length
+    ? await db
+        .select({
+          hitId: hitSecondaryActors.hitId,
+          talentId: hitSecondaryActors.talentId,
+          tmdbName: hitSecondaryActors.tmdbName,
+          tmdbProfileUrl: hitSecondaryActors.tmdbProfileUrl,
+          confidence: hitSecondaryActors.confidence,
+          source: hitSecondaryActors.source,
+          onboardedName: talentProfiles.fullName,
+          onboardedImageUrl: talentProfiles.profileImageUrl,
+        })
+        .from(hitSecondaryActors)
+        .leftJoin(talentProfiles, eq(talentProfiles.userId, hitSecondaryActors.talentId))
+        .where(inArray(hitSecondaryActors.hitId, hitIds))
+        .all()
+    : [];
+  const secondariesByHit = new Map<string, SecondaryActorSummary[]>();
+  for (const s of secondaries) {
+    const list = secondariesByHit.get(s.hitId) ?? [];
+    list.push({
+      talentId: s.talentId,
+      name: s.onboardedName ?? s.tmdbName ?? "Unknown",
+      profileImageUrl: s.onboardedImageUrl ?? s.tmdbProfileUrl ?? null,
+      confidence: s.confidence,
+      source: s.source,
+      onboarded: s.talentId !== null,
+    });
+    secondariesByHit.set(s.hitId, list);
+  }
+
   const now = Math.floor(Date.now() / 1000);
 
   const built = accounts.map((acc) => {
@@ -173,6 +218,7 @@ export async function listOffenderAccounts(db: Db, talentId: string): Promise<Of
         riskLevel: h.riskLevel,
         status: h.status,
         detectedAt: h.detectedAt,
+        secondaryActors: secondariesByHit.get(h.id) ?? [],
       })),
     };
   });

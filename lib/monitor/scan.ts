@@ -19,6 +19,7 @@ import {
   scanPackages,
   geometryFingerprints,
   users,
+  hitSecondaryActors,
 } from "@/lib/db/schema";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { callAi } from "@/lib/ai/providers";
@@ -929,6 +930,37 @@ export async function getMonitorState(db: Db, talentId: string) {
       .all(),
   ]);
 
+  // Stack secondary actors on each hit. One query per page-load rather than
+  // one per hit — the join to talent_profiles gives us the onboarded actor's
+  // display name and headshot so the UI can render immediately without an
+  // extra round-trip per avatar.
+  const hitIds = hits.map((h) => h.id);
+  const secondaries = hitIds.length
+    ? await db
+        .select({
+          hitId: hitSecondaryActors.hitId,
+          talentId: hitSecondaryActors.talentId,
+          tmdbId: hitSecondaryActors.tmdbId,
+          tmdbName: hitSecondaryActors.tmdbName,
+          tmdbProfileUrl: hitSecondaryActors.tmdbProfileUrl,
+          confidence: hitSecondaryActors.confidence,
+          source: hitSecondaryActors.source,
+          onboardedName: talentProfiles.fullName,
+          onboardedImageUrl: talentProfiles.profileImageUrl,
+        })
+        .from(hitSecondaryActors)
+        .leftJoin(talentProfiles, eq(talentProfiles.userId, hitSecondaryActors.talentId))
+        .where(inArray(hitSecondaryActors.hitId, hitIds))
+        .all()
+    : [];
+
+  const secondariesByHit = new Map<string, typeof secondaries>();
+  for (const s of secondaries) {
+    const list = secondariesByHit.get(s.hitId) ?? [];
+    list.push(s);
+    secondariesByHit.set(s.hitId, list);
+  }
+
   return {
     monitor: monitor ?? null,
     hits: hits.map((h) => ({
@@ -945,6 +977,17 @@ export async function getMonitorState(db: Db, talentId: string) {
       aiRationale: h.aiRationale,
       status: h.status,
       detectedAt: h.detectedAt,
+      secondaryActors: (secondariesByHit.get(h.id) ?? []).map((s) => ({
+        // onboarded talents get name + headshot from talent_profiles; other
+        // rows fall back to the TMDB cache. The name is what the UI displays,
+        // so it must always resolve to something.
+        talentId: s.talentId,
+        name: s.onboardedName ?? s.tmdbName ?? "Unknown",
+        profileImageUrl: s.onboardedImageUrl ?? s.tmdbProfileUrl ?? null,
+        confidence: s.confidence,
+        source: s.source,
+        onboarded: s.talentId !== null,
+      })),
     })),
     scans,
   };
