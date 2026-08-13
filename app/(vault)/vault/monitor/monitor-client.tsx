@@ -337,18 +337,13 @@ function ConfidenceBar({ value, label }: { value: number; label: string }) {
 
 /**
  * Row of small round headshots for every additional actor identified in a
- * hit's media. Onboarded actors get an accent-coloured ring so a talent
- * skimming the list sees at a glance "someone we represent is also here."
- * Non-onboarded actors carry a subtle dashed ring and a "not on platform"
- * hover cue instead. When no image URL is available (rare — TMDB usually
- * has one) we fall back to initials on a grey chip.
+ * hit's media. Deliberately neutral: whether or not a given actor is on
+ * ImageVault is not surfaced here — that would leak roster membership to
+ * every talent viewing their own hits. Onboarded vs non-onboarded gets
+ * tracked internally on the row (talentId is null for non-onboarded) and
+ * exposed only to admins on the funnel-candidates panel.
  */
 function SecondaryActorStack({ actors }: { actors: SecondaryActor[] }) {
-  const onboarded = actors.filter((a) => a.onboarded);
-  const otherLabel = onboarded.length
-    ? `${onboarded.length} on ImageVault · ${actors.length - onboarded.length} other${actors.length - onboarded.length === 1 ? "" : "s"}`
-    : `${actors.length} other actor${actors.length === 1 ? "" : "s"} identified`;
-
   return (
     <div className="flex items-center gap-3 flex-wrap">
       <p
@@ -375,7 +370,7 @@ function SecondaryActorStack({ actors }: { actors: SecondaryActor[] }) {
         )}
       </div>
       <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-        {otherLabel}
+        {actors.length} actor{actors.length === 1 ? "" : "s"} identified
       </span>
     </div>
   );
@@ -387,27 +382,25 @@ function SecondaryAvatar({ actor }: { actor: SecondaryActor }) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
-  const ring = actor.onboarded ? "var(--color-accent)" : "var(--color-border)";
-  const label = actor.onboarded
-    ? `${actor.name} — on ImageVault (${actor.confidence}%)`
-    : `${actor.name} — not on ImageVault (${actor.confidence}%)`;
+  const [broken, setBroken] = useState(false);
+  const showImage = actor.profileImageUrl && !broken;
 
   return (
     <div
-      title={label}
+      title={`${actor.name} (${actor.confidence}%)`}
       className="relative h-7 w-7 rounded-full overflow-hidden"
       style={{
         border: `2px solid var(--color-bg)`,
-        boxShadow: `0 0 0 1.5px ${ring}`,
+        boxShadow: `0 0 0 1.5px var(--color-border)`,
       }}
     >
-      {actor.profileImageUrl ? (
+      {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={actor.profileImageUrl}
+          src={actor.profileImageUrl!}
           alt={actor.name}
           className="h-full w-full object-cover"
-          style={{ opacity: actor.onboarded ? 1 : 0.85 }}
+          onError={() => setBroken(true)}
         />
       ) : (
         <div
@@ -421,9 +414,132 @@ function SecondaryAvatar({ actor }: { actor: SecondaryActor }) {
   );
 }
 
+/**
+ * Two-step dismiss control. First click reveals four typed reasons; picking
+ * one fires the PATCH. "Other" expands a small text field. Structured
+ * reasons feed the admin tuning panel — a hit dropped as `not_ai` is a
+ * different tuning signal than one dropped as `not_me`, and merging them
+ * costs us insight into the pre-filter's real error mix.
+ */
+const DISMISS_OPTIONS: Array<{ reason: string; label: string }> = [
+  { reason: "not_me", label: "Not me" },
+  { reason: "not_misuse", label: "Not misuse" },
+  { reason: "not_ai", label: "Not AI" },
+  { reason: "other", label: "Other…" },
+];
+
+function DismissMenu({
+  hitId,
+  onDismiss,
+  busy,
+}: {
+  hitId: string;
+  onDismiss: (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => void;
+  busy: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [notes, setNotes] = useState("");
+
+  const pick = (reason: string) => {
+    if (reason === "other") {
+      setOtherOpen(true);
+      return;
+    }
+    setOpen(false);
+    onDismiss(hitId, "dismissed", { dismissalReason: reason });
+  };
+
+  const submitOther = () => {
+    const trimmed = notes.trim();
+    if (!trimmed) return;
+    setOpen(false);
+    setOtherOpen(false);
+    onDismiss(hitId, "dismissed", { dismissalReason: "other", dismissalNotes: trimmed });
+  };
+
+  return (
+    <div className="relative inline-flex">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60"
+        style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+      >
+        Dismiss
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          className="absolute z-10 right-0 top-full mt-1 w-52 rounded shadow-lg"
+          style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
+        >
+          {otherOpen ? (
+            <div className="p-2 space-y-2">
+              <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
+                Reason
+              </p>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                autoFocus
+                maxLength={500}
+                rows={3}
+                placeholder="Why is this being dismissed?"
+                className="w-full text-xs rounded px-2 py-1.5 resize-none"
+                style={{
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-surface)",
+                  color: "var(--color-ink)",
+                }}
+              />
+              <div className="flex gap-1 justify-end">
+                <button
+                  onClick={() => {
+                    setOtherOpen(false);
+                    setNotes("");
+                  }}
+                  className="text-xs px-2 py-1 rounded"
+                  style={{ color: "var(--color-muted)" }}
+                >
+                  Back
+                </button>
+                <button
+                  onClick={submitOther}
+                  disabled={!notes.trim()}
+                  className="text-xs px-2 py-1 rounded"
+                  style={{
+                    background: notes.trim() ? "var(--color-ink)" : "var(--color-surface)",
+                    color: notes.trim() ? "white" : "var(--color-muted)",
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : (
+            DISMISS_OPTIONS.map((opt) => (
+              <button
+                key={opt.reason}
+                onClick={() => pick(opt.reason)}
+                className="block w-full text-left text-xs px-3 py-2 hover:opacity-80"
+                style={{ color: "var(--color-ink)" }}
+              >
+                {opt.label}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HitCard({ hit, onTriage, busy }: {
   hit: LikenessHit;
-  onTriage: (id: string, status: string) => void;
+  onTriage: (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => void;
   busy: boolean;
 }) {
   const risk = RISK_COLORS[hit.riskLevel] ?? RISK_COLORS.medium;
@@ -510,14 +626,7 @@ function HitCard({ hit, onTriage, busy }: {
           </button>
         )}
         {hit.status === "new" && (
-          <button
-            onClick={() => onTriage(hit.id, "dismissed")}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60"
-            style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
-          >
-            Dismiss — not me
-          </button>
+          <DismissMenu hitId={hit.id} onDismiss={onTriage} busy={busy} />
         )}
         {hit.status === "takedown_requested" && (
           <button
@@ -649,13 +758,13 @@ export default function MonitorClient({ identity }: Props) {
     }
   }, [scanning, refresh]);
 
-  const triageHit = useCallback(async (id: string, status: string) => {
+  const triageHit = useCallback(async (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => {
     setTriaging(id);
     try {
       const res = await fetch(`/api/monitor/hits/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...extra }),
       });
       if (res.ok) {
         setHits((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)));

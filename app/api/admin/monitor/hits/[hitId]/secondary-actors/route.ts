@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { hitSecondaryActors, likenessHits, users, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
+import { fetchTmdbPersonById } from "@/lib/monitor/tmdb-lookup";
 import { and, eq } from "drizzle-orm";
+
+function readTmdbKey(): string | null {
+  try {
+    const { env } = getCloudflareContext();
+    return (env as unknown as { TMDB_API_KEY?: string }).TMDB_API_KEY ?? null;
+  } catch {
+    return process.env.TMDB_API_KEY ?? null;
+  }
+}
 
 /**
  * Admin endpoint for stacking additional actors against a hit ahead of the
@@ -83,6 +94,20 @@ export async function POST(
         { error: "Each actor must have talentId or tmdbId" },
         { status: 400 }
       );
+    }
+
+    // Fill in name / headshot from TMDB when the caller only sent an id.
+    // Non-fatal on lookup failure — the row still writes, we just fall back
+    // to whatever the client provided (or the initials chip in the UI).
+    if (tmdbId && (!tmdbName || !tmdbProfileUrl)) {
+      const key = readTmdbKey();
+      if (key) {
+        const person = await fetchTmdbPersonById(tmdbId, key);
+        if (person) {
+          tmdbName = tmdbName ?? person.name;
+          tmdbProfileUrl = tmdbProfileUrl ?? person.profileUrl;
+        }
+      }
     }
 
     const id = crypto.randomUUID();

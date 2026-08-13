@@ -1621,6 +1621,12 @@ export const likenessHits = sqliteTable("likeness_hits", {
   }).notNull().default("new"),
   statusUpdatedBy: text("status_updated_by").references(() => users.id),
   statusUpdatedAt: integer("status_updated_at"),
+  // Populated on status=dismissed so admin can aggregate what got dismissed
+  // and why, and tune the pre-filter / adjudicator scope from that signal.
+  dismissalReason: text("dismissal_reason", {
+    enum: ["not_me", "not_misuse", "not_ai", "other"],
+  }),
+  dismissalNotes: text("dismissal_notes"),
   detectedAt: integer("detected_at").notNull(),
 });
 
