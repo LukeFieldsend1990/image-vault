@@ -40,6 +40,7 @@ import { apifyToken } from "./ingest/apify";
 import { discoverInstagram, preFilter } from "./ingest/instagram";
 import { checkApifyBudget, logApifyUsage } from "./ingest/budget";
 import { discoverYouTube, youtubeApiKey } from "./ingest/youtube";
+import { discoverTikTok } from "./ingest/tiktok";
 import { seedHandlesFor } from "./ingest/seeds";
 
 type Db = ReturnType<typeof getDb>;
@@ -574,9 +575,54 @@ async function discoverCandidates(
     );
   }
 
-  // YouTube and Instagram are independent surfaces; a failure on one is not a
-  // failure of the sweep if the other produced results.
-  const combined = [...youtube, ...candidates];
+  // TikTok: strongest surface for AI misuse of MCU-scale talent per the discovery
+  // bake-off (scripts/discovery-bakeoff.mjs). Runs after Instagram so the budget
+  // gate has seen Instagram's spend first — the ceiling is shared, and Instagram
+  // is cheaper per query so it gets first refusal.
+  const tiktok: CandidateContent[] = [];
+  try {
+    const tt = await discoverTikTok({
+      token,
+      anchor: opts.anchor,
+      budget: {
+        check: async () => {
+          const v = await checkApifyBudget(db);
+          return { ok: v.ok, reason: v.reason };
+        },
+        record: (entry) =>
+          logApifyUsage(db, {
+            runId: entry.runId,
+            actorId: entry.actorId,
+            mode: entry.mode,
+            query: entry.query,
+            talentId: opts.talentId,
+            scanId: opts.scanId ?? null,
+            itemCount: entry.itemCount,
+            costUsd: entry.costUsd,
+            status: entry.status,
+            error: entry.error ?? null,
+          }),
+      },
+    });
+    const { kept } = preFilter(tt.candidates, {
+      anchor: opts.anchor,
+      scope: opts.scope,
+      allowlist: opts.allowlist,
+      seenUrls: previousUrls,
+    });
+    tiktok.push(...kept);
+    if (tt.budgetStopped) {
+      console.warn(
+        `[monitor] TikTok sweep for ${opts.talentId} stopped early: ${tt.budgetStopped}`
+      );
+    }
+  } catch (err) {
+    console.warn(`[monitor] TikTok discovery failed: ${(err as Error).message}`);
+  }
+
+  // YouTube, Instagram and TikTok are independent surfaces; a failure on one is
+  // not a failure of the sweep if the others produced results.
+  const combined = [...youtube, ...candidates, ...tiktok];
   return {
     candidates: combined,
     discoveryError: combined.length ? null : diagnostics.fatalError,
@@ -692,15 +738,21 @@ export async function runLikenessScan(
   const flagged = verdicts.filter((v) => v.flag);
 
   // Dedupe against previously recorded hits for this talent (same content URL).
+  // D1 caps parameters per statement at ~100, and a real TikTok+Instagram sweep
+  // routinely flags more than that — so batch the IN(...) lookup rather than
+  // relying on the driver to handle it. Chunk size safely under the cap.
   const flaggedUrls = flagged.map((v) => candidates[v.index].contentUrl);
-  const existing = flaggedUrls.length
-    ? await db
-        .select({ contentUrl: likenessHits.contentUrl })
-        .from(likenessHits)
-        .where(and(eq(likenessHits.talentId, opts.talentId), inArray(likenessHits.contentUrl, flaggedUrls)))
-        .all()
-    : [];
-  const seen = new Set(existing.map((e) => e.contentUrl));
+  const seen = new Set<string>();
+  const CHUNK = 80;
+  for (let i = 0; i < flaggedUrls.length; i += CHUNK) {
+    const chunk = flaggedUrls.slice(i, i + CHUNK);
+    const rows = await db
+      .select({ contentUrl: likenessHits.contentUrl })
+      .from(likenessHits)
+      .where(and(eq(likenessHits.talentId, opts.talentId), inArray(likenessHits.contentUrl, chunk)))
+      .all();
+    for (const r of rows) seen.add(r.contentUrl);
+  }
 
   const newHits: LikenessHitRecord[] = [];
   for (const verdict of flagged) {

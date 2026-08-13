@@ -401,6 +401,24 @@ export default async function SettingsPage({
         </div>
       )}
 
+      {/* Likeness monitor enforcement setup (talent only) */}
+      {user?.role === "talent" && (
+        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Likeness Monitor</h2>
+          <Link
+            href="/settings/monitor"
+            className="flex items-center justify-between text-sm"
+            style={{ color: "var(--color-ink)" }}
+          >
+            <span>Enforcement setup</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </Link>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>Upload the signed authorisation and ID scan platforms require before we can file takedowns on your behalf.</p>
+        </div>
+      )}
+
       {/* AI & Likeness Licensing — dedicated RSL page (talent only) */}
       {user?.role === "talent" && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>

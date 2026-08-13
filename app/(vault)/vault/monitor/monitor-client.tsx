@@ -463,6 +463,22 @@ export default function MonitorClient({ identity }: Props) {
       setHits(data.hits);
       setScans(data.scans);
       setMonitor(data.monitor);
+
+      // Reconstruct the platform panel from persisted state, so a page reload
+      // (or a scan triggered from another surface) still reflects reality —
+      // otherwise the animation in runScan() is the only thing that ever
+      // populates it, and the panel misreports "0/8 checked" whenever the
+      // user opens the page cold.
+      const lastCompleteScan = data.scans.find((s) => s.status === "complete");
+      if (lastCompleteScan) {
+        const platformsWithHits = new Set(data.hits.map((h) => h.platform));
+        setPlatforms((prev) =>
+          prev.map((p) => ({
+            ...p,
+            status: platformsWithHits.has(p.id) ? "flagged" : "clear",
+          }))
+        );
+      }
     } finally {
       setLoaded(true);
     }
