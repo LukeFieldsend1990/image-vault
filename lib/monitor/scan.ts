@@ -951,12 +951,26 @@ export async function getMonitorState(db: Db, talentId: string) {
     .where(eq(likenessMonitors.talentId, talentId))
     .get();
 
-  const [hits, scans] = await Promise.all([
+  // Reach-weighted ordering: a hit on an account with 500k cumulative views
+  // is a bigger enforcement problem than a hit on a small account, even if
+  // it was detected first. LEFT JOIN so hits with no accountId (rare, only
+  // early data before Mode B seeded the offender file) still surface —
+  // NULL cumulative_views sorts last with sql`... IS NULL, ...`. Recency is
+  // the tiebreaker within the same account.
+  const [hitRows, scans] = await Promise.all([
     db
-      .select()
+      .select({
+        hit: likenessHits,
+        accountViews: monitorAccounts.cumulativeViews,
+      })
       .from(likenessHits)
+      .leftJoin(monitorAccounts, eq(monitorAccounts.id, likenessHits.accountId))
       .where(eq(likenessHits.talentId, talentId))
-      .orderBy(desc(likenessHits.detectedAt))
+      .orderBy(
+        sql`${monitorAccounts.cumulativeViews} IS NULL`,
+        desc(monitorAccounts.cumulativeViews),
+        desc(likenessHits.detectedAt)
+      )
       .limit(50)
       .all(),
     db
@@ -967,6 +981,7 @@ export async function getMonitorState(db: Db, talentId: string) {
       .limit(20)
       .all(),
   ]);
+  const hits = hitRows.map((r) => r.hit);
 
   // Stack secondary actors on each hit. One query per page-load rather than
   // one per hit — the join to talent_profiles gives us the onboarded actor's

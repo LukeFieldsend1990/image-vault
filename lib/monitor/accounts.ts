@@ -138,27 +138,34 @@ export async function listOffenderAccounts(db: Db, talentId: string): Promise<Of
     .where(inArray(monitorAccounts.id, accountIds))
     .all();
 
-  // Stack secondary actors on every hit at once — the same query pattern as
-  // getMonitorState. Skipping this join would leave the accounts UI without
-  // the avatar row that the main monitor view now shows.
+  // Stack secondary actors on every hit at once. D1 caps parameters per
+  // statement at ~100, and Tom Hardy's monitor already sits on 100+ hits,
+  // so batch the IN(...) lookup rather than relying on the driver to
+  // handle it (same fix as the flagged-URL dedupe in lib/monitor/scan.ts).
   const hitIds = hits.map((h) => h.id);
-  const secondaries = hitIds.length
-    ? await db
-        .select({
-          hitId: hitSecondaryActors.hitId,
-          talentId: hitSecondaryActors.talentId,
-          tmdbName: hitSecondaryActors.tmdbName,
-          tmdbProfileUrl: hitSecondaryActors.tmdbProfileUrl,
-          confidence: hitSecondaryActors.confidence,
-          source: hitSecondaryActors.source,
-          onboardedName: talentProfiles.fullName,
-          onboardedImageUrl: talentProfiles.profileImageUrl,
-        })
-        .from(hitSecondaryActors)
-        .leftJoin(talentProfiles, eq(talentProfiles.userId, hitSecondaryActors.talentId))
-        .where(inArray(hitSecondaryActors.hitId, hitIds))
-        .all()
-    : [];
+  const secondaries: Awaited<ReturnType<typeof queryChunk>> = [];
+  async function queryChunk(chunk: string[]) {
+    return db
+      .select({
+        hitId: hitSecondaryActors.hitId,
+        talentId: hitSecondaryActors.talentId,
+        tmdbName: hitSecondaryActors.tmdbName,
+        tmdbProfileUrl: hitSecondaryActors.tmdbProfileUrl,
+        confidence: hitSecondaryActors.confidence,
+        source: hitSecondaryActors.source,
+        onboardedName: talentProfiles.fullName,
+        onboardedImageUrl: talentProfiles.profileImageUrl,
+      })
+      .from(hitSecondaryActors)
+      .leftJoin(talentProfiles, eq(talentProfiles.userId, hitSecondaryActors.talentId))
+      .where(inArray(hitSecondaryActors.hitId, chunk))
+      .all();
+  }
+  const CHUNK = 80;
+  for (let i = 0; i < hitIds.length; i += CHUNK) {
+    const rows = await queryChunk(hitIds.slice(i, i + CHUNK));
+    secondaries.push(...rows);
+  }
   const secondariesByHit = new Map<string, SecondaryActorSummary[]>();
   for (const s of secondaries) {
     const list = secondariesByHit.get(s.hitId) ?? [];
