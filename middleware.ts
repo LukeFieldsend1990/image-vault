@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { ADMIN_EMAILS } from "@/lib/auth/adminEmails";
 
-const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin", "/inbox", "/evidence", "/trace"];
+const PROTECTED = ["/dashboard", "/licences", "/audit", "/settings", "/directory", "/talent", "/vault/requests", "/vault/licences", "/vault/authorise", "/vault/monitor", "/roster", "/onboarding", "/admin", "/inbox", "/evidence", "/trace", "/vault/custody"];
 const AUTH_PAGES = ["/login", "/signup", "/setup-2fa", "/register-interest"];
 
 function getSecret(): Uint8Array {
@@ -156,6 +156,7 @@ export const config = {
     "/inbox/:path*",
     "/evidence/:path*",
     "/trace/:path*",
+    "/vault/custody/:path*",
     "/login",
     "/signup",
     "/setup-2fa",

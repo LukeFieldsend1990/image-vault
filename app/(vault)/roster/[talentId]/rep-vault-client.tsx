@@ -7,6 +7,7 @@ import UploadModal from "../../upload-modal";
 import { FadeImage } from "@/app/(vault)/fade-image";
 import type { PreviewResponse } from "@/app/api/packages/[id]/preview/route";
 import ComplianceClient from "../../compliance/compliance-client";
+import LifetimeCustodyClient from "@/app/(vault)/vault/custody/lifetime-custody-client";
 import TalentProductionsClient from "../../vault/productions/talent-productions-client";
 import { USE_CATEGORIES } from "@/lib/consent/use-categories";
 
@@ -1272,9 +1273,9 @@ function RevenueTab({ talentId }: { talentId: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-type Tab = "vault" | "licences" | "permissions" | "revenue" | "compliance" | "productions";
+type Tab = "vault" | "licences" | "permissions" | "revenue" | "compliance" | "productions" | "custody";
 
-const VALID_TABS = new Set<Tab>(["vault", "licences", "productions", "compliance", "permissions", "revenue"]);
+const VALID_TABS = new Set<Tab>(["vault", "licences", "productions", "compliance", "custody", "permissions", "revenue"]);
 
 export default function RepVaultClient({ talentId }: { talentId: string }) {
   const searchParams = useSearchParams();
@@ -1376,6 +1377,7 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
     { id: "licences", label: "Licences" },
     { id: "productions", label: "Productions" },
     { id: "compliance", label: "Compliance" },
+    { id: "custody", label: "Custody" },
     { id: "permissions", label: "Permissions" },
     { id: "revenue", label: "Revenue" },
   ];
@@ -1566,6 +1568,9 @@ export default function RepVaultClient({ talentId }: { talentId: string }) {
         {activeTab === "licences" && <LicencesTab talentId={talentId} />}
         {activeTab === "productions" && <TalentProductionsClient talentId={talentId} />}
         {activeTab === "compliance" && <ComplianceClient talentId={talentId} />}
+        {/* The client's whole likeness history across every production — the thing
+            an agent is asked for and cannot currently produce. */}
+        {activeTab === "custody" && <LifetimeCustodyClient talentId={talentId} />}
         {activeTab === "permissions" && <PermissionsTab talentId={talentId} />}
         {activeTab === "revenue" && <RevenueTab talentId={talentId} />}
       </div>

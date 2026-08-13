@@ -151,10 +151,11 @@ export const CONCEPTS: ConceptEntry[] = [
   {
     id: "audit-log",
     name: "Audit Log",
-    summary: "Unified admin event stream assembled from downloads, bridge events, grants, licences, signups, packages, invites and password resets.",
+    summary: "Unified admin event stream assembled from downloads, bridge events, grants, licences, signups, packages, invites, password resets and the hash-chained compliance ledger.",
     details:
       "/api/admin/audit/events composes events with category, actor, severity (info|warn|critical) and supports date/user/category filters + CSV export. " +
-      "complianceEvents adds a hash-chained, append-only consent ledger. MCP tool calls are additionally logged to mcpAuditLog.",
+      "The `compliance` category surfaces complianceEvents — the append-only consent ledger — and each entry carries its chain key, sequence and hash so an audit row can be reconciled against a printed custody record or consent receipt. " +
+      "MCP tool calls are additionally logged to mcpAuditLog.",
     codePaths: ["app/api/admin/audit/", "lib/db/schema.ts (downloadEvents, bridgeEvents, complianceEvents, mcpAuditLog)"],
     related: ["admin-panel", "security-model"],
   },

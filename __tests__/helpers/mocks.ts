@@ -105,7 +105,12 @@ export function mockChainDb() {
     }
   );
 
-  return { db, enqueue, insertedRows, updatedRows, deletedRows };
+  /** Drop any results a test queued but never consumed. */
+  function clearQueue() {
+    queue.length = 0;
+  }
+
+  return { db, enqueue, clearQueue, insertedRows, updatedRows, deletedRows };
 }
 
 // ─── Request builder ─────────────────────────────────────────────────────────
@@ -149,7 +154,7 @@ export async function parseJson(res: NextResponse | Response) {
  */
 export function createTestEnv() {
   const kv = mockKv();
-  const { db, enqueue, insertedRows, updatedRows } = mockChainDb();
+  const { db, enqueue, clearQueue, insertedRows, updatedRows } = mockChainDb();
 
   const currentSession: { value: SessionPayload | null } = { value: null };
 
@@ -183,6 +188,7 @@ export function createTestEnv() {
     kv,
     db,
     enqueue,
+    clearQueue,
     insertedRows,
     updatedRows,
     env,
@@ -201,6 +207,10 @@ export function createTestEnv() {
     reset() {
       insertedRows.length = 0;
       updatedRows.length = 0;
+      // Results a test queued but never consumed must not bleed into the next
+      // one: a handler that skips a conditional query leaves the queue dirty,
+      // and every subsequent test then reads the wrong row for the right call.
+      clearQueue();
       kv._store.clear();
       currentSession.value = null;
     },

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { USE_CATEGORIES } from "@/lib/consent/use-categories";
+import { USE_CATEGORIES, normaliseUseCategoryIds } from "@/lib/consent/use-categories";
+import { buildRedline, summariseRedline, type RedlineEntry } from "@/lib/consent/redline";
+import type { NegotiationRound } from "@/lib/consent/negotiation";
 import type { ConsentDocViewModel } from "@/lib/consent/load";
 
 type Source =
@@ -20,16 +22,6 @@ interface DocResponse {
   actingRole?: "talent" | "rep" | null;
 }
 
-interface NegotiationRound {
-  id: string;
-  round: number;
-  party: "producer" | "talent" | "rep";
-  action: "counter" | "accepted" | "declined";
-  scope: string[];
-  fee: number | null;
-  comment: string | null;
-  createdAt: number;
-}
 interface NegotiationState {
   party: "producer" | "talent" | "rep" | "admin" | null;
   currentOffer: { scope: string[]; fee: number | null };
@@ -279,6 +271,27 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
   // been shown anywhere in this product.
   const withheldList = useMemo(() => USE_CATEGORIES.filter((c) => !consents.has(c.id)), [consents]);
 
+  /**
+   * The thread as a redline.
+   *
+   * `currentOffer` is live state, not round zero — a producer counter overwrites
+   * the licence's stored scope, so once one exists the opening ask is no longer
+   * recoverable from it. So it is only safe to use as a baseline while no
+   * producer counter has landed; after that the first round is shown as the
+   * baseline and labelled as such, rather than diffing against a position that
+   * has since been overwritten.
+   */
+  const redline = useMemo(() => {
+    if (!nego) return [] as RedlineEntry[];
+    const producerCountered = nego.rounds.some((r) => r.party === "producer" && r.action === "counter");
+    return buildRedline({
+      rounds: nego.rounds,
+      baseline: producerCountered
+        ? null
+        : { scope: normaliseUseCategoryIds(nego.currentOffer.scope), fee: nego.currentOffer.fee },
+    });
+  }, [nego]);
+
   const submit = useCallback(async () => {
     if (!attested) return;
     setSubmitting(true);
@@ -507,7 +520,7 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         value={counterComment} onChange={(e) => setCounterComment(e.target.value)} placeholder="Add a note (optional)" rows={3}
         className="w-full mb-3 rounded px-3 py-2 text-sm" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
       />
-      {submitError && <p className="text-xs mb-3 rounded px-3 py-2" style={{ background: TINT, color: ACCENT, border: `1px solid ` }}>{submitError}</p>}
+      {submitError && <p className="text-xs mb-3 rounded px-3 py-2" style={{ background: TINT, color: ACCENT, border: `1px solid ${ACCENT}` }}>{submitError}</p>}
       <div className="flex items-center gap-2">
         <button type="button" onClick={sendCounter} disabled={negoBusy} className="rounded px-4 py-2 text-sm font-medium text-white" style={{ background: negoBusy ? "var(--color-muted)" : ACCENT }}>
           {negoBusy ? "Sending…" : isProducer ? "Send counter" : "Send counter-offer"}
@@ -682,12 +695,15 @@ export default function ConsentDocumentClient({ source }: { source: Source }) {
         </div>
       </div>
 
-      {/* Negotiation history */}
+      {/* Negotiation history, as a redline against the position before it */}
       {nego && nego.rounds.length > 0 && (
         <div className="rounded-xl p-5 mb-4" style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
-          <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: "var(--color-muted)" }}>Negotiation history</p>
+          <p className="text-xs font-medium tracking-widest uppercase mb-1" style={{ color: "var(--color-muted)" }}>Negotiation history</p>
+          <p className="text-xs mb-3" style={{ color: "var(--color-muted)", lineHeight: 1.55 }}>
+            Each round shows what moved from the position before it.
+          </p>
           <div className="space-y-3">
-            {nego.rounds.map((r) => <Round key={r.id} r={r} />)}
+            {redline.map((entry) => <Round key={entry.round.id} entry={entry} />)}
           </div>
         </div>
       )}
@@ -1122,7 +1138,7 @@ function firstName(name: string): string {
 }
 
 function ErrLine({ msg }: { msg: string }) {
-  return <p className="text-xs mb-3 rounded px-3 py-2" style={{ background: TINT, color: ACCENT, border: `1px solid ` }}>{msg}</p>;
+  return <p className="text-xs mb-3 rounded px-3 py-2" style={{ background: TINT, color: ACCENT, border: `1px solid ${ACCENT}` }}>{msg}</p>;
 }
 
 function OfferBox({ scope, fee, comment }: { scope: string[]; fee: number | null; comment?: string | null }) {
@@ -1135,23 +1151,99 @@ function OfferBox({ scope, fee, comment }: { scope: string[]; fee: number | null
   );
 }
 
-function Round({ r }: { r: NegotiationRound }) {
+/** Name a use category for the redline, falling back to the raw id. */
+function categoryName(id: string): string {
+  return USE_CATEGORIES.find((c) => c.id === id)?.name ?? id;
+}
+
+/**
+ * One round, shown as what moved rather than as a standalone position.
+ *
+ * Additions read in olive (a right granted), removals in brick with a
+ * strikethrough (a right withdrawn) — the same grammar the consent picker and
+ * the printed documents use, so the colours mean one thing across the product.
+ */
+function Round({ entry }: { entry: RedlineEntry }) {
+  const r = entry.round;
   const partyLabel = r.party === "producer" ? "Production" : r.party === "rep" ? "Agent" : "Performer";
   const actionLabel = r.action === "counter" ? "proposed" : r.action === "accepted" ? "accepted" : "declined";
   const date = new Date(r.createdAt * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+
   return (
     <div className="rounded-lg p-3" style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-medium" style={{ color: "var(--color-text)" }}>{partyLabel} {actionLabel}</span>
-        <span className="text-[10px] font-mono" style={{ color: "var(--color-muted)" }}>{date}</span>
+      <div className="flex items-center justify-between gap-3 mb-1.5 flex-wrap">
+        <span className="text-xs font-medium" style={{ color: "var(--color-text)" }}>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-faint)", marginRight: 6 }}>
+            {String(r.round).padStart(2, "0")}
+          </span>
+          {partyLabel} {actionLabel}
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="text-[10px] font-medium" style={{ color: "var(--color-muted)" }}>{summariseRedline(entry)}</span>
+          <span className="text-[10px] font-mono" style={{ color: "var(--color-muted)" }}>{date}</span>
+        </span>
       </div>
-      {r.action === "counter" && (
+
+      {/* A decline states no scope — its empty scope means "none given", not
+          "every use withdrawn", so no diff is drawn for it. */}
+      {!entry.scopeStated ? (
+        r.comment ? (
+          <p className="text-xs italic" style={{ color: "var(--color-muted)" }}>&ldquo;{r.comment}&rdquo;</p>
+        ) : (
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>No terms stated.</p>
+        )
+      ) : (
         <>
-          <p className="text-xs" style={{ color: "var(--color-muted)" }}>{scopeNames(r.scope)} · {feeLabel(r.fee)}</p>
-          {r.comment && <p className="text-xs mt-1 italic" style={{ color: "var(--color-muted)" }}>&ldquo;{r.comment}&rdquo;</p>}
+          {entry.isBaseline && (
+            <p className="text-[11px] mb-1.5" style={{ color: "var(--color-muted)" }}>
+              First position on record — nothing earlier to compare against.
+            </p>
+          )}
+
+          {(entry.added.length > 0 || entry.removed.length > 0) && (
+            <div className="flex flex-col gap-1 mb-1.5">
+              {entry.added.map((id) => (
+                <span key={`a-${id}`} className="text-xs flex items-start gap-1.5" style={{ color: OLIVE }}>
+                  <span aria-hidden>+</span>
+                  <span style={{ color: "var(--color-ink)" }}>{categoryName(id)}</span>
+                </span>
+              ))}
+              {entry.removed.map((id) => (
+                <span key={`r-${id}`} className="text-xs flex items-start gap-1.5" style={{ color: ACCENT }}>
+                  <span aria-hidden>−</span>
+                  <span style={{ color: "var(--color-muted)", textDecoration: "line-through" }}>{categoryName(id)}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* The full resulting position, so a reader never has to reassemble it
+              from the deltas above. */}
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            {entry.isBaseline ? "" : "Now: "}{scopeNames(r.scope)}
+          </p>
+
+          <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
+            {r.fee === null ? (
+              // null is ambiguous on write between "unchanged" and "cleared to
+              // N/A", so it is reported as unstated rather than as a fee of zero.
+              <>No fee stated</>
+            ) : entry.feeChanged ? (
+              <>
+                Fee <span style={{ textDecoration: "line-through" }}>{feeLabel(entry.feeFrom)}</span>{" "}
+                <span aria-hidden>→</span>{" "}
+                <span style={{ color: "var(--color-ink)", fontWeight: 500 }}>{feeLabel(entry.feeTo)}</span>
+              </>
+            ) : (
+              <>Fee {feeLabel(r.fee)}</>
+            )}
+          </p>
+
+          {r.comment && (
+            <p className="text-xs mt-1 italic" style={{ color: "var(--color-muted)" }}>&ldquo;{r.comment}&rdquo;</p>
+          )}
         </>
       )}
-      {r.action === "declined" && r.comment && <p className="text-xs italic" style={{ color: "var(--color-muted)" }}>&ldquo;{r.comment}&rdquo;</p>}
     </div>
   );
 }
