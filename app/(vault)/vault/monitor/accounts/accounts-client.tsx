@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { buildTemplates, composeUrlFor, type OutreachPurpose } from "@/lib/monitor/outreach-templates";
 
 interface SecondaryActor {
   talentId: string | null;
@@ -145,13 +146,377 @@ function MiniAvatar({ actor }: { actor: SecondaryActor }) {
   );
 }
 
+/**
+ * Compose-and-log outreach flow. We never send the message ourselves —
+ * Instagram / TikTok DM APIs are locked down and any programmatic sending
+ * gets treated as spam. So the modal does the two things we CAN do: pre-fill
+ * a template the operator can copy, and deep-link them into the platform's
+ * DM composer. On "Mark sent", the outreach row lands so we don't spam
+ * the same account with a second message next week without knowing.
+ */
+function ContactModal({
+  account,
+  talentName,
+  onClose,
+}: {
+  account: OffenderAccount;
+  talentName: string;
+  onClose: () => void;
+}) {
+  const templates = useMemo(
+    () =>
+      buildTemplates({
+        talentName,
+        accountHandle: account.handle,
+        platform: account.platform,
+      }),
+    [talentName, account.handle, account.platform]
+  );
+  const [purpose, setPurpose] = useState<OutreachPurpose>(templates[0].purpose);
+  const [body, setBody] = useState(templates[0].body);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const composeUrl = composeUrlFor(account.platform, account.handle);
+
+  const switchPurpose = (p: OutreachPurpose) => {
+    setPurpose(p);
+    const t = templates.find((x) => x.purpose === p);
+    if (t) setBody(t.body);
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(body);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setStatus("Copy failed — select the text manually.");
+    }
+  };
+
+  const logSent = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/monitor/accounts/${account.id}/outreach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "dm", purpose, messageBody: body }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setStatus(data.error ?? "Log failed");
+        return;
+      }
+      setStatus("Logged. Close when you're done.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      style={{ background: "rgba(0,0,0,0.75)" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative rounded-lg overflow-hidden flex flex-col"
+        style={{
+          background: "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+          width: "min(640px, 100%)",
+          maxHeight: "90vh",
+        }}
+      >
+        <div
+          className="flex items-center justify-between gap-2 px-4 py-3"
+          style={{ borderBottom: "1px solid var(--color-border)" }}
+        >
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Contact @{account.handle}
+            </h3>
+            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+              {PLATFORM_LABELS[account.platform] ?? account.platform}
+              {account.displayName ? ` · ${account.displayName}` : ""}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="text-sm rounded p-1"
+            style={{ color: "var(--color-muted)" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4 overflow-y-auto">
+          <div>
+            <p
+              className="text-[10px] uppercase tracking-widest font-semibold mb-2"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Message purpose
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {templates.map((t) => (
+                <button
+                  key={t.purpose}
+                  onClick={() => switchPurpose(t.purpose)}
+                  className="text-xs px-2 py-1 rounded"
+                  style={{
+                    background: purpose === t.purpose ? "var(--color-ink)" : "var(--color-surface)",
+                    color: purpose === t.purpose ? "white" : "var(--color-ink)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p
+              className="text-[10px] uppercase tracking-widest font-semibold mb-2"
+              style={{ color: "var(--color-muted)" }}
+            >
+              Message
+            </p>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={12}
+              className="w-full text-sm rounded p-3"
+              style={{
+                border: "1px solid var(--color-border)",
+                background: "var(--color-surface)",
+                color: "var(--color-ink)",
+                fontFamily: "inherit",
+              }}
+            />
+          </div>
+
+          {status && (
+            <div
+              className="text-xs px-3 py-2 rounded"
+              style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}
+            >
+              {status}
+            </div>
+          )}
+
+          <div
+            className="text-xs px-3 py-2 rounded space-y-1"
+            style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}
+          >
+            <p style={{ color: "var(--color-ink)", fontWeight: 500 }}>How this works</p>
+            <p>
+              Platform DM APIs don&apos;t let us send messages on your behalf. Copy the message,
+              open the platform&apos;s DM composer, paste and send, then click &quot;Mark sent&quot;
+              here to log the outreach.
+            </p>
+          </div>
+        </div>
+
+        <div
+          className="flex items-center justify-between gap-2 px-4 py-3"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
+          <div className="flex gap-2">
+            <button
+              onClick={copy}
+              className="text-xs px-3 py-1.5 rounded"
+              style={{
+                background: copied ? "var(--color-accent)" : "var(--color-surface)",
+                color: copied ? "white" : "var(--color-ink)",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              {copied ? "Copied ✓" : "Copy message"}
+            </button>
+            {composeUrl && (
+              <a
+                href={composeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs px-3 py-1.5 rounded"
+                style={{
+                  background: "var(--color-surface)",
+                  color: "var(--color-ink)",
+                  border: "1px solid var(--color-border)",
+                }}
+              >
+                Open on platform →
+              </a>
+            )}
+          </div>
+          <button
+            onClick={() => void logSent()}
+            disabled={busy || !body.trim()}
+            className="text-xs px-3 py-1.5 rounded"
+            style={{
+              background: body.trim() ? "var(--color-ink)" : "var(--color-surface)",
+              color: body.trim() ? "white" : "var(--color-muted)",
+              opacity: busy ? 0.6 : 1,
+            }}
+          >
+            Mark sent
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Two-step whitelist control. First click reveals reasons; picking one
+ *  fires the POST. "Other" expands a text field. Structured reasons feed
+ *  the admin panel so we can aggregate what talents whitelist and why. */
+const WHITELIST_OPTIONS: Array<{ reason: string; label: string }> = [
+  { reason: "false_positive", label: "False positive — not misuse" },
+  { reason: "fan_fluff", label: "Harmless fan content" },
+  { reason: "talent_approved", label: "Talent has approved this account" },
+  { reason: "other", label: "Other…" },
+];
+
+function WhitelistMenu({
+  accountId,
+  onWhitelist,
+  busy,
+}: {
+  accountId: string;
+  onWhitelist: (id: string, reason: string, notes?: string) => void;
+  busy: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [notes, setNotes] = useState("");
+
+  const pick = (reason: string) => {
+    if (reason === "other") {
+      setOtherOpen(true);
+      return;
+    }
+    setOpen(false);
+    onWhitelist(accountId, reason);
+  };
+
+  const submitOther = () => {
+    const trimmed = notes.trim();
+    if (!trimmed) return;
+    setOpen(false);
+    setOtherOpen(false);
+    onWhitelist(accountId, "other", trimmed);
+  };
+
+  return (
+    <div className="relative inline-flex">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={busy}
+        className="px-3 py-1.5 text-xs font-medium border transition disabled:opacity-50 inline-flex items-center gap-1"
+        style={{
+          borderColor: "var(--color-border)",
+          color: "var(--color-muted)",
+          borderRadius: "var(--radius)",
+        }}
+      >
+        Whitelist
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          className="absolute z-10 right-0 top-full mt-1 w-64 rounded shadow-lg"
+          style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
+        >
+          {otherOpen ? (
+            <div className="p-2 space-y-2">
+              <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
+                Reason
+              </p>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                autoFocus
+                maxLength={500}
+                rows={3}
+                placeholder="Why is this account being whitelisted?"
+                className="w-full text-xs rounded px-2 py-1.5 resize-none"
+                style={{
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-surface)",
+                  color: "var(--color-ink)",
+                }}
+              />
+              <div className="flex gap-1 justify-end">
+                <button
+                  onClick={() => {
+                    setOtherOpen(false);
+                    setNotes("");
+                  }}
+                  className="text-xs px-2 py-1 rounded"
+                  style={{ color: "var(--color-muted)" }}
+                >
+                  Back
+                </button>
+                <button
+                  onClick={submitOther}
+                  disabled={!notes.trim()}
+                  className="text-xs px-2 py-1 rounded"
+                  style={{
+                    background: notes.trim() ? "var(--color-ink)" : "var(--color-surface)",
+                    color: notes.trim() ? "white" : "var(--color-muted)",
+                  }}
+                >
+                  Whitelist
+                </button>
+              </div>
+            </div>
+          ) : (
+            WHITELIST_OPTIONS.map((opt) => (
+              <button
+                key={opt.reason}
+                onClick={() => pick(opt.reason)}
+                className="block w-full text-left text-xs px-3 py-2 hover:opacity-80"
+                style={{ color: "var(--color-ink)" }}
+              >
+                {opt.label}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AccountCard({
   account,
   onStatus,
+  onWhitelist,
+  onContact,
   busy,
 }: {
   account: OffenderAccount;
   onStatus: (id: string, status: string) => void;
+  onWhitelist: (id: string, reason: string, notes?: string) => void;
+  onContact: (account: OffenderAccount) => void;
   busy: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -287,19 +652,22 @@ function AccountCard({
                 Removed
               </button>
             )}
-            {account.status !== "cleared" && account.status !== "suspended" && (
+            {account.status !== "suspended" && (
               <button
-                onClick={() => onStatus(account.id, "cleared")}
+                onClick={() => onContact(account)}
                 disabled={busy}
                 className="px-3 py-1.5 text-xs font-medium border transition disabled:opacity-50"
                 style={{
                   borderColor: "var(--color-border)",
-                  color: "var(--color-muted)",
+                  color: "var(--color-ink)",
                   borderRadius: "var(--radius)",
                 }}
               >
-                Not a problem
+                Contact
               </button>
+            )}
+            {account.status !== "cleared" && account.status !== "suspended" && (
+              <WhitelistMenu accountId={account.id} onWhitelist={onWhitelist} busy={busy} />
             )}
           </div>
         </div>
@@ -399,6 +767,7 @@ export default function AccountsClient({ talentName }: { talentName: string }) {
   const [accounts, setAccounts] = useState<OffenderAccount[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [contactAccount, setContactAccount] = useState<OffenderAccount | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -423,6 +792,23 @@ export default function AccountsClient({ talentName }: { talentName: string }) {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status }),
+        });
+        if (res.ok) await refresh();
+      } finally {
+        setBusy(null);
+      }
+    },
+    [refresh]
+  );
+
+  const whitelistAccount = useCallback(
+    async (id: string, reason: string, notes?: string) => {
+      setBusy(id);
+      try {
+        const res = await fetch(`/api/monitor/accounts/${id}/whitelist`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason, notes }),
         });
         if (res.ok) await refresh();
       } finally {
@@ -501,7 +887,7 @@ export default function AccountsClient({ talentName }: { talentName: string }) {
             Priority queue
           </h2>
           {active.map((a) => (
-            <AccountCard key={a.id} account={a} onStatus={setStatus} busy={busy === a.id} />
+            <AccountCard key={a.id} account={a} onStatus={setStatus} onWhitelist={whitelistAccount} onContact={setContactAccount} busy={busy === a.id} />
           ))}
         </div>
       )}
@@ -515,9 +901,17 @@ export default function AccountsClient({ talentName }: { talentName: string }) {
             Closed
           </h2>
           {closed.map((a) => (
-            <AccountCard key={a.id} account={a} onStatus={setStatus} busy={busy === a.id} />
+            <AccountCard key={a.id} account={a} onStatus={setStatus} onWhitelist={whitelistAccount} onContact={setContactAccount} busy={busy === a.id} />
           ))}
         </div>
+      )}
+
+      {contactAccount && (
+        <ContactModal
+          account={contactAccount}
+          talentName={talentName}
+          onClose={() => setContactAccount(null)}
+        />
       )}
     </div>
   );
