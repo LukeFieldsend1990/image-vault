@@ -104,35 +104,34 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-/** Tiny round headshot used in the accounts view; smaller than the monitor
- *  view's SecondaryAvatar to fit alongside a thumbnail without crowding.
- *  Onboarded actors get an accent ring; non-onboarded get a soft border. */
+/** Tiny round headshot used in the accounts view. Neutral — no signal about
+ *  onboarded vs non-onboarded, same as SecondaryActorStack. Falls back to
+ *  initials on any image load error so a dead TMDB URL doesn't leave a
+ *  broken-image icon in the card. */
 function MiniAvatar({ actor }: { actor: SecondaryActor }) {
   const initials = actor.name
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
-  const ring = actor.onboarded ? "var(--color-accent)" : "var(--color-border)";
-  const label = actor.onboarded
-    ? `${actor.name} — on ImageVault (${actor.confidence}%)`
-    : `${actor.name} — not on ImageVault (${actor.confidence}%)`;
+  const [broken, setBroken] = useState(false);
+  const showImage = actor.profileImageUrl && !broken;
   return (
     <div
-      title={label}
+      title={`${actor.name} (${actor.confidence}%)`}
       className="relative h-5 w-5 rounded-full overflow-hidden"
       style={{
         border: `1.5px solid var(--color-bg)`,
-        boxShadow: `0 0 0 1px ${ring}`,
+        boxShadow: `0 0 0 1px var(--color-border)`,
       }}
     >
-      {actor.profileImageUrl ? (
+      {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={actor.profileImageUrl}
+          src={actor.profileImageUrl!}
           alt={actor.name}
           className="h-full w-full object-cover"
-          style={{ opacity: actor.onboarded ? 1 : 0.85 }}
+          onError={() => setBroken(true)}
         />
       ) : (
         <div
