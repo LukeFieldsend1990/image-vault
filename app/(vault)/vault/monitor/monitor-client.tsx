@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { TalentIdentityForMonitor } from "./page";
+import { embedInfoFor } from "@/lib/monitor/embed-url";
 
 // ── Types (mirror /api/monitor payloads) ────────────────────────────────────
 
@@ -415,6 +416,104 @@ function SecondaryAvatar({ actor }: { actor: SecondaryActor }) {
 }
 
 /**
+ * Preview a flagged hit inline via the platform's iframe embed endpoint.
+ *
+ * Two design choices worth calling out:
+ *  1. Embeds are iframed directly at the platform, not proxied through us.
+ *     Proxying would require rebroadcasting the platform's video which
+ *     invites hosting-liability questions and doubles bandwidth cost. The
+ *     iframe scoping matches how any Instagram embed on any site works —
+ *     the platform's cookies stay first-party, ours never touch the frame.
+ *  2. Fallback for X and unknown hosts: we surface the platform link and a
+ *     one-line reason ("this platform blocks iframe embedding"). Silent
+ *     failure would leave the modal empty with no explanation for the
+ *     talent about why we can't render the content in place.
+ */
+function HitPreviewModal({ hit, onClose }: { hit: LikenessHit; onClose: () => void }) {
+  const embed = embedInfoFor(hit.contentUrl);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      style={{ background: "rgba(0,0,0,0.75)" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative rounded-lg overflow-hidden flex flex-col max-h-full"
+        style={{
+          background: "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+          width: embed?.aspectRatio === "16/9" ? "min(880px, 100%)" : "min(420px, 100%)",
+        }}
+      >
+        <div
+          className="flex items-center justify-between gap-2 px-4 py-2"
+          style={{ borderBottom: "1px solid var(--color-border)" }}
+        >
+          <div className="min-w-0">
+            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+              {PLATFORM_LABELS[hit.platform] ?? hit.platform}
+              {hit.authorHandle ? ` · ${hit.authorHandle}` : ""}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="text-sm rounded p-1"
+            style={{ color: "var(--color-muted)" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        {embed ? (
+          <div
+            className="relative w-full"
+            style={{ aspectRatio: embed.aspectRatio.replace("/", " / ") }}
+          >
+            <iframe
+              src={embed.embedUrl}
+              className="absolute inset-0 h-full w-full"
+              allow="autoplay; encrypted-media; fullscreen"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
+          </div>
+        ) : (
+          <div className="p-6 text-center space-y-3">
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+              This platform blocks iframe embedding, so it can&apos;t be shown here.
+            </p>
+            <a
+              href={hit.contentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium"
+              style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}
+            >
+              Open on platform →
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Two-step dismiss control. First click reveals four typed reasons; picking
  * one fires the PATCH. "Other" expands a small text field. Structured
  * reasons feed the admin tuning panel — a hit dropped as `not_ai` is a
@@ -537,9 +636,10 @@ function DismissMenu({
   );
 }
 
-function HitCard({ hit, onTriage, busy }: {
+function HitCard({ hit, onTriage, onPreview, busy }: {
   hit: LikenessHit;
   onTriage: (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => void;
+  onPreview: (hit: LikenessHit) => void;
   busy: boolean;
 }) {
   const risk = RISK_COLORS[hit.riskLevel] ?? RISK_COLORS.medium;
@@ -605,15 +705,26 @@ function HitCard({ hit, onTriage, busy }: {
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => onPreview(hit)}
+          className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition"
+          style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Preview
+        </button>
         <a href={hit.contentUrl} target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition"
-          style={{ borderColor: "var(--color-border)", color: "var(--color-ink)" }}>
+          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
             <polyline points="15 3 21 3 21 9" />
             <line x1="10" y1="14" x2="21" y2="3" />
           </svg>
-          View content
+          Open on platform
         </a>
         {open && hit.status !== "takedown_requested" && (
           <button
@@ -661,6 +772,7 @@ export default function MonitorClient({ identity }: Props) {
   const [monitor, setMonitor] = useState<MonitorConfig | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [triaging, setTriaging] = useState<string | null>(null);
+  const [previewHit, setPreviewHit] = useState<LikenessHit | null>(null);
 
   const name = identity?.fullName ?? "your likeness";
 
@@ -970,7 +1082,7 @@ export default function MonitorClient({ identity }: Props) {
           </p>
           <div className="space-y-3">
             {openHits.map((hit) => (
-              <HitCard key={hit.id} hit={hit} onTriage={triageHit} busy={triaging === hit.id} />
+              <HitCard key={hit.id} hit={hit} onTriage={triageHit} onPreview={setPreviewHit} busy={triaging === hit.id} />
             ))}
           </div>
         </div>
@@ -1086,12 +1198,15 @@ export default function MonitorClient({ identity }: Props) {
           </p>
           <div className="space-y-3 opacity-70">
             {closedHits.map((hit) => (
-              <HitCard key={hit.id} hit={hit} onTriage={triageHit} busy={triaging === hit.id} />
+              <HitCard key={hit.id} hit={hit} onTriage={triageHit} onPreview={setPreviewHit} busy={triaging === hit.id} />
             ))}
           </div>
         </div>
       )}
 
+      {previewHit && (
+        <HitPreviewModal hit={previewHit} onClose={() => setPreviewHit(null)} />
+      )}
     </div>
   );
 }
