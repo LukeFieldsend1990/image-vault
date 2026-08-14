@@ -29,7 +29,8 @@ import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import { likenessHitAlertEmail } from "@/lib/email/templates";
 import { generateCandidates } from "./candidates";
-import { MONITOR_PLATFORMS, platformName } from "./platforms";
+import { platformName, type MonitorPlatformId } from "./platforms";
+import { applyPlatformOverrides, getEnabledPlatforms, parsePlatformOverrides } from "./platform-settings";
 import {
   AI_ONLY_LIKELIHOOD_FLOOR,
   IDENTITY_UNVERIFIED_SIGNAL,
@@ -39,14 +40,26 @@ import {
   type TalentIdentityAnchor,
 } from "./types";
 import { hasAiIntent, hashtagsHaveAiIntent, queryImpliesAiIntent } from "./ingest/queries";
-import { apifyToken } from "./ingest/apify";
+import { apifyToken, type ActorBudget } from "./ingest/apify";
 import { discoverInstagram, preFilter } from "./ingest/instagram";
 import { checkApifyBudget, logApifyUsage } from "./ingest/budget";
 import { discoverYouTube, youtubeApiKey } from "./ingest/youtube";
 import { discoverTikTok } from "./ingest/tiktok";
+import { discoverX } from "./ingest/x";
+import { discoverPinterest } from "./ingest/pinterest";
+import { discoverSerp } from "./ingest/serp";
+import { discoverAiPlatforms } from "./ingest/ai-platforms";
 import { seedHandlesFor } from "./ingest/seeds";
 import { verifyCandidatesIdentity } from "./identity-check";
+import { assessCandidatesSynthetic } from "./synthetic-check";
 import { recordLearnedHashtags, topLearnedQueries } from "./query-mining";
+import {
+  computeDetectionCoverage,
+  coverageInputFromReferences,
+  presignReferenceUrls,
+  syncReferenceSet,
+  type ReferenceImage,
+} from "./reference-set";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -118,9 +131,16 @@ function buildAdjudicationPrompt(
     `Protected talent: ${anchor.fullName}`,
     `Known for: ${anchor.knownForTitles.join(", ") || "(no filmography on record)"}`,
     `Reference material in vault: ${anchor.scanPackageCount} scan package(s), ${anchor.geometryFingerprintCount} geometry fingerprint(s) issued on licensed deliveries.`,
+    anchor.referenceImageCount != null
+      ? anchor.referenceImageCount > 0
+        ? `Identity matching this sweep is anchored to ${anchor.referenceImageCount} reference image(s) drawn directly from the talent's vault scan packages (detection coverage: ${anchor.coverageTier ?? "anchored"}) — face similarity readings compare against ground-truth captures, not public photos.`
+        : `No vault reference images available — face similarity readings (if any) compare against a single public photo only (detection coverage: ${anchor.coverageTier ?? "baseline"}).`
+      : null,
     scopeLine,
     `Monitor sensitivity: ${sensitivity}`,
-  ].join("\n");
+  ]
+    .filter((l): l is string => l !== null)
+    .join("\n");
 
   const items = candidates
     .map((c, i) => {
@@ -143,6 +163,14 @@ function buildAdjudicationPrompt(
         `caption (untrusted): ${JSON.stringify(c.caption)}\n` +
         (c.hashtags?.length ? `hashtags (untrusted): ${c.hashtags.slice(0, 15).join(", ")}\n` : "") +
         `detector readings: ${JSON.stringify(detectors)}\n` +
+        (c.syntheticFindings
+          ? `synthetic-media analysis (detector output, ${c.syntheticFindings.analyst}): ` +
+            (c.syntheticFindings.generatorFamily
+              ? `resembles ${c.syntheticFindings.generatorFamily}; `
+              : "") +
+            (c.syntheticFindings.evidence.join("; ") || "no specific observations") +
+            "\n"
+          : "") +
         (unmeasured.length ? `NOT MEASURED (no reading taken, do not treat as low): ${unmeasured.join(", ")}` : "all detectors reported")
       );
     })
@@ -263,6 +291,11 @@ export function heuristicAdjudicate(candidates: CandidateContent[]): Adjudicatio
     }
     if (provenance) matchSignals.push(`Geometry fingerprint correlation ${s.geometryFingerprintCorrelation}`);
     if (haveSynthetic && synthetic) matchSignals.push(`Synthetic media score ${s.syntheticMediaScore}`);
+    if (haveSynthetic && synthetic && c.syntheticFindings?.generatorFamily) {
+      // Enforcement-grade attribution: "resembles face-swap" reads far better
+      // in a takedown letter than a bare score.
+      matchSignals.push(`Artifact analysis: resembles ${c.syntheticFindings.generatorFamily}`);
+    }
     if (!haveSynthetic && declaresAi) matchSignals.push("Caption/handle/hashtags declare AI generation");
     if (c.discoverySource && c.discoverySource.mode !== "simulated") {
       matchSignals.push(`Surfaced by ${c.discoverySource.mode} "${c.discoverySource.query}"`);
@@ -365,7 +398,9 @@ async function loadIdentityAnchor(db: Db, talentId: string): Promise<TalentIdent
   };
 }
 
-async function ensureMonitor(db: Db, talentId: string) {
+/** Exported for the admin route that stores per-talent platform overrides —
+ *  an override can arrive before the talent has ever run a scan. */
+export async function ensureMonitor(db: Db, talentId: string) {
   const existing = await db
     .select()
     .from(likenessMonitors)
@@ -382,6 +417,7 @@ async function ensureMonitor(db: Db, talentId: string) {
     scope: "ai_only" as const,
     cadence: "weekly" as const,
     allowlistJson: "[]",
+    platformOverridesJson: "{}",
     lastScanAt: null,
     createdAt: now,
     updatedAt: now,
@@ -479,6 +515,11 @@ function parseAllowlist(json: string | null | undefined): string[] {
  * standard graceful-degradation pattern used for RESEND_API_KEY and friends.
  * The swap is total: nothing downstream can tell which producer ran, beyond
  * the discoverySource stamped on each candidate.
+ *
+ * Coverage is bounded by `enabled` — the admin's per-platform toggles from
+ * /admin/monitor. A disabled platform is skipped entirely, live and simulated
+ * alike, so switching one off is a real spend and coverage decision rather
+ * than a display preference.
  */
 async function discoverCandidates(
   env: { APIFY_TOKEN?: string; YOUTUBE_API_KEY?: string },
@@ -488,15 +529,18 @@ async function discoverCandidates(
     anchor: TalentIdentityAnchor;
     scope: MonitorScope;
     allowlist: string[];
+    enabled: Set<MonitorPlatformId>;
     scanId?: string;
   }
 ): Promise<{ candidates: CandidateContent[]; discoveryError: string | null }> {
   const token = apifyToken(env);
   const ytKey = youtubeApiKey(env);
+  const on = (id: MonitorPlatformId) => opts.enabled.has(id);
 
-  // No live source at all → simulated crawler, exactly as before.
+  // No live credential at all → simulated crawler, exactly as before, covering
+  // only the platforms the admin has switched on.
   if (!token && !ytKey) {
-    return { candidates: generateCandidates(opts.anchor), discoveryError: null };
+    return { candidates: generateCandidates(opts.anchor, [...opts.enabled]), discoveryError: null };
   }
 
   const previousUrls = new Set(
@@ -510,19 +554,21 @@ async function discoverCandidates(
     ).map((p) => p.contentUrl)
   );
 
+  const filterOpts = {
+    anchor: opts.anchor,
+    scope: opts.scope,
+    allowlist: opts.allowlist,
+    seenUrls: previousUrls,
+  };
+
   // ── YouTube ───────────────────────────────────────────────────────────────
   // Independent of Apify: official API, quota not money, so it runs even when
   // the Apify ceiling is spent. Never fails the sweep on its own.
   const youtube: CandidateContent[] = [];
-  if (ytKey) {
+  if (ytKey && on("youtube")) {
     try {
       const yt = await discoverYouTube({ apiKey: ytKey, anchor: opts.anchor });
-      const { kept } = preFilter(yt.candidates, {
-        anchor: opts.anchor,
-        scope: opts.scope,
-        allowlist: opts.allowlist,
-        seenUrls: previousUrls,
-      });
+      const { kept } = preFilter(yt.candidates, filterOpts);
       youtube.push(...kept);
       if (yt.quotaExhausted) {
         console.warn(`[monitor] YouTube quota exhausted for ${opts.talentId}; coverage reduced`);
@@ -532,70 +578,91 @@ async function discoverCandidates(
     }
   }
 
+  // ── AI platforms (Civitai) ────────────────────────────────────────────────
+  // Free public API, no credential and no Apify spend, so like YouTube it runs
+  // outside the ceiling. Finds distributable likeness models, not clips.
+  const aiPlatforms: CandidateContent[] = [];
+  if (on("midjourney")) {
+    const cv = await discoverAiPlatforms({ anchor: opts.anchor });
+    const { kept } = preFilter(cv.candidates, filterOpts);
+    aiPlatforms.push(...kept);
+  }
+
+  const freeSurfaces = [...youtube, ...aiPlatforms];
   if (!token) {
-    return { candidates: youtube, discoveryError: null };
+    return { candidates: freeSurfaces, discoveryError: null };
   }
 
   // Spend gate. Refuse up front rather than degrading to the simulated crawler:
   // returning invented candidates because we ran out of money would report a
-  // clean sweep we never performed. YouTube results already gathered are kept —
-  // they cost quota, not money, so the ceiling has no claim on them.
+  // clean sweep we never performed. Results already gathered from the free
+  // surfaces are kept — the ceiling has no claim on them.
   const upfront = await checkApifyBudget(db);
   if (!upfront.ok) {
     return {
-      candidates: youtube,
-      discoveryError: youtube.length ? null : upfront.reason,
+      candidates: freeSurfaces,
+      discoveryError: freeSurfaces.length ? null : upfront.reason,
     };
   }
 
-  // Known offenders are re-harvested every sweep — the repost-after-takedown
-  // pattern is invisible to hashtag discovery. Seeded AI-content accounts join
-  // them: content on those accounts routinely carries no hashtags at all.
-  const watched = await db
-    .select({ handle: monitorAccounts.handle })
-    .from(monitorAccounts)
-    .where(and(eq(monitorAccounts.platform, "instagram"), eq(monitorAccounts.status, "watchlist")))
-    .limit(20)
-    .all();
-  const watchedHandles = [
-    ...new Set([...watched.map((w) => w.handle), ...seedHandlesFor("instagram")]),
-  ];
-
-  const { candidates, diagnostics } = await discoverInstagram({
-    token,
-    anchor: opts.anchor,
-    scope: opts.scope,
-    allowlist: opts.allowlist,
-    seenUrls: previousUrls,
-    watchedHandles,
-    budget: {
-      check: async () => {
-        const v = await checkApifyBudget(db);
-        return { ok: v.ok, reason: v.reason };
-      },
-      record: (entry) =>
-        logApifyUsage(db, {
-          runId: entry.runId,
-          actorId: entry.actorId,
-          mode: entry.mode,
-          query: entry.query,
-          talentId: opts.talentId,
-          scanId: opts.scanId ?? null,
-          itemCount: entry.itemCount,
-          costUsd: entry.costUsd,
-          status: entry.status,
-          error: entry.error ?? null,
-        }),
+  // One spend gate + usage ledger shared by every Apify-backed surface below.
+  const budget: ActorBudget = {
+    check: async () => {
+      const v = await checkApifyBudget(db);
+      return { ok: v.ok, reason: v.reason };
     },
-  });
+    record: (entry) =>
+      logApifyUsage(db, {
+        runId: entry.runId,
+        actorId: entry.actorId,
+        mode: entry.mode,
+        query: entry.query,
+        talentId: opts.talentId,
+        scanId: opts.scanId ?? null,
+        itemCount: entry.itemCount,
+        costUsd: entry.costUsd,
+        status: entry.status,
+        error: entry.error ?? null,
+      }),
+  };
 
-  // A sweep cut short mid-way still produced real candidates, so it is not an
-  // error — but the talent must not read it as full coverage.
-  if (diagnostics.budgetStopped && !diagnostics.fatalError) {
-    console.warn(
-      `[monitor] sweep for ${opts.talentId} stopped early: ${diagnostics.budgetStopped} ` +
-        `(${diagnostics.queriesRun} of ${diagnostics.queriesRun + 1}+ queries ran, $${diagnostics.costUsd.toFixed(4)} spent)`
-    );
+  // ── Instagram ─────────────────────────────────────────────────────────────
+  let instagram: CandidateContent[] = [];
+  let instagramFatal: string | null = null;
+  if (on("instagram")) {
+    // Known offenders are re-harvested every sweep — the repost-after-takedown
+    // pattern is invisible to hashtag discovery. Seeded AI-content accounts join
+    // them: content on those accounts routinely carries no hashtags at all.
+    const watched = await db
+      .select({ handle: monitorAccounts.handle })
+      .from(monitorAccounts)
+      .where(and(eq(monitorAccounts.platform, "instagram"), eq(monitorAccounts.status, "watchlist")))
+      .limit(20)
+      .all();
+    const watchedHandles = [
+      ...new Set([...watched.map((w) => w.handle), ...seedHandlesFor("instagram")]),
+    ];
+
+    const { candidates, diagnostics } = await discoverInstagram({
+      token,
+      anchor: opts.anchor,
+      scope: opts.scope,
+      allowlist: opts.allowlist,
+      seenUrls: previousUrls,
+      watchedHandles,
+      budget,
+    });
+    instagram = candidates;
+    instagramFatal = diagnostics.fatalError;
+
+    // A sweep cut short mid-way still produced real candidates, so it is not an
+    // error — but the talent must not read it as full coverage.
+    if (diagnostics.budgetStopped && !diagnostics.fatalError) {
+      console.warn(
+        `[monitor] sweep for ${opts.talentId} stopped early: ${diagnostics.budgetStopped} ` +
+          `(${diagnostics.queriesRun} of ${diagnostics.queriesRun + 1}+ queries ran, $${diagnostics.costUsd.toFixed(4)} spent)`
+      );
+    }
   }
 
   // TikTok: strongest surface for AI misuse of MCU-scale talent per the discovery
@@ -603,56 +670,88 @@ async function discoverCandidates(
   // gate has seen Instagram's spend first — the ceiling is shared, and Instagram
   // is cheaper per query so it gets first refusal.
   const tiktok: CandidateContent[] = [];
-  try {
-    // Learned hashtags from prior sweeps — mined from confirmed hits'
-    // captions. Bare list, no leading '#'. buildTikTokQueries prefixes.
-    const learnedHashtags = await topLearnedQueries(db, opts.talentId, "tiktok", 3);
-    const tt = await discoverTikTok({
-      token,
-      anchor: opts.anchor,
-      learnedHashtags,
-      budget: {
-        check: async () => {
-          const v = await checkApifyBudget(db);
-          return { ok: v.ok, reason: v.reason };
-        },
-        record: (entry) =>
-          logApifyUsage(db, {
-            runId: entry.runId,
-            actorId: entry.actorId,
-            mode: entry.mode,
-            query: entry.query,
-            talentId: opts.talentId,
-            scanId: opts.scanId ?? null,
-            itemCount: entry.itemCount,
-            costUsd: entry.costUsd,
-            status: entry.status,
-            error: entry.error ?? null,
-          }),
-      },
-    });
-    const { kept } = preFilter(tt.candidates, {
-      anchor: opts.anchor,
-      scope: opts.scope,
-      allowlist: opts.allowlist,
-      seenUrls: previousUrls,
-    });
-    tiktok.push(...kept);
-    if (tt.budgetStopped) {
-      console.warn(
-        `[monitor] TikTok sweep for ${opts.talentId} stopped early: ${tt.budgetStopped}`
-      );
+  if (on("tiktok")) {
+    try {
+      // Learned hashtags from prior sweeps — mined from confirmed hits'
+      // captions. Bare list, no leading '#'. buildTikTokQueries prefixes.
+      const learnedHashtags = await topLearnedQueries(db, opts.talentId, "tiktok", 3);
+      const tt = await discoverTikTok({ token, anchor: opts.anchor, learnedHashtags, budget });
+      const { kept } = preFilter(tt.candidates, filterOpts);
+      tiktok.push(...kept);
+      if (tt.budgetStopped) {
+        console.warn(
+          `[monitor] TikTok sweep for ${opts.talentId} stopped early: ${tt.budgetStopped}`
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] TikTok discovery failed: ${(err as Error).message}`);
     }
-  } catch (err) {
-    console.warn(`[monitor] TikTok discovery failed: ${(err as Error).message}`);
   }
 
-  // YouTube, Instagram and TikTok are independent surfaces; a failure on one is
-  // not a failure of the sweep if the others produced results.
-  const combined = [...youtube, ...candidates, ...tiktok];
+  // The remaining Apify surfaces run after the originals: they are the newer,
+  // less-proven connectors, so the shared ceiling gives the proven surfaces
+  // first refusal on spend. Each degrades independently.
+  const xCandidates: CandidateContent[] = [];
+  if (on("x")) {
+    try {
+      const res = await discoverX({ token, anchor: opts.anchor, budget });
+      const { kept } = preFilter(res.candidates, filterOpts);
+      xCandidates.push(...kept);
+      if (res.budgetStopped) {
+        console.warn(`[monitor] X sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`);
+      }
+    } catch (err) {
+      console.warn(`[monitor] X discovery failed: ${(err as Error).message}`);
+    }
+  }
+
+  const pinterest: CandidateContent[] = [];
+  if (on("pinterest")) {
+    try {
+      const res = await discoverPinterest({ token, anchor: opts.anchor, budget });
+      const { kept } = preFilter(res.candidates, filterOpts);
+      pinterest.push(...kept);
+      if (res.budgetStopped) {
+        console.warn(
+          `[monitor] Pinterest sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] Pinterest discovery failed: ${(err as Error).message}`);
+    }
+  }
+
+  // SERP-backed surfaces: Google Images and the stock libraries via site:
+  // queries. discoverSerp absorbs its own failures, so no try/catch here.
+  const serp: CandidateContent[] = [];
+  for (const platform of ["google", "getty"] as const) {
+    if (!on(platform)) continue;
+    const res = await discoverSerp({ token, platform, anchor: opts.anchor, budget });
+    const { kept } = preFilter(res.candidates, filterOpts);
+    serp.push(...kept);
+    if (res.budgetStopped) {
+      console.warn(
+        `[monitor] ${platform} sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`
+      );
+    }
+  }
+
+  // Every surface is independent; a failure on one is not a failure of the
+  // sweep if the others produced results. Instagram's fatal error is still the
+  // one worth surfacing when everything came back empty — it is the primary
+  // paid surface and its diagnostics are the richest.
+  const combined = [
+    ...youtube,
+    ...instagram,
+    ...tiktok,
+    ...xCandidates,
+    ...pinterest,
+    ...serp,
+    ...aiPlatforms,
+  ];
   return {
     candidates: combined,
-    discoveryError: combined.length ? null : diagnostics.fatalError,
+    discoveryError: combined.length ? null : instagramFatal,
   };
 }
 
@@ -671,6 +770,10 @@ export async function beginLikenessScan(
 ): Promise<{ scanId: string; monitorId: string }> {
   const now = Math.floor(Date.now() / 1000);
   const monitor = await ensureMonitor(db, opts.talentId);
+  const enabledPlatforms = applyPlatformOverrides(
+    await getEnabledPlatforms(db),
+    parsePlatformOverrides(monitor.platformOverridesJson)
+  );
   const scanId = crypto.randomUUID();
   await db.insert(monitorScans).values({
     id: scanId,
@@ -678,7 +781,7 @@ export async function beginLikenessScan(
     talentId: opts.talentId,
     trigger: opts.trigger ?? "manual",
     status: "running",
-    platformsChecked: MONITOR_PLATFORMS.length,
+    platformsChecked: enabledPlatforms.size,
     startedAt: now,
   });
   return { scanId, monitorId: monitor.id };
@@ -704,6 +807,12 @@ export async function runLikenessScan(
     AWS_ACCESS_KEY_ID?: string;
     AWS_SECRET_ACCESS_KEY?: string;
     AWS_REGION?: string;
+    // R2 signing for vault reference images (lib/monitor/reference-set.ts).
+    // Absent in local dev → the matcher falls back to the public profile photo.
+    CF_ACCOUNT_ID?: string;
+    R2_BUCKET_NAME?: string;
+    R2_ACCESS_KEY_ID?: string;
+    R2_SECRET_ACCESS_KEY?: string;
   },
   db: Db,
   opts: {
@@ -717,6 +826,37 @@ export async function runLikenessScan(
   const now = Math.floor(Date.now() / 1000);
   const monitor = await ensureMonitor(db, opts.talentId);
   const anchor = await loadIdentityAnchor(db, opts.talentId);
+  // Global toggles first, then this talent's admin-set overrides on top.
+  const enabledPlatforms = applyPlatformOverrides(
+    await getEnabledPlatforms(db),
+    parsePlatformOverrides(monitor.platformOverridesJson)
+  );
+
+  // Vault-anchored reference set: reconcile the reference gallery with the
+  // vault's current contents so a scan package uploaded since the last sweep
+  // strengthens this one. DB-only and idempotent; failure degrades to the
+  // public-photo reference path rather than failing the sweep.
+  let references: ReferenceImage[] = [];
+  try {
+    references = await syncReferenceSet(db, opts.talentId);
+  } catch (err) {
+    console.warn(`[monitor] reference-set sync failed: ${(err as Error).message}`);
+  }
+  {
+    const profile = await db
+      .select({ url: talentProfiles.profileImageUrl })
+      .from(talentProfiles)
+      .where(eq(talentProfiles.userId, opts.talentId))
+      .get();
+    const coverage = computeDetectionCoverage(
+      coverageInputFromReferences(references, {
+        geometryFingerprintCount: anchor.geometryFingerprintCount,
+        hasProfileImage: !!profile?.url,
+      })
+    );
+    anchor.referenceImageCount = references.length;
+    anchor.coverageTier = coverage.tier;
+  }
 
   let scanId = opts.scanId;
   if (!scanId) {
@@ -727,7 +867,7 @@ export async function runLikenessScan(
       talentId: opts.talentId,
       trigger: opts.trigger ?? "manual",
       status: "running",
-      platformsChecked: MONITOR_PLATFORMS.length,
+      platformsChecked: enabledPlatforms.size,
       startedAt: now,
     });
   }
@@ -738,6 +878,7 @@ export async function runLikenessScan(
     anchor,
     scope,
     allowlist: parseAllowlist(monitor.allowlistJson),
+    enabled: enabledPlatforms,
     scanId,
   });
 
@@ -771,8 +912,18 @@ export async function runLikenessScan(
       const provider = (providerRow?.value ?? "llava") as "llava" | "rekognition" | "both";
 
       let referenceImageUrl: string | undefined;
+      let referenceImageUrls: string[] | undefined;
       let rekognitionCredentials: { accessKeyId: string; secretAccessKey: string; region?: string } | undefined;
       if (provider !== "llava") {
+        // Vault references first: presigned scan stills are ground truth the
+        // public photo can't match — multi-angle, studio lighting, verified
+        // identity. The TMDB profile stays in the gallery as the last-resort
+        // source so the pre-reference behaviour is a strict subset.
+        try {
+          referenceImageUrls = await presignReferenceUrls(env, references);
+        } catch (err) {
+          console.warn(`[monitor] reference presigning failed: ${(err as Error).message}`);
+        }
         const profile = await db
           .select({ url: talentProfiles.profileImageUrl })
           .from(talentProfiles)
@@ -791,14 +942,43 @@ export async function runLikenessScan(
       const stats = await verifyCandidatesIdentity(ai, candidates, anchor.fullName, {
         provider,
         referenceImageUrl,
+        referenceImageUrls,
         rekognitionCredentials,
       });
       console.log(
-        `[monitor] identity check for ${opts.talentId} via ${stats.provider}: ${stats.checked} of ${candidates.length} ` +
+        `[monitor] identity check for ${opts.talentId} via ${stats.provider}` +
+          (stats.referenceSources ? ` (${stats.referenceSources} reference source(s))` : "") +
+          `: ${stats.checked} of ${candidates.length} ` +
           `checked (${stats.confirmed} confirmed, ${stats.uncertain} uncertain, ${stats.denied} denied, ${stats.noFace} no-face, ${stats.errors} errored)`
       );
     } catch (err) {
       console.warn(`[monitor] identity check failed: ${(err as Error).message}`);
+    }
+  }
+
+  // Synthetic-media check: provenance markers, then Claude Haiku vision
+  // (budget-gated) with LLaVA fallback, filling the syntheticMediaScore slot
+  // that was null since Phase 1. Runs after the identity check so the
+  // adjudicator sees both halves of the flag criterion (likeness AND
+  // synthesis) as real readings where possible. Non-fatal, and disableable
+  // via ai_settings synthetic_check_enabled=false.
+  if ((ai || env.ANTHROPIC_API_KEY) && candidates.length) {
+    try {
+      const enabledRow = await db
+        .select({ value: sql<string>`${aiSettings.value}` })
+        .from(aiSettings)
+        .where(eq(aiSettings.key, "synthetic_check_enabled"))
+        .get();
+      if (enabledRow?.value !== "false") {
+        const stats = await assessCandidatesSynthetic(env, db, candidates);
+        console.log(
+          `[monitor] synthetic check for ${opts.talentId}: ${stats.checked} checked ` +
+            `(${stats.declared} declared via metadata, ${stats.claude} via claude, ${stats.llava} via llava; ` +
+            `${stats.synthetic} synthetic, ${stats.authentic} authentic, ${stats.unsure} unsure, ${stats.errors} errored)`
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] synthetic check failed: ${(err as Error).message}`);
     }
   }
 
@@ -892,6 +1072,9 @@ export async function runLikenessScan(
       candidatesAnalysed: candidates.length,
       hitsFound: newHits.length,
       aiProvider,
+      // Re-stated at completion: a row opened by beginLikenessScan may predate
+      // an admin toggling platforms mid-flight.
+      platformsChecked: enabledPlatforms.size,
       completedAt: Math.floor(Date.now() / 1000),
     })
     .where(eq(monitorScans.id, scanId));
@@ -920,7 +1103,7 @@ export async function runLikenessScan(
 
   return {
     scanId,
-    platformsChecked: MONITOR_PLATFORMS.length,
+    platformsChecked: enabledPlatforms.size,
     candidatesAnalysed: candidates.length,
     newHits,
     aiProvider,
@@ -1012,6 +1195,14 @@ export async function getMonitorState(db: Db, talentId: string) {
     .where(eq(likenessMonitors.talentId, talentId))
     .get();
 
+  // Admin platform toggles (global, then this talent's overrides), surfaced so
+  // the monitor page shows the coverage a sweep will actually have rather than
+  // the full registry.
+  const enabledPlatforms = applyPlatformOverrides(
+    await getEnabledPlatforms(db),
+    parsePlatformOverrides(monitor?.platformOverridesJson)
+  );
+
   // Reach-weighted ordering: a hit on an account with 500k cumulative views
   // is a bigger enforcement problem than a hit on a small account, even if
   // it was detected first. LEFT JOIN so hits with no accountId (rare, only
@@ -1098,6 +1289,7 @@ export async function getMonitorState(db: Db, talentId: string) {
 
   return {
     monitor: monitor ?? null,
+    enabledPlatforms: [...enabledPlatforms],
     hits: hits.map((h) => ({
       id: h.id,
       platform: h.platform,

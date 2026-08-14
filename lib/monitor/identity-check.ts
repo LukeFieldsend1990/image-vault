@@ -55,9 +55,11 @@ const SIMILARITY_BY_VERDICT: Record<IdentityVerdict, number> = {
 /**
  * Fetch the thumbnail bytes with the same 8-second timeout and size cap
  * both checks use. Extracted so the face-presence pre-check and the
- * identity check share the download instead of doubling it.
+ * identity check share the download instead of doubling it. Exported for
+ * the synthetic-media check (lib/monitor/synthetic-check.ts), which needs
+ * identical fetch semantics.
  */
-async function fetchImageBytes(url: string, timeoutMs = 8_000): Promise<Uint8Array | null> {
+export async function fetchImageBytes(url: string, timeoutMs = 8_000): Promise<Uint8Array | null> {
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -184,25 +186,42 @@ export function parseVerdict(text: string): IdentityVerdict {
  */
 async function checkIdentityViaRekognition(
   creds: RekognitionCredentials,
-  sourceBytes: Uint8Array,
+  sources: Uint8Array[],
   imageUrl: string,
   timeoutMs = 8_000
 ): Promise<{ similarity: number; verdict: IdentityVerdict } | null> {
   const target = await fetchImageBytes(imageUrl, timeoutMs);
   if (!target) return null;
-  const result = await compareFaces(creds, sourceBytes, target);
-  if (!result) return null;
-  const s = result.similarity;
+
+  // Multi-reference gallery: the candidate matches if it matches ANY vault
+  // reference. Take the max similarity across sources, stopping early once a
+  // source clears the confirmed bar — extra compares past that point cost
+  // money without changing the verdict.
+  let best = -1;
+  for (const sourceBytes of sources) {
+    const result = await compareFaces(creds, sourceBytes, target);
+    if (!result) continue;
+    best = Math.max(best, result.similarity);
+    if (best >= REKOGNITION_CONFIRMED) break;
+  }
+  if (best < 0) return null;
+
   const verdict: IdentityVerdict =
-    s >= REKOGNITION_CONFIRMED ? "confirmed" : s >= REKOGNITION_UNCERTAIN ? "uncertain" : "denied";
-  return { similarity: s, verdict };
+    best >= REKOGNITION_CONFIRMED ? "confirmed" : best >= REKOGNITION_UNCERTAIN ? "uncertain" : "denied";
+  return { similarity: best, verdict };
 }
 
 export interface VerifyOptions {
   concurrency?: number;
   provider?: IdentityProvider;
-  /** Required for rekognition and both. Reference image URL (usually talent's TMDB profile). */
+  /** Single reference image URL (talent's TMDB profile). Merged after `referenceImageUrls`. */
   referenceImageUrl?: string;
+  /**
+   * Ordered reference gallery for rekognition/both — presigned vault scan
+   * stills first (see lib/monitor/reference-set.ts), public fallbacks last.
+   * The matcher takes the best similarity across the gallery.
+   */
+  referenceImageUrls?: string[];
   /** Required for rekognition and both. */
   rekognitionCredentials?: RekognitionCredentials;
 }
@@ -220,6 +239,8 @@ export async function verifyCandidatesIdentity(
   noFace: number;
   errors: number;
   provider: IdentityProvider;
+  /** How many reference images the matcher compared against (0 on the LLaVA path). */
+  referenceSources: number;
 }> {
   // Workers AI throws generic "internal error" 5xxs under high parallel load
   // on this account tier — observed live at concurrency 8 with a Tom Hardy
@@ -229,29 +250,46 @@ export async function verifyCandidatesIdentity(
   const concurrency = opts.concurrency ?? 3;
   const requestedProvider: IdentityProvider = opts.provider ?? "llava";
 
-  // Determine actual provider used. Rekognition needs credentials + a
-  // reference image; falling back to LLaVA silently would misrepresent
+  // Determine actual provider used. Rekognition needs credentials + at least
+  // one reference image; falling back to LLaVA silently would misrepresent
   // to the operator what happened. Log the downgrade instead.
+  const referenceUrls = [
+    ...(opts.referenceImageUrls ?? []),
+    ...(opts.referenceImageUrl ? [opts.referenceImageUrl] : []),
+  ];
   let provider: IdentityProvider = requestedProvider;
-  let sourceBytes: Uint8Array | null = null;
+  let sources: Uint8Array[] = [];
   if (requestedProvider !== "llava") {
-    if (!opts.rekognitionCredentials || !opts.referenceImageUrl) {
+    if (!opts.rekognitionCredentials || !referenceUrls.length) {
       console.warn(
-        `[monitor] identity provider "${requestedProvider}" requested without credentials + reference URL; falling back to llava`
+        `[monitor] identity provider "${requestedProvider}" requested without credentials + reference URL(s); falling back to llava`
       );
       provider = "llava";
     } else {
-      sourceBytes = await fetchImageBytes(opts.referenceImageUrl);
-      if (!sourceBytes) {
+      // Fetch the gallery once, up front — the same sources serve every
+      // candidate in the sweep. A URL that fails just shrinks the gallery.
+      sources = (await Promise.all(referenceUrls.map((u) => fetchImageBytes(u)))).filter(
+        (b): b is Uint8Array => b !== null
+      );
+      if (!sources.length) {
         console.warn(
-          `[monitor] failed to fetch reference image at ${opts.referenceImageUrl}; falling back to llava`
+          `[monitor] failed to fetch any of ${referenceUrls.length} reference image(s); falling back to llava`
         );
         provider = "llava";
       }
     }
   }
 
-  const stats = { checked: 0, confirmed: 0, uncertain: 0, denied: 0, noFace: 0, errors: 0, provider };
+  const stats = {
+    checked: 0,
+    confirmed: 0,
+    uncertain: 0,
+    denied: 0,
+    noFace: 0,
+    errors: 0,
+    provider,
+    referenceSources: sources.length,
+  };
 
   const withThumb = candidates
     .map((c, i) => ({ c, i }))
@@ -268,7 +306,7 @@ export async function verifyCandidatesIdentity(
         // bucketing distortion. If it succeeds, use it; if it fails and
         // provider="both", we fall through to LLaVA below.
         if (provider === "rekognition" || provider === "both") {
-          const rek = await checkIdentityViaRekognition(opts.rekognitionCredentials!, sourceBytes!, url);
+          const rek = await checkIdentityViaRekognition(opts.rekognitionCredentials!, sources, url);
           if (rek) {
             stats.checked++;
             stats[rek.verdict]++;

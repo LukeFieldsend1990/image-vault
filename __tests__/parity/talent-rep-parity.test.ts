@@ -39,6 +39,10 @@ const TALENT_ONLY_WHITELIST: Record<string, string> = {
   "monitor/accounts/route.ts": "offender case files derived from the talent's own likeness hits — same identity boundary as monitor/hits",
   "monitor/accounts/[id]/route.ts": "talent personally decides whether an account targeting them is reported or cleared",
   "monitor/hits/[id]/route.ts": "talent personally confirms/dismisses likeness hits ('is this me?' is an identity decision)",
+  "monitor/setup/route.ts": "talent configures their own likeness monitor — same identity boundary as monitor/route.ts",
+  "monitor/accounts/[id]/outreach/route.ts": "talent personally authorises contact with an account using their likeness",
+  "monitor/accounts/[id]/whitelist/route.ts": "talent personally vouches for an account using their likeness ('this one is fine' is an identity decision)",
+  "monitor/reference-set/route.ts": "detection coverage over the talent's own biometric reference imagery — same identity boundary as monitor/scan",
   // Not an authorisation gate at all: this is the public, unauthenticated
   // waitlist form, and `role === "talent"` there only selects which email
   // template audience to use. No account exists yet, so there is no talent for

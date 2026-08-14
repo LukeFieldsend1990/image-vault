@@ -108,6 +108,11 @@ export async function POST(req: NextRequest) {
     AWS_ACCESS_KEY_ID: (env as unknown as { AWS_ACCESS_KEY_ID?: string }).AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY: (env as unknown as { AWS_SECRET_ACCESS_KEY?: string }).AWS_SECRET_ACCESS_KEY,
     AWS_REGION: (env as unknown as { AWS_REGION?: string }).AWS_REGION,
+    // R2 signing so scheduled sweeps match against vault reference images too.
+    CF_ACCOUNT_ID: (env as unknown as { CF_ACCOUNT_ID?: string }).CF_ACCOUNT_ID,
+    R2_BUCKET_NAME: (env as unknown as { R2_BUCKET_NAME?: string }).R2_BUCKET_NAME,
+    R2_ACCESS_KEY_ID: (env as unknown as { R2_ACCESS_KEY_ID?: string }).R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY: (env as unknown as { R2_SECRET_ACCESS_KEY?: string }).R2_SECRET_ACCESS_KEY,
   };
 
   const kickoff = async () => {

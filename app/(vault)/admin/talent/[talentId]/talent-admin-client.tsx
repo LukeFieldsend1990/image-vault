@@ -23,6 +23,136 @@ interface Rep {
   linkedSince: number;
 }
 
+// ── Monitor platform overrides ─────────────────────────────────────────────────
+
+interface MonitorPlatformRow {
+  id: string;
+  name: string;
+  category: string;
+  globalEnabled: boolean;
+  override: boolean | null;
+  effective: boolean;
+}
+
+const OVERRIDE_OPTIONS: { value: boolean | null; label: string; color: string }[] = [
+  { value: null, label: "Inherit", color: "#6b7280" },
+  { value: true, label: "On", color: "#166534" },
+  { value: false, label: "Off", color: "#991b1b" },
+];
+
+function MonitorPlatformsCard({ talentId }: { talentId: string }) {
+  const [rows, setRows] = useState<MonitorPlatformRow[] | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const res = await fetch(`/api/admin/talent/${talentId}/monitor-platforms`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { platforms: MonitorPlatformRow[] };
+      setRows(data.platforms);
+    } catch {
+      // leave the loading state; the card is non-critical
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [talentId]);
+
+  async function setOverride(platformId: string, override: boolean | null) {
+    setSaving(platformId);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/talent/${talentId}/monitor-platforms`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platformId, override }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setMessage(data.error ?? "Save failed.");
+        return;
+      }
+      await load();
+    } catch {
+      setMessage("Save failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <div className="rounded border p-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+      <h2 className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>Likeness Monitor Platforms</h2>
+      <p className="text-xs mb-5" style={{ color: "var(--color-muted)" }}>
+        Per-actor override of the global platform toggles on the monitor admin page. &quot;Inherit&quot;
+        follows the global setting; &quot;On&quot; / &quot;Off&quot; pins this talent&apos;s sweeps
+        regardless of it — e.g. switch a surface on early for a talent being actively targeted there.
+      </p>
+
+      {!rows ? (
+        <div className="space-y-2">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-10 rounded border animate-pulse" style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }} />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((row) => {
+            const isSaving = saving === row.id;
+            return (
+              <div key={row.id} className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm" style={{ color: "var(--color-ink)" }}>
+                    {row.name}
+                    <span className="ml-2 text-[10px] uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+                      {row.category}
+                    </span>
+                  </p>
+                  <p className="text-[11px]" style={{ color: row.effective ? "#166534" : "var(--color-muted)" }}>
+                    Effective: {row.effective ? "swept" : "skipped"}
+                    {row.override === null && ` (global ${row.globalEnabled ? "on" : "off"})`}
+                  </p>
+                </div>
+                <div
+                  className="flex items-center rounded shrink-0 overflow-hidden"
+                  style={{ border: "1px solid var(--color-border)" }}
+                >
+                  {OVERRIDE_OPTIONS.map((opt, idx) => {
+                    const active = row.override === opt.value;
+                    return (
+                      <button
+                        key={opt.label}
+                        disabled={isSaving}
+                        onClick={() => void setOverride(row.id, opt.value)}
+                        className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium transition"
+                        style={{
+                          background: active ? `${opt.color}18` : "transparent",
+                          color: active ? opt.color : "var(--color-muted)",
+                          borderRight: idx === OVERRIDE_OPTIONS.length - 1 ? "none" : "1px solid var(--color-border)",
+                          cursor: isSaving ? "wait" : "pointer",
+                          opacity: isSaving && !active ? 0.5 : 1,
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {message && (
+        <p className="mt-3 text-xs" style={{ color: "var(--color-danger)" }}>{message}</p>
+      )}
+    </div>
+  );
+}
+
 // ── Settings Tab ───────────────────────────────────────────────────────────────
 
 function SettingsTab({ talentId, initial }: { talentId: string; initial: TalentSettings }) {
@@ -266,6 +396,9 @@ function SettingsTab({ talentId, initial }: { talentId: string; initial: TalentS
           <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>{unionMsg}</p>
         )}
       </div>
+
+      {/* Likeness monitor platform overrides */}
+      <MonitorPlatformsCard talentId={talentId} />
     </div>
   );
 }

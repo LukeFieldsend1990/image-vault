@@ -63,8 +63,24 @@ interface MonitorConfig {
 
 interface MonitorState {
   monitor: MonitorConfig | null;
+  /** Platform ids the admin has switched on — the sweep's actual coverage. */
+  enabledPlatforms?: string[];
   hits: LikenessHit[];
   scans: ScanRecord[];
+}
+
+interface ReferenceSetState {
+  coverage: {
+    tier: "unanchored" | "baseline" | "anchored" | "fortified";
+    score: number;
+    improvements: string[];
+  };
+  referenceCount: number;
+  faceReferenceCount: number;
+  bodyReferenceCount: number;
+  packagesContributing: { id: string; name: string }[];
+  geometryFingerprintCount: number;
+  hasProfileImage: boolean;
 }
 
 interface ScanResponse {
@@ -315,6 +331,84 @@ function IdentityBadge({ identity }: { identity: TalentIdentityForMonitor }) {
       <p className="shrink-0 text-xs" style={{ color: "var(--color-muted)" }}>
         Monitoring target
       </p>
+    </div>
+  );
+}
+
+// ── Detection coverage ──────────────────────────────────────────────────────
+
+const TIER_LABELS: Record<ReferenceSetState["coverage"]["tier"], { label: string; color: string }> = {
+  unanchored: { label: "Unanchored", color: "#d97706" },
+  baseline: { label: "Baseline", color: "#6b7280" },
+  anchored: { label: "Vault-anchored", color: "var(--color-accent)" },
+  fortified: { label: "Fortified", color: "#16a34a" },
+};
+
+/**
+ * The flywheel card: shows how strongly detection is anchored to the talent's
+ * own vault scans, and which upload strengthens it next. This is the
+ * capability pitch made concrete — matching runs against their ground-truth
+ * captures, not public photos, and improves with every scan they add.
+ */
+function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
+  const tier = TIER_LABELS[refSet.coverage.tier];
+  const parts: string[] = [];
+  if (refSet.faceReferenceCount > 0) parts.push(`${refSet.faceReferenceCount} face`);
+  if (refSet.bodyReferenceCount > 0) parts.push(`${refSet.bodyReferenceCount} full-body`);
+  const unclassified = refSet.referenceCount - refSet.faceReferenceCount - refSet.bodyReferenceCount;
+  if (unclassified > 0) parts.push(`${unclassified} other`);
+
+  return (
+    <div className="rounded-md border px-5 py-4 space-y-3"
+      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+          Detection coverage
+        </p>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: tier.color }}>
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: tier.color }} />
+          {tier.label}
+        </span>
+      </div>
+
+      <div>
+        <div className="flex items-baseline justify-between">
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            {refSet.referenceCount > 0
+              ? `Matching against ${refSet.referenceCount} reference image${refSet.referenceCount === 1 ? "" : "s"}` +
+                (parts.length ? ` (${parts.join(", ")})` : "") +
+                ` from ${refSet.packagesContributing.length} scan package${refSet.packagesContributing.length === 1 ? "" : "s"} in your vault.`
+              : "No vault references yet — matching relies on a single public photo."}
+          </p>
+          <p className="text-xs font-semibold shrink-0" style={{ color: "var(--color-ink)" }}>
+            {refSet.coverage.score}/100
+          </p>
+        </div>
+        <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+          <div className="h-full rounded-full transition-all" style={{ width: `${refSet.coverage.score}%`, background: tier.color }} />
+        </div>
+      </div>
+
+      {refSet.coverage.improvements.length > 0 && (
+        <div className="space-y-1.5">
+          {refSet.coverage.improvements.slice(0, 2).map((text) => (
+            <div key={text} className="flex items-start gap-2">
+              <svg className="mt-0.5 shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--color-muted)" }}>{text}</p>
+            </div>
+          ))}
+          <Link
+            href="/vault"
+            className="inline-block text-xs font-medium underline underline-offset-2"
+            style={{ color: "var(--color-accent)" }}
+          >
+            Add scans to strengthen detection →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -764,6 +858,9 @@ export default function MonitorClient({ identity }: Props) {
   const [platforms, setPlatforms] = useState<Platform[]>(
     INITIAL_PLATFORMS.map((p) => ({ ...p, status: "idle" as ScanStatus }))
   );
+  // Admin platform toggles, from /api/monitor. Null until first load — the
+  // full registry renders as a sensible placeholder in the meantime.
+  const [enabledIds, setEnabledIds] = useState<string[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [lastResult, setLastResult] = useState<ScanResponse | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -773,11 +870,19 @@ export default function MonitorClient({ identity }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [triaging, setTriaging] = useState<string | null>(null);
   const [previewHit, setPreviewHit] = useState<LikenessHit | null>(null);
+  const [refSet, setRefSet] = useState<ReferenceSetState | null>(null);
 
   const name = identity?.fullName ?? "your likeness";
 
   const refresh = useCallback(async () => {
     try {
+      // Coverage rides along with every state refresh: a sweep re-syncs the
+      // reference set server-side, so post-scan refreshes pick up new scans.
+      void fetch("/api/monitor/reference-set")
+        .then((r) => (r.ok ? (r.json() as Promise<ReferenceSetState>) : null))
+        .then((data) => data && setRefSet(data))
+        .catch(() => {});
+
       const res = await fetch("/api/monitor");
       if (!res.ok) return;
       const data = (await res.json()) as MonitorState;
@@ -785,21 +890,31 @@ export default function MonitorClient({ identity }: Props) {
       setScans(data.scans);
       setMonitor(data.monitor);
 
+      // The panel only lists platforms the admin has switched on — showing a
+      // surface we are not sweeping as "clear" would claim coverage we don't
+      // have. Falls back to the full registry if the API predates the field.
+      const enabled = data.enabledPlatforms?.length
+        ? INITIAL_PLATFORMS.filter((p) => data.enabledPlatforms!.includes(p.id))
+        : INITIAL_PLATFORMS;
+      setEnabledIds(enabled.map((p) => p.id));
+
       // Reconstruct the platform panel from persisted state, so a page reload
       // (or a scan triggered from another surface) still reflects reality —
       // otherwise the animation in runScan() is the only thing that ever
-      // populates it, and the panel misreports "0/8 checked" whenever the
+      // populates it, and the panel misreports "0 checked" whenever the
       // user opens the page cold.
       const lastCompleteScan = data.scans.find((s) => s.status === "complete");
-      if (lastCompleteScan) {
-        const platformsWithHits = new Set(data.hits.map((h) => h.platform));
-        setPlatforms((prev) =>
-          prev.map((p) => ({
-            ...p,
-            status: platformsWithHits.has(p.id) ? "flagged" : "clear",
-          }))
-        );
-      }
+      const platformsWithHits = new Set(data.hits.map((h) => h.platform));
+      setPlatforms(
+        enabled.map((p) => ({
+          ...p,
+          status: lastCompleteScan
+            ? platformsWithHits.has(p.id)
+              ? ("flagged" as ScanStatus)
+              : ("clear" as ScanStatus)
+            : ("idle" as ScanStatus),
+        }))
+      );
     } finally {
       setLoaded(true);
     }
@@ -815,7 +930,10 @@ export default function MonitorClient({ identity }: Props) {
     setScanning(true);
     setLastResult(null);
     setScanError(null);
-    setPlatforms(INITIAL_PLATFORMS.map((p) => ({ ...p, status: "idle" as ScanStatus })));
+    const activePlatforms = enabledIds
+      ? INITIAL_PLATFORMS.filter((p) => enabledIds.includes(p.id))
+      : INITIAL_PLATFORMS;
+    setPlatforms(activePlatforms.map((p) => ({ ...p, status: "idle" as ScanStatus })));
 
     // Kick off the sweep. Discovery runs against live platforms and takes
     // minutes, so the POST only opens the scan — the result arrives by polling.
@@ -842,7 +960,7 @@ export default function MonitorClient({ identity }: Props) {
     })();
 
     const animation = (async () => {
-      for (const platform of INITIAL_PLATFORMS) {
+      for (const platform of activePlatforms) {
         setPlatforms((prev) =>
           prev.map((p) => (p.id === platform.id ? { ...p, status: "checking" } : p))
         );
@@ -868,7 +986,7 @@ export default function MonitorClient({ identity }: Props) {
     } finally {
       setScanning(false);
     }
-  }, [scanning, refresh]);
+  }, [scanning, refresh, enabledIds]);
 
   const triageHit = useCallback(async (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => {
     setTriaging(id);
@@ -956,6 +1074,9 @@ export default function MonitorClient({ identity }: Props) {
       {/* ── Identity badge ── */}
       {identity && <IdentityBadge identity={identity} />}
 
+      {/* ── Detection coverage (vault-anchored reference set) ── */}
+      {refSet && <DetectionCoverageCard refSet={refSet} />}
+
       {/* ── Monitor status strip ── */}
       {monitor && (
         <div className="flex items-center justify-between rounded-md border px-4 py-3"
@@ -1025,7 +1146,7 @@ export default function MonitorClient({ identity }: Props) {
               No unauthorised usage detected for {name}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-              {lastResult?.candidatesAnalysed ?? 0} candidates cleared by the adjudicator across all {INITIAL_PLATFORMS.length} platforms.
+              {lastResult?.candidatesAnalysed ?? 0} candidates cleared by the adjudicator across all {platforms.length} monitored platforms.
               {lastScanAt && ` Last scanned ${formatRelative(lastScanAt)}.`}
             </p>
           </div>
@@ -1068,7 +1189,7 @@ export default function MonitorClient({ identity }: Props) {
           <div>
             <p className="text-sm font-medium" style={{ color: "#3b82f6" }}>Scan in progress</p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-              Cross-referencing {name}&apos;s biometric signature across {INITIAL_PLATFORMS.length} platforms, then adjudicating candidates with the vault&apos;s AI reasoning layer.
+              Cross-referencing {name}&apos;s biometric signature across {platforms.length} platforms, then adjudicating candidates with the vault&apos;s AI reasoning layer.
             </p>
           </div>
         </div>
