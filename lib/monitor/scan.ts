@@ -46,6 +46,7 @@ import { discoverYouTube, youtubeApiKey } from "./ingest/youtube";
 import { discoverTikTok } from "./ingest/tiktok";
 import { seedHandlesFor } from "./ingest/seeds";
 import { verifyCandidatesIdentity } from "./identity-check";
+import { recordLearnedHashtags, topLearnedQueries } from "./query-mining";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -603,9 +604,13 @@ async function discoverCandidates(
   // is cheaper per query so it gets first refusal.
   const tiktok: CandidateContent[] = [];
   try {
+    // Learned hashtags from prior sweeps — mined from confirmed hits'
+    // captions. Bare list, no leading '#'. buildTikTokQueries prefixes.
+    const learnedHashtags = await topLearnedQueries(db, opts.talentId, "tiktok", 3);
     const tt = await discoverTikTok({
       token,
       anchor: opts.anchor,
+      learnedHashtags,
       budget: {
         check: async () => {
           const v = await checkApifyBudget(db);
@@ -897,6 +902,20 @@ export async function runLikenessScan(
 
   if (newHits.length) {
     await alertTalent(db, opts.talentId, anchor.fullName, newHits, opts.baseUrl);
+
+    // Mine hashtags from new hits back into the query vocabulary. Cheap
+    // (in-memory + a few upserts) and directly compounds each sweep — the
+    // next sweep expands its query set with whatever the last one taught us.
+    // Non-fatal on failure; this is a nice-to-have quality lever, not
+    // scan-critical.
+    try {
+      const stats = await recordLearnedHashtags(db, opts.talentId, newHits);
+      console.log(
+        `[monitor] mined ${stats.recorded} learned hashtag(s) for ${opts.talentId} (${stats.skipped} skipped)`
+      );
+    } catch (err) {
+      console.warn(`[monitor] hashtag mining failed: ${(err as Error).message}`);
+    }
   }
 
   return {
