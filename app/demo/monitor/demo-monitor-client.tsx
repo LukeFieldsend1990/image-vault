@@ -14,7 +14,10 @@
  * drift. Structure copied from /demo/production so the two feel of a piece.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+
+const IsMobileContext = createContext(false);
+const useIsMobile = () => useContext(IsMobileContext);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1124,108 +1127,150 @@ const SCENES: Scene[] = [
 
 // ─── TourCard ────────────────────────────────────────────────────────────────
 
+// Style parity with /demo/production: floating blurred-glass card with
+// centred dot indicators and prev/next arrows, and safe-area-aware bottom
+// spacing so it doesn't collide with mobile home-indicators.
 function TourCard({
   scene,
   sceneIndex,
   total,
+  paused,
   onPrev,
   onNext,
   onMouseEnter,
   onMouseLeave,
-  paused,
 }: {
   scene: Scene;
   sceneIndex: number;
   total: number;
+  paused: boolean;
   onPrev: () => void;
   onNext: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
-  paused: boolean;
 }) {
+  const mobile = useIsMobile();
+
   return (
     <div
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      // Hover-pause is desktop-only: on touch devices taps fire a synthetic
+      // mouseenter with no mouseleave to follow, which would stick the tour
+      // paused. Mobile pauses via press-and-hold on the shell instead.
+      onMouseEnter={mobile ? undefined : onMouseEnter}
+      onMouseLeave={mobile ? undefined : onMouseLeave}
       style={{
         position: "absolute",
+        bottom: mobile ? "calc(0.625rem + env(safe-area-inset-bottom))" : "1.5rem",
         left: "50%",
         transform: "translateX(-50%)",
-        bottom: "1rem",
-        width: "min(640px, calc(100% - 2rem))",
-        background: "rgba(10,10,10,0.92)",
-        backdropFilter: "blur(8px)",
+        width: mobile ? "calc(100% - 1.25rem)" : "min(600px, calc(100% - 3rem))",
+        background: "rgba(10,10,10,0.93)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        borderRadius: "8px",
+        padding: mobile ? "0.875rem 1rem" : "1.25rem 1.5rem",
         color: "#fff",
-        borderRadius: "0.5rem",
-        padding: "0.9rem 1rem 0.75rem",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.4rem",
-        boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+        boxShadow: "0 24px 64px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.07)",
+        zIndex: 50,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: "0.9rem", fontWeight: 600, lineHeight: 1.2 }}>{scene.headline}</p>
-          <p style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "rgba(255,255,255,0.7)", lineHeight: 1.4 }}>{scene.body}</p>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.35rem", flexShrink: 0 }}>
-          <div style={{ display: "flex", gap: "0.35rem" }}>
-            <button
-              onClick={onPrev}
-              aria-label="Previous scene"
-              style={{
-                width: "1.75rem",
-                height: "1.75rem",
-                borderRadius: "50%",
-                background: "rgba(255,255,255,0.08)",
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              ‹
-            </button>
-            <button
-              onClick={onNext}
-              aria-label="Next scene"
-              style={{
-                width: "1.75rem",
-                height: "1.75rem",
-                borderRadius: "50%",
-                background: "#c0392b",
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              ›
-            </button>
-          </div>
-          <span style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.55)" }}>
-            {sceneIndex + 1} / {total}
-            {paused && " · paused"}
-          </span>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: "0.2rem", marginTop: "0.35rem" }}>
+      <div style={{ display: "flex", gap: "0.375rem", marginBottom: "0.875rem", justifyContent: "center" }}>
         {Array.from({ length: total }).map((_, i) => (
           <div
             key={i}
             style={{
-              flex: 1,
-              height: "2px",
-              borderRadius: "999px",
-              background: i === sceneIndex ? "#c0392b" : "rgba(255,255,255,0.15)",
+              width: i === sceneIndex ? "1.5rem" : "0.375rem",
+              height: "0.375rem",
+              borderRadius: "9999px",
+              background: i === sceneIndex ? "#c0392b" : "rgba(255,255,255,0.2)",
+              transition: "width 0.3s ease, background 0.3s ease",
             }}
           />
         ))}
+      </div>
+
+      <h3 style={{ fontSize: mobile ? "0.875rem" : "0.9375rem", fontWeight: 600, margin: "0 0 0.375rem", letterSpacing: "-0.01em", color: "#fff" }}>
+        {scene.headline}
+      </h3>
+      <p style={{ fontSize: mobile ? "0.75rem" : "0.8125rem", color: "rgba(255,255,255,0.6)", margin: mobile ? "0 0 0.75rem" : "0 0 1rem", lineHeight: mobile ? 1.55 : 1.65 }}>
+        {scene.body}
+      </p>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button
+          onClick={onPrev}
+          style={{ fontSize: "0.75rem", fontWeight: 500, padding: "0.375rem 0.875rem", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", background: "transparent", color: "rgba(255,255,255,0.65)", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.375rem" }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Prev
+        </button>
+        <span style={{ fontSize: mobile ? "0.625rem" : "0.6875rem", color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          {paused ? "Paused" : mobile ? "Swipe" : "Auto-playing"} · {sceneIndex + 1} / {total}
+        </span>
+        <button
+          onClick={onNext}
+          style={{ fontSize: "0.75rem", fontWeight: 500, padding: "0.375rem 0.875rem", border: "none", borderRadius: "4px", background: "#c0392b", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.375rem" }}
+        >
+          Next
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Mobile top bar ──────────────────────────────────────────────────────────
+// Replaces the 14rem sidebar on phones so the scene isn't crushed to a strip.
+function MobileTopBar({ role }: { role: "talent" | "admin" }) {
+  const user =
+    role === "talent"
+      ? { name: TALENT.fullName, subtitle: "Talent", initials: TALENT.initials }
+      : { name: "Admin", subtitle: "Platform Admin", initials: "AD" };
+  return (
+    <div
+      style={{
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "0.75rem",
+        padding: "0.625rem 1rem",
+        paddingTop: "calc(0.625rem + env(safe-area-inset-top))",
+        background: "#0a0a0a",
+        color: "#fff",
+      }}
+    >
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ fontSize: "0.8125rem", fontWeight: 500, letterSpacing: "0.05em" }}>ImageVault</div>
+        <div style={{ marginTop: "0.25rem", height: "1px", width: "1.5rem", background: "#c0392b" }} />
+      </div>
+      <div
+        style={{
+          fontSize: "0.5625rem",
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          padding: "0.2rem 0.5rem",
+          background: "rgba(192,57,43,0.15)",
+          color: "#c0392b",
+          borderRadius: "2px",
+          border: "1px solid rgba(192,57,43,0.3)",
+          flexShrink: 0,
+        }}
+      >
+        DEMO
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+        <div style={{ minWidth: 0, textAlign: "right" }}>
+          <div style={{ fontSize: "0.6875rem", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</div>
+          <div style={{ fontSize: "0.5625rem", color: "rgba(255,255,255,0.45)" }}>{user.subtitle}</div>
+        </div>
+        <div style={{ width: "1.625rem", height: "1.625rem", borderRadius: "50%", background: "#c0392b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.5rem", fontWeight: 700, flexShrink: 0 }}>
+          {user.initials}
+        </div>
       </div>
     </div>
   );
@@ -1270,10 +1315,21 @@ function IntroOverlay({ leaving, onDismiss }: { leaving: boolean; onDismiss: () 
 // ─── Root ────────────────────────────────────────────────────────────────────
 
 export default function DemoMonitorClient() {
+  // Starts null so the server render (which has no window) matches the
+  // first client render; resolves in the effect below.
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
   const [sceneIndex, setSceneIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [intro, setIntro] = useState<IntroState>("visible");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (intro === "gone") return;
@@ -1285,10 +1341,12 @@ export default function DemoMonitorClient() {
   }, [intro]);
 
   useEffect(() => {
-    if (paused || intro !== "gone") return;
+    if (isMobile === null || paused || intro !== "gone") return;
     const t = setTimeout(() => setSceneIndex((i) => (i + 1) % SCENES.length), AUTO_MS);
     return () => clearTimeout(t);
-  }, [sceneIndex, paused, intro]);
+  }, [sceneIndex, paused, intro, isMobile]);
+
+  if (isMobile === null) return null;
 
   const scene = SCENES[sceneIndex];
 
@@ -1296,48 +1354,59 @@ export default function DemoMonitorClient() {
   const goNext = () => setSceneIndex((i) => (i + 1) % SCENES.length);
 
   return (
-    <div
-      style={{ display: "flex", flexDirection: "row", height: "100vh", overflow: "hidden" }}
-      onTouchStart={(e) => {
-        touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        setPaused(true);
-      }}
-      onTouchEnd={(e) => {
-        const start = touchStart.current;
-        touchStart.current = null;
-        setPaused(false);
-        if (!start) return;
-        const dx = e.changedTouches[0].clientX - start.x;
-        const dy = e.changedTouches[0].clientY - start.y;
-        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-          if (dx < 0) goNext();
-          else goPrev();
-        }
-      }}
-    >
-      {intro !== "gone" && <IntroOverlay leaving={intro === "leaving"} onDismiss={() => setIntro("leaving")} />}
-      <Sidebar role={scene.role} />
-      <main style={{ flex: 1, minHeight: 0, overflow: "hidden", background: "var(--color-bg)", position: "relative", display: "flex", flexDirection: "column" }}>
-        <div key={`${scene.id}-${intro === "gone"}`} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {scene.view === "hits-list" && <HitsListView />}
-          {scene.view === "hit-preview" && <HitPreviewView />}
-          {scene.view === "accounts-queue" && (
-            <AccountsQueueView withWhitelistOpen={false} />
-          )}
-          {scene.view === "contact-compose" && <ContactComposeView />}
-          {scene.view === "admin-panel" && <AdminPanelView />}
-        </div>
-        <TourCard
-          scene={scene}
-          sceneIndex={sceneIndex}
-          total={SCENES.length}
-          paused={paused}
-          onPrev={goPrev}
-          onNext={goNext}
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
-        />
-      </main>
-    </div>
+    <IsMobileContext.Provider value={isMobile}>
+      <div
+        style={{
+          display: "flex",
+          // Phones stack vertically: MobileTopBar on top, scene below,
+          // TourCard floats at the bottom. Desktop keeps sidebar-on-left.
+          flexDirection: isMobile ? "column" : "row",
+          height: "100vh",
+          overflow: "hidden",
+        }}
+        onTouchStart={(e) => {
+          touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          setPaused(true);
+        }}
+        onTouchEnd={(e) => {
+          const start = touchStart.current;
+          touchStart.current = null;
+          setPaused(false);
+          if (!start) return;
+          const dx = e.changedTouches[0].clientX - start.x;
+          const dy = e.changedTouches[0].clientY - start.y;
+          if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            if (dx < 0) goNext();
+            else goPrev();
+          }
+        }}
+        onTouchCancel={() => {
+          touchStart.current = null;
+          setPaused(false);
+        }}
+      >
+        {intro !== "gone" && <IntroOverlay leaving={intro === "leaving"} onDismiss={() => setIntro("leaving")} />}
+        {isMobile ? <MobileTopBar role={scene.role} /> : <Sidebar role={scene.role} />}
+        <main style={{ flex: 1, minHeight: 0, overflow: "hidden", background: "var(--color-bg)", position: "relative", display: "flex", flexDirection: "column" }}>
+          <div key={`${scene.id}-${intro === "gone"}`} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {scene.view === "hits-list" && <HitsListView />}
+            {scene.view === "hit-preview" && <HitPreviewView />}
+            {scene.view === "accounts-queue" && <AccountsQueueView withWhitelistOpen={false} />}
+            {scene.view === "contact-compose" && <ContactComposeView />}
+            {scene.view === "admin-panel" && <AdminPanelView />}
+          </div>
+          <TourCard
+            scene={scene}
+            sceneIndex={sceneIndex}
+            total={SCENES.length}
+            paused={paused}
+            onPrev={goPrev}
+            onNext={goNext}
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+          />
+        </main>
+      </div>
+    </IsMobileContext.Provider>
   );
 }
