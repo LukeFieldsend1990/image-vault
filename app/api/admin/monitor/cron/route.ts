@@ -6,7 +6,13 @@ import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { eq, inArray } from "drizzle-orm";
 
-const KEYS = ["monitor_cron_enabled", "watchlist_reharvest_hours", "monitor_cron_last_run"];
+const KEYS = [
+  "monitor_cron_enabled",
+  "watchlist_reharvest_hours",
+  "monitor_cron_last_run",
+  "identity_check_provider",
+];
+const VALID_PROVIDERS = new Set(["llava", "rekognition", "both"]);
 
 async function guard(req: NextRequest) {
   const session = await requireSession(req);
@@ -34,6 +40,7 @@ export async function GET(req: NextRequest) {
     enabled: (map.get("monitor_cron_enabled") ?? "true") === "true",
     watchlistReharvestHours: parseInt(map.get("watchlist_reharvest_hours") ?? "168", 10),
     lastRunAt: parseInt(map.get("monitor_cron_last_run") ?? "0", 10) || null,
+    identityCheckProvider: (map.get("identity_check_provider") ?? "llava") as "llava" | "rekognition" | "both",
   });
 }
 
@@ -45,6 +52,7 @@ export async function PATCH(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     enabled?: boolean;
     watchlistReharvestHours?: number;
+    identityCheckProvider?: string;
   };
 
   const db = getDb();
@@ -59,6 +67,12 @@ export async function PATCH(req: NextRequest) {
     // limits would bite anything shorter); 90 days is the ceiling.
     const clamped = Math.max(1, Math.min(24 * 90, Math.round(body.watchlistReharvestHours)));
     updates.push({ key: "watchlist_reharvest_hours", value: String(clamped) });
+  }
+  if (typeof body.identityCheckProvider === "string") {
+    if (!VALID_PROVIDERS.has(body.identityCheckProvider)) {
+      return NextResponse.json({ error: "provider must be llava | rekognition | both" }, { status: 400 });
+    }
+    updates.push({ key: "identity_check_provider", value: body.identityCheckProvider });
   }
   if (!updates.length) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

@@ -6,6 +6,7 @@ interface CronState {
   enabled: boolean;
   watchlistReharvestHours: number;
   lastRunAt: number | null;
+  identityCheckProvider: "llava" | "rekognition" | "both";
 }
 
 function whenRelative(unix: number | null): string {
@@ -218,6 +219,41 @@ export default function CronClient() {
             >
               Save
             </button>
+          </div>
+        </div>
+
+        <hr style={{ borderColor: "var(--color-border)" }} />
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex-1">
+            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+              Identity-check provider
+            </p>
+            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+              LLaVA is free and vision-LLM based, capped ~90% confidence. Rekognition costs ~$0.002
+              per candidate, does real face comparison, can reach 95%+. &quot;Both&quot; uses
+              Rekognition and falls back to LLaVA on failure.
+            </p>
+          </div>
+          <div className="flex gap-1">
+            {(["llava", "rekognition", "both"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() =>
+                  void patch({ identityCheckProvider: p }, `Provider set to ${p}`)
+                }
+                disabled={busy}
+                className="text-xs px-2 py-1 rounded"
+                style={{
+                  background: state.identityCheckProvider === p ? "var(--color-ink)" : "var(--color-surface)",
+                  color: state.identityCheckProvider === p ? "white" : "var(--color-ink)",
+                  border: "1px solid var(--color-border)",
+                  textTransform: "capitalize",
+                }}
+              >
+                {p}
+              </button>
+            ))}
           </div>
         </div>
 

@@ -42,7 +42,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A scan is already in progress" }, { status: 409 });
   }
 
-  type ScanEnv = { AI?: Ai; ANTHROPIC_API_KEY?: string; APIFY_TOKEN?: string; YOUTUBE_API_KEY?: string };
+  type ScanEnv = {
+    AI?: Ai;
+    ANTHROPIC_API_KEY?: string;
+    APIFY_TOKEN?: string;
+    YOUTUBE_API_KEY?: string;
+    AWS_ACCESS_KEY_ID?: string;
+    AWS_SECRET_ACCESS_KEY?: string;
+    AWS_REGION?: string;
+  };
   let env: ScanEnv = {};
   let waitUntil: ((p: Promise<unknown>) => void) | null = null;
   try {
@@ -54,6 +62,9 @@ export async function POST(req: NextRequest) {
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
       APIFY_TOKEN: process.env.APIFY_TOKEN,
       YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
+      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+      AWS_REGION: process.env.AWS_REGION,
     };
   }
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
