@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface SampleHit {
   hitId: string;
@@ -28,16 +28,21 @@ function when(unix: number): string {
 export default function FunnelCandidatesClient() {
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch("/api/admin/monitor/funnel-candidates");
-    if (!res.ok) return;
-    const data = (await res.json()) as { candidates: Candidate[] };
-    setCandidates(data.candidates);
-  }, []);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    // Inline the fetch so React's set-state-in-effect linter can see the
+    // await boundary before the setState. Cancellation guard prevents a
+    // late response from setting state after unmount.
+    let cancelled = false;
+    (async () => {
+      const res = await fetch("/api/admin/monitor/funnel-candidates");
+      if (cancelled || !res.ok) return;
+      const data = (await res.json()) as { candidates: Candidate[] };
+      if (!cancelled) setCandidates(data.candidates);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="space-y-4">

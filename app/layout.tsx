@@ -1,31 +1,15 @@
 import type { Metadata } from "next";
-import { Newsreader, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+// Self-hosted via fontsource so the Cloudflare Workers build never fetches
+// Google Fonts. next/font/google was our previous approach; its build-time
+// fetch to fonts.gstatic.com started failing on Cloudflare's build boxes on
+// 2026-08-14, blocking every deploy. Self-hosting eliminates the network
+// dependency entirely.
+import "@fontsource-variable/hanken-grotesk";
+import "@fontsource-variable/newsreader";
+import "@fontsource-variable/newsreader/wght-italic.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
 import "./globals.css";
-
-// Editorial serif — headlines, statements, the wordmark
-const serif = Newsreader({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
-  variable: "--font-serif",
-  display: "swap",
-});
-
-// Functional sans — body, labels, data
-const sans = Hanken_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-sans",
-  display: "swap",
-});
-
-// Monospace — tabular data (licence IDs, dates, amounts)
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-mono",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "ImageVault",
@@ -40,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`}>
+    <html lang="en">
       <body>{children}</body>
     </html>
   );
