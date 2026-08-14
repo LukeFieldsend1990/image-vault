@@ -32,6 +32,8 @@ interface Env {
   ANTHROPIC_API_KEY?: string;
   TMDB_API_KEY?: string;
   APP_URL: string;
+  /** Shared secret used to POST /api/cron/monitor-sweeps on the main app. */
+  CRON_SECRET?: string;
 }
 
 interface Actor {
@@ -752,6 +754,30 @@ async function upsertSetting(db: Db, key: string, value: string): Promise<void> 
   }
 }
 
+/**
+ * Kick the main app's monitor-sweep endpoint. Fire-and-forget: the endpoint
+ * returns immediately after queueing the actual sweeps into waitUntil, so
+ * this call resolves in seconds even if each individual sweep takes ~5 min.
+ * Kill switch and cadence-due filtering live on the endpoint side; we just
+ * ping it.
+ */
+async function pingMonitorSweeps(env: Env): Promise<void> {
+  if (!env.CRON_SECRET) {
+    console.log("CRON_SECRET missing — skipping monitor sweeps");
+    return;
+  }
+  try {
+    const res = await fetch(`${env.APP_URL}/api/cron/monitor-sweeps`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
+    });
+    const body = await res.text().catch(() => "");
+    console.log(`monitor sweeps ping: ${res.status} ${body.slice(0, 200)}`);
+  } catch (err) {
+    console.warn(`monitor sweeps ping failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 async function maybeRunTmdbDiscovery(tmdbKey: string, db: Db, now: number): Promise<void> {
   const enabled = await getSettingStr(db, "watchlist_discovery_enabled");
   if (enabled === "false") {
@@ -830,6 +856,10 @@ const handler = {
         console.error("TMDB discovery error:", err instanceof Error ? err.message : String(err));
       }
     }
+
+    // Likeness monitor sweeps — the endpoint reads ai_settings for the kill
+    // switch and cadence-due filtering, so we always ping and let it decide.
+    await pingMonitorSweeps(env);
 
     const batchId = crypto.randomUUID();
     await createBatchRun(db, {

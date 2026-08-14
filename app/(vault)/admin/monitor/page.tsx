@@ -4,6 +4,7 @@ import ApifyBudgetClient from "./apify-budget-client";
 import WatchlistClient from "./watchlist-client";
 import TakedownsClient from "./takedowns-client";
 import FunnelCandidatesClient from "./funnel-candidates-client";
+import CronClient from "./cron-client";
 
 export default async function AdminMonitorPage() {
   await requireAdmin();
@@ -26,6 +27,10 @@ export default async function AdminMonitorPage() {
           gated rather than merely reported.
         </p>
       </div>
+
+      <CronClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
 
       <ApifyBudgetClient />
 
