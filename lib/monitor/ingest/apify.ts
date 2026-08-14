@@ -61,6 +61,25 @@ export interface ActorRunResult<T> {
   costUsd: number | null;
 }
 
+/**
+ * Spend gate handed to every Apify-backed discovery module. Checked before
+ * each run and written to after it — the shape the instagram/tiktok modules
+ * declared inline, lifted here so the newer platform modules share it.
+ */
+export interface ActorBudget {
+  check: () => Promise<{ ok: boolean; reason: string | null }>;
+  record: (entry: {
+    runId: string | null;
+    actorId: string;
+    mode: string;
+    query: string;
+    itemCount: number;
+    costUsd: number | null;
+    status: "succeeded" | "failed";
+    error?: string;
+  }) => Promise<void>;
+}
+
 const TERMINAL_OK = "SUCCEEDED";
 const TERMINAL_BAD = new Set(["FAILED", "ABORTED", "TIMED-OUT", "TIMING-OUT"]);
 

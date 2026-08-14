@@ -63,6 +63,8 @@ interface MonitorConfig {
 
 interface MonitorState {
   monitor: MonitorConfig | null;
+  /** Platform ids the admin has switched on — the sweep's actual coverage. */
+  enabledPlatforms?: string[];
   hits: LikenessHit[];
   scans: ScanRecord[];
 }
@@ -764,6 +766,9 @@ export default function MonitorClient({ identity }: Props) {
   const [platforms, setPlatforms] = useState<Platform[]>(
     INITIAL_PLATFORMS.map((p) => ({ ...p, status: "idle" as ScanStatus }))
   );
+  // Admin platform toggles, from /api/monitor. Null until first load — the
+  // full registry renders as a sensible placeholder in the meantime.
+  const [enabledIds, setEnabledIds] = useState<string[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [lastResult, setLastResult] = useState<ScanResponse | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -785,21 +790,31 @@ export default function MonitorClient({ identity }: Props) {
       setScans(data.scans);
       setMonitor(data.monitor);
 
+      // The panel only lists platforms the admin has switched on — showing a
+      // surface we are not sweeping as "clear" would claim coverage we don't
+      // have. Falls back to the full registry if the API predates the field.
+      const enabled = data.enabledPlatforms?.length
+        ? INITIAL_PLATFORMS.filter((p) => data.enabledPlatforms!.includes(p.id))
+        : INITIAL_PLATFORMS;
+      setEnabledIds(enabled.map((p) => p.id));
+
       // Reconstruct the platform panel from persisted state, so a page reload
       // (or a scan triggered from another surface) still reflects reality —
       // otherwise the animation in runScan() is the only thing that ever
-      // populates it, and the panel misreports "0/8 checked" whenever the
+      // populates it, and the panel misreports "0 checked" whenever the
       // user opens the page cold.
       const lastCompleteScan = data.scans.find((s) => s.status === "complete");
-      if (lastCompleteScan) {
-        const platformsWithHits = new Set(data.hits.map((h) => h.platform));
-        setPlatforms((prev) =>
-          prev.map((p) => ({
-            ...p,
-            status: platformsWithHits.has(p.id) ? "flagged" : "clear",
-          }))
-        );
-      }
+      const platformsWithHits = new Set(data.hits.map((h) => h.platform));
+      setPlatforms(
+        enabled.map((p) => ({
+          ...p,
+          status: lastCompleteScan
+            ? platformsWithHits.has(p.id)
+              ? ("flagged" as ScanStatus)
+              : ("clear" as ScanStatus)
+            : ("idle" as ScanStatus),
+        }))
+      );
     } finally {
       setLoaded(true);
     }
@@ -815,7 +830,10 @@ export default function MonitorClient({ identity }: Props) {
     setScanning(true);
     setLastResult(null);
     setScanError(null);
-    setPlatforms(INITIAL_PLATFORMS.map((p) => ({ ...p, status: "idle" as ScanStatus })));
+    const activePlatforms = enabledIds
+      ? INITIAL_PLATFORMS.filter((p) => enabledIds.includes(p.id))
+      : INITIAL_PLATFORMS;
+    setPlatforms(activePlatforms.map((p) => ({ ...p, status: "idle" as ScanStatus })));
 
     // Kick off the sweep. Discovery runs against live platforms and takes
     // minutes, so the POST only opens the scan — the result arrives by polling.
@@ -842,7 +860,7 @@ export default function MonitorClient({ identity }: Props) {
     })();
 
     const animation = (async () => {
-      for (const platform of INITIAL_PLATFORMS) {
+      for (const platform of activePlatforms) {
         setPlatforms((prev) =>
           prev.map((p) => (p.id === platform.id ? { ...p, status: "checking" } : p))
         );
@@ -868,7 +886,7 @@ export default function MonitorClient({ identity }: Props) {
     } finally {
       setScanning(false);
     }
-  }, [scanning, refresh]);
+  }, [scanning, refresh, enabledIds]);
 
   const triageHit = useCallback(async (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => {
     setTriaging(id);
@@ -1025,7 +1043,7 @@ export default function MonitorClient({ identity }: Props) {
               No unauthorised usage detected for {name}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-              {lastResult?.candidatesAnalysed ?? 0} candidates cleared by the adjudicator across all {INITIAL_PLATFORMS.length} platforms.
+              {lastResult?.candidatesAnalysed ?? 0} candidates cleared by the adjudicator across all {platforms.length} monitored platforms.
               {lastScanAt && ` Last scanned ${formatRelative(lastScanAt)}.`}
             </p>
           </div>
@@ -1068,7 +1086,7 @@ export default function MonitorClient({ identity }: Props) {
           <div>
             <p className="text-sm font-medium" style={{ color: "#3b82f6" }}>Scan in progress</p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-              Cross-referencing {name}&apos;s biometric signature across {INITIAL_PLATFORMS.length} platforms, then adjudicating candidates with the vault&apos;s AI reasoning layer.
+              Cross-referencing {name}&apos;s biometric signature across {platforms.length} platforms, then adjudicating candidates with the vault&apos;s AI reasoning layer.
             </p>
           </div>
         </div>

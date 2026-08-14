@@ -79,17 +79,30 @@ function contentUrlFor(platform: MonitorPlatformId, handle: string): { url: stri
       return { url: `https://www.tiktok.com/@${handle}/video/${randomDigits(19)}`, type: "video" };
     case "youtube":
       return { url: `https://www.youtube.com/shorts/${randomId(11)}`, type: "short" };
+    case "pinterest":
+      return { url: `https://www.pinterest.com/pin/${randomDigits(18)}/`, type: "post" };
+    case "google":
+      return { url: `https://${handle.replace(/\./g, "-")}.example.net/gallery/${randomId(8)}`, type: "image" };
+    case "getty":
+      return { url: `https://www.gettyimages.com/detail/photo/${randomDigits(10)}`, type: "image" };
+    case "midjourney":
+      return { url: `https://civitai.com/models/${randomDigits(6)}`, type: "image" };
     default:
       return { url: `https://x.com/${handle}/status/${randomDigits(19)}`, type: "post" };
   }
 }
 
-const VIDEO_PLATFORMS: MonitorPlatformId[] = ["instagram", "tiktok", "youtube", "x"];
+/** Pool used when the caller passes no platform list — the pre-toggle set. */
+const DEFAULT_SIMULATED_PLATFORMS: MonitorPlatformId[] = ["instagram", "tiktok", "youtube", "x"];
 
 // ── Generator ────────────────────────────────────────────────────────────────
 
-function makeCandidate(anchor: TalentIdentityAnchor, suspicious: boolean): CandidateContent {
-  const platform = pick(VIDEO_PLATFORMS);
+function makeCandidate(
+  anchor: TalentIdentityAnchor,
+  suspicious: boolean,
+  platforms: MonitorPlatformId[]
+): CandidateContent {
+  const platform = pick(platforms);
   const handle = suspicious ? pick(SUSPICIOUS_HANDLES) : pick(BENIGN_HANDLES);
   const { url, type } = contentUrlFor(platform, handle);
   const title = anchor.knownForTitles.length ? pick(anchor.knownForTitles) : "their latest film";
@@ -131,13 +144,20 @@ function makeCandidate(anchor: TalentIdentityAnchor, suspicious: boolean): Candi
  * Emit this sweep's candidate set: a few benign lookalike/fan items the
  * adjudicator should clear, plus 0-3 planted synthetic-likeness items
  * (~1 in 4 sweeps comes back fully clean).
+ *
+ * `platforms` bounds which surfaces the simulation draws from — the sweep
+ * passes the admin's enabled set so simulated coverage mirrors the toggles.
  */
-export function generateCandidates(anchor: TalentIdentityAnchor): CandidateContent[] {
+export function generateCandidates(
+  anchor: TalentIdentityAnchor,
+  platforms?: MonitorPlatformId[]
+): CandidateContent[] {
+  const pool = platforms?.length ? platforms : DEFAULT_SIMULATED_PLATFORMS;
   const suspiciousCount = Math.random() < 0.25 ? 0 : intBetween(1, 3);
   const benignCount = intBetween(2, 4);
   const candidates = [
-    ...Array.from({ length: suspiciousCount }, () => makeCandidate(anchor, true)),
-    ...Array.from({ length: benignCount }, () => makeCandidate(anchor, false)),
+    ...Array.from({ length: suspiciousCount }, () => makeCandidate(anchor, true, pool)),
+    ...Array.from({ length: benignCount }, () => makeCandidate(anchor, false, pool)),
   ];
   // Shuffle so planted items aren't positionally identifiable by the adjudicator
   for (let i = candidates.length - 1; i > 0; i--) {

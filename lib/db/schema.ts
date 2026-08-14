@@ -1600,8 +1600,8 @@ export const likenessHits = sqliteTable("likeness_hits", {
   id: text("id").primaryKey(),
   scanId: text("scan_id").notNull().references(() => monitorScans.id, { onDelete: "cascade" }),
   talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  platform: text("platform").notNull(), // instagram | tiktok | youtube | x
-  contentType: text("content_type", { enum: ["reel", "short", "video", "post"] }).notNull().default("reel"),
+  platform: text("platform").notNull(), // any MonitorPlatformId (lib/monitor/platforms.ts)
+  contentType: text("content_type", { enum: ["reel", "short", "video", "post", "image"] }).notNull().default("reel"),
   contentUrl: text("content_url").notNull(),
   authorHandle: text("author_handle"),
   caption: text("caption"),
