@@ -46,6 +46,7 @@ import { discoverYouTube, youtubeApiKey } from "./ingest/youtube";
 import { discoverTikTok } from "./ingest/tiktok";
 import { seedHandlesFor } from "./ingest/seeds";
 import { verifyCandidatesIdentity } from "./identity-check";
+import { assessCandidatesSynthetic } from "./synthetic-check";
 import { recordLearnedHashtags, topLearnedQueries } from "./query-mining";
 import {
   computeDetectionCoverage,
@@ -858,6 +859,31 @@ export async function runLikenessScan(
       );
     } catch (err) {
       console.warn(`[monitor] identity check failed: ${(err as Error).message}`);
+    }
+  }
+
+  // Synthetic-media check: provenance markers + LLaVA artifact reasoning fill
+  // the syntheticMediaScore slot that has been null since Phase 1. Runs after
+  // the identity check so the adjudicator sees both halves of the flag
+  // criterion (likeness AND synthesis) as real readings where possible.
+  // Non-fatal, and disableable via ai_settings synthetic_check_enabled=false.
+  if (ai && candidates.length) {
+    try {
+      const enabledRow = await db
+        .select({ value: sql<string>`${aiSettings.value}` })
+        .from(aiSettings)
+        .where(eq(aiSettings.key, "synthetic_check_enabled"))
+        .get();
+      if (enabledRow?.value !== "false") {
+        const stats = await assessCandidatesSynthetic(ai, candidates);
+        console.log(
+          `[monitor] synthetic check for ${opts.talentId}: ${stats.checked} checked ` +
+            `(${stats.declared} declared via metadata, ${stats.synthetic} synthetic, ` +
+            `${stats.authentic} authentic, ${stats.unsure} unsure, ${stats.errors} errored)`
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] synthetic check failed: ${(err as Error).message}`);
     }
   }
 

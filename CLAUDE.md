@@ -253,6 +253,8 @@ Key secrets: `JWT_SECRET`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `TMDB_API_KEY`
 
 `APIFY_TOKEN` is optional and gates the likeness monitor's real discovery: absent, `lib/monitor/scan.ts` falls back to the simulated crawler (`lib/monitor/candidates.ts`) and the monitor behaves exactly as it did before. Present, sweeps hit live Instagram via Apify actors and cost money per run.
 
+The deepfake-detection stack (detector signals, vault-anchored reference set, synthetic-media checks) is documented in `docs/deepfake-detection.md` — including its **known limitations and open questions**; read that before extending `lib/monitor/` detection layers, and keep it current.
+
 ## Workers
 
 | Worker | Queue | Purpose |

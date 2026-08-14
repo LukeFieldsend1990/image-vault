@@ -55,9 +55,11 @@ const SIMILARITY_BY_VERDICT: Record<IdentityVerdict, number> = {
 /**
  * Fetch the thumbnail bytes with the same 8-second timeout and size cap
  * both checks use. Extracted so the face-presence pre-check and the
- * identity check share the download instead of doubling it.
+ * identity check share the download instead of doubling it. Exported for
+ * the synthetic-media check (lib/monitor/synthetic-check.ts), which needs
+ * identical fetch semantics.
  */
-async function fetchImageBytes(url: string, timeoutMs = 8_000): Promise<Uint8Array | null> {
+export async function fetchImageBytes(url: string, timeoutMs = 8_000): Promise<Uint8Array | null> {
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);
