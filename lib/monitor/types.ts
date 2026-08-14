@@ -52,6 +52,16 @@ export interface CandidateAuthorMeta {
   verified: boolean;
 }
 
+/** Structured output of the synthetic-media check (lib/monitor/synthetic-check.ts). */
+export interface SyntheticFindings {
+  /** Which detector produced the reading: embedded metadata, Claude vision, or LLaVA. */
+  analyst: "metadata" | "claude" | "llava";
+  /** Best-guess generator family (midjourney, stable-diffusion, face-swap, ...) — Claude path only. */
+  generatorFamily: string | null;
+  /** Short specific observations, enforcement-grade ("blending seam at jawline"). */
+  evidence: string[];
+}
+
 export interface CandidateContent {
   platform: MonitorPlatformId;
   contentType: HitContentType;
@@ -64,6 +74,8 @@ export interface CandidateContent {
   authorMeta?: CandidateAuthorMeta;
   /** Hashtags parsed from the post, lowercased without the leading '#'. */
   hashtags?: string[];
+  /** Set by the synthetic-media check when it produced a reading. */
+  syntheticFindings?: SyntheticFindings;
 }
 
 export interface TalentIdentityAnchor {
@@ -71,6 +83,11 @@ export interface TalentIdentityAnchor {
   knownForTitles: string[];
   scanPackageCount: number;
   geometryFingerprintCount: number;
+  /** Active vault-derived reference images backing identity matching this
+   *  sweep (lib/monitor/reference-set.ts). Absent = reference set not loaded. */
+  referenceImageCount?: number;
+  /** Detection-coverage tier computed from the reference set. */
+  coverageTier?: "unanchored" | "baseline" | "anchored" | "fortified";
 }
 
 /**
