@@ -145,7 +145,7 @@ export const CONCEPTS: ConceptEntry[] = [
       "and adjudicates them via callAi() with heuristic-threshold fallback. Identity matching is vault-anchored: monitorReferenceImages indexes stills from the talent's own scan packages " +
       "(bytes stay in R2, presigned per sweep) as the face-match reference gallery, replacing the single-public-photo baseline; computeDetectionCoverage scores the set into a talent-facing " +
       "tier (unanchored/baseline/anchored/fortified) with next-upload suggestions, so detection strengthens as talent adds scans. syntheticMediaScore is produced by lib/monitor/synthetic-check.ts: " +
-      "embedded provenance markers (IPTC trainedAlgorithmicMedia, generator signatures — near-conclusive) plus a LLaVA artifact check (capped, 'unsure' stays null). Layering and limits: docs/deepfake-detection.md. Hits persist to likenessHits with confidence, risk level and rationale; " +
+      "embedded provenance markers (IPTC trainedAlgorithmicMedia, generator signatures — near-conclusive), then Claude Haiku vision (budget-gated; structured verdict with generator-family attribution and face-swap evidence, filtered-real guard) with LLaVA fallback. Layering and limits: docs/deepfake-detection.md. Hits persist to likenessHits with confidence, risk level and rationale; " +
       "new hits notify the talent and their reps in-app and email the content link. Triage transitions: new → confirmed/dismissed/takedown_requested/resolved. " +
       "Talent UI at /vault/monitor (gated with the royalty-meter flag); admin visibility via the list_likeness_hits MCP tool.",
     codePaths: ["lib/monitor/", "app/api/monitor/", "app/(vault)/vault/monitor/", "lib/mcp/tools/likeness-monitor.ts"],

@@ -158,6 +158,14 @@ function buildAdjudicationPrompt(
         `caption (untrusted): ${JSON.stringify(c.caption)}\n` +
         (c.hashtags?.length ? `hashtags (untrusted): ${c.hashtags.slice(0, 15).join(", ")}\n` : "") +
         `detector readings: ${JSON.stringify(detectors)}\n` +
+        (c.syntheticFindings
+          ? `synthetic-media analysis (detector output, ${c.syntheticFindings.analyst}): ` +
+            (c.syntheticFindings.generatorFamily
+              ? `resembles ${c.syntheticFindings.generatorFamily}; `
+              : "") +
+            (c.syntheticFindings.evidence.join("; ") || "no specific observations") +
+            "\n"
+          : "") +
         (unmeasured.length ? `NOT MEASURED (no reading taken, do not treat as low): ${unmeasured.join(", ")}` : "all detectors reported")
       );
     })
@@ -278,6 +286,11 @@ export function heuristicAdjudicate(candidates: CandidateContent[]): Adjudicatio
     }
     if (provenance) matchSignals.push(`Geometry fingerprint correlation ${s.geometryFingerprintCorrelation}`);
     if (haveSynthetic && synthetic) matchSignals.push(`Synthetic media score ${s.syntheticMediaScore}`);
+    if (haveSynthetic && synthetic && c.syntheticFindings?.generatorFamily) {
+      // Enforcement-grade attribution: "resembles face-swap" reads far better
+      // in a takedown letter than a bare score.
+      matchSignals.push(`Artifact analysis: resembles ${c.syntheticFindings.generatorFamily}`);
+    }
     if (!haveSynthetic && declaresAi) matchSignals.push("Caption/handle/hashtags declare AI generation");
     if (c.discoverySource && c.discoverySource.mode !== "simulated") {
       matchSignals.push(`Surfaced by ${c.discoverySource.mode} "${c.discoverySource.query}"`);
@@ -862,12 +875,13 @@ export async function runLikenessScan(
     }
   }
 
-  // Synthetic-media check: provenance markers + LLaVA artifact reasoning fill
-  // the syntheticMediaScore slot that has been null since Phase 1. Runs after
-  // the identity check so the adjudicator sees both halves of the flag
-  // criterion (likeness AND synthesis) as real readings where possible.
-  // Non-fatal, and disableable via ai_settings synthetic_check_enabled=false.
-  if (ai && candidates.length) {
+  // Synthetic-media check: provenance markers, then Claude Haiku vision
+  // (budget-gated) with LLaVA fallback, filling the syntheticMediaScore slot
+  // that was null since Phase 1. Runs after the identity check so the
+  // adjudicator sees both halves of the flag criterion (likeness AND
+  // synthesis) as real readings where possible. Non-fatal, and disableable
+  // via ai_settings synthetic_check_enabled=false.
+  if ((ai || env.ANTHROPIC_API_KEY) && candidates.length) {
     try {
       const enabledRow = await db
         .select({ value: sql<string>`${aiSettings.value}` })
@@ -875,11 +889,11 @@ export async function runLikenessScan(
         .where(eq(aiSettings.key, "synthetic_check_enabled"))
         .get();
       if (enabledRow?.value !== "false") {
-        const stats = await assessCandidatesSynthetic(ai, candidates);
+        const stats = await assessCandidatesSynthetic(env, db, candidates);
         console.log(
           `[monitor] synthetic check for ${opts.talentId}: ${stats.checked} checked ` +
-            `(${stats.declared} declared via metadata, ${stats.synthetic} synthetic, ` +
-            `${stats.authentic} authentic, ${stats.unsure} unsure, ${stats.errors} errored)`
+            `(${stats.declared} declared via metadata, ${stats.claude} via claude, ${stats.llava} via llava; ` +
+            `${stats.synthetic} synthetic, ${stats.authentic} authentic, ${stats.unsure} unsure, ${stats.errors} errored)`
         );
       }
     } catch (err) {

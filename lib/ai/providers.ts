@@ -59,6 +59,38 @@ export async function callVisionAi(
   return { text, inputTokens, outputTokens, provider: "workers_ai", model };
 }
 
+/**
+ * Sniff an image's media type from magic bytes. The Anthropic API requires an
+ * accurate media_type on image blocks; social-media thumbnails arrive as
+ * jpeg/png/webp/gif and their URLs routinely lie about the format.
+ */
+export function sniffImageMediaType(
+  bytes: Uint8Array
+): "image/jpeg" | "image/png" | "image/webp" | "image/gif" | null {
+  if (bytes.length < 12) return null;
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return "image/gif";
+  return null;
+}
+
+/** Chunked base64 without Buffer (Workers runtime) — same helper shape as
+ *  lib/monitor/rekognition.ts. */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 // ── Anthropic (raw fetch) ────────────────────────────────────────────────────
 
 export async function callAnthropic(
@@ -101,6 +133,76 @@ export async function callAnthropic(
 
   return {
     text,
+    inputTokens: data.usage.input_tokens,
+    outputTokens: data.usage.output_tokens,
+    provider: "anthropic",
+    model,
+  };
+}
+
+/**
+ * Anthropic vision via the same raw-fetch path as callAnthropic — the image
+ * rides as a base64 content block ahead of the text prompt. Claude Haiku's
+ * vision is a large step up from LLaVA 1.5 7B for the subjective reads the
+ * monitor needs (generator house styles, face-swap blending seams), at a cost
+ * the $1/14-day budget ceiling absorbs (~1k–5k image tokens per thumbnail at
+ * Haiku input rates).
+ */
+export async function callAnthropicVision(
+  apiKey: string,
+  params: {
+    imageBytes: Uint8Array;
+    prompt: string;
+    system?: string;
+    model?: string;
+    maxTokens?: number;
+  }
+): Promise<AiResult | null> {
+  const model = params.model ?? "claude-haiku-4-5-20251001";
+  const mediaType = sniffImageMediaType(params.imageBytes);
+  // Unknown container → refuse rather than guess: a wrong media_type is a 400.
+  if (!mediaType) return null;
+
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: params.maxTokens ?? 512,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: mediaType, data: bytesToBase64(params.imageBytes) },
+          },
+          { type: "text", text: params.prompt },
+        ],
+      },
+    ],
+  };
+  if (params.system) body.system = params.system;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Anthropic API error ${res.status}: ${errText}`);
+  }
+
+  const data = (await res.json()) as {
+    content: Array<{ type: string; text: string }>;
+    usage: { input_tokens: number; output_tokens: number };
+  };
+
+  return {
+    text: data.content.filter((c) => c.type === "text").map((c) => c.text).join(""),
     inputTokens: data.usage.input_tokens,
     outputTokens: data.usage.output_tokens,
     provider: "anthropic",

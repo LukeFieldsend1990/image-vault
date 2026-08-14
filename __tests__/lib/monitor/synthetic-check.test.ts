@@ -11,11 +11,16 @@ vi.mock("@opennextjs/cloudflare", () => ({
 import {
   ARTIFACT_SCORE,
   AUTHENTIC_SCORE,
+  CLAUDE_ARTIFACT_CAP,
+  CLAUDE_ARTIFACT_FLOOR,
   MARKER_SCORE,
   checkSyntheticMedia,
+  parseArtifactAnalysis,
   parseSyntheticVerdict,
   scanProvenanceMarkers,
+  scoreArtifactAnalysis,
 } from "@/lib/monitor/synthetic-check";
+import { sniffImageMediaType } from "@/lib/ai/providers";
 
 function bytesWith(text: string): Uint8Array {
   // Marker embedded mid-buffer surrounded by binary noise, like real
@@ -115,5 +120,82 @@ describe("checkSyntheticMedia", () => {
   it("returns null when the vision model errors and no markers exist", async () => {
     const result = await checkSyntheticMedia(aiNeverCalled, bytesWith("no markers here"));
     expect(result).toBeNull();
+  });
+});
+
+describe("parseArtifactAnalysis", () => {
+  it("parses a clean JSON analysis", () => {
+    const analysis = parseArtifactAnalysis(
+      '{"verdict":"synthetic","confidence":85,"generatorFamily":"face-swap","evidence":["blending seam at jawline","face lighting inconsistent with scene"],"filteredReal":false}'
+    );
+    expect(analysis).toEqual({
+      verdict: "synthetic",
+      confidence: 85,
+      generatorFamily: "face-swap",
+      evidence: ["blending seam at jawline", "face lighting inconsistent with scene"],
+      filteredReal: false,
+    });
+  });
+
+  it("tolerates markdown fences and normalises unknown generator families", () => {
+    const analysis = parseArtifactAnalysis(
+      '```json\n{"verdict":"synthetic","confidence":70,"generatorFamily":"SomeNewModel","evidence":[],"filteredReal":false}\n```'
+    );
+    expect(analysis?.verdict).toBe("synthetic");
+    expect(analysis?.generatorFamily).toBeNull();
+  });
+
+  it("rejects garbage and unknown verdicts", () => {
+    expect(parseArtifactAnalysis("I think it looks fake")).toBeNull();
+    expect(parseArtifactAnalysis('{"verdict":"probably","confidence":50}')).toBeNull();
+  });
+
+  it("clamps out-of-range confidence and defaults a missing one to 50", () => {
+    expect(parseArtifactAnalysis('{"verdict":"synthetic","confidence":250}')?.confidence).toBe(100);
+    expect(parseArtifactAnalysis('{"verdict":"unsure"}')?.confidence).toBe(50);
+  });
+});
+
+describe("scoreArtifactAnalysis", () => {
+  const base = { generatorFamily: null, evidence: [], filteredReal: false };
+
+  it("scales synthetic verdicts with confidence inside the floor-cap band", () => {
+    expect(scoreArtifactAnalysis({ ...base, verdict: "synthetic", confidence: 0 })).toBe(CLAUDE_ARTIFACT_FLOOR);
+    expect(scoreArtifactAnalysis({ ...base, verdict: "synthetic", confidence: 100 })).toBe(CLAUDE_ARTIFACT_CAP);
+    const mid = scoreArtifactAnalysis({ ...base, verdict: "synthetic", confidence: 50 });
+    expect(mid).toBeGreaterThan(CLAUDE_ARTIFACT_FLOOR);
+    expect(mid).toBeLessThan(CLAUDE_ARTIFACT_CAP);
+  });
+
+  it("keeps the Claude cap below a metadata declaration", () => {
+    expect(CLAUDE_ARTIFACT_CAP).toBeLessThan(MARKER_SCORE);
+  });
+
+  it("collapses 'synthetic but plausibly filtered' to null — the false-positive guard", () => {
+    expect(
+      scoreArtifactAnalysis({ ...base, verdict: "synthetic", confidence: 90, filteredReal: true })
+    ).toBeNull();
+  });
+
+  it("maps authentic and unsure as the LLaVA path does", () => {
+    expect(scoreArtifactAnalysis({ ...base, verdict: "authentic", confidence: 80 })).toBe(AUTHENTIC_SCORE);
+    expect(scoreArtifactAnalysis({ ...base, verdict: "unsure", confidence: 50 })).toBeNull();
+  });
+});
+
+describe("sniffImageMediaType", () => {
+  it("identifies the containers social thumbnails arrive in", () => {
+    expect(sniffImageMediaType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]))).toBe("image/jpeg");
+    expect(sniffImageMediaType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]))).toBe("image/png");
+    expect(
+      sniffImageMediaType(
+        new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50])
+      )
+    ).toBe("image/webp");
+  });
+
+  it("refuses to guess on unknown bytes", () => {
+    expect(sniffImageMediaType(new TextEncoder().encode("<html>not an image</html>"))).toBeNull();
+    expect(sniffImageMediaType(new Uint8Array([1, 2, 3]))).toBeNull();
   });
 });

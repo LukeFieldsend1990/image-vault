@@ -89,12 +89,25 @@ Two-stage scoring of `syntheticMediaScore`, cheapest evidence first:
    A C2PA/JUMBF manifest *without* an AI source type is recorded but not
    scored — content credentials also ship on authentic camera captures
    (Leica, Sony), so "has provenance" must never be read as "is AI".
-2. **Vision artifact check** — LLaVA inspects the thumbnail for generation
-   artifacts (malformed hands/text, waxy skin, impossible lighting, merged
-   objects). Verdict buckets: synthetic → 0.8, authentic → 0.15,
-   unsure → null (no reading, adjudicator falls back to text-intent
-   evidence). This is reasoning, not a trained forensic classifier — the 0.8
-   cap reflects that.
+2. **Vision artifact check** — analyst chosen per sweep:
+   - **Claude Haiku vision** (primary when `ANTHROPIC_API_KEY` is set, the AI
+     switch is on, and the $1/14-day budget has headroom; every call is
+     cost-logged under feature `synthetic_check`). Returns a structured
+     analysis: verdict + confidence, **generator-family attribution**
+     (midjourney / stable-diffusion / flux / dalle / video-model /
+     **face-swap** / other), and up to four specific observations
+     ("blending seam at jawline") that flow into the adjudicator prompt and
+     hit match signals — enforcement-grade rationale for takedown letters.
+     Synthetic verdicts scale with confidence inside [0.6, 0.9]; a verdict
+     the model itself flags as "plausibly genuine-but-filtered" is **not
+     scored** — beauty-filtered real photos share the waxy-skin tell, and
+     that false positive is the one this layer must never produce.
+   - **LLaVA** (free fallback — no key, budget exhausted, or a Claude call
+     failed). One-word verdict: synthetic → 0.8, authentic → 0.15,
+     unsure → null (no reading; adjudicator falls back to text-intent
+     evidence).
+   Both are reasoning, not trained forensic classifiers — the caps (0.9 /
+   0.8, always below the 0.95 a metadata hit earns) reflect that.
 
 ### Honest limits of this layer
 
