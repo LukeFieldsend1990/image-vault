@@ -20,10 +20,20 @@ export const TIKTOK_ACTOR = "clockworks~tiktok-scraper";
 
 export const TIKTOK_QUERY_SUFFIXES = ["ai", "deepfake", "ai trailer", "concept trailer"] as const;
 
-export function buildTikTokQueries(anchor: TalentIdentityAnchor, max = 4): string[] {
+export function buildTikTokQueries(
+  anchor: TalentIdentityAnchor,
+  max = 4,
+  learnedHashtags: string[] = []
+): string[] {
   const name = anchor.fullName.trim();
   if (!name) return [];
-  return TIKTOK_QUERY_SUFFIXES.map((s) => `${name} ${s}`).slice(0, max);
+  const base = TIKTOK_QUERY_SUFFIXES.map((s) => `${name} ${s}`);
+  // Learned hashtags come in as bare tags (e.g. "tomhardyrayleigh") from
+  // the mining pass. TikTok search takes phrases, so we prefix "#" and
+  // append them after the base set — TIKTOK_QUERY_SUFFIXES is the tried
+  // vocabulary, learned queries expand it.
+  const learned = learnedHashtags.map((h) => `#${h}`);
+  return [...base, ...learned].slice(0, max + Math.min(learnedHashtags.length, 3));
 }
 
 interface TikTokItem {
@@ -101,6 +111,8 @@ export async function discoverTikTok(opts: {
   anchor: TalentIdentityAnchor;
   maxQueries?: number;
   resultsPerQuery?: number;
+  /** Learned hashtags from prior sweeps for this talent (bare, no '#'). */
+  learnedHashtags?: string[];
   signal?: AbortSignal;
   budget?: {
     check: () => Promise<{ ok: boolean; reason: string | null }>;
@@ -116,7 +128,7 @@ export async function discoverTikTok(opts: {
     }) => Promise<void>;
   };
 }): Promise<TikTokDiscoveryResult> {
-  const queries = buildTikTokQueries(opts.anchor, opts.maxQueries ?? 4);
+  const queries = buildTikTokQueries(opts.anchor, opts.maxQueries ?? 4, opts.learnedHashtags ?? []);
   const resultsLimit = opts.resultsPerQuery ?? 50;
   const candidates: CandidateContent[] = [];
   const seen = new Set<string>();

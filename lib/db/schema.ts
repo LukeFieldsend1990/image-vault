@@ -1785,3 +1785,27 @@ export const accountOutreach = sqliteTable("account_outreach", {
   lastStatusAt: integer("last_status_at").notNull(),
   notes: text("notes"),
 });
+
+/**
+ * Per-talent, per-platform queries mined from confirmed hits. Confirmed hits
+ * carry hashtags we didn't ask for — #tomhardyrayleigh, #томхарди,
+ * #hardyfakes. Adding those back into next sweep's query set expands
+ * coverage without operator effort. hit_count tracks yield so we can
+ * prioritise when capping learned queries against Apify budget.
+ */
+export const monitorLearnedQueries = sqliteTable(
+  "monitor_learned_queries",
+  {
+    id: text("id").primaryKey(),
+    talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    platform: text("platform").notNull(), // instagram | tiktok | youtube
+    query: text("query").notNull(),
+    hitCount: integer("hit_count").notNull().default(1),
+    firstSeenAt: integer("first_seen_at").notNull(),
+    lastSeenAt: integer("last_seen_at").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+  },
+  (t) => ({
+    uniqTalentPlatformQuery: unique().on(t.talentId, t.platform, t.query),
+  })
+);
