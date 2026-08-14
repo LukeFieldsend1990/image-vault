@@ -105,6 +105,9 @@ export async function POST(req: NextRequest) {
     ANTHROPIC_API_KEY: (env as unknown as { ANTHROPIC_API_KEY?: string }).ANTHROPIC_API_KEY,
     APIFY_TOKEN: (env as unknown as { APIFY_TOKEN?: string }).APIFY_TOKEN,
     YOUTUBE_API_KEY: (env as unknown as { YOUTUBE_API_KEY?: string }).YOUTUBE_API_KEY,
+    AWS_ACCESS_KEY_ID: (env as unknown as { AWS_ACCESS_KEY_ID?: string }).AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: (env as unknown as { AWS_SECRET_ACCESS_KEY?: string }).AWS_SECRET_ACCESS_KEY,
+    AWS_REGION: (env as unknown as { AWS_REGION?: string }).AWS_REGION,
   };
 
   const kickoff = async () => {

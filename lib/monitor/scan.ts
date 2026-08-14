@@ -21,6 +21,7 @@ import {
   users,
   hitSecondaryActors,
   talentAccountWhitelist,
+  aiSettings,
 } from "@/lib/db/schema";
 import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { callAi } from "@/lib/ai/providers";
@@ -690,7 +691,15 @@ export async function failScan(db: Db, scanId: string, message: string): Promise
 }
 
 export async function runLikenessScan(
-  env: { AI?: Ai; ANTHROPIC_API_KEY?: string; APIFY_TOKEN?: string; YOUTUBE_API_KEY?: string },
+  env: {
+    AI?: Ai;
+    ANTHROPIC_API_KEY?: string;
+    APIFY_TOKEN?: string;
+    YOUTUBE_API_KEY?: string;
+    AWS_ACCESS_KEY_ID?: string;
+    AWS_SECRET_ACCESS_KEY?: string;
+    AWS_REGION?: string;
+  },
   db: Db,
   opts: {
     talentId: string;
@@ -746,10 +755,42 @@ export async function runLikenessScan(
   const ai = (env as unknown as { AI?: Ai }).AI;
   if (ai && candidates.length) {
     try {
-      const stats = await verifyCandidatesIdentity(ai, candidates, anchor.fullName);
+      // Provider comes from ai_settings. Default llava. Rekognition needs
+      // AWS creds AND a reference image URL (talent's TMDB profile); if
+      // either is missing the identity-check module logs and falls back.
+      const providerRow = await db
+        .select({ value: sql<string>`${aiSettings.value}` })
+        .from(aiSettings)
+        .where(eq(aiSettings.key, "identity_check_provider"))
+        .get();
+      const provider = (providerRow?.value ?? "llava") as "llava" | "rekognition" | "both";
+
+      let referenceImageUrl: string | undefined;
+      let rekognitionCredentials: { accessKeyId: string; secretAccessKey: string; region?: string } | undefined;
+      if (provider !== "llava") {
+        const profile = await db
+          .select({ url: talentProfiles.profileImageUrl })
+          .from(talentProfiles)
+          .where(eq(talentProfiles.userId, opts.talentId))
+          .get();
+        referenceImageUrl = profile?.url ?? undefined;
+        if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
+          rekognitionCredentials = {
+            accessKeyId: env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+            region: env.AWS_REGION ?? "us-east-1",
+          };
+        }
+      }
+
+      const stats = await verifyCandidatesIdentity(ai, candidates, anchor.fullName, {
+        provider,
+        referenceImageUrl,
+        rekognitionCredentials,
+      });
       console.log(
-        `[monitor] identity check for ${opts.talentId}: ${stats.checked} of ${candidates.length} ` +
-          `checked (${stats.confirmed} confirmed, ${stats.uncertain} uncertain, ${stats.denied} denied, ${stats.errors} errored)`
+        `[monitor] identity check for ${opts.talentId} via ${stats.provider}: ${stats.checked} of ${candidates.length} ` +
+          `checked (${stats.confirmed} confirmed, ${stats.uncertain} uncertain, ${stats.denied} denied, ${stats.noFace} no-face, ${stats.errors} errored)`
       );
     } catch (err) {
       console.warn(`[monitor] identity check failed: ${(err as Error).message}`);

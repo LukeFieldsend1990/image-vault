@@ -28,8 +28,16 @@
 
 import { callVisionAi } from "@/lib/ai/providers";
 import type { CandidateContent } from "./types";
+import { compareFaces, type RekognitionCredentials } from "./rekognition";
 
 export type IdentityVerdict = "confirmed" | "uncertain" | "denied";
+export type IdentityProvider = "llava" | "rekognition" | "both";
+
+/** Rekognition-similarity buckets, tuned to the API's typical output distribution.
+ *  A genuine face match usually comes in above 0.90; lookalikes tend to sit 0.65-0.85;
+ *  wrong-person or no-face returns are usually 0 (no match at all). */
+const REKOGNITION_CONFIRMED = 0.85;
+const REKOGNITION_UNCERTAIN = 0.65;
 
 export interface IdentityCheckResult {
   verdict: IdentityVerdict;
@@ -45,28 +53,76 @@ const SIMILARITY_BY_VERDICT: Record<IdentityVerdict, number> = {
 };
 
 /**
+ * Fetch the thumbnail bytes with the same 8-second timeout and size cap
+ * both checks use. Extracted so the face-presence pre-check and the
+ * identity check share the download instead of doubling it.
+ */
+async function fetchImageBytes(url: string, timeoutMs = 8_000): Promise<Uint8Array | null> {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 5_000_000) return null;
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cheap sanity check before the identity model runs: does this thumbnail
+ * contain a human face at all? A large class of hits come from video
+ * thumbnails that are title cards, movie posters, or scene shots — LLaVA
+ * asked "is this Tom Hardy?" on a poster with no face will still answer,
+ * and the answer is noise. Filtering out no-face candidates up front is
+ * the highest-leverage false-positive cut we can make cheaply.
+ */
+export async function hasFaceInImage(ai: Ai, imgBytes: Uint8Array): Promise<boolean | null> {
+  const prompt = "Does this image contain at least one human face? Answer with exactly one word: yes or no. Do not explain.";
+  try {
+    const out = await callVisionAi(ai, { imageBytes: imgBytes, prompt, maxTokens: 4 });
+    const raw = out.text?.trim().toLowerCase() ?? "";
+    if (!raw) return null;
+    if (/\byes\b/.test(raw)) return true;
+    if (/\bno\b/.test(raw)) return false;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Check whether the given thumbnail shows the target talent.
  *
  * Returns null when the check couldn't run (no thumbnail, image fetch failed,
- * LLaVA errored). Signal downstream reads null as "no reading taken" and
- * falls back to the pre-Phase-2 heuristic path — a genuine "we tried and
- * cannot say" is more honest than a manufactured 0.5.
+ * LLaVA errored, or the pre-check found no face). Signal downstream reads
+ * null as "no reading taken" and falls back to the pre-Phase-2 heuristic path
+ * — a genuine "we tried and cannot say" is more honest than a manufactured
+ * 0.5. `skipReason` on the return payload lets the caller log why.
  */
 export async function checkIdentity(
   ai: Ai,
-  opts: { imageUrl: string; talentName: string; timeoutMs?: number }
-): Promise<IdentityCheckResult | null> {
-  let imgBytes: Uint8Array;
-  try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8_000);
-    const res = await fetch(opts.imageUrl, { signal: controller.signal });
-    clearTimeout(t);
-    if (!res.ok) return null;
-    imgBytes = new Uint8Array(await res.arrayBuffer());
-    if (imgBytes.length === 0 || imgBytes.length > 5_000_000) return null;
-  } catch {
-    return null;
+  opts: { imageUrl: string; talentName: string; timeoutMs?: number; skipFacePrecheck?: boolean }
+): Promise<(IdentityCheckResult & { skipReason?: string }) | null> {
+  const imgBytes = await fetchImageBytes(opts.imageUrl, opts.timeoutMs);
+  if (!imgBytes) return null;
+
+  // Face-presence gate. Skipped only when the caller explicitly opts out
+  // (Rekognition path, which does its own face detection internally).
+  if (!opts.skipFacePrecheck) {
+    const hasFace = await hasFaceInImage(ai, imgBytes);
+    if (hasFace === false) {
+      // Distinct return: not null (we DID run) but no verdict — the caller
+      // can distinguish "no face present" from "identity check failed" in
+      // its stats.
+      return { verdict: "denied", similarity: 0.2, raw: "no face in image", skipReason: "no_face_in_thumbnail" };
+    }
+    // hasFace === null (couldn't tell) falls through and runs the identity
+    // check anyway. Better to spend the second LLaVA call than to drop a
+    // real hit because the face-detect model hedged.
   }
 
   const prompt =
@@ -119,19 +175,83 @@ export function parseVerdict(text: string): IdentityVerdict {
  * vision model" to the match signals so the human reviewer sees where the
  * confidence came from and can weigh it against a lookalike bug.
  */
+/**
+ * Rekognition path — used when the operator has selected `rekognition` or
+ * `both`. Fetches the target thumbnail bytes and calls compareFaces against
+ * pre-fetched source bytes (talent's reference photo, downloaded once at
+ * the top of verifyCandidatesIdentity). Sets the signal directly from the
+ * numeric similarity, so this path bypasses the yes/maybe/no bucketing.
+ */
+async function checkIdentityViaRekognition(
+  creds: RekognitionCredentials,
+  sourceBytes: Uint8Array,
+  imageUrl: string,
+  timeoutMs = 8_000
+): Promise<{ similarity: number; verdict: IdentityVerdict } | null> {
+  const target = await fetchImageBytes(imageUrl, timeoutMs);
+  if (!target) return null;
+  const result = await compareFaces(creds, sourceBytes, target);
+  if (!result) return null;
+  const s = result.similarity;
+  const verdict: IdentityVerdict =
+    s >= REKOGNITION_CONFIRMED ? "confirmed" : s >= REKOGNITION_UNCERTAIN ? "uncertain" : "denied";
+  return { similarity: s, verdict };
+}
+
+export interface VerifyOptions {
+  concurrency?: number;
+  provider?: IdentityProvider;
+  /** Required for rekognition and both. Reference image URL (usually talent's TMDB profile). */
+  referenceImageUrl?: string;
+  /** Required for rekognition and both. */
+  rekognitionCredentials?: RekognitionCredentials;
+}
+
 export async function verifyCandidatesIdentity(
   ai: Ai,
   candidates: CandidateContent[],
   talentName: string,
-  opts: { concurrency?: number } = {}
-): Promise<{ checked: number; confirmed: number; uncertain: number; denied: number; errors: number }> {
+  opts: VerifyOptions = {}
+): Promise<{
+  checked: number;
+  confirmed: number;
+  uncertain: number;
+  denied: number;
+  noFace: number;
+  errors: number;
+  provider: IdentityProvider;
+}> {
   // Workers AI throws generic "internal error" 5xxs under high parallel load
   // on this account tier — observed live at concurrency 8 with a Tom Hardy
   // sweep. Dropping to 3 keeps most calls succeeding at the cost of ~3x wall
   // time, which for a ~60-candidate sweep is still under the 5-min Apify
   // discovery budget so end-to-end wall time barely moves.
   const concurrency = opts.concurrency ?? 3;
-  const stats = { checked: 0, confirmed: 0, uncertain: 0, denied: 0, errors: 0 };
+  const requestedProvider: IdentityProvider = opts.provider ?? "llava";
+
+  // Determine actual provider used. Rekognition needs credentials + a
+  // reference image; falling back to LLaVA silently would misrepresent
+  // to the operator what happened. Log the downgrade instead.
+  let provider: IdentityProvider = requestedProvider;
+  let sourceBytes: Uint8Array | null = null;
+  if (requestedProvider !== "llava") {
+    if (!opts.rekognitionCredentials || !opts.referenceImageUrl) {
+      console.warn(
+        `[monitor] identity provider "${requestedProvider}" requested without credentials + reference URL; falling back to llava`
+      );
+      provider = "llava";
+    } else {
+      sourceBytes = await fetchImageBytes(opts.referenceImageUrl);
+      if (!sourceBytes) {
+        console.warn(
+          `[monitor] failed to fetch reference image at ${opts.referenceImageUrl}; falling back to llava`
+        );
+        provider = "llava";
+      }
+    }
+  }
+
+  const stats = { checked: 0, confirmed: 0, uncertain: 0, denied: 0, noFace: 0, errors: 0, provider };
 
   const withThumb = candidates
     .map((c, i) => ({ c, i }))
@@ -143,9 +263,37 @@ export async function verifyCandidatesIdentity(
       batch.map(async ({ c }) => {
         const url = c.media?.thumbnailUrl;
         if (!url) return;
+
+        // Rekognition path: real cosine similarity, no yes/maybe/no
+        // bucketing distortion. If it succeeds, use it; if it fails and
+        // provider="both", we fall through to LLaVA below.
+        if (provider === "rekognition" || provider === "both") {
+          const rek = await checkIdentityViaRekognition(opts.rekognitionCredentials!, sourceBytes!, url);
+          if (rek) {
+            stats.checked++;
+            stats[rek.verdict]++;
+            c.signals.faceEmbeddingSimilarity = rek.similarity;
+            return;
+          }
+          if (provider === "rekognition") {
+            // Strict mode: Rekognition failed, don't second-guess with LLaVA.
+            stats.errors++;
+            return;
+          }
+          // provider === "both": fall through to LLaVA fallback.
+        }
+
         const result = await checkIdentity(ai, { imageUrl: url, talentName });
         if (!result) {
           stats.errors++;
+          return;
+        }
+        if (result.skipReason === "no_face_in_thumbnail") {
+          stats.noFace++;
+          // Explicitly null: the pre-check ran, no face was present, so we
+          // have zero signal to feed the identity slot — better than
+          // pretending 0.2 similarity is a real reading.
+          c.signals.faceEmbeddingSimilarity = null;
           return;
         }
         stats.checked++;
