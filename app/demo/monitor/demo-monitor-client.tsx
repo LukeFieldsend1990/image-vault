@@ -3,15 +3,16 @@
 /**
  * /demo/monitor — auto-advancing tour of the Likeness Monitor.
  *
- * Five beats:
- *  1. Hits — reach-weighted list with secondary-actor avatar stack and confidence.
- *  2. Preview — in-app iframe modal on a flagged TikTok.
- *  3. Accounts — priority queue with Contact + Whitelist actions per offender.
- *  4. Contact — compose modal with a Licence-offer template.
- *  5. Admin — takedown backlog + cron controls (toggle, provider selector, Run now).
+ * All talent and account names are fictional. Product copy describes the
+ * user-facing outcome (identity match, reach ranking, priority queue) and
+ * deliberately avoids the underlying implementation — vendor names, model
+ * choice, cost per invocation, and orchestration cadence are not surfaced
+ * anywhere on this tour. Those belong in internal docs, not the public
+ * shop window.
  *
- * Self-contained: no fetches, no D1, inline styles so it survives any theme
- * drift. Structure copied from /demo/production so the two feel of a piece.
+ * Shell + TourCard structure copied from /demo/production so the two feel
+ * of a piece — same mobile top-bar, same floating card, same swipe
+ * controls.
  */
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
@@ -42,17 +43,18 @@ const INTRO_HOLD_MS = 2_000;
 const INTRO_FADE_MS = 700;
 
 // ─── Fake data ────────────────────────────────────────────────────────────────
+// All names below are fictional. No real actor, film, or account is depicted.
 
 const TALENT = {
-  fullName: "Tom Hardy",
-  initials: "TH",
-  profileUrl: "https://image.tmdb.org/t/p/w185/4TpgnS6l8YUXSne9Av9nda6mjxY.jpg",
+  fullName: "Marcus Vane",
+  initials: "MV",
+  profileUrl: null as string | null, // no image, avatars fall back to initials
 };
 
 const SECONDARY_ACTORS = [
-  { name: "Mads Mikkelsen", url: "https://image.tmdb.org/t/p/w185/AsX4bdvZ8UCayWTmAf9lAqOA8V7.jpg", confidence: 88 },
-  { name: "John Cena", url: "https://image.tmdb.org/t/p/w185/rgB2eIOt7WyQjdgJCOuESdDlrjg.jpg", confidence: 84 },
-  { name: "Channing Tatum", url: "https://image.tmdb.org/t/p/w185/prwdWq7iu9YMx8RENlZWNb6jVet.jpg", confidence: 92 },
+  { name: "Elena Cross", url: null as string | null, confidence: 92 },
+  { name: "Damon Reyes", url: null as string | null, confidence: 88 },
+  { name: "Sofia Marsh", url: null as string | null, confidence: 84 },
 ];
 
 interface FakeHit {
@@ -69,11 +71,11 @@ interface FakeHit {
 
 const HITS: FakeHit[] = [
   {
-    handle: "@ultimatestudiosofficial",
-    displayName: "Ultimate Studios",
+    handle: "@studiofakes.official",
+    displayName: "StudioFakes",
     platform: "instagram",
     caption:
-      "Anti-Venom (2027) – Tom Hardy, Mads Mikkelsen, John Cena | Concept Trailer. #AntiVenom #TomHardy #ai #conceptrailer",
+      "Nightblade Rising (2027) — Marcus Vane, Elena Cross, Damon Reyes | Fan Concept Trailer. #NightbladeRising #MarcusVane #ai #conceptrailer",
     cumulativeViews: 4_857_092,
     confidence: 90,
     riskLevel: "high",
@@ -81,11 +83,11 @@ const HITS: FakeHit[] = [
     secondaries: 3,
   },
   {
-    handle: "@hardy.generates",
-    displayName: "Hardy Generates",
+    handle: "@vane.generates",
+    displayName: "Vane Generates",
     platform: "tiktok",
     caption:
-      "❤️🔥 New Tom Hardy AI edit — Mad Max concept scene, all AI generated. #tomhardy #ai #veo3",
+      "❤️🔥 New Marcus Vane AI edit — reimagined action scene, all AI generated. #marcusvane #ai #edit",
     cumulativeViews: 1_244_000,
     confidence: 90,
     riskLevel: "medium",
@@ -93,11 +95,11 @@ const HITS: FakeHit[] = [
     secondaries: 0,
   },
   {
-    handle: "@celeb_transform",
-    displayName: "Celeb Transform",
+    handle: "@celeb.morphs",
+    displayName: "Celeb Morphs",
     platform: "tiktok",
     caption:
-      "Tom Hardy Was Born In Different Countries 🤯 #shorts #TomHardy #ai #celebrity #beforeafter",
+      "Marcus Vane Was Born In Different Countries 🤯 #shorts #MarcusVane #ai #celebrity #beforeafter",
     cumulativeViews: 383_400,
     confidence: 90,
     riskLevel: "medium",
@@ -119,8 +121,8 @@ interface FakeAccount {
 
 const OFFENDER_ACCOUNTS: FakeAccount[] = [
   {
-    handle: "ultimatestudiosofficial",
-    displayName: "Ultimate Studios",
+    handle: "studiofakes.official",
+    displayName: "StudioFakes",
     platform: "instagram",
     cumulativeViews: 4_857_092,
     hitCount: 4,
@@ -129,8 +131,8 @@ const OFFENDER_ACCOUNTS: FakeAccount[] = [
     lastSeen: "2h ago",
   },
   {
-    handle: "hardy.generates",
-    displayName: "Hardy Generates",
+    handle: "vane.generates",
+    displayName: "Vane Generates",
     platform: "tiktok",
     cumulativeViews: 1_244_000,
     hitCount: 9,
@@ -139,8 +141,8 @@ const OFFENDER_ACCOUNTS: FakeAccount[] = [
     lastSeen: "5h ago",
   },
   {
-    handle: "celeb_transform",
-    displayName: "Celeb Transform",
+    handle: "celeb.morphs",
+    displayName: "Celeb Morphs",
     platform: "tiktok",
     cumulativeViews: 383_400,
     hitCount: 2,
@@ -319,25 +321,42 @@ function AvatarStack({ count }: { count: number }) {
         Also in this content
       </p>
       <div style={{ display: "flex", marginLeft: "-0.125rem" }}>
-        {actors.map((a) => (
-          <div
-            key={a.name}
-            title={`${a.name} (${a.confidence}%)`}
-            style={{
-              width: "1.75rem",
-              height: "1.75rem",
-              borderRadius: "50%",
-              overflow: "hidden",
-              border: "2px solid var(--color-bg)",
-              boxShadow: "0 0 0 1.5px var(--color-border)",
-              marginLeft: "-0.5rem",
-              background: "#f3f3f3",
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={a.url} alt={a.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          </div>
-        ))}
+        {actors.map((a) => {
+          const initials = a.name
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((p) => p[0]?.toUpperCase() ?? "")
+            .join("");
+          return (
+            <div
+              key={a.name}
+              title={`${a.name} (${a.confidence}%)`}
+              style={{
+                width: "1.75rem",
+                height: "1.75rem",
+                borderRadius: "50%",
+                overflow: "hidden",
+                border: "2px solid var(--color-bg)",
+                boxShadow: "0 0 0 1.5px var(--color-border)",
+                marginLeft: "-0.5rem",
+                background: "var(--color-surface)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "0.6rem",
+                fontWeight: 700,
+                color: "var(--color-muted)",
+              }}
+            >
+              {a.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.url} alt={a.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                initials
+              )}
+            </div>
+          );
+        })}
       </div>
       <span style={{ fontSize: "0.7rem", color: "var(--color-muted)" }}>
         {actors.length} actor{actors.length === 1 ? "" : "s"} identified
@@ -590,13 +609,13 @@ function HitPreviewView() {
           >
             <div>
               <p style={{ fontSize: "0.75rem", color: "var(--color-muted)" }}>
-                TikTok · @hardy.generates
+                TikTok · @vane.generates
               </p>
             </div>
             <div style={{ color: "var(--color-muted)", fontSize: "0.9rem" }}>×</div>
           </div>
 
-          {/* Fake TikTok embed frame */}
+          {/* Fake video preview frame */}
           <div style={{ aspectRatio: "9 / 16", width: "100%", background: "linear-gradient(135deg, #000 0%, #1a1a1a 100%)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
             <div style={{ textAlign: "center", color: "rgba(255,255,255,0.7)" }}>
               <div
@@ -616,10 +635,7 @@ function HitPreviewView() {
                 </svg>
               </div>
               <p style={{ fontSize: "0.75rem", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                Embedded TikTok player
-              </p>
-              <p style={{ marginTop: "0.5rem", fontSize: "0.65rem", opacity: 0.6 }}>
-                tiktok.com/embed/v2/…
+                Platform preview
               </p>
             </div>
           </div>
@@ -944,50 +960,50 @@ function AdminPanelView() {
         </h1>
       </div>
 
-      {/* Cron controls */}
+      {/* Monitor controls */}
       <div style={{ marginBottom: "1.5rem" }}>
         <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--color-ink)", marginBottom: "0.25rem" }}>
-          Cron controls
+          Monitor controls
         </h2>
         <p style={{ fontSize: "0.8rem", color: "var(--color-muted)", marginBottom: "0.75rem" }}>
-          Sweeps run twice daily via ai-cron-worker, honouring each monitor&apos;s cadence.
+          Background sweeps run continuously, honouring each talent&apos;s cadence.
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem", marginBottom: "0.75rem" }}>
           <div style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", borderRadius: "0.375rem", padding: "0.75rem" }}>
-            <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--color-muted)" }}>Cron status</div>
+            <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--color-muted)" }}>Monitor status</div>
             <div style={{ marginTop: "0.35rem", fontSize: "1.35rem", fontWeight: 600, color: "var(--color-accent)" }}>On</div>
           </div>
           <div style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", borderRadius: "0.375rem", padding: "0.75rem" }}>
-            <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--color-muted)" }}>Last cron run</div>
+            <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--color-muted)" }}>Last sweep</div>
             <div style={{ marginTop: "0.35rem", fontSize: "1.35rem", fontWeight: 600, color: "var(--color-ink)" }}>2h ago</div>
           </div>
           <div style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", borderRadius: "0.375rem", padding: "0.75rem" }}>
-            <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--color-muted)" }}>Watchlist re-harvest</div>
-            <div style={{ marginTop: "0.35rem", fontSize: "1.35rem", fontWeight: 600, color: "var(--color-ink)" }}>168h</div>
+            <div style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--color-muted)" }}>Watchlist refresh</div>
+            <div style={{ marginTop: "0.35rem", fontSize: "1.35rem", fontWeight: 600, color: "var(--color-ink)" }}>weekly</div>
           </div>
         </div>
 
         <div style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", borderRadius: "0.5rem", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
             <div>
-              <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--color-ink)" }}>Cron enabled</p>
-              <p style={{ fontSize: "0.7rem", color: "var(--color-muted)" }}>Pause the fleet without redeploying.</p>
+              <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--color-ink)" }}>Monitoring enabled</p>
+              <p style={{ fontSize: "0.7rem", color: "var(--color-muted)" }}>Pause the fleet instantly if needed.</p>
             </div>
             <div style={{ fontSize: "0.7rem", padding: "0.35rem 0.75rem", borderRadius: "0.25rem", background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-ink)" }}>
-              Pause cron
+              Pause monitoring
             </div>
           </div>
           <div style={{ borderTop: "1px solid var(--color-border)" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
             <div style={{ flex: 1 }}>
-              <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--color-ink)" }}>Identity-check provider</p>
-              <p style={{ fontSize: "0.7rem", color: "var(--color-muted)" }}>LLaVA (free, ~90% cap) or Rekognition (real cosine, 95%+, ~$0.002/hit).</p>
+              <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--color-ink)" }}>Match sensitivity</p>
+              <p style={{ fontSize: "0.7rem", color: "var(--color-muted)" }}>Higher sensitivity catches more borderline cases; standard runs at no additional cost.</p>
             </div>
             <div style={{ display: "flex", gap: "0.2rem" }}>
               {[
-                { label: "LLaVA", active: true },
-                { label: "Rekognition", active: false },
+                { label: "Standard", active: true },
+                { label: "Enhanced", active: false },
                 { label: "Both", active: false },
               ].map((p) => (
                 <div
@@ -1009,8 +1025,8 @@ function AdminPanelView() {
           <div style={{ borderTop: "1px solid var(--color-border)" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
             <div>
-              <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--color-ink)" }}>Run cron now</p>
-              <p style={{ fontSize: "0.7rem", color: "var(--color-muted)" }}>Same code path as the scheduled trigger.</p>
+              <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--color-ink)" }}>Run a sweep now</p>
+              <p style={{ fontSize: "0.7rem", color: "var(--color-muted)" }}>Trigger an immediate sweep across all monitored talents.</p>
             </div>
             <div style={{ fontSize: "0.7rem", padding: "0.4rem 0.9rem", borderRadius: "0.25rem", background: "var(--color-accent)", color: "#fff" }}>
               Run now
@@ -1045,7 +1061,7 @@ function AdminPanelView() {
                 {" · Instagram · @"}{TAKEDOWN_TARGET.handle}
               </div>
               <p style={{ marginTop: "0.35rem", fontSize: "0.8rem", color: "var(--color-ink)" }}>
-                &ldquo;Anti-Venom (2027) – Tom Hardy, Mads Mikkelsen, John Cena | Concept Trailer…&rdquo;
+                &ldquo;Nightblade Rising (2027) — Marcus Vane, Elena Cross, Damon Reyes | Fan Concept Trailer…&rdquo;
               </p>
               <div style={{ marginTop: "0.35rem", fontSize: "0.7rem", color: "var(--color-muted)", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
                 <span>Requested 2h ago</span>
@@ -1064,7 +1080,7 @@ function AdminPanelView() {
             </div>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <div style={{ fontSize: "0.7rem", padding: "0.4rem 0.75rem", borderRadius: "0.25rem", background: "var(--color-ink)", color: "#fff" }}>
-                Send report to Meta
+                File report to platform
               </div>
               <div style={{ fontSize: "0.7rem", padding: "0.4rem 0.75rem", borderRadius: "0.25rem", background: "var(--color-accent)", color: "#fff" }}>
                 Mark resolved
@@ -1089,7 +1105,7 @@ const SCENES: Scene[] = [
     role: "talent",
     activeNav: "monitor",
     headline: "Every AI hit, reach-weighted",
-    body: "The Anti-Venom concept trailer sits at the top — 4.8M cumulative views on the account. Mads Mikkelsen, John Cena and Channing Tatum are stacked on the card because they were identified in the same media.",
+    body: "The highest-reach account leads the list — the fan concept trailer sits on top with 4.8M cumulative views. Additional actors detected in the same media are stacked on the card so cross-actor misuse is visible at a glance.",
   },
   {
     id: "hit-preview",
@@ -1097,7 +1113,7 @@ const SCENES: Scene[] = [
     role: "talent",
     activeNav: "monitor",
     headline: "Preview the content in-app",
-    body: "Click Preview and the platform's embed renders inline. Triage without flipping to a new tab and back. Works for TikTok, Instagram and YouTube; X falls back to the platform link.",
+    body: "Click Preview and the flagged post renders inline. Triage without flipping to a new tab and back.",
   },
   {
     id: "accounts-queue",
@@ -1105,7 +1121,7 @@ const SCENES: Scene[] = [
     role: "talent",
     activeNav: "monitor-accounts",
     headline: "Priority queue by offender account",
-    body: "Ultimate Studios is the target worth acting on first — one account producing multiple fake trailers. Whitelist to clear it if it's a legit partner; Contact to open a licence conversation instead of a takedown.",
+    body: "StudioFakes is the account worth acting on first — one source producing multiple pieces at scale. Whitelist to clear it if it's a legitimate partner; Contact to open a licence conversation instead of a takedown.",
   },
   {
     id: "contact-compose",
@@ -1113,15 +1129,15 @@ const SCENES: Scene[] = [
     role: "talent",
     activeNav: "monitor-accounts",
     headline: "Turn offenders into licensees",
-    body: "Pre-filled Licence offer template. Copy the message, open the platform's DM composer, send it, mark it sent. Every outreach logged so we don't spam the same account twice.",
+    body: "Pre-filled Licence offer template. Copy the message, open the platform's DM, send it, mark it sent. Every outreach is logged so the same account isn't approached twice.",
   },
   {
     id: "admin-panel",
     view: "admin-panel",
     role: "admin",
     activeNav: "admin-monitor",
-    headline: "Continuous sweeps, no operator effort",
-    body: "Cron fires twice daily and hits every talent whose cadence is due. Provider is LLaVA by default (free, ~90% cap) — flip to AWS Rekognition when you need real face embeddings. Takedown backlog files to Meta with one click.",
+    headline: "Continuous monitoring, no operator effort",
+    body: "Background sweeps run continuously per talent cadence. Match sensitivity is tunable; the takedown backlog files to platforms with one click.",
   },
 ];
 
@@ -1305,7 +1321,7 @@ function IntroOverlay({ leaving, onDismiss }: { leaving: boolean; onDismiss: () 
           Likeness Monitor
         </h1>
         <p style={{ marginTop: "1rem", fontSize: "0.95rem", color: "rgba(255,255,255,0.7)", maxWidth: "32rem", margin: "1rem auto 0" }}>
-          Continuous, AI-adjudicated sweeps across TikTok, Instagram and YouTube — with in-app preview, per-talent whitelisting, one-click Meta takedowns, and a licensing bridge for offenders.
+          Continuous, AI-powered monitoring across every major short-form platform — with in-app preview, per-talent whitelisting, one-click takedowns, and a licensing bridge that turns offenders into paying partners.
         </p>
       </div>
     </div>
