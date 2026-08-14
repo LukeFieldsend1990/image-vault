@@ -45,8 +45,11 @@
   --color-sidebar-active: #f2e0da;
 
   /* ── Type ── */
-  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
-  --font-sans:  "Hanken Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* Variable font families come from @fontsource-variable/* (self-hosted).
+     The plain family names remain as fallbacks in case a user has them
+     locally installed and prefers system rendering. */
+  --font-serif: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans:  "Hanken Grotesk Variable", "Hanken Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono:  "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, monospace;
 
   /* ── Radius ── */
