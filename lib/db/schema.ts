@@ -1519,6 +1519,10 @@ export const likenessMonitors = sqliteTable("likeness_monitors", {
   // Handles that can never be flagged: the talent's own account, their agency,
   // studios, distributors, press. JSON string[].
   allowlistJson: text("allowlist_json").notNull().default("[]"),
+  // Per-talent platform coverage overrides set by admins from the talent
+  // settings page. JSON object { [platformId]: boolean }; an absent key
+  // inherits the global toggle. See lib/monitor/platform-settings.ts.
+  platformOverridesJson: text("platform_overrides_json").notNull().default("{}"),
   lastScanAt: integer("last_scan_at"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),

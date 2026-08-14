@@ -7,7 +7,12 @@ vi.mock("@opennextjs/cloudflare", () => ({
 }));
 
 import { MONITOR_PLATFORMS, isMonitorPlatformId } from "@/lib/monitor/platforms";
-import { getEnabledPlatforms, platformSettingKey } from "@/lib/monitor/platform-settings";
+import {
+  applyPlatformOverrides,
+  getEnabledPlatforms,
+  parsePlatformOverrides,
+  platformSettingKey,
+} from "@/lib/monitor/platform-settings";
 import { mapXItem, buildXQueries } from "@/lib/monitor/ingest/x";
 import { mapPinterestItem, buildPinterestQueries } from "@/lib/monitor/ingest/pinterest";
 import { mapSerpResult, buildSerpQueries } from "@/lib/monitor/ingest/serp";
@@ -70,6 +75,30 @@ describe("getEnabledPlatforms", () => {
     expect(enabled.has("x")).toBe(true);
     expect(enabled.has("instagram")).toBe(false);
     expect(enabled.has("tiktok")).toBe(true); // untouched default
+  });
+});
+
+// ── Per-talent overrides ─────────────────────────────────────────────────────
+
+describe("per-talent platform overrides", () => {
+  it("parses only known platforms with boolean values, tolerating junk", () => {
+    expect(parsePlatformOverrides('{"x":true,"instagram":false,"myspace":true,"tiktok":"yes"}')).toEqual({
+      x: true,
+      instagram: false,
+    });
+    expect(parsePlatformOverrides("not json")).toEqual({});
+    expect(parsePlatformOverrides(null)).toEqual({});
+    expect(parsePlatformOverrides("[1,2]")).toEqual({});
+  });
+
+  it("forces platforms on or off over the global set, inheriting where absent", () => {
+    const global = new Set<"instagram" | "tiktok" | "youtube">(["instagram", "tiktok", "youtube"]);
+    const effective = applyPlatformOverrides(global as never, { x: true, instagram: false });
+    expect(effective.has("x")).toBe(true); // forced on despite global off
+    expect(effective.has("instagram")).toBe(false); // forced off despite global on
+    expect(effective.has("tiktok")).toBe(true); // inherited
+    // The input set is not mutated.
+    expect(global.has("instagram")).toBe(true);
   });
 });
 

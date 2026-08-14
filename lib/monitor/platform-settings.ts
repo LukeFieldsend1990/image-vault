@@ -11,7 +11,7 @@
 import { inArray } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 import { aiSettings } from "@/lib/db/schema";
-import { MONITOR_PLATFORMS, type MonitorPlatformId } from "./platforms";
+import { isMonitorPlatformId, MONITOR_PLATFORMS, type MonitorPlatformId } from "./platforms";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -37,6 +37,44 @@ export async function getEnabledPlatforms(db: Db): Promise<Set<MonitorPlatformId
     }
   }
   return enabled;
+}
+
+/**
+ * Per-talent overrides, stored as JSON on the talent's likeness_monitors row
+ * (`platformOverridesJson`). A key present forces that platform on or off for
+ * this talent regardless of the global toggle; an absent key inherits it.
+ */
+export type PlatformOverrides = Partial<Record<MonitorPlatformId, boolean>>;
+
+export function parsePlatformOverrides(json: string | null | undefined): PlatformOverrides {
+  if (!json) return {};
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    const overrides: PlatformOverrides = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (isMonitorPlatformId(key) && typeof value === "boolean") {
+        overrides[key] = value;
+      }
+    }
+    return overrides;
+  } catch {
+    return {};
+  }
+}
+
+/** The coverage one talent's sweep actually gets: global toggles, then their overrides. */
+export function applyPlatformOverrides(
+  global: Set<MonitorPlatformId>,
+  overrides: PlatformOverrides
+): Set<MonitorPlatformId> {
+  const effective = new Set(global);
+  for (const platform of MONITOR_PLATFORMS) {
+    const override = overrides[platform.id];
+    if (override === true) effective.add(platform.id);
+    else if (override === false) effective.delete(platform.id);
+  }
+  return effective;
 }
 
 export async function setPlatformEnabled(

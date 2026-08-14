@@ -30,7 +30,7 @@ import { sendEmail } from "@/lib/email/send";
 import { likenessHitAlertEmail } from "@/lib/email/templates";
 import { generateCandidates } from "./candidates";
 import { platformName, type MonitorPlatformId } from "./platforms";
-import { getEnabledPlatforms } from "./platform-settings";
+import { applyPlatformOverrides, getEnabledPlatforms, parsePlatformOverrides } from "./platform-settings";
 import {
   AI_ONLY_LIKELIHOOD_FLOOR,
   IDENTITY_UNVERIFIED_SIGNAL,
@@ -370,7 +370,9 @@ async function loadIdentityAnchor(db: Db, talentId: string): Promise<TalentIdent
   };
 }
 
-async function ensureMonitor(db: Db, talentId: string) {
+/** Exported for the admin route that stores per-talent platform overrides —
+ *  an override can arrive before the talent has ever run a scan. */
+export async function ensureMonitor(db: Db, talentId: string) {
   const existing = await db
     .select()
     .from(likenessMonitors)
@@ -387,6 +389,7 @@ async function ensureMonitor(db: Db, talentId: string) {
     scope: "ai_only" as const,
     cadence: "weekly" as const,
     allowlistJson: "[]",
+    platformOverridesJson: "{}",
     lastScanAt: null,
     createdAt: now,
     updatedAt: now,
@@ -739,7 +742,10 @@ export async function beginLikenessScan(
 ): Promise<{ scanId: string; monitorId: string }> {
   const now = Math.floor(Date.now() / 1000);
   const monitor = await ensureMonitor(db, opts.talentId);
-  const enabledPlatforms = await getEnabledPlatforms(db);
+  const enabledPlatforms = applyPlatformOverrides(
+    await getEnabledPlatforms(db),
+    parsePlatformOverrides(monitor.platformOverridesJson)
+  );
   const scanId = crypto.randomUUID();
   await db.insert(monitorScans).values({
     id: scanId,
@@ -786,7 +792,11 @@ export async function runLikenessScan(
   const now = Math.floor(Date.now() / 1000);
   const monitor = await ensureMonitor(db, opts.talentId);
   const anchor = await loadIdentityAnchor(db, opts.talentId);
-  const enabledPlatforms = await getEnabledPlatforms(db);
+  // Global toggles first, then this talent's admin-set overrides on top.
+  const enabledPlatforms = applyPlatformOverrides(
+    await getEnabledPlatforms(db),
+    parsePlatformOverrides(monitor.platformOverridesJson)
+  );
 
   let scanId = opts.scanId;
   if (!scanId) {
@@ -1086,9 +1096,13 @@ export async function getMonitorState(db: Db, talentId: string) {
     .where(eq(likenessMonitors.talentId, talentId))
     .get();
 
-  // Admin platform toggles, surfaced so the monitor page shows the coverage a
-  // sweep will actually have rather than the full registry.
-  const enabledPlatforms = await getEnabledPlatforms(db);
+  // Admin platform toggles (global, then this talent's overrides), surfaced so
+  // the monitor page shows the coverage a sweep will actually have rather than
+  // the full registry.
+  const enabledPlatforms = applyPlatformOverrides(
+    await getEnabledPlatforms(db),
+    parsePlatformOverrides(monitor?.platformOverridesJson)
+  );
 
   // Reach-weighted ordering: a hit on an account with 500k cumulative views
   // is a bigger enforcement problem than a hit on a small account, even if
