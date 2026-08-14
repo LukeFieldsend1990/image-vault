@@ -50,6 +50,11 @@ export async function POST(req: NextRequest) {
     AWS_ACCESS_KEY_ID?: string;
     AWS_SECRET_ACCESS_KEY?: string;
     AWS_REGION?: string;
+    // R2 signing so the sweep can use vault scan stills as face-match references.
+    CF_ACCOUNT_ID?: string;
+    R2_BUCKET_NAME?: string;
+    R2_ACCESS_KEY_ID?: string;
+    R2_SECRET_ACCESS_KEY?: string;
   };
   let env: ScanEnv = {};
   let waitUntil: ((p: Promise<unknown>) => void) | null = null;
@@ -65,6 +70,10 @@ export async function POST(req: NextRequest) {
       AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
       AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
       AWS_REGION: process.env.AWS_REGION,
+      CF_ACCOUNT_ID: process.env.CF_ACCOUNT_ID,
+      R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
+      R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+      R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
     };
   }
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";

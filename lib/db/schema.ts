@@ -1809,3 +1809,30 @@ export const monitorLearnedQueries = sqliteTable(
     uniqTalentPlatformQuery: unique().on(t.talentId, t.platform, t.query),
   })
 );
+
+/**
+ * Reference images the likeness monitor matches candidates against —
+ * derived from the talent's own vault scan packages rather than public
+ * photos. Each row points at a scan file in R2 (never a copy: the image
+ * bytes stay in the vault and are presigned per sweep). `kind` drives the
+ * detection-coverage score: a face reference and a full-body reference
+ * strengthen different match paths.
+ */
+export const monitorReferenceImages = sqliteTable(
+  "monitor_reference_images",
+  {
+    id: text("id").primaryKey(),
+    talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+    scanFileId: text("scan_file_id").notNull().references(() => scanFiles.id, { onDelete: "cascade" }),
+    r2Key: text("r2_key").notNull(),
+    kind: text("kind", { enum: ["face", "full_body", "unknown"] }).notNull().default("unknown"),
+    // active — usable as a match source; rejected — vision model found no
+    // face (kept so re-syncs don't retry the same file every sweep).
+    status: text("status", { enum: ["active", "rejected"] }).notNull().default("active"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => ({
+    uniqScanFile: unique().on(t.scanFileId),
+  })
+);

@@ -47,6 +47,13 @@ import { discoverTikTok } from "./ingest/tiktok";
 import { seedHandlesFor } from "./ingest/seeds";
 import { verifyCandidatesIdentity } from "./identity-check";
 import { recordLearnedHashtags, topLearnedQueries } from "./query-mining";
+import {
+  computeDetectionCoverage,
+  coverageInputFromReferences,
+  presignReferenceUrls,
+  syncReferenceSet,
+  type ReferenceImage,
+} from "./reference-set";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -118,9 +125,16 @@ function buildAdjudicationPrompt(
     `Protected talent: ${anchor.fullName}`,
     `Known for: ${anchor.knownForTitles.join(", ") || "(no filmography on record)"}`,
     `Reference material in vault: ${anchor.scanPackageCount} scan package(s), ${anchor.geometryFingerprintCount} geometry fingerprint(s) issued on licensed deliveries.`,
+    anchor.referenceImageCount != null
+      ? anchor.referenceImageCount > 0
+        ? `Identity matching this sweep is anchored to ${anchor.referenceImageCount} reference image(s) drawn directly from the talent's vault scan packages (detection coverage: ${anchor.coverageTier ?? "anchored"}) — face similarity readings compare against ground-truth captures, not public photos.`
+        : `No vault reference images available — face similarity readings (if any) compare against a single public photo only (detection coverage: ${anchor.coverageTier ?? "baseline"}).`
+      : null,
     scopeLine,
     `Monitor sensitivity: ${sensitivity}`,
-  ].join("\n");
+  ]
+    .filter((l): l is string => l !== null)
+    .join("\n");
 
   const items = candidates
     .map((c, i) => {
@@ -704,6 +718,12 @@ export async function runLikenessScan(
     AWS_ACCESS_KEY_ID?: string;
     AWS_SECRET_ACCESS_KEY?: string;
     AWS_REGION?: string;
+    // R2 signing for vault reference images (lib/monitor/reference-set.ts).
+    // Absent in local dev → the matcher falls back to the public profile photo.
+    CF_ACCOUNT_ID?: string;
+    R2_BUCKET_NAME?: string;
+    R2_ACCESS_KEY_ID?: string;
+    R2_SECRET_ACCESS_KEY?: string;
   },
   db: Db,
   opts: {
@@ -717,6 +737,32 @@ export async function runLikenessScan(
   const now = Math.floor(Date.now() / 1000);
   const monitor = await ensureMonitor(db, opts.talentId);
   const anchor = await loadIdentityAnchor(db, opts.talentId);
+
+  // Vault-anchored reference set: reconcile the reference gallery with the
+  // vault's current contents so a scan package uploaded since the last sweep
+  // strengthens this one. DB-only and idempotent; failure degrades to the
+  // public-photo reference path rather than failing the sweep.
+  let references: ReferenceImage[] = [];
+  try {
+    references = await syncReferenceSet(db, opts.talentId);
+  } catch (err) {
+    console.warn(`[monitor] reference-set sync failed: ${(err as Error).message}`);
+  }
+  {
+    const profile = await db
+      .select({ url: talentProfiles.profileImageUrl })
+      .from(talentProfiles)
+      .where(eq(talentProfiles.userId, opts.talentId))
+      .get();
+    const coverage = computeDetectionCoverage(
+      coverageInputFromReferences(references, {
+        geometryFingerprintCount: anchor.geometryFingerprintCount,
+        hasProfileImage: !!profile?.url,
+      })
+    );
+    anchor.referenceImageCount = references.length;
+    anchor.coverageTier = coverage.tier;
+  }
 
   let scanId = opts.scanId;
   if (!scanId) {
@@ -771,8 +817,18 @@ export async function runLikenessScan(
       const provider = (providerRow?.value ?? "llava") as "llava" | "rekognition" | "both";
 
       let referenceImageUrl: string | undefined;
+      let referenceImageUrls: string[] | undefined;
       let rekognitionCredentials: { accessKeyId: string; secretAccessKey: string; region?: string } | undefined;
       if (provider !== "llava") {
+        // Vault references first: presigned scan stills are ground truth the
+        // public photo can't match — multi-angle, studio lighting, verified
+        // identity. The TMDB profile stays in the gallery as the last-resort
+        // source so the pre-reference behaviour is a strict subset.
+        try {
+          referenceImageUrls = await presignReferenceUrls(env, references);
+        } catch (err) {
+          console.warn(`[monitor] reference presigning failed: ${(err as Error).message}`);
+        }
         const profile = await db
           .select({ url: talentProfiles.profileImageUrl })
           .from(talentProfiles)
@@ -791,10 +847,13 @@ export async function runLikenessScan(
       const stats = await verifyCandidatesIdentity(ai, candidates, anchor.fullName, {
         provider,
         referenceImageUrl,
+        referenceImageUrls,
         rekognitionCredentials,
       });
       console.log(
-        `[monitor] identity check for ${opts.talentId} via ${stats.provider}: ${stats.checked} of ${candidates.length} ` +
+        `[monitor] identity check for ${opts.talentId} via ${stats.provider}` +
+          (stats.referenceSources ? ` (${stats.referenceSources} reference source(s))` : "") +
+          `: ${stats.checked} of ${candidates.length} ` +
           `checked (${stats.confirmed} confirmed, ${stats.uncertain} uncertain, ${stats.denied} denied, ${stats.noFace} no-face, ${stats.errors} errored)`
       );
     } catch (err) {

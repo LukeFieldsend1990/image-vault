@@ -71,6 +71,11 @@ export interface TalentIdentityAnchor {
   knownForTitles: string[];
   scanPackageCount: number;
   geometryFingerprintCount: number;
+  /** Active vault-derived reference images backing identity matching this
+   *  sweep (lib/monitor/reference-set.ts). Absent = reference set not loaded. */
+  referenceImageCount?: number;
+  /** Detection-coverage tier computed from the reference set. */
+  coverageTier?: "unanchored" | "baseline" | "anchored" | "fortified";
 }
 
 /**

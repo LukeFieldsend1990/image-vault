@@ -67,6 +67,20 @@ interface MonitorState {
   scans: ScanRecord[];
 }
 
+interface ReferenceSetState {
+  coverage: {
+    tier: "unanchored" | "baseline" | "anchored" | "fortified";
+    score: number;
+    improvements: string[];
+  };
+  referenceCount: number;
+  faceReferenceCount: number;
+  bodyReferenceCount: number;
+  packagesContributing: { id: string; name: string }[];
+  geometryFingerprintCount: number;
+  hasProfileImage: boolean;
+}
+
 interface ScanResponse {
   scanId: string;
   status: "running" | "complete" | "error";
@@ -315,6 +329,84 @@ function IdentityBadge({ identity }: { identity: TalentIdentityForMonitor }) {
       <p className="shrink-0 text-xs" style={{ color: "var(--color-muted)" }}>
         Monitoring target
       </p>
+    </div>
+  );
+}
+
+// ── Detection coverage ──────────────────────────────────────────────────────
+
+const TIER_LABELS: Record<ReferenceSetState["coverage"]["tier"], { label: string; color: string }> = {
+  unanchored: { label: "Unanchored", color: "#d97706" },
+  baseline: { label: "Baseline", color: "#6b7280" },
+  anchored: { label: "Vault-anchored", color: "var(--color-accent)" },
+  fortified: { label: "Fortified", color: "#16a34a" },
+};
+
+/**
+ * The flywheel card: shows how strongly detection is anchored to the talent's
+ * own vault scans, and which upload strengthens it next. This is the
+ * capability pitch made concrete — matching runs against their ground-truth
+ * captures, not public photos, and improves with every scan they add.
+ */
+function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
+  const tier = TIER_LABELS[refSet.coverage.tier];
+  const parts: string[] = [];
+  if (refSet.faceReferenceCount > 0) parts.push(`${refSet.faceReferenceCount} face`);
+  if (refSet.bodyReferenceCount > 0) parts.push(`${refSet.bodyReferenceCount} full-body`);
+  const unclassified = refSet.referenceCount - refSet.faceReferenceCount - refSet.bodyReferenceCount;
+  if (unclassified > 0) parts.push(`${unclassified} other`);
+
+  return (
+    <div className="rounded-md border px-5 py-4 space-y-3"
+      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+          Detection coverage
+        </p>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: tier.color }}>
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: tier.color }} />
+          {tier.label}
+        </span>
+      </div>
+
+      <div>
+        <div className="flex items-baseline justify-between">
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            {refSet.referenceCount > 0
+              ? `Matching against ${refSet.referenceCount} reference image${refSet.referenceCount === 1 ? "" : "s"}` +
+                (parts.length ? ` (${parts.join(", ")})` : "") +
+                ` from ${refSet.packagesContributing.length} scan package${refSet.packagesContributing.length === 1 ? "" : "s"} in your vault.`
+              : "No vault references yet — matching relies on a single public photo."}
+          </p>
+          <p className="text-xs font-semibold shrink-0" style={{ color: "var(--color-ink)" }}>
+            {refSet.coverage.score}/100
+          </p>
+        </div>
+        <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
+          <div className="h-full rounded-full transition-all" style={{ width: `${refSet.coverage.score}%`, background: tier.color }} />
+        </div>
+      </div>
+
+      {refSet.coverage.improvements.length > 0 && (
+        <div className="space-y-1.5">
+          {refSet.coverage.improvements.slice(0, 2).map((text) => (
+            <div key={text} className="flex items-start gap-2">
+              <svg className="mt-0.5 shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--color-muted)" }}>{text}</p>
+            </div>
+          ))}
+          <Link
+            href="/vault"
+            className="inline-block text-xs font-medium underline underline-offset-2"
+            style={{ color: "var(--color-accent)" }}
+          >
+            Add scans to strengthen detection →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -773,11 +865,19 @@ export default function MonitorClient({ identity }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [triaging, setTriaging] = useState<string | null>(null);
   const [previewHit, setPreviewHit] = useState<LikenessHit | null>(null);
+  const [refSet, setRefSet] = useState<ReferenceSetState | null>(null);
 
   const name = identity?.fullName ?? "your likeness";
 
   const refresh = useCallback(async () => {
     try {
+      // Coverage rides along with every state refresh: a sweep re-syncs the
+      // reference set server-side, so post-scan refreshes pick up new scans.
+      void fetch("/api/monitor/reference-set")
+        .then((r) => (r.ok ? (r.json() as Promise<ReferenceSetState>) : null))
+        .then((data) => data && setRefSet(data))
+        .catch(() => {});
+
       const res = await fetch("/api/monitor");
       if (!res.ok) return;
       const data = (await res.json()) as MonitorState;
@@ -955,6 +1055,9 @@ export default function MonitorClient({ identity }: Props) {
 
       {/* ── Identity badge ── */}
       {identity && <IdentityBadge identity={identity} />}
+
+      {/* ── Detection coverage (vault-anchored reference set) ── */}
+      {refSet && <DetectionCoverageCard refSet={refSet} />}
 
       {/* ── Monitor status strip ── */}
       {monitor && (
