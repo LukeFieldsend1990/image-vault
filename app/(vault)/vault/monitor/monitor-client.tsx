@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { TalentIdentityForMonitor } from "./page";
 import { embedInfoFor } from "@/lib/monitor/embed-url";
+import { platformBrand } from "@/lib/monitor/platform-brand";
 
 // ── Types (mirror /api/monitor payloads) ────────────────────────────────────
 
@@ -738,12 +739,15 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
 }) {
   const risk = RISK_COLORS[hit.riskLevel] ?? RISK_COLORS.medium;
   const open = hit.status === "new" || hit.status === "confirmed";
+  const brand = platformBrand(hit.platform);
   return (
-    <div className="rounded-md border p-4 space-y-3"
+    <div className="relative overflow-hidden rounded-md border p-4 pl-5 space-y-3"
       style={{ borderColor: hit.status === "new" ? "rgba(239,68,68,0.35)" : "var(--color-border)", background: "var(--color-bg)" }}>
+      {/* Platform accent edge — the one brand element each card carries. */}
+      <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: brand.edge }} />
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
-          style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}>
+          style={{ background: brand.tint, color: brand.color }}>
           {PLATFORM_ICONS[hit.platform] ?? <GettyIcon />}
         </div>
         <div className="flex-1 min-w-0">
