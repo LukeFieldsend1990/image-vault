@@ -22,6 +22,7 @@ import {
   hitSecondaryActors,
   talentAccountWhitelist,
   aiSettings,
+  talentBodyProfiles,
 } from "@/lib/db/schema";
 import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { callAi } from "@/lib/ai/providers";
@@ -60,6 +61,8 @@ import {
   syncReferenceSet,
   type ReferenceImage,
 } from "./reference-set";
+import { ensurePhashIndex, loadPhashIndex, scoreCandidatesPhash } from "./phash-index";
+import { buildBodyBuildSummary, parseBodyMetrics } from "./body-profile";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -135,6 +138,9 @@ function buildAdjudicationPrompt(
       ? anchor.referenceImageCount > 0
         ? `Identity matching this sweep is anchored to ${anchor.referenceImageCount} reference image(s) drawn directly from the talent's vault scan packages (detection coverage: ${anchor.coverageTier ?? "anchored"}) — face similarity readings compare against ground-truth captures, not public photos.`
         : `No vault reference images available — face similarity readings (if any) compare against a single public photo only (detection coverage: ${anchor.coverageTier ?? "baseline"}).`
+      : null,
+    anchor.bodyBuildSummary
+      ? `Body-build context from the talent's full-body scan (context only — NEVER treat this as identity proof or as a reason to flag; at most it may lower confidence in a full-body likeness claim that clearly contradicts it): ${anchor.bodyBuildSummary}.`
       : null,
     scopeLine,
     `Monitor sensitivity: ${sensitivity}`,
@@ -390,11 +396,34 @@ async function loadIdentityAnchor(db: Db, talentId: string): Promise<TalentIdent
     // leave empty
   }
 
+  // Body-build context: opt-in (default off) until adjudicator rationale
+  // quality is validated on live sweeps. Context only — never a signal.
+  let bodyBuildSummary: string | undefined;
+  try {
+    const gate = await db
+      .select({ value: sql<string>`${aiSettings.value}` })
+      .from(aiSettings)
+      .where(eq(aiSettings.key, "body_context_enabled"))
+      .get();
+    if (gate?.value === "true") {
+      const bodyProfile = await db
+        .select({ metricsJson: talentBodyProfiles.metricsJson })
+        .from(talentBodyProfiles)
+        .where(eq(talentBodyProfiles.talentId, talentId))
+        .get();
+      const metrics = bodyProfile ? parseBodyMetrics(bodyProfile.metricsJson) : null;
+      if (metrics) bodyBuildSummary = buildBodyBuildSummary(metrics);
+    }
+  } catch {
+    // Context is optional; identity anchoring proceeds without it.
+  }
+
   return {
     fullName: profile?.fullName ?? "this talent",
     knownForTitles,
     scanPackageCount: packages.length,
     geometryFingerprintCount: fingerprintCount,
+    bodyBuildSummary,
   };
 }
 
@@ -842,6 +871,19 @@ export async function runLikenessScan(
   } catch (err) {
     console.warn(`[monitor] reference-set sync failed: ${(err as Error).message}`);
   }
+
+  // Derivation index: hash any newly-synced reference stills (lazy, capped
+  // per sweep — steady state is zero work). Non-fatal like the sync above.
+  try {
+    const stats = await ensurePhashIndex(db, env, opts.talentId, references);
+    if (stats.hashed || stats.failed || stats.pending) {
+      console.log(
+        `[monitor] phash index for ${opts.talentId}: +${stats.hashed} hashed, ${stats.failed} failed, ${stats.pending} pending`
+      );
+    }
+  } catch (err) {
+    console.warn(`[monitor] phash indexing failed: ${(err as Error).message}`);
+  }
   {
     const profile = await db
       .select({ url: talentProfiles.profileImageUrl })
@@ -890,6 +932,24 @@ export async function runLikenessScan(
       .set({ status: "error", error: discoveryError, completedAt: Math.floor(Date.now() / 1000) })
       .where(eq(monitorScans.id, scanId));
     throw new Error(discoveryError);
+  }
+
+  // Derivation reading: hash candidate thumbnails against the pHash index so
+  // perceptualHashDistance is a real measurement where a thumbnail exists.
+  // Pure CPU, no AI spend. Runs before the identity check so the adjudicator
+  // sees both signals together. Non-fatal; unmeasured candidates keep null.
+  if (candidates.length) {
+    try {
+      const index = await loadPhashIndex(db, opts.talentId);
+      if (index.length) {
+        const stats = await scoreCandidatesPhash(index, candidates);
+        console.log(
+          `[monitor] phash scoring for ${opts.talentId}: ${stats.measured} of ${candidates.length} measured, ${stats.matched} within derivation threshold`
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] phash scoring failed: ${(err as Error).message}`);
+    }
   }
 
   // Phase 2: LLaVA identity verification. Runs before the adjudicator so the

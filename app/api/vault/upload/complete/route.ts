@@ -8,6 +8,7 @@ import { eq, sql, and } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { sha256HexFromStream } from "@/lib/crypto/hash";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
+import { maybeEnqueueDerivedStills } from "@/lib/monitor/derived-stills";
 
 function cfEnv(key: string): string | undefined {
   try {
@@ -227,6 +228,14 @@ export async function POST(req: NextRequest) {
         body: pkgRow?.name ?? null,
         href: `/vault`,
       });
+
+      // Mesh- or video-only package? Queue derived reference stills so the
+      // likeness monitor can anchor on it. Cheap decision, non-fatal.
+      try {
+        await maybeEnqueueDerivedStills(db, packageId);
+      } catch {
+        // Rendering is an enhancement — never fail the upload for it.
+      }
     }
 
   }

@@ -81,6 +81,8 @@ interface ReferenceSetState {
   packagesContributing: { id: string; name: string }[];
   geometryFingerprintCount: number;
   hasProfileImage: boolean;
+  /** Reference stills fingerprinted into the derivation (pHash) index. */
+  phashIndexedCount?: number;
 }
 
 interface ScanResponse {
@@ -387,6 +389,12 @@ function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
         <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
           <div className="h-full rounded-full transition-all" style={{ width: `${refSet.coverage.score}%`, background: tier.color }} />
         </div>
+        {(refSet.phashIndexedCount ?? 0) > 0 && (
+          <p className="mt-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
+            Derivation index: {refSet.phashIndexedCount} still{refSet.phashIndexedCount === 1 ? "" : "s"} fingerprinted —
+            reposts and edits of your vault imagery are matched directly.
+          </p>
+        )}
       </div>
 
       {refSet.coverage.improvements.length > 0 && (

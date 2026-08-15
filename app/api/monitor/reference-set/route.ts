@@ -1,65 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { geometryFingerprints, scanPackages, talentProfiles } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import {
-  computeDetectionCoverage,
-  coverageInputFromReferences,
-  getActiveReferences,
-  syncReferenceSet,
-  type ReferenceImage,
-} from "@/lib/monitor/reference-set";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { getActiveReferences, syncReferenceSet } from "@/lib/monitor/reference-set";
+import { buildCoveragePayload } from "@/lib/monitor/coverage";
+import { maybeEnqueueDerivedStills } from "@/lib/monitor/derived-stills";
+import { scanPackages } from "@/lib/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
 
 // GET  /api/monitor/reference-set — the talent's detection coverage: which
 //      vault scans anchor identity matching, and what to add to strengthen it.
 // POST /api/monitor/reference-set — re-sync the reference set against the
 //      vault now (also happens lazily at the top of every sweep).
-
-async function buildPayload(db: ReturnType<typeof getDb>, talentId: string, refs: ReferenceImage[]) {
-  const packages = await db
-    .select({ id: scanPackages.id, name: scanPackages.name })
-    .from(scanPackages)
-    .where(and(eq(scanPackages.talentId, talentId), isNull(scanPackages.deletedAt)))
-    .all();
-
-  let fingerprintCount = 0;
-  if (packages.length) {
-    const row = await db
-      .select({ n: sql<number>`count(*)` })
-      .from(geometryFingerprints)
-      .where(inArray(geometryFingerprints.packageId, packages.map((p) => p.id)))
-      .get();
-    fingerprintCount = row?.n ?? 0;
-  }
-
-  const profile = await db
-    .select({ url: talentProfiles.profileImageUrl })
-    .from(talentProfiles)
-    .where(eq(talentProfiles.userId, talentId))
-    .get();
-
-  const coverage = computeDetectionCoverage(
-    coverageInputFromReferences(refs, {
-      geometryFingerprintCount: fingerprintCount,
-      hasProfileImage: !!profile?.url,
-    })
-  );
-
-  const packageNames = new Map(packages.map((p) => [p.id, p.name]));
-  return {
-    coverage,
-    referenceCount: refs.length,
-    faceReferenceCount: refs.filter((r) => r.kind === "face").length,
-    bodyReferenceCount: refs.filter((r) => r.kind === "full_body").length,
-    packagesContributing: [...new Set(refs.map((r) => r.packageId))].map((id) => ({
-      id,
-      name: packageNames.get(id) ?? "Scan package",
-    })),
-    geometryFingerprintCount: fingerprintCount,
-    hasProfileImage: !!profile?.url,
-  };
-}
 
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
@@ -70,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
   const refs = await getActiveReferences(db, session.sub);
-  return NextResponse.json(await buildPayload(db, session.sub, refs));
+  return NextResponse.json(await buildCoveragePayload(db, session.sub, refs));
 }
 
 export async function POST(req: NextRequest) {
@@ -82,5 +33,30 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
   const refs = await syncReferenceSet(db, session.sub);
-  return NextResponse.json(await buildPayload(db, session.sub, refs));
+
+  // Nothing to anchor on? Give mesh/video-only packages a self-serve path
+  // to derived reference stills — the sync will pick the renders up once
+  // the pipeline job lands them.
+  if (refs.length === 0) {
+    try {
+      const packages = await db
+        .select({ id: scanPackages.id })
+        .from(scanPackages)
+        .where(
+          and(
+            eq(scanPackages.talentId, session.sub),
+            eq(scanPackages.status, "ready"),
+            isNull(scanPackages.deletedAt)
+          )
+        )
+        .all();
+      for (const pkg of packages) {
+        await maybeEnqueueDerivedStills(db, pkg.id);
+      }
+    } catch {
+      // Enhancement only — the payload below is still the answer.
+    }
+  }
+
+  return NextResponse.json(await buildCoveragePayload(db, session.sub, refs));
 }

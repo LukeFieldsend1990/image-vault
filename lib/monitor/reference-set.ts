@@ -62,7 +62,16 @@ export interface ReferenceImage {
   scanFileId: string;
   r2Key: string;
   kind: ReferenceKind;
+  /** vault_still — photographic capture; derived_render — turntable render
+   *  or video frame grab. Absent reads as vault_still (pre-migration rows). */
+  source?: ReferenceSource;
 }
+
+export type ReferenceSource = "vault_still" | "derived_render";
+
+/** Derived stills live under this R2 prefix; the prefix is also what marks
+ *  a reference row as derived at sync time. */
+export const DERIVED_R2_PREFIX = "derived/";
 
 /** Is this scan file plausibly a photographic still we can match faces in? */
 export function isReferenceCandidate(file: {
@@ -195,6 +204,9 @@ export async function syncReferenceSet(db: Db, talentId: string): Promise<Refere
         r2Key: file.r2Key,
         kind: classifyReferenceKind(file.filename),
         status: "active" as const,
+        source: (file.r2Key.startsWith(DERIVED_R2_PREFIX)
+          ? "derived_render"
+          : "vault_still") as ReferenceSource,
         createdAt: now,
       };
       await db.insert(monitorReferenceImages).values(row);
@@ -210,6 +222,7 @@ export async function syncReferenceSet(db: Db, talentId: string): Promise<Refere
       scanFileId: r.scanFileId,
       r2Key: r.r2Key,
       kind: r.kind as ReferenceKind,
+      source: (r.source ?? "vault_still") as ReferenceSource,
     }));
 }
 
@@ -227,6 +240,7 @@ export async function getActiveReferences(db: Db, talentId: string): Promise<Ref
     scanFileId: r.scanFileId,
     r2Key: r.r2Key,
     kind: r.kind as ReferenceKind,
+    source: (r.source ?? "vault_still") as ReferenceSource,
   }));
 }
 
@@ -247,18 +261,16 @@ export function orderForMatching(refs: ReferenceImage[]): ReferenceImage[] {
 }
 
 /**
- * Presign GET URLs for the top match sources. Same aws4fetch signing the
- * cover-image route uses; 10-minute TTL comfortably outlives a sweep's
- * identity-check stage. Returns [] when R2 credentials are absent (local
- * dev), which callers treat as "vault references unavailable".
+ * Presign a GET for one vault object. Same aws4fetch signing the cover-image
+ * route uses. Returns null when R2 credentials are absent (local dev), which
+ * callers treat as "vault references unavailable".
  */
-export async function presignReferenceUrls(
+export async function presignR2Url(
   env: R2SignEnv,
-  refs: ReferenceImage[],
-  max = MAX_MATCH_SOURCES,
+  r2Key: string,
   ttlSeconds = 600
-): Promise<string[]> {
-  if (!env.CF_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) return [];
+): Promise<string | null> {
+  if (!env.CF_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) return null;
   const bucket = env.R2_BUCKET_NAME ?? "image-vault-scans";
   const client = new AwsClient({
     accessKeyId: env.R2_ACCESS_KEY_ID,
@@ -266,17 +278,29 @@ export async function presignReferenceUrls(
     region: "auto",
     service: "s3",
   });
+  const url = new URL(`https://${env.CF_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket}/${r2Key}`);
+  url.searchParams.set("X-Amz-Expires", String(ttlSeconds));
+  const signed = await client.sign(new Request(url.toString(), { method: "GET" }), {
+    aws: { signQuery: true },
+  });
+  return signed.url;
+}
 
+/**
+ * Presign GET URLs for the top match sources; 10-minute TTL comfortably
+ * outlives a sweep's identity-check stage. Returns [] when R2 credentials
+ * are absent.
+ */
+export async function presignReferenceUrls(
+  env: R2SignEnv,
+  refs: ReferenceImage[],
+  max = MAX_MATCH_SOURCES,
+  ttlSeconds = 600
+): Promise<string[]> {
   const urls: string[] = [];
   for (const ref of orderForMatching(refs).slice(0, max)) {
-    const url = new URL(
-      `https://${env.CF_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket}/${ref.r2Key}`
-    );
-    url.searchParams.set("X-Amz-Expires", String(ttlSeconds));
-    const signed = await client.sign(new Request(url.toString(), { method: "GET" }), {
-      aws: { signQuery: true },
-    });
-    urls.push(signed.url);
+    const url = await presignR2Url(env, ref.r2Key, ttlSeconds);
+    if (url) urls.push(url);
   }
   return urls;
 }
@@ -286,10 +310,17 @@ export async function presignReferenceUrls(
 export type CoverageTier = "unanchored" | "baseline" | "anchored" | "fortified";
 
 export interface CoverageInput {
+  /** Photographic face captures (source = vault_still). */
   faceReferenceCount: number;
+  /** Photographic full-body captures (source = vault_still). */
   bodyReferenceCount: number;
   /** References not yet classified as face or body. */
   unknownReferenceCount: number;
+  /** Turntable renders / video frame grabs classified as face. Count at
+   *  half weight: geometry-true but texture/lighting-untrue. */
+  derivedFaceReferenceCount?: number;
+  /** Derived stills classified as full-body — same half weight. */
+  derivedBodyReferenceCount?: number;
   /** Distinct scan packages contributing references. */
   packageCount: number;
   geometryFingerprintCount: number;
@@ -315,19 +346,25 @@ export interface DetectionCoverage {
  * failure mode (one angle, one lighting rig, easy to dodge).
  */
 export function computeDetectionCoverage(input: CoverageInput): DetectionCoverage {
+  const derivedFace = input.derivedFaceReferenceCount ?? 0;
+  const derivedBody = input.derivedBodyReferenceCount ?? 0;
+
   // Unknown-kind references still feed the matcher, just less predictably —
-  // count them at half a face reference's value.
-  const faceEquivalent = input.faceReferenceCount + input.unknownReferenceCount / 2;
+  // count them at half a face reference's value. Derived renders count at
+  // half too: geometry-true, but texture/lighting-untrue.
+  const faceEquivalent =
+    input.faceReferenceCount + input.unknownReferenceCount / 2 + derivedFace / 2;
+  const bodyEquivalent = input.bodyReferenceCount + derivedBody / 2;
 
   let score = 0;
   if (input.hasProfileImage) score += 10;
   score += Math.min(faceEquivalent, 4) * 10; // up to 40
-  score += Math.min(input.bodyReferenceCount, 2) * 10; // up to 20
+  score += Math.min(bodyEquivalent, 2) * 10; // up to 20
   if (input.packageCount >= 2) score += 15;
   if (input.geometryFingerprintCount > 0) score += 15;
   score = Math.min(100, Math.round(score));
 
-  const anchored = faceEquivalent >= 1 || input.bodyReferenceCount >= 1;
+  const anchored = faceEquivalent >= 1 || bodyEquivalent >= 1;
   const tier: CoverageTier =
     score >= 80 && anchored
       ? "fortified"
@@ -338,14 +375,19 @@ export function computeDetectionCoverage(input: CoverageInput): DetectionCoverag
           : "unanchored";
 
   const improvements: string[] = [];
+  const derivedOnly = anchored && input.faceReferenceCount === 0 && (derivedFace > 0 || derivedBody > 0);
   if (!anchored) {
     improvements.push(
       "Upload a scan package with face captures — matching currently relies on a single public photo."
     );
+  } else if (derivedOnly) {
+    improvements.push(
+      "Turntable renders are anchoring detection — photographic stills from a scan session would strengthen matching further."
+    );
   } else if (faceEquivalent < 4) {
     improvements.push("Add more face angles — each capture angle closes a pose the matcher can miss.");
   }
-  if (input.bodyReferenceCount === 0) {
+  if (bodyEquivalent === 0) {
     improvements.push("Add a full-body scan to extend detection beyond the face to full-figure synthesis.");
   }
   if (input.packageCount < 2) {
@@ -368,10 +410,13 @@ export function coverageInputFromReferences(
   refs: ReferenceImage[],
   extra: { geometryFingerprintCount: number; hasProfileImage: boolean }
 ): CoverageInput {
+  const isDerived = (r: ReferenceImage) => (r.source ?? "vault_still") === "derived_render";
   return {
-    faceReferenceCount: refs.filter((r) => r.kind === "face").length,
-    bodyReferenceCount: refs.filter((r) => r.kind === "full_body").length,
+    faceReferenceCount: refs.filter((r) => r.kind === "face" && !isDerived(r)).length,
+    bodyReferenceCount: refs.filter((r) => r.kind === "full_body" && !isDerived(r)).length,
     unknownReferenceCount: refs.filter((r) => r.kind === "unknown").length,
+    derivedFaceReferenceCount: refs.filter((r) => r.kind === "face" && isDerived(r)).length,
+    derivedBodyReferenceCount: refs.filter((r) => r.kind === "full_body" && isDerived(r)).length,
     packageCount: new Set(refs.map((r) => r.packageId)).size,
     geometryFingerprintCount: extra.geometryFingerprintCount,
     hasProfileImage: extra.hasProfileImage,
