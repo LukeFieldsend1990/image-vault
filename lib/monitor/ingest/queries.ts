@@ -219,6 +219,19 @@ export function buildDiscoveryPlan(
 
   if (!slug) return watched.slice(0, maxQueries);
 
+  // An open announcement window goes in ahead of the standing vocabulary.
+  // During the fortnight after a cast reveal the character and production tags
+  // are where the new content is — the actor's own name tag is dominated by
+  // press and reaction, and the name+AI variants are tags that nobody has
+  // started using for this role yet. The window's terms are capped and decay
+  // (lib/monitor/vigilance.ts), so this is a temporary re-prioritisation of the
+  // query budget rather than a permanent expansion of it.
+  const vigilance: DiscoveryQuery[] = (anchor.vigilance?.extraHashtags ?? []).map((value) => ({
+    mode: "hashtag" as const,
+    value,
+    resultsLimit,
+  }));
+
   const discovery: DiscoveryQuery[] = [
     // The bare name tag, first and highest-volume.
     //
@@ -248,8 +261,15 @@ export function buildDiscoveryPlan(
     }
   }
 
-  const budget = Math.max(0, maxQueries - watched.length);
-  return [...watched, ...discovery.slice(0, budget)];
+  // A window raises the ceiling as well as reordering under it: sweeping the
+  // announcement vocabulary by dropping the name tag would be trading coverage
+  // for coverage. The lift is bounded by what the window itself contributes.
+  const effectiveMax = maxQueries + vigilance.length;
+  const budget = Math.max(0, effectiveMax - watched.length);
+  const planned = [...vigilance, ...discovery].filter(
+    (q, i, all) => all.findIndex((o) => o.mode === q.mode && o.value === q.value) === i
+  );
+  return [...watched, ...planned.slice(0, budget)];
 }
 
 /**

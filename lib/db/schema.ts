@@ -1620,6 +1620,12 @@ export const likenessHits = sqliteTable("likeness_hits", {
   // query weighting ("#tomhardyai finds 8x what #tomhardyfaceswap does").
   discoverySource: text("discovery_source"),
   accountId: text("account_id").references(() => monitorAccounts.id),
+  // The vigilance window in force when this hit was detected, if any. Attribution
+  // is by window, not by caption: it answers "what did the X-Men announcement
+  // cost this talent", which is the question that justifies the extra spend.
+  // No FK cascade to deletion — losing the hit history when a stale event row is
+  // cleaned up would be worse than a dangling id.
+  vigilanceEventId: text("vigilance_event_id"),
   status: text("status", {
     enum: ["new", "confirmed", "dismissed", "takedown_requested", "resolved"],
   }).notNull().default("new"),
@@ -1811,6 +1817,67 @@ export const monitorLearnedQueries = sqliteTable(
   },
   (t) => ({
     uniqTalentPlatformQuery: unique().on(t.talentId, t.platform, t.query),
+  })
+);
+
+/**
+ * Vigilance events — the announcements that kick off synthetic-content waves.
+ *
+ * Cast reveals, trailer drops and premieres are the trigger for the waves this
+ * platform exists to catch, and they are knowable in advance of the content.
+ * Recording one opens a bounded window during which sweeps ask for the wave's
+ * own vocabulary (character and production, not just the actor's name), run
+ * more often, and tell the adjudicator what it is looking at.
+ *
+ * `expires_at` is mandatory: a window that never closes is just a permanent
+ * widening of the query set, which spends Apify budget forever on a news cycle
+ * that ended. See lib/monitor/vigilance.ts for the decay model.
+ */
+export const monitorEvents = sqliteTable("monitor_events", {
+  id: text("id").primaryKey(),
+  kind: text("kind", {
+    enum: ["cast_announcement", "trailer", "premiere", "festival", "awards", "other"],
+  }).notNull().default("cast_announcement"),
+  title: text("title").notNull(),
+  productionTitle: text("production_title"),
+  sourceUrl: text("source_url"),
+  announcedAt: integer("announced_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  status: text("status", { enum: ["active", "closed"] }).notNull().default("active"),
+  notes: text("notes"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+/**
+ * A persona under watch for the duration of an event.
+ *
+ * `talent_id` is nullable on purpose. The personas named in an announcement are
+ * rarely all clients, and the ones who aren't still matter: they are the early
+ * warning that the wave has started, and the reason to reach out. An unlinked
+ * persona is tracked and displayed but cannot be swept — detection is anchored
+ * to a vault identity, and there is nothing to match against without one.
+ *
+ * `person_slug` is the join key for auto-linking: a persona resolves to whatever
+ * talent's profile name slugs to the same string, so a cast member who signs up
+ * after the announcement is picked up on their next sweep with no manual step.
+ */
+export const monitorEventPersonas = sqliteTable(
+  "monitor_event_personas",
+  {
+    id: text("id").primaryKey(),
+    eventId: text("event_id").notNull().references(() => monitorEvents.id, { onDelete: "cascade" }),
+    personName: text("person_name").notNull(),
+    personSlug: text("person_slug").notNull(), // nameSlug(personName)
+    characterName: text("character_name"),
+    /** Operator-added extras: alt spellings, fandom shorthand. JSON string[]. */
+    extraTermsJson: text("extra_terms_json").notNull().default("[]"),
+    talentId: text("talent_id").references(() => users.id, { onDelete: "set null" }),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+  },
+  (t) => ({
+    uniqEventPerson: unique().on(t.eventId, t.personSlug),
   })
 );
 

@@ -76,6 +76,47 @@ export interface CandidateContent {
   hashtags?: string[];
   /** Set by the synthetic-media check when it produced a reading. */
   syntheticFindings?: SyntheticFindings;
+  /**
+   * Set when an open vigilance window — not the talent's name — supplied the
+   * identity match ("cyclops+xmen", "kitconnorcyclops"). Tells the adjudicator
+   * the identity evidence is role vocabulary, and tells us afterwards whether
+   * windows are earning the queries they add.
+   */
+  vigilanceMatchTerm?: string;
+}
+
+/**
+ * How far into an announcement wave a vigilance window is. Peak is the
+ * fortnight after the announcement, where generation volume concentrates;
+ * elevated is the long tail that follows it.
+ */
+export type VigilancePhase = "peak" | "elevated";
+
+/**
+ * The open announcement window steering this talent's sweep, flattened for the
+ * discovery, pre-filter and adjudication stages. Built in lib/monitor/events.ts
+ * from monitor_events + monitor_event_personas; the vocabulary logic that fills
+ * it lives in lib/monitor/vigilance.ts.
+ *
+ * Absent = no window open, and every stage behaves exactly as it did before
+ * windows existed.
+ */
+export interface VigilanceAnchor {
+  eventId: string;
+  eventTitle: string;
+  kind: string;
+  productionTitle: string | null;
+  announcedAt: number;
+  daysSinceAnnouncement: number;
+  phase: VigilancePhase;
+  /** Role names for this talent, lowercased ("cyclops", "scott summers"). */
+  characterAliases: string[];
+  /** Production spellings, lowercased ("x-men", "xmen"). */
+  productionAliases: string[];
+  /** Actor+role fusions that identify the target on their own ("kitconnorcyclops"). */
+  compoundAliases: string[];
+  /** Extra hashtag values this window adds to the sweep, without '#'. */
+  extraHashtags: string[];
 }
 
 export interface TalentIdentityAnchor {
@@ -88,6 +129,8 @@ export interface TalentIdentityAnchor {
   referenceImageCount?: number;
   /** Detection-coverage tier computed from the reference set. */
   coverageTier?: "unanchored" | "baseline" | "anchored" | "fortified";
+  /** Open announcement window focusing this sweep, if any. */
+  vigilance?: VigilanceAnchor | null;
 }
 
 /**

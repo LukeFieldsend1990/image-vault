@@ -53,6 +53,8 @@ import { seedHandlesFor } from "./ingest/seeds";
 import { verifyCandidatesIdentity } from "./identity-check";
 import { assessCandidatesSynthetic } from "./synthetic-check";
 import { recordLearnedHashtags, topLearnedQueries } from "./query-mining";
+import { loadVigilanceForTalent } from "./events";
+import { describeVigilance } from "./vigilance";
 import {
   computeDetectionCoverage,
   coverageInputFromReferences,
@@ -138,6 +140,7 @@ function buildAdjudicationPrompt(
       : null,
     scopeLine,
     `Monitor sensitivity: ${sensitivity}`,
+    anchor.vigilance ? describeVigilance(anchor.vigilance) : null,
   ]
     .filter((l): l is string => l !== null)
     .join("\n");
@@ -160,6 +163,9 @@ function buildAdjudicationPrompt(
         `author: ${c.authorHandle}${c.authorMeta?.followerCount != null ? ` (${c.authorMeta.followerCount} followers)` : ""}` +
         ` | views: ${s.viewCount} | posted ${s.postedDaysAgo}d ago\n` +
         (c.discoverySource ? `surfaced by: ${c.discoverySource.mode} "${c.discoverySource.query}"\n` : "") +
+        (c.vigilanceMatchTerm
+          ? `identity evidence is ROLE VOCABULARY, not the talent's name — matched "${c.vigilanceMatchTerm}" from the open announcement window. Treat as a weaker identity claim than a name match: it establishes who the poster is targeting, not who is depicted.\n`
+          : "") +
         `caption (untrusted): ${JSON.stringify(c.caption)}\n` +
         (c.hashtags?.length ? `hashtags (untrusted): ${c.hashtags.slice(0, 15).join(", ")}\n` : "") +
         `detector readings: ${JSON.stringify(detectors)}\n` +
@@ -297,6 +303,9 @@ export function heuristicAdjudicate(candidates: CandidateContent[]): Adjudicatio
       matchSignals.push(`Artifact analysis: resembles ${c.syntheticFindings.generatorFamily}`);
     }
     if (!haveSynthetic && declaresAi) matchSignals.push("Caption/handle/hashtags declare AI generation");
+    if (c.vigilanceMatchTerm) {
+      matchSignals.push(`Persona reference "${c.vigilanceMatchTerm}" during an open announcement window`);
+    }
     if (c.discoverySource && c.discoverySource.mode !== "simulated") {
       matchSignals.push(`Surfaced by ${c.discoverySource.mode} "${c.discoverySource.query}"`);
     }
@@ -315,7 +324,9 @@ export function heuristicAdjudicate(candidates: CandidateContent[]): Adjudicatio
       rationale: flag
         ? haveFace
           ? "Detector thresholds exceeded for both likeness match and synthetic-media classification (heuristic adjudication)."
-          : "Content declares AI generation and is associated with the talent by name; identity not verified — no face matcher available (heuristic adjudication)."
+          : c.vigilanceMatchTerm
+            ? `Content declares AI generation and references the talent's announced role ("${c.vigilanceMatchTerm}") rather than their name; identity not verified — no face matcher available (heuristic adjudication).`
+            : "Content declares AI generation and is associated with the talent by name; identity not verified — no face matcher available (heuristic adjudication)."
         : "Signals below flagging thresholds (heuristic adjudication).",
     };
   });
@@ -858,6 +869,24 @@ export async function runLikenessScan(
     anchor.coverageTier = coverage.tier;
   }
 
+  // Open announcement window, if this talent is in one. Steers three stages at
+  // once: the query plan asks for the wave's own vocabulary, the pre-filter
+  // accepts corroborated role references as identity evidence, and the
+  // adjudicator is told what it is looking at. Non-fatal — a failure here
+  // degrades to an ordinary name-anchored sweep.
+  try {
+    anchor.vigilance = await loadVigilanceForTalent(db, opts.talentId, anchor.fullName, now);
+    if (anchor.vigilance) {
+      console.log(
+        `[monitor] vigilance window for ${opts.talentId}: "${anchor.vigilance.eventTitle}" ` +
+          `(${anchor.vigilance.phase}, day ${anchor.vigilance.daysSinceAnnouncement}) ` +
+          `adding ${anchor.vigilance.extraHashtags.length} quer(ies): ${anchor.vigilance.extraHashtags.join(", ")}`
+      );
+    }
+  } catch (err) {
+    console.warn(`[monitor] vigilance lookup failed: ${(err as Error).message}`);
+  }
+
   let scanId = opts.scanId;
   if (!scanId) {
     scanId = crypto.randomUUID();
@@ -1059,6 +1088,7 @@ export async function runLikenessScan(
         ? `${candidate.discoverySource.mode}:${candidate.discoverySource.query}`
         : null,
       accountId,
+      vigilanceEventId: anchor.vigilance?.eventId ?? null,
       status: "new",
       detectedAt: now,
     });
