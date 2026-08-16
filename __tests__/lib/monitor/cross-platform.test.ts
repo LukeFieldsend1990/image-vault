@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 
 import {
+  buildProbeMemory,
   captionSimilarity,
   handleVariants,
+  shouldProbe,
   reachOf,
   topByReach,
   scoreSiblingEvidence,
@@ -161,5 +163,55 @@ describe("scoreSiblingEvidence", () => {
       bestSimilarity: 0,
       examples: [],
     });
+  });
+});
+
+describe("probe memory", () => {
+  const DAY = 24 * 60 * 60;
+  const now = 1_800_000_000;
+
+  it("does not re-probe a handle another source account already answered", () => {
+    const memory = buildProbeMemory([
+      { platform: "tiktok", handle: "leakingai", status: "name_only", checkedAt: now - DAY },
+    ]);
+    expect(shouldProbe(memory, "tiktok", "leakingai", now)).toBe(false);
+    // Case is not identity — @LeakingAI is the same account.
+    expect(shouldProbe(memory, "tiktok", "LeakingAI", now)).toBe(false);
+    // A different platform is a different question.
+    expect(shouldProbe(memory, "x", "leakingai", now)).toBe(true);
+  });
+
+  it("treats confirmed and dismissed as settled", () => {
+    for (const status of ["confirmed", "dismissed"] as const) {
+      const memory = buildProbeMemory([
+        { platform: "tiktok", handle: "leakingai", status, checkedAt: now - 400 * DAY },
+      ]);
+      expect(shouldProbe(memory, "tiktok", "leakingai", now)).toBe(false);
+    }
+  });
+
+  it("trusts a negative for a bounded time, then asks again", () => {
+    const fresh = buildProbeMemory([
+      { platform: "tiktok", handle: "leakingai", status: "not_found", checkedAt: now - 5 * DAY },
+    ]);
+    expect(shouldProbe(fresh, "tiktok", "leakingai", now)).toBe(false);
+
+    const stale = buildProbeMemory([
+      { platform: "tiktok", handle: "leakingai", status: "not_found", checkedAt: now - 90 * DAY },
+    ]);
+    expect(shouldProbe(stale, "tiktok", "leakingai", now)).toBe(true);
+  });
+
+  it("lets a real answer override an older negative for the same handle", () => {
+    const memory = buildProbeMemory([
+      { platform: "tiktok", handle: "leakingai", status: "not_found", checkedAt: now - 100 * DAY },
+      { platform: "tiktok", handle: "leakingai", status: "confirmed", checkedAt: now - 200 * DAY },
+    ]);
+    expect(memory.get("tiktok:leakingai")?.status).toBe("confirmed");
+    expect(shouldProbe(memory, "tiktok", "leakingai", now)).toBe(false);
+  });
+
+  it("probes a handle nobody has asked about", () => {
+    expect(shouldProbe(buildProbeMemory([]), "tiktok", "newhandle", now)).toBe(true);
   });
 });

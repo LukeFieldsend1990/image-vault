@@ -331,8 +331,16 @@ Three rules keep it cheap and honest:
    the pre-filter and adjudicator. Anything that exists but does not match is
    recorded as `name_only` for an admin decision at `/admin/monitor`.
 
-Every probe is written to `monitor_account_links`, negatives included. That row
-is what stops the next sweep paying to ask the same question again.
+Every probe is written to `monitor_account_links`, negatives included, and the
+memory is keyed by *what was probed* rather than by which account triggered it
+(`buildProbeMemory` / `shouldProbe`). Several watched accounts routinely produce
+the same candidate handle — the same operator under two source accounts, or two
+variant spellings collapsing onto one — and keying by source would pay for the
+same lookup once per source. Confirmed, name-only and dismissed are settled
+forever. A negative is trusted for `NEGATIVE_RECHECK_SECONDS` (60 days) and then
+re-asked once, because a handle that did not exist in March can exist in May,
+and an operator expanding to a new platform is precisely what this layer is
+for.
 
 ### Known limitations
 

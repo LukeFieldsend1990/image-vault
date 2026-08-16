@@ -419,11 +419,82 @@ async function probeYouTube(env: ProbeEnv, handle: string): Promise<ProbeResult>
 
 export type LinkStatus = "confirmed" | "name_only" | "not_found" | "dismissed";
 
+/**
+ * How long a "handle does not exist" answer is trusted before it is worth
+ * asking again. Not forever: handles get registered later, and an operator
+ * who expands to TikTok next month is exactly the case this layer exists to
+ * catch. Long enough that no sweep re-probes the same dead handle in any
+ * normal cadence.
+ */
+export const NEGATIVE_RECHECK_SECONDS = 60 * 24 * 60 * 60; // 60 days
+
+export interface ProbeRecord {
+  platform: string;
+  handle: string;
+  status: LinkStatus;
+  checkedAt: number | null;
+}
+
+/**
+ * Index past probes by what was probed, not by who paid for the probe.
+ *
+ * Two watched accounts routinely produce the same candidate handle — the same
+ * operator shows up under several source accounts, and the variant spellings
+ * collapse onto each other. Keyed by source, each of them would pay for its
+ * own copy of the same lookup. Keyed by target, the second one is free.
+ *
+ * Where several records exist for one target, the decisive one wins: an answer
+ * about whether the account exists beats a negative, and the most recent
+ * negative beats an older one.
+ */
+export function buildProbeMemory(records: ProbeRecord[]): Map<string, ProbeRecord> {
+  const memory = new Map<string, ProbeRecord>();
+  for (const record of records) {
+    const key = probeKey(record.platform, record.handle);
+    const existing = memory.get(key);
+    if (!existing) {
+      memory.set(key, record);
+      continue;
+    }
+    const decisive = (r: ProbeRecord) => (r.status === "not_found" ? 0 : 1);
+    if (
+      decisive(record) > decisive(existing) ||
+      (decisive(record) === decisive(existing) && (record.checkedAt ?? 0) > (existing.checkedAt ?? 0))
+    ) {
+      memory.set(key, record);
+    }
+  }
+  return memory;
+}
+
+export function probeKey(platform: string, handle: string): string {
+  return `${platform}:${handle.toLowerCase()}`;
+}
+
+/**
+ * Is this handle worth spending a probe on? No, if we already know what it is
+ * — confirmed, name-only and dismissed are all settled answers. No, if we
+ * looked and found nothing recently. Yes otherwise.
+ */
+export function shouldProbe(
+  memory: Map<string, ProbeRecord>,
+  platform: string,
+  handle: string,
+  now: number
+): boolean {
+  const record = memory.get(probeKey(platform, handle));
+  if (!record) return true;
+  if (record.status !== "not_found") return false;
+  return now - (record.checkedAt ?? 0) >= NEGATIVE_RECHECK_SECONDS;
+}
+
 export interface CrossPlatformStats {
   probed: number;
   confirmed: number;
   nameOnly: number;
   notFound: number;
+  /** Candidates we already had an answer for, so no run was paid for. */
+  skipped: number;
   costUsd: number;
 }
 
@@ -449,7 +520,14 @@ export async function findCrossPlatformSiblings(
     maxProbes?: number;
   }
 ): Promise<CrossPlatformStats> {
-  const stats: CrossPlatformStats = { probed: 0, confirmed: 0, nameOnly: 0, notFound: 0, costUsd: 0 };
+  const stats: CrossPlatformStats = {
+    probed: 0,
+    confirmed: 0,
+    nameOnly: 0,
+    notFound: 0,
+    skipped: 0,
+    costUsd: 0,
+  };
 
   const accounts = await db
     .select({
@@ -468,18 +546,20 @@ export async function findCrossPlatformSiblings(
   });
   if (!targets.length) return stats;
 
-  // Skip anything already answered, so repeat sweeps do not re-probe the same
-  // dead handle every night.
-  const existingLinks = await db
-    .select({
-      sourceAccountId: monitorAccountLinks.sourceAccountId,
-      platform: monitorAccountLinks.platform,
-      handle: monitorAccountLinks.handle,
-    })
-    .from(monitorAccountLinks)
-    .all();
-  const answered = new Set(
-    existingLinks.map((l) => `${l.sourceAccountId}:${l.platform}:${l.handle}`)
+  // Everything we have ever probed, keyed by what was probed. This is what
+  // stops sweeps paying nightly to re-ask a question that already has an
+  // answer — including across source accounts, which frequently produce the
+  // same candidate handle.
+  const memory = buildProbeMemory(
+    await db
+      .select({
+        platform: monitorAccountLinks.platform,
+        handle: monitorAccountLinks.handle,
+        status: monitorAccountLinks.status,
+        checkedAt: monitorAccountLinks.checkedAt,
+      })
+      .from(monitorAccountLinks)
+      .all()
   );
 
   const maxProbes = opts.maxProbes ?? MAX_PROBES_PER_SWEEP;
@@ -501,8 +581,10 @@ export async function findCrossPlatformSiblings(
 
     for (const candidate of target.candidates) {
       if (stats.probed >= maxProbes) break;
-      const key = `${target.sourceAccountId}:${target.platform}:${candidate}`;
-      if (answered.has(key)) continue;
+      if (!shouldProbe(memory, target.platform, candidate, now)) {
+        stats.skipped++;
+        continue;
+      }
 
       const probe = await probeHandle(env, target.platform, candidate, opts.budget);
       if (probe.error && !probe.exists) {
@@ -513,7 +595,6 @@ export async function findCrossPlatformSiblings(
       }
       stats.probed++;
       stats.costUsd += probe.costUsd;
-      answered.add(key);
 
       const evidence = scoreSiblingEvidence(sourceCaptions, probe.posts);
       const status: LinkStatus = !probe.exists
@@ -539,20 +620,47 @@ export async function findCrossPlatformSiblings(
         stats.notFound++;
       }
 
-      await db.insert(monitorAccountLinks).values({
-        id: crypto.randomUUID(),
-        sourceAccountId: target.sourceAccountId,
+      memory.set(probeKey(target.platform, candidate), {
         platform: target.platform,
         handle: candidate,
+        status,
+        checkedAt: now,
+      });
+
+      // A re-probe after the negative TTL updates the existing row rather than
+      // colliding with the (source, platform, handle) unique constraint.
+      const previous = await db
+        .select({ id: monitorAccountLinks.id })
+        .from(monitorAccountLinks)
+        .where(
+          and(
+            eq(monitorAccountLinks.sourceAccountId, target.sourceAccountId),
+            eq(monitorAccountLinks.platform, target.platform),
+            eq(monitorAccountLinks.handle, candidate)
+          )
+        )
+        .get();
+      const row = {
         status,
         matchedPosts: evidence.matchedPosts,
         bestSimilarity: Math.round(evidence.bestSimilarity * 100),
         evidenceJson: JSON.stringify(evidence.examples),
         promotedAccountId,
-        discoveredByTalentId: opts.talentId,
-        createdAt: now,
         checkedAt: now,
-      });
+      };
+      if (previous) {
+        await db.update(monitorAccountLinks).set(row).where(eq(monitorAccountLinks.id, previous.id));
+      } else {
+        await db.insert(monitorAccountLinks).values({
+          id: crypto.randomUUID(),
+          sourceAccountId: target.sourceAccountId,
+          platform: target.platform,
+          handle: candidate,
+          discoveredByTalentId: opts.talentId,
+          createdAt: now,
+          ...row,
+        });
+      }
 
       // One confirmed sibling per platform is enough; the remaining spellings
       // are almost certainly the same account or nobody.
