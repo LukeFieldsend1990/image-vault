@@ -851,6 +851,21 @@ export default function DashboardClient() {
     }
   }, []);
 
+  // ?upload=1 opens the uploader straight away, so "add scans" CTAs elsewhere
+  // (the likeness monitor's coverage card) land on the action rather than on
+  // the vault index. Read off location rather than useSearchParams to keep
+  // this page out of a Suspense boundary; the param is then stripped so a
+  // reload doesn't reopen the modal.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("upload") !== "1") return;
+    setModalOpen(true);
+    params.delete("upload");
+    const query = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
+  }, []);
+
   useEffect(() => {
     void fetchPackages();
     void (async () => {

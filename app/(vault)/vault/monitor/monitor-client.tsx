@@ -75,12 +75,15 @@ interface ReferenceSetState {
     score: number;
     improvements: string[];
   };
-  referenceCount: number;
-  faceReferenceCount: number;
-  bodyReferenceCount: number;
-  packagesContributing: { id: string; name: string }[];
-  geometryFingerprintCount: number;
-  hasProfileImage: boolean;
+  /** What the vault holds — the only thing the coverage card talks about. */
+  vaultPackages?: { total: number; faceCount: number; bodyCount: number };
+}
+
+interface OffenderAccountSummary {
+  id: string;
+  status: string;
+  cumulativeViews: number;
+  openHitsForTalent: number;
 }
 
 interface ScanResponse {
@@ -207,6 +210,12 @@ function formatRelative(unix: number): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+function formatCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  return String(n);
 }
 
 function formatDate(unix: number): string {
@@ -345,18 +354,26 @@ const TIER_LABELS: Record<ReferenceSetState["coverage"]["tier"], { label: string
 };
 
 /**
- * The flywheel card: shows how strongly detection is anchored to the talent's
- * own vault scans, and which upload strengthens it next. This is the
- * capability pitch made concrete — matching runs against their ground-truth
- * captures, not public photos, and improves with every scan they add.
+ * The flywheel card: how much of the talent's vault is strengthening the
+ * monitor, and which scan to add next.
+ *
+ * Deliberately says nothing about what detection leans on when coverage is
+ * thin — the talent's own dashboard is not the place to publish where the
+ * monitor is weakest. It states what they have, the type of scan that would
+ * help next, and that adding it makes monitoring more effective.
  */
 function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
   const tier = TIER_LABELS[refSet.coverage.tier];
+  const vault = refSet.vaultPackages ?? { total: 0, faceCount: 0, bodyCount: 0 };
   const parts: string[] = [];
-  if (refSet.faceReferenceCount > 0) parts.push(`${refSet.faceReferenceCount} face`);
-  if (refSet.bodyReferenceCount > 0) parts.push(`${refSet.bodyReferenceCount} full-body`);
-  const unclassified = refSet.referenceCount - refSet.faceReferenceCount - refSet.bodyReferenceCount;
-  if (unclassified > 0) parts.push(`${unclassified} other`);
+  if (vault.faceCount > 0) parts.push("face");
+  if (vault.bodyCount > 0) parts.push("full-body");
+
+  const summary =
+    vault.total === 0
+      ? "No scans in your vault yet — adding one makes monitoring more effective."
+      : `${vault.total} scan package${vault.total === 1 ? "" : "s"} in your vault` +
+        (parts.length ? ` — ${parts.join(" and ")} captures.` : ".");
 
   return (
     <div className="rounded-md border px-5 py-4 space-y-3"
@@ -372,13 +389,9 @@ function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
       </div>
 
       <div>
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline justify-between gap-3">
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-            {refSet.referenceCount > 0
-              ? `Matching against ${refSet.referenceCount} reference image${refSet.referenceCount === 1 ? "" : "s"}` +
-                (parts.length ? ` (${parts.join(", ")})` : "") +
-                ` from ${refSet.packagesContributing.length} scan package${refSet.packagesContributing.length === 1 ? "" : "s"} in your vault.`
-              : "No vault references yet — matching relies on a single public photo."}
+            {summary}
           </p>
           <p className="text-xs font-semibold shrink-0" style={{ color: "var(--color-ink)" }}>
             {refSet.coverage.score}/100
@@ -401,11 +414,11 @@ function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
             </div>
           ))}
           <Link
-            href="/vault"
+            href="/dashboard?upload=1"
             className="inline-block text-xs font-medium underline underline-offset-2"
             style={{ color: "var(--color-accent)" }}
           >
-            Add scans to strengthen detection →
+            Add scans to your vault →
           </Link>
         </div>
       )}
@@ -613,6 +626,11 @@ function HitPreviewModal({ hit, onClose }: { hit: LikenessHit; onClose: () => vo
  * reasons feed the admin tuning panel — a hit dropped as `not_ai` is a
  * different tuning signal than one dropped as `not_me`, and merging them
  * costs us insight into the pre-filter's real error mix.
+ *
+ * The reason picker anchors to the button on desktop but becomes a bottom
+ * sheet on narrow screens: the button sits in a wrapping action row, so a
+ * right-anchored 13rem dropdown ran off the side of a phone viewport and the
+ * reasons were unreachable.
  */
 const DISMISS_OPTIONS: Array<{ reason: string; label: string }> = [
   { reason: "not_me", label: "Not me" },
@@ -633,6 +651,20 @@ function DismissMenu({
   const [open, setOpen] = useState(false);
   const [otherOpen, setOtherOpen] = useState(false);
   const [notes, setNotes] = useState("");
+
+  const close = () => {
+    setOpen(false);
+    setOtherOpen(false);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   const pick = (reason: string) => {
     if (reason === "other") {
@@ -665,10 +697,19 @@ function DismissMenu({
         </svg>
       </button>
       {open && (
-        <div
-          className="absolute z-10 right-0 top-full mt-1 w-52 rounded shadow-lg"
-          style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
-        >
+        <>
+          {/* Dim backdrop on phones (the sheet is modal there); an invisible
+              catcher on desktop so clicking away closes the dropdown. */}
+          <div
+            onClick={close}
+            className="fixed inset-0 z-40 sm:hidden"
+            style={{ background: "rgba(0,0,0,0.45)" }}
+          />
+          <div onClick={close} className="fixed inset-0 z-40 hidden sm:block" />
+          <div
+            className="fixed z-50 inset-x-3 bottom-3 rounded shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-full sm:bottom-auto sm:mt-1 sm:w-52"
+            style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
+          >
           {otherOpen ? (
             <div className="p-2 space-y-2">
               <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
@@ -717,14 +758,15 @@ function DismissMenu({
               <button
                 key={opt.reason}
                 onClick={() => pick(opt.reason)}
-                className="block w-full text-left text-xs px-3 py-2 hover:opacity-80"
+                className="block w-full text-left text-xs px-3 py-3 sm:py-2 hover:opacity-80"
                 style={{ color: "var(--color-ink)" }}
               >
                 {opt.label}
               </button>
             ))
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -738,6 +780,21 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
 }) {
   const risk = RISK_COLORS[hit.riskLevel] ?? RISK_COLORS.medium;
   const open = hit.status === "new" || hit.status === "confirmed";
+
+  // Everything below the confidence bars folds away, so a page of hits reads
+  // as a scannable list. The action row stays out of the fold — triage is the
+  // point of the card and shouldn't cost an extra click.
+  const [expanded, setExpanded] = useState(false);
+  const detailParts: string[] = [];
+  if (hit.secondaryActors?.length) {
+    detailParts.push(`${hit.secondaryActors.length} other actor${hit.secondaryActors.length === 1 ? "" : "s"}`);
+  }
+  if (hit.matchSignals.length) {
+    detailParts.push(`${hit.matchSignals.length} match signal${hit.matchSignals.length === 1 ? "" : "s"}`);
+  }
+  if (hit.aiRationale) detailParts.push("adjudicator note");
+  const hasDetail = detailParts.length > 0;
+
   return (
     <div className="rounded-md border p-4 space-y-3"
       style={{ borderColor: hit.status === "new" ? "rgba(239,68,68,0.35)" : "var(--color-border)", background: "var(--color-bg)" }}>
@@ -775,11 +832,35 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
         <ConfidenceBar value={hit.aiGeneratedLikelihood} label="AI-generated" />
       </div>
 
-      {hit.secondaryActors && hit.secondaryActors.length > 0 && (
+      {hasDetail && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="flex w-full items-center gap-1.5 text-left text-[11px] font-medium"
+          style={{ color: "var(--color-muted)" }}
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 120ms" }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+          {expanded ? "Hide detail" : detailParts.join(" · ")}
+        </button>
+      )}
+
+      {expanded && hit.secondaryActors && hit.secondaryActors.length > 0 && (
         <SecondaryActorStack actors={hit.secondaryActors} />
       )}
 
-      {hit.matchSignals.length > 0 && (
+      {expanded && hit.matchSignals.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {hit.matchSignals.map((s, i) => (
             <span key={i} className="rounded px-2 py-0.5 text-[10px] font-medium"
@@ -790,7 +871,7 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
         </div>
       )}
 
-      {hit.aiRationale && (
+      {expanded && hit.aiRationale && (
         <p className="text-xs leading-relaxed rounded px-3 py-2"
           style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}>
           <span className="font-semibold" style={{ color: "var(--color-ink)" }}>Adjudicator: </span>
@@ -848,6 +929,117 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
   );
 }
 
+// ── Review queue ────────────────────────────────────────────────────────────
+
+function QueueStat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+  return (
+    <div>
+      <p
+        className="font-mono text-2xl leading-none"
+        style={{ color: accent ? "var(--color-accent)" : "var(--color-ink)" }}
+      >
+        {value}
+      </p>
+      <p className="mt-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
+        {label}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Hits waiting on the talent and the accounts publishing them, in one place.
+ *
+ * These were two separate things: a status strip counting unreviewed hits, and
+ * a small text link to the accounts screen buried under the page title. The
+ * accounts view is where the actual enforcement decisions get made — an
+ * account is what has to be shut down, individual posts are cheap to repost —
+ * so it gets a real tile and a real button rather than an anonymous link.
+ */
+function ReviewQueueCard({
+  newCount,
+  openCount,
+  accounts,
+  loaded,
+  name,
+}: {
+  newCount: number;
+  openCount: number;
+  accounts: OffenderAccountSummary[];
+  loaded: boolean;
+  name: string;
+}) {
+  const activeAccounts = accounts.filter((a) => a.status === "watchlist" || a.status === "reported");
+  const reach = activeAccounts.reduce((sum, a) => sum + (a.cumulativeViews ?? 0), 0);
+  const reported = accounts.filter((a) => a.status === "reported").length;
+  const empty = newCount === 0 && openCount === 0 && activeAccounts.length === 0;
+
+  return (
+    <div
+      className="rounded-md border overflow-hidden"
+      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+    >
+      <div className="px-5 py-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+            Review queue
+          </p>
+          {newCount > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+              style={{ background: "rgba(239,68,68,0.12)", color: "#dc2626" }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              Needs you
+            </span>
+          )}
+        </div>
+
+        {empty && loaded ? (
+          <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+            Nothing waiting on you. Run a scan to check the monitored platforms for unauthorised use of{" "}
+            {name}.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+            <QueueStat
+              value={String(newCount)}
+              label={`hit${newCount === 1 ? "" : "s"} awaiting review`}
+              accent={newCount > 0}
+            />
+            <QueueStat value={String(openCount)} label="open cases" />
+            <QueueStat value={String(activeAccounts.length)} label="accounts in play" />
+            <QueueStat value={formatCompact(reach)} label="views to remove" />
+          </div>
+        )}
+      </div>
+
+      <div
+        className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
+        style={{ borderTop: "1px solid var(--color-border)", background: "var(--color-bg)" }}
+      >
+        <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+          {activeAccounts.length > 0
+            ? `${activeAccounts.length} account${activeAccounts.length === 1 ? "" : "s"} publishing this content` +
+              (reported > 0 ? ` · ${reported} reported to the platform` : "")
+            : "Accounts are opened as case files the first time a sweep flags a post."}
+        </p>
+        <Link
+          href="/vault/monitor/accounts"
+          className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-white transition shrink-0"
+          style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
+        >
+          View accounts
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12 5 19 12 12 19" />
+          </svg>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 interface Props {
@@ -871,6 +1063,7 @@ export default function MonitorClient({ identity }: Props) {
   const [triaging, setTriaging] = useState<string | null>(null);
   const [previewHit, setPreviewHit] = useState<LikenessHit | null>(null);
   const [refSet, setRefSet] = useState<ReferenceSetState | null>(null);
+  const [accounts, setAccounts] = useState<OffenderAccountSummary[]>([]);
 
   const name = identity?.fullName ?? "your likeness";
 
@@ -881,6 +1074,13 @@ export default function MonitorClient({ identity }: Props) {
       void fetch("/api/monitor/reference-set")
         .then((r) => (r.ok ? (r.json() as Promise<ReferenceSetState>) : null))
         .then((data) => data && setRefSet(data))
+        .catch(() => {});
+
+      // Offender accounts feed the review-queue tile's second half. Non-fatal:
+      // the tile degrades to hit counts if this fails.
+      void fetch("/api/monitor/accounts")
+        .then((r) => (r.ok ? (r.json() as Promise<{ accounts: OffenderAccountSummary[] }>) : null))
+        .then((data) => data && setAccounts(data.accounts))
         .catch(() => {});
 
       const res = await fetch("/api/monitor");
@@ -1025,7 +1225,7 @@ export default function MonitorClient({ identity }: Props) {
     <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
 
       {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
             Likeness Monitor
@@ -1034,13 +1234,6 @@ export default function MonitorClient({ identity }: Props) {
             AI-adjudicated scanning of public platforms for unauthorised use of{" "}
             <span className="font-medium" style={{ color: "var(--color-ink)" }}>{name}</span>.
           </p>
-          <Link
-            href="/vault/monitor/accounts"
-            className="mt-2 inline-block text-xs font-medium underline underline-offset-2"
-            style={{ color: "var(--color-muted)" }}
-          >
-            View accounts →
-          </Link>
         </div>
 
         <button
@@ -1073,6 +1266,15 @@ export default function MonitorClient({ identity }: Props) {
 
       {/* ── Identity badge ── */}
       {identity && <IdentityBadge identity={identity} />}
+
+      {/* ── Review queue: hits awaiting review + the accounts behind them ── */}
+      <ReviewQueueCard
+        newCount={newCount}
+        openCount={openHits.length}
+        accounts={accounts}
+        loaded={loaded}
+        name={name}
+      />
 
       {/* ── Detection coverage (vault-anchored reference set) ── */}
       {refSet && <DetectionCoverageCard refSet={refSet} />}
@@ -1148,30 +1350,6 @@ export default function MonitorClient({ identity }: Props) {
             <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
               {lastResult?.candidatesAnalysed ?? 0} candidates cleared by the adjudicator across all {platforms.length} monitored platforms.
               {lastScanAt && ` Last scanned ${formatRelative(lastScanAt)}.`}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {!lastResult && !scanning && !scanError && (
-        <div className="flex items-center gap-4 rounded-md border px-5 py-4"
-          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-            style={{ background: "var(--color-border)" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-              {newCount > 0 ? `${newCount} hit${newCount === 1 ? "" : "s"} awaiting review` : "Awaiting scan"}
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-              {newCount > 0
-                ? "Review the flagged content below, or run a fresh sweep."
-                : `Run a scan to check all monitored platforms for unauthorised use of ${name}.`}
             </p>
           </div>
         </div>

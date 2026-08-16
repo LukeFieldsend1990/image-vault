@@ -21,10 +21,10 @@
  *    add scans, and the UI tells them exactly which scan to add next.
  */
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { AwsClient } from "aws4fetch";
 import type { getDb } from "@/lib/db";
-import { monitorReferenceImages, scanFiles, scanPackages } from "@/lib/db/schema";
+import { monitorReferenceImages, packageTags, scanFiles, scanPackages } from "@/lib/db/schema";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -79,13 +79,133 @@ export function isReferenceCandidate(file: {
   return file.sizeBytes >= 20_000 && file.sizeBytes <= 10_000_000;
 }
 
-/** Best-effort kind classification from the capture's filename. Studios name
- *  scan stills descriptively often enough for this to be worth doing before
- *  any vision model gets involved; "unknown" is a fine answer. */
-export function classifyReferenceKind(filename: string): ReferenceKind {
+/**
+ * Best-effort kind classification from the capture's filename, falling back to
+ * what the package itself says it is.
+ *
+ * Filenames alone under-report badly: plenty of studios ship `IMG_2041.jpg`
+ * inside a package called "Full body — Pinewood, March". Without the package
+ * fallback those stills classify as "unknown" and the talent gets told to
+ * upload a full-body scan they already have.
+ */
+export function classifyReferenceKind(
+  filename: string,
+  packageHint: ReferenceKind = "unknown"
+): ReferenceKind {
   if (FACE_HINTS.test(filename)) return "face";
   if (BODY_HINTS.test(filename)) return "full_body";
+  return packageHint;
+}
+
+// Package-level hints. Wider than the filename patterns because they run over
+// curated text (package name, description, accepted tags) rather than machine
+// filenames, and the vocabulary in lib/ai/constants.ts is hyphenated
+// ("full-body", "head-closeup", "face-detail") so separators are normalised out
+// before matching.
+const PACKAGE_BODY_HINTS = /(full ?body|body scan|whole body|figure|a ?pose|t ?pose|standing|torso)/;
+const PACKAGE_FACE_HINTS = /(face|head|portrait|bust|facs|expression)/;
+
+export interface PackageMetaInput {
+  id: string;
+  name: string;
+  description?: string | null;
+  /** scan_packages.tags — a JSON array of strings. */
+  tags?: string | null;
+  /** Values from package_tags (AI-suggested or user-accepted). */
+  extraTags?: string[];
+}
+
+function normaliseHaystack(pkg: PackageMetaInput): string {
+  let tags: string[] = [];
+  if (pkg.tags) {
+    try {
+      const parsed = JSON.parse(pkg.tags);
+      if (Array.isArray(parsed)) tags = parsed.filter((t): t is string => typeof t === "string");
+    } catch {
+      /* tags column is free-form enough that a parse failure is not worth surfacing */
+    }
+  }
+  return [pkg.name, pkg.description ?? "", ...tags, ...(pkg.extraTags ?? [])]
+    .join(" ")
+    .toLowerCase()
+    .replace(/[_\-.]+/g, " ");
+}
+
+/**
+ * What kind of capture is this package, as described by its own metadata?
+ * Body wins over face when both are present: a package that says "full body"
+ * covers the face too, and the body claim is the one the talent is told they
+ * are missing.
+ */
+export function classifyPackageKind(pkg: PackageMetaInput): ReferenceKind {
+  const haystack = normaliseHaystack(pkg);
+  if (PACKAGE_BODY_HINTS.test(haystack)) return "full_body";
+  if (PACKAGE_FACE_HINTS.test(haystack)) return "face";
   return "unknown";
+}
+
+export interface VaultPackageSummary {
+  /** Live, ready packages in the vault. */
+  total: number;
+  /** Packages identifiable as face/head captures. */
+  faceCount: number;
+  /** Packages identifiable as full-body captures. */
+  bodyCount: number;
+  /** Per-package kind, keyed by package id — used to classify their stills. */
+  kinds: Map<string, ReferenceKind>;
+}
+
+/**
+ * Summarise what the talent actually has in their vault, independent of which
+ * stills made it into the reference set. Coverage guidance is written from
+ * this, so we never ask for a scan that is already uploaded — including
+ * packages whose files are all meshes and textures with no eligible stills.
+ */
+export async function getVaultPackageSummary(db: Db, talentId: string): Promise<VaultPackageSummary> {
+  const packages = await db
+    .select({
+      id: scanPackages.id,
+      name: scanPackages.name,
+      description: scanPackages.description,
+      tags: scanPackages.tags,
+    })
+    .from(scanPackages)
+    .where(
+      and(
+        eq(scanPackages.talentId, talentId),
+        eq(scanPackages.status, "ready"),
+        isNull(scanPackages.deletedAt)
+      )
+    )
+    .all();
+
+  const tagsByPackage = new Map<string, string[]>();
+  for (let i = 0; i < packages.length; i += 80) {
+    const ids = packages.slice(i, i + 80).map((p) => p.id);
+    if (!ids.length) continue;
+    const rows = await db
+      .select({ packageId: packageTags.packageId, tag: packageTags.tag })
+      .from(packageTags)
+      .where(and(inArray(packageTags.packageId, ids), ne(packageTags.status, "dismissed")))
+      .all();
+    for (const row of rows) {
+      const list = tagsByPackage.get(row.packageId) ?? [];
+      list.push(row.tag);
+      tagsByPackage.set(row.packageId, list);
+    }
+  }
+
+  const kinds = new Map<string, ReferenceKind>();
+  for (const pkg of packages) {
+    kinds.set(pkg.id, classifyPackageKind({ ...pkg, extraTags: tagsByPackage.get(pkg.id) }));
+  }
+
+  return {
+    total: packages.length,
+    faceCount: [...kinds.values()].filter((k) => k === "face").length,
+    bodyCount: [...kinds.values()].filter((k) => k === "full_body").length,
+    kinds,
+  };
 }
 
 /**
@@ -178,6 +298,28 @@ export async function syncReferenceSet(db: Db, talentId: string): Promise<Refere
   }
 
   const kept = existing.filter((r) => liveFileIds.has(r.scanFileId));
+
+  // What each package says it is, so stills with uninformative filenames
+  // inherit their package's kind instead of sitting as "unknown" forever.
+  const { kinds: packageKinds } = await getVaultPackageSummary(db, talentId);
+  const filenames = new Map(files.map((f) => [f.id, f.filename]));
+
+  // Backfill rows written before their package was classified (or before this
+  // fallback existed). Cheap — only rows that would change get an UPDATE.
+  for (const row of kept) {
+    if (row.kind !== "unknown") continue;
+    const resolved = classifyReferenceKind(
+      filenames.get(row.scanFileId) ?? "",
+      packageKinds.get(row.packageId) ?? "unknown"
+    );
+    if (resolved === "unknown") continue;
+    await db
+      .update(monitorReferenceImages)
+      .set({ kind: resolved })
+      .where(eq(monitorReferenceImages.id, row.id));
+    row.kind = resolved;
+  }
+
   const referencedFileIds = new Set(kept.map((r) => r.scanFileId));
   const room = MAX_REFERENCES - kept.length;
   if (room > 0) {
@@ -193,7 +335,7 @@ export async function syncReferenceSet(db: Db, talentId: string): Promise<Refere
         packageId: file.packageId,
         scanFileId: file.id,
         r2Key: file.r2Key,
-        kind: classifyReferenceKind(file.filename),
+        kind: classifyReferenceKind(file.filename, packageKinds.get(file.packageId) ?? "unknown"),
         status: "active" as const,
         createdAt: now,
       };
@@ -294,6 +436,14 @@ export interface CoverageInput {
   packageCount: number;
   geometryFingerprintCount: number;
   hasProfileImage: boolean;
+  /**
+   * What the vault holds, regardless of which stills were indexed. A package
+   * can be a full-body scan and still contribute no reference images (meshes
+   * and textures only, or filenames that classify as unknown) — coverage
+   * guidance is written from this so we never ask for a scan they already
+   * uploaded.
+   */
+  vaultPackages?: { total: number; faceCount: number; bodyCount: number };
 }
 
 export interface DetectionCoverage {
@@ -307,27 +457,40 @@ export interface DetectionCoverage {
 /**
  * Score how well-anchored this talent's detection is.
  *
- * The components mirror what the matcher can actually use — this is not a
- * marketing number. Face references carry the most weight because the face
- * matcher is the primary detector; body references and fingerprints extend
- * coverage to full-body synthesis and provenance tracing; multiple packages
- * mean pose/lighting diversity, which is what defeats the single-photo
- * failure mode (one angle, one lighting rig, easy to dodge).
+ * Face captures carry the most weight, body captures extend coverage past the
+ * face, and a second session adds lighting and pose variety. Uploaded scans
+ * alone can reach the top tier — the two non-scan components (a public profile
+ * photo, geometry fingerprints from a licensed delivery) are worth a few points
+ * each but are never asked for, because the talent-facing guidance is only ever
+ * "which scan to add next".
+ *
+ * Coverage credit is taken from the vault package summary when it is richer
+ * than the indexed references: a full-body package with no eligible stills
+ * still means the talent has uploaded a full-body scan, and telling them
+ * otherwise is the bug this guards.
  */
 export function computeDetectionCoverage(input: CoverageInput): DetectionCoverage {
   // Unknown-kind references still feed the matcher, just less predictably —
   // count them at half a face reference's value.
   const faceEquivalent = input.faceReferenceCount + input.unknownReferenceCount / 2;
+  const vault = input.vaultPackages ?? { total: 0, faceCount: 0, bodyCount: 0 };
+
+  // A package the talent has uploaded counts for one unit of its kind even
+  // when it contributed no stills; indexed references beat it when there are
+  // more of them.
+  const faceCoverage = Math.max(faceEquivalent, vault.faceCount > 0 ? 1 : 0);
+  const bodyCoverage = Math.max(input.bodyReferenceCount, vault.bodyCount > 0 ? 1 : 0);
+  const packageCount = Math.max(input.packageCount, vault.total);
 
   let score = 0;
-  if (input.hasProfileImage) score += 10;
-  score += Math.min(faceEquivalent, 4) * 10; // up to 40
-  score += Math.min(input.bodyReferenceCount, 2) * 10; // up to 20
-  if (input.packageCount >= 2) score += 15;
-  if (input.geometryFingerprintCount > 0) score += 15;
+  score += Math.min(faceCoverage, 4) * 12; // up to 48
+  score += Math.min(bodyCoverage, 2) * 12; // up to 24
+  if (packageCount >= 2) score += 18;
+  if (input.hasProfileImage) score += 5;
+  if (input.geometryFingerprintCount > 0) score += 5;
   score = Math.min(100, Math.round(score));
 
-  const anchored = faceEquivalent >= 1 || input.bodyReferenceCount >= 1;
+  const anchored = faceCoverage >= 1 || bodyCoverage >= 1;
   const tier: CoverageTier =
     score >= 80 && anchored
       ? "fortified"
@@ -337,27 +500,24 @@ export function computeDetectionCoverage(input: CoverageInput): DetectionCoverag
           ? "baseline"
           : "unanchored";
 
+  // Talent-facing and scan-only: what to upload next and why it helps. No
+  // mention of what detection currently leans on — that is ours to know, and
+  // reads as a weakness disclosure on the talent's own dashboard.
   const improvements: string[] = [];
-  if (!anchored) {
+  if (faceCoverage < 1) {
+    improvements.push("Add a face scan — close-range captures make monitoring considerably more effective.");
+  } else if (faceCoverage < 4) {
     improvements.push(
-      "Upload a scan package with face captures — matching currently relies on a single public photo."
-    );
-  } else if (faceEquivalent < 4) {
-    improvements.push("Add more face angles — each capture angle closes a pose the matcher can miss.");
-  }
-  if (input.bodyReferenceCount === 0) {
-    improvements.push("Add a full-body scan to extend detection beyond the face to full-figure synthesis.");
-  }
-  if (input.packageCount < 2) {
-    improvements.push("A second scan package adds lighting and session diversity to the reference set.");
-  }
-  if (input.geometryFingerprintCount === 0) {
-    improvements.push(
-      "License a delivery to activate geometry fingerprinting — it traces leaked scan data back to source."
+      "Add more face angles — front, three-quarter and profile captures each make monitoring more effective."
     );
   }
-  if (!input.hasProfileImage) {
-    improvements.push("Link your public profile photo as a fallback reference.");
+  if (bodyCoverage < 1) {
+    improvements.push("Add a full-body scan — it extends monitoring beyond the face.");
+  }
+  if (packageCount < 2) {
+    improvements.push(
+      "Add a scan from a second session — different lighting and setup makes monitoring more effective."
+    );
   }
 
   return { tier, score, improvements };
@@ -366,7 +526,11 @@ export function computeDetectionCoverage(input: CoverageInput): DetectionCoverag
 /** Bundle a talent's reference rows into the coverage input shape. */
 export function coverageInputFromReferences(
   refs: ReferenceImage[],
-  extra: { geometryFingerprintCount: number; hasProfileImage: boolean }
+  extra: {
+    geometryFingerprintCount: number;
+    hasProfileImage: boolean;
+    vaultPackages?: { total: number; faceCount: number; bodyCount: number };
+  }
 ): CoverageInput {
   return {
     faceReferenceCount: refs.filter((r) => r.kind === "face").length,
@@ -375,5 +539,6 @@ export function coverageInputFromReferences(
     packageCount: new Set(refs.map((r) => r.packageId)).size,
     geometryFingerprintCount: extra.geometryFingerprintCount,
     hasProfileImage: extra.hasProfileImage,
+    ...(extra.vaultPackages ? { vaultPackages: extra.vaultPackages } : {}),
   };
 }
