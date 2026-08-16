@@ -7,6 +7,8 @@ import FunnelCandidatesClient from "./funnel-candidates-client";
 import CronClient from "./cron-client";
 import PlatformsClient from "./platforms-client";
 import VigilanceClient from "./vigilance-client";
+import CrossPlatformClient from "./cross-platform-client";
+import LearnedQueriesClient from "./learned-queries-client";
 
 export default async function AdminMonitorPage() {
   await requireAdmin();
@@ -55,6 +57,14 @@ export default async function AdminMonitorPage() {
       <hr style={{ borderColor: "var(--color-border)" }} />
 
       <WatchlistClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
+
+      <CrossPlatformClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
+
+      <LearnedQueriesClient />
     </div>
   );
 }

@@ -66,6 +66,7 @@ import {
 } from "./reference-set";
 import { ensurePhashIndex, loadPhashIndex, scoreCandidatesPhash } from "./phash-index";
 import { captureThumbnail } from "./thumbnail-proxy";
+import { findCrossPlatformSiblings, isSiblingPlatform, type SiblingPlatform } from "./cross-platform";
 import { buildBodyBuildSummary, parseBodyMetrics } from "./body-profile";
 
 type Db = ReturnType<typeof getDb>;
@@ -1228,6 +1229,50 @@ export async function runLikenessScan(
       );
     } catch (err) {
       console.warn(`[monitor] hashtag mining failed: ${(err as Error).message}`);
+    }
+  }
+
+  // Look for the same operators on the platforms this sweep did not find them
+  // on. Crossposters keep their handle, so the highest-reach accounts are worth
+  // probing elsewhere — a confirmed sibling joins the watchlist and gets
+  // harvested like any other watched account from the next sweep on. Capped and
+  // budget-gated; non-fatal, because this is a compounding extra rather than
+  // part of the sweep's contract.
+  const siblingPlatforms = [...enabledPlatforms].filter(isSiblingPlatform) as SiblingPlatform[];
+  if (apifyToken(env) && siblingPlatforms.length > 1) {
+    try {
+      const siblingBudget: ActorBudget = {
+        check: async () => {
+          const v = await checkApifyBudget(db);
+          return { ok: v.ok, reason: v.reason };
+        },
+        record: (entry) =>
+          logApifyUsage(db, {
+            runId: entry.runId,
+            actorId: entry.actorId,
+            mode: entry.mode,
+            query: entry.query,
+            talentId: opts.talentId,
+            scanId: scanId ?? null,
+            itemCount: entry.itemCount,
+            costUsd: entry.costUsd,
+            status: entry.status,
+            error: entry.error ?? null,
+          }),
+      };
+      const stats = await findCrossPlatformSiblings(env, db, {
+        talentId: opts.talentId,
+        budget: siblingBudget,
+        platforms: siblingPlatforms,
+      });
+      if (stats.probed) {
+        console.log(
+          `[monitor] cross-platform probes for ${opts.talentId}: ${stats.probed} run ` +
+            `(${stats.confirmed} confirmed, ${stats.nameOnly} name-only, ${stats.notFound} not found)`
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] cross-platform sibling check failed: ${(err as Error).message}`);
     }
   }
 

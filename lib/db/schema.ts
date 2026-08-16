@@ -1585,6 +1585,47 @@ export const monitorAccounts = sqliteTable(
   })
 );
 
+/**
+ * Cross-platform sibling leads (lib/monitor/cross-platform.ts).
+ *
+ * A crossposter keeps their handle: the account flagged on Instagram is very
+ * often the same account on TikTok. Each row is one probe of one handle
+ * spelling on one platform, kept whatever the answer was — a "not_found" is
+ * what stops the next sweep paying to ask the same question again.
+ */
+export const monitorAccountLinks = sqliteTable(
+  "monitor_account_links",
+  {
+    id: text("id").primaryKey(),
+    sourceAccountId: text("source_account_id")
+      .notNull()
+      .references(() => monitorAccounts.id, { onDelete: "cascade" }),
+    platform: text("platform").notNull(),
+    handle: text("handle").notNull(),
+    // confirmed = handle exists AND its posts match content we already flagged
+    // on the source account. name_only = exists but nothing matched, which is
+    // a lead for a human, not a finding.
+    status: text("status", {
+      enum: ["confirmed", "name_only", "not_found", "dismissed"],
+    }).notNull().default("name_only"),
+    matchedPosts: integer("matched_posts").notNull().default(0),
+    /** Best caption overlap, 0-100. */
+    bestSimilarity: integer("best_similarity").notNull().default(0),
+    evidenceJson: text("evidence_json"), // JSON string[] of matching post URLs
+    /** Set when a confirmed sibling was added to the watchlist. */
+    promotedAccountId: text("promoted_account_id").references(() => monitorAccounts.id),
+    /** Whose sweep paid for the probe — for cost attribution, not scoping. */
+    discoveredByTalentId: text("discovered_by_talent_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at").notNull(),
+    checkedAt: integer("checked_at"),
+  },
+  (t) => ({
+    uniqProbe: unique().on(t.sourceAccountId, t.platform, t.handle),
+  })
+);
+
 export const monitorScans = sqliteTable("monitor_scans", {
   id: text("id").primaryKey(),
   monitorId: text("monitor_id").notNull().references(() => likenessMonitors.id, { onDelete: "cascade" }),
