@@ -15,6 +15,7 @@ import {
 import {
   computeDetectionCoverage,
   coverageInputFromReferences,
+  getVaultPackageSummary,
   type ReferenceImage,
 } from "./reference-set";
 
@@ -49,10 +50,16 @@ export async function buildCoveragePayload(db: Db, talentId: string, refs: Refer
     .where(and(eq(monitorPhashIndex.talentId, talentId), eq(monitorPhashIndex.status, "hashed")))
     .get();
 
+  // What the vault actually holds, so coverage never asks for a scan type the
+  // talent has already uploaded — including packages whose files are all
+  // meshes and textures and so contribute no reference stills.
+  const vault = await getVaultPackageSummary(db, talentId);
+
   const coverage = computeDetectionCoverage(
     coverageInputFromReferences(refs, {
       geometryFingerprintCount: fingerprintCount,
       hasProfileImage: !!profile?.url,
+      vaultPackages: { total: vault.total, faceCount: vault.faceCount, bodyCount: vault.bodyCount },
     })
   );
 
@@ -66,6 +73,11 @@ export async function buildCoveragePayload(db: Db, talentId: string, refs: Refer
       id,
       name: packageNames.get(id) ?? "Scan package",
     })),
+    vaultPackages: {
+      total: vault.total,
+      faceCount: vault.faceCount,
+      bodyCount: vault.bodyCount,
+    },
     geometryFingerprintCount: fingerprintCount,
     hasProfileImage: !!profile?.url,
     /** Reference stills carrying a dHash in the derivation index. Shown as

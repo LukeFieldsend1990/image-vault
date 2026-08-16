@@ -1,7 +1,7 @@
 import LifetimeCustodyClient from "@/app/(vault)/vault/custody/lifetime-custody-client";
 
 export const metadata = {
-  title: "Lifetime custody — ImageVault",
+  title: "Chain of custody — ImageVault",
 };
 
 /**

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   MAX_REFERENCES,
+  classifyPackageKind,
   classifyReferenceKind,
   computeDetectionCoverage,
   coverageInputFromReferences,
@@ -54,6 +55,39 @@ describe("classifyReferenceKind", () => {
     expect(classifyReferenceKind("full_body_apose.jpg")).toBe("full_body");
     expect(classifyReferenceKind("standing_ref.webp")).toBe("full_body");
     expect(classifyReferenceKind("IMG_2041.jpg")).toBe("unknown");
+  });
+
+  it("falls back to the package's kind for uninformative filenames", () => {
+    expect(classifyReferenceKind("IMG_2041.jpg", "full_body")).toBe("full_body");
+    // A filename that says what it is still wins over the package hint.
+    expect(classifyReferenceKind("face_front.jpg", "full_body")).toBe("face");
+  });
+});
+
+describe("classifyPackageKind", () => {
+  it("reads the kind from the package name", () => {
+    expect(classifyPackageKind({ id: "p", name: "Full Body — Pinewood, March 2026" })).toBe("full_body");
+    expect(classifyPackageKind({ id: "p", name: "Head & expression set" })).toBe("face");
+    expect(classifyPackageKind({ id: "p", name: "Session 2" })).toBe("unknown");
+  });
+
+  it("reads hyphenated vocabulary tags from both tag sources", () => {
+    expect(
+      classifyPackageKind({ id: "p", name: "Session 2", tags: '["full-body","vfx-grade"]' })
+    ).toBe("full_body");
+    expect(
+      classifyPackageKind({ id: "p", name: "Session 2", extraTags: ["head-closeup", "studio-neutral"] })
+    ).toBe("face");
+  });
+
+  it("treats a full-body capture as full-body even when it also mentions the face", () => {
+    expect(
+      classifyPackageKind({ id: "p", name: "Body scan", description: "Includes face detail passes" })
+    ).toBe("full_body");
+  });
+
+  it("survives a malformed tags column", () => {
+    expect(classifyPackageKind({ id: "p", name: "Session 2", tags: "not json" })).toBe("unknown");
   });
 });
 
@@ -114,7 +148,7 @@ describe("computeDetectionCoverage", () => {
     });
     expect(coverage.tier).toBe("unanchored");
     expect(coverage.score).toBe(0);
-    expect(coverage.improvements[0]).toMatch(/face captures/);
+    expect(coverage.improvements[0]).toMatch(/face scan/);
   });
 
   it("is baseline on a public photo alone — the pre-reference-set world", () => {
@@ -127,7 +161,7 @@ describe("computeDetectionCoverage", () => {
       hasProfileImage: true,
     });
     expect(coverage.tier).toBe("baseline");
-    expect(coverage.score).toBe(10);
+    expect(coverage.score).toBe(5);
   });
 
   it("becomes anchored once vault references exist", () => {
@@ -140,13 +174,13 @@ describe("computeDetectionCoverage", () => {
       hasProfileImage: true,
     });
     expect(coverage.tier).toBe("anchored");
-    expect(coverage.score).toBe(30);
+    expect(coverage.score).toBe(29);
     // Suggests the highest-value next uploads.
     expect(coverage.improvements.join(" ")).toMatch(/full-body/);
-    expect(coverage.improvements.join(" ")).toMatch(/second scan package/);
+    expect(coverage.improvements.join(" ")).toMatch(/second session/);
   });
 
-  it("is fortified with face + body references across packages plus fingerprints", () => {
+  it("is fortified with face + body references across packages", () => {
     const coverage = computeDetectionCoverage({
       faceReferenceCount: 4,
       bodyReferenceCount: 2,
@@ -160,6 +194,21 @@ describe("computeDetectionCoverage", () => {
     expect(coverage.improvements).toHaveLength(0);
   });
 
+  it("reaches the top tier on uploaded scans alone", () => {
+    // Nothing but scans: no public photo, no licensed delivery. The guidance
+    // only ever asks for scans, so scans alone have to be able to get there.
+    const coverage = computeDetectionCoverage({
+      faceReferenceCount: 4,
+      bodyReferenceCount: 2,
+      unknownReferenceCount: 0,
+      packageCount: 2,
+      geometryFingerprintCount: 0,
+      hasProfileImage: false,
+    });
+    expect(coverage.tier).toBe("fortified");
+    expect(coverage.improvements).toHaveLength(0);
+  });
+
   it("counts unclassified references at half weight", () => {
     const withUnknowns = computeDetectionCoverage({
       faceReferenceCount: 0,
@@ -170,7 +219,34 @@ describe("computeDetectionCoverage", () => {
       hasProfileImage: false,
     });
     expect(withUnknowns.tier).toBe("anchored");
-    expect(withUnknowns.score).toBe(10);
+    expect(withUnknowns.score).toBe(12);
+  });
+
+  it("never asks for a scan type the vault already holds", () => {
+    // The reported bug: a full-body package is uploaded but contributed no
+    // indexed stills, and coverage told the talent to upload one.
+    const coverage = computeDetectionCoverage({
+      faceReferenceCount: 3,
+      bodyReferenceCount: 0,
+      unknownReferenceCount: 0,
+      packageCount: 1,
+      geometryFingerprintCount: 0,
+      hasProfileImage: false,
+      vaultPackages: { total: 2, faceCount: 1, bodyCount: 1 },
+    });
+    expect(coverage.improvements.join(" ")).not.toMatch(/full-body/);
+    expect(coverage.improvements.join(" ")).not.toMatch(/second session/);
+    expect(coverage.score).toBe(66); // 3 face + 1 body-from-package + 2 packages
+  });
+
+  it("keeps talent-facing guidance to scans, with no detail on what detection leans on", () => {
+    for (const input of [
+      { faceReferenceCount: 0, bodyReferenceCount: 0, unknownReferenceCount: 0, packageCount: 0, geometryFingerprintCount: 0, hasProfileImage: false },
+      { faceReferenceCount: 1, bodyReferenceCount: 0, unknownReferenceCount: 0, packageCount: 1, geometryFingerprintCount: 0, hasProfileImage: true },
+    ]) {
+      const text = computeDetectionCoverage(input).improvements.join(" ").toLowerCase();
+      expect(text).not.toMatch(/public photo|profile photo|fingerprint|matcher|relies|fallback/);
+    }
   });
 
   it("anchors a mesh-only package through derived renders at half weight", () => {
@@ -184,9 +260,9 @@ describe("computeDetectionCoverage", () => {
       geometryFingerprintCount: 0,
       hasProfileImage: false,
     });
-    // 4 derived face = 2 face-equivalents (20) + 2 derived body = 1 body-equivalent (10).
+    // 4 derived face = 2 face-equivalents (24) + 2 derived body = 1 body-equivalent (12).
     expect(coverage.tier).toBe("anchored");
-    expect(coverage.score).toBe(30);
+    expect(coverage.score).toBe(36);
     // The derived-only case gets its own honest improvement line.
     expect(coverage.improvements[0]).toMatch(/Turntable renders/);
   });
@@ -202,9 +278,10 @@ describe("computeDetectionCoverage", () => {
       geometryFingerprintCount: 0,
       hasProfileImage: true,
     });
-    // 10 + 40 + 20 = 70 < 80: photographic diversity still required.
+    // 48 face-capped + 24 body-capped + 5 profile = 77 < 80: photographic
+    // session diversity still required for fortified.
     expect(coverage.tier).toBe("anchored");
-    expect(coverage.score).toBe(70);
+    expect(coverage.score).toBe(77);
   });
 });
 
@@ -226,6 +303,15 @@ describe("coverageInputFromReferences", () => {
       geometryFingerprintCount: 3,
       hasProfileImage: true,
     });
+  });
+
+  it("passes the vault package summary through when given one", () => {
+    const input = coverageInputFromReferences([], {
+      geometryFingerprintCount: 0,
+      hasProfileImage: false,
+      vaultPackages: { total: 2, faceCount: 1, bodyCount: 1 },
+    });
+    expect(input.vaultPackages).toEqual({ total: 2, faceCount: 1, bodyCount: 1 });
   });
 
   it("splits derived renders out of the photographic counts", () => {

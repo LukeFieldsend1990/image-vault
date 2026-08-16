@@ -1,7 +1,7 @@
 import LifetimeCustodyClient from "./lifetime-custody-client";
 
 export const metadata = {
-  title: "Lifetime custody — ImageVault",
+  title: "Chain of custody — ImageVault",
 };
 
 // The performer's own view. No talentId — the API defaults to the caller, and
