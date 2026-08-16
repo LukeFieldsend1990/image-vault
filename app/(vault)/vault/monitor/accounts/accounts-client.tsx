@@ -152,6 +152,49 @@ function MiniAvatar({ actor }: { actor: SecondaryActor }) {
 }
 
 /**
+ * Post preview for a flagged hit.
+ *
+ * Loaded through /api/monitor/hits/:id/thumbnail rather than hotlinked: the
+ * platform CDNs reject a browser request carrying our Referer, so the stored
+ * URL rendered as a broken-image icon in every row. The Worker fetches it and
+ * streams it back. When the fetch fails anyway — a signed CDN URL that has
+ * since expired, or a post already taken down — this falls back to a neutral
+ * tile rather than the browser's broken-image glyph.
+ */
+function HitThumbnail({ hit }: { hit: OffenderHit }) {
+  const [broken, setBroken] = useState(false);
+  const showImage = !!hit.thumbnailUrl && !broken;
+
+  if (showImage) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`/api/monitor/hits/${hit.id}/thumbnail`}
+        alt=""
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className="h-14 w-14 shrink-0 rounded object-cover"
+        style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}
+      />
+    );
+  }
+
+  return (
+    <div
+      title={hit.thumbnailUrl ? "Preview unavailable — open the post to view it" : "No preview captured"}
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded"
+      style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <polyline points="21 15 16 10 5 21" />
+      </svg>
+    </div>
+  );
+}
+
+/**
  * Compose-and-log outreach flow. We never send the message ourselves —
  * Instagram / TikTok DM APIs are locked down and any programmatic sending
  * gets treated as spam. So the modal does the two things we CAN do: pre-fill
@@ -694,20 +737,7 @@ function AccountCard({
             const risk = RISK_COLORS[hit.riskLevel] ?? RISK_COLORS.medium;
             return (
               <div key={hit.id} className="flex gap-3">
-                {hit.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={hit.thumbnailUrl}
-                    alt=""
-                    className="h-14 w-14 shrink-0 rounded object-cover"
-                    style={{ border: "1px solid var(--color-border)" }}
-                  />
-                ) : (
-                  <div
-                    className="h-14 w-14 shrink-0 rounded"
-                    style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
-                  />
-                )}
+                <HitThumbnail hit={hit} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
