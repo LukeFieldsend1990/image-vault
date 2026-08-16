@@ -11,6 +11,8 @@ const card = "rounded p-4";
 const cardStyle = { border: "1px solid var(--color-border)", background: "var(--color-surface)" };
 const eyebrow = "text-[10px] font-semibold tracking-widest uppercase";
 
+const LIVE_STATUSES = new Set(["APPROVED", "SCRUB_PERIOD", "OVERDUE"]);
+
 const SEVERITY_COLOUR: Record<LifetimeLedgerEvent["severity"], string> = {
   info: "var(--color-active)",
   warn: "var(--color-expiring)",
@@ -123,6 +125,73 @@ function LicenceBlock({ l }: { l: LifetimeLicence }) {
   );
 }
 
+// Productions start collapsed: a performer with a long history would otherwise
+// open onto hundreds of ledger lines. The header carries enough — company,
+// licence count, anything live or broken — to decide whether to open it.
+function ProductionBlock({ p }: { p: LifetimeCustody["productions"][number] }) {
+  const [open, setOpen] = useState(false);
+
+  // Mirrors LIVE_LICENCE_STATUSES in lib/compliance/lifetime.ts so this count
+  // agrees with the "In force" stat above. Duplicated rather than imported:
+  // that module pulls the DB layer in, which has no business in the bundle.
+  const liveCount = p.licences.filter((l) => l.revokedAt == null && LIVE_STATUSES.has(l.status)).length;
+  const chainBroken = p.licences.some((l) => !l.chainOk);
+
+  return (
+    <section>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-baseline gap-3 text-left"
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+      >
+        <span
+          aria-hidden
+          className="shrink-0 self-center"
+          style={{
+            color: "var(--color-muted)",
+            transform: open ? "rotate(90deg)" : "none",
+            transition: "transform 120ms ease",
+            lineHeight: 0,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 5 16 12 9 19" />
+          </svg>
+        </span>
+        <span className="min-w-0">
+          <span
+            className="block"
+            style={{ fontFamily: "var(--font-serif)", fontSize: 19, fontWeight: 600, color: "var(--color-ink)" }}
+          >
+            {p.projectName}
+          </span>
+          <span className="block text-xs" style={{ color: "var(--color-muted)" }}>{p.productionCompany}</span>
+        </span>
+        <span className="flex-1 h-px self-center" style={{ background: "var(--color-border)" }} />
+        {chainBroken && (
+          <span className={`${eyebrow} shrink-0`} style={{ color: "var(--color-danger)" }}>chain broken</span>
+        )}
+        {liveCount > 0 && (
+          <span className="text-[11px] font-mono shrink-0" style={{ color: "var(--color-active)" }}>
+            {liveCount} in force
+          </span>
+        )}
+        <span className="text-[11px] font-mono shrink-0" style={{ color: "var(--color-muted)" }}>
+          {p.licences.length} licence{p.licences.length === 1 ? "" : "s"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="space-y-2.5 mt-2.5">
+          {p.licences.map((l) => <LicenceBlock key={l.id} l={l} />)}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function LifetimeCustodyClient({ talentId }: { talentId?: string }) {
   const [data, setData] = useState<LifetimeCustody | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +237,7 @@ export default function LifetimeCustodyClient({ talentId }: { talentId?: string 
     <div className="p-8 max-w-4xl space-y-6">
       <div>
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-          Lifetime custody
+          Chain of custody
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--color-muted)", lineHeight: 1.65, maxWidth: "66ch" }}>
           Every production that has held {who}&rsquo;s likeness, every licence granted over it, and
@@ -179,7 +248,7 @@ export default function LifetimeCustodyClient({ talentId }: { talentId?: string 
 
       {s.ledgerEntries > 0 && (
         <Inlay
-          eyebrow="Lifetime custody"
+          eyebrow="Chain of custody"
           gate
           footnote={`${s.ledgerEntries} sealed ${s.ledgerEntries === 1 ? "entry" : "entries"} · ${data.chains.length} chains · ${
             data.chainsOk ? "all verified" : "verification failed"
@@ -251,23 +320,7 @@ export default function LifetimeCustodyClient({ talentId }: { talentId?: string 
       ) : (
         <div className="space-y-6">
           {data.productions.map((p) => (
-            <section key={`${p.productionCompany}::${p.projectName}`}>
-              <div className="flex items-baseline gap-3 mb-2.5">
-                <div className="min-w-0">
-                  <h2 style={{ fontFamily: "var(--font-serif)", fontSize: 19, fontWeight: 600, color: "var(--color-ink)", margin: 0 }}>
-                    {p.projectName}
-                  </h2>
-                  <p className="text-xs" style={{ color: "var(--color-muted)" }}>{p.productionCompany}</p>
-                </div>
-                <div className="flex-1 h-px" style={{ background: "var(--color-border)" }} />
-                <span className="text-[11px] font-mono shrink-0" style={{ color: "var(--color-muted)" }}>
-                  {p.licences.length} licence{p.licences.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="space-y-2.5">
-                {p.licences.map((l) => <LicenceBlock key={l.id} l={l} />)}
-              </div>
-            </section>
+            <ProductionBlock key={`${p.productionCompany}::${p.projectName}`} p={p} />
           ))}
         </div>
       )}
