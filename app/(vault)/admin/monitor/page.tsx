@@ -9,6 +9,7 @@ import PlatformsClient from "./platforms-client";
 import VigilanceClient from "./vigilance-client";
 import CrossPlatformClient from "./cross-platform-client";
 import LearnedQueriesClient from "./learned-queries-client";
+import FeedbackClient from "./feedback-client";
 
 export default async function AdminMonitorPage() {
   await requireAdmin();
@@ -49,6 +50,10 @@ export default async function AdminMonitorPage() {
       <hr style={{ borderColor: "var(--color-border)" }} />
 
       <TakedownsClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
+
+      <FeedbackClient />
 
       <hr style={{ borderColor: "var(--color-border)" }} />
 

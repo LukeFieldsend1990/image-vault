@@ -370,6 +370,44 @@ outperform LLaVA on borderline content at per-call cost. The
 `identity-check.ts` leave room to add one as a paid tier without reshaping the
 pipeline.
 
+## Adjudication feedback loop (`/admin/monitor`, `/api/admin/monitor/feedback`)
+
+Every hit eventually collects a human verdict: confirmed (or pushed on to
+takedown/resolved, which imply confirmation), dismissed with a structured
+reason (`likeness_hits.dismissal_reason`), or silenced at the account level
+via `talent_account_whitelist.reason`. The "Detection feedback" panel on the
+admin monitor page reads those verdicts back as a tuning signal:
+
+- **Calibration by verdict** — mean likeness confidence and AI likelihood per
+  outcome label. The reasons partition detector error from policy: `not_me`
+  indicts the likeness matcher, `not_ai` indicts the synthetic check,
+  `not_misuse` (and `fan_fluff` / `talent_approved` on the whitelist) means
+  the detectors were right and the human made a policy call. High average
+  confidence on `dismissed:not_me` = matcher over-confident; high AI
+  likelihood on `dismissed:not_ai` = synthetic check over-confident.
+- **Per-talent split** — precision, dismissal reasons, and whitelist counts
+  per talent, because detector error is identity-skewed: a thin reference set
+  or a common face drags one talent's precision down invisibly in the global
+  numbers.
+- **Labelled export** (`/api/admin/monitor/feedback/export`, JSON or JSONL) —
+  one row per labelled hit pairing discovery-time detector signals
+  (confidence, AI likelihood, match signals, discovery source) with the
+  verdict. This is the replay set for threshold tuning or evaluating a
+  third-party classifier before paying for it. Talent ids only, no PII —
+  the file is expected to leave the console.
+
+### Known limitations
+
+1. **Labels are behavioural, not forensic.** A talent who ignores their queue
+   leaves hits at `new` forever; silence is excluded from the export, not
+   treated as a soft no.
+2. **Whitelist labels apply account-wide.** A `false_positive` whitelist
+   labels every hit from that account by extension, including any future ones
+   at discovery time; one bad early call can mislabel later genuine matches.
+3. **Confirmed hits don't say *which* detector was right.** The positive label
+   validates the stack end-to-end, not the individual signals — per-signal
+   attribution would need the verdict UI to ask more of the human.
+
 ## Roadmap order
 
 1. Vet the reference gallery at sync time (fixes limitation 2, uses `rejected`).
