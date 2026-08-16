@@ -21,6 +21,7 @@ import type {
 import type { HitContentType } from "../platforms";
 import { ACTORS, ApifyError, runActor } from "./apify";
 import { effectiveRunCost } from "./budget";
+import { vigilanceMatch } from "../vigilance";
 import {
   buildDiscoveryPlan,
   hasAiIntent,
@@ -149,6 +150,7 @@ export function preFilter(
   opts: PreFilterOptions
 ): PreFilterResult {
   const variants = nameVariants(opts.anchor.fullName).map(normalise);
+  const vigilance = opts.anchor.vigilance ?? null;
   const allow = new Set((opts.allowlist ?? []).map((h) => h.replace(/^@/, "").trim().toLowerCase()));
   const seen = opts.seenUrls ?? new Set<string>();
   const withinSweep = new Set<string>();
@@ -170,7 +172,13 @@ export function preFilter(
     }
 
     const haystack = normalise([c.caption, c.authorHandle, (c.hashtags ?? []).join(" ")].join(" "));
-    if (variants.length && !variants.some((v) => haystack.includes(v))) {
+    // Name match, widened by an open announcement window. A synthetic reel made
+    // the week a role is announced routinely never names the actor — it names
+    // the character — so during a window a corroborated persona reference
+    // (compound tag, or character *and* production together) is accepted as
+    // identity evidence. Outside a window this is exactly the old test.
+    const vigilanceHit = vigilance ? vigilanceMatch(haystack, vigilance) : { matched: false as const, term: null };
+    if (variants.length && !variants.some((v) => haystack.includes(v)) && !vigilanceHit.matched) {
       dropped.no_name_match++;
       continue;
     }
@@ -197,7 +205,11 @@ export function preFilter(
     }
 
     withinSweep.add(c.contentUrl);
-    kept.push(c);
+    // Carry *why* it survived. When the window supplied the identity match, the
+    // adjudicator needs to know the evidence is role vocabulary rather than the
+    // actor's name — and it is the only way to tell later whether windows are
+    // earning the spend they add.
+    kept.push(vigilanceHit.matched ? { ...c, vigilanceMatchTerm: vigilanceHit.term } : c);
   }
 
   return { kept, dropped };

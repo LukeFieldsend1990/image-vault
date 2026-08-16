@@ -19,6 +19,7 @@
  */
 
 import type { CandidateContent, DiscoverySource, TalentIdentityAnchor } from "../types";
+import { vigilancePhrases } from "../vigilance";
 
 const API_BASE = "https://www.googleapis.com/youtube/v3";
 
@@ -41,7 +42,13 @@ export function buildYouTubeQueries(anchor: TalentIdentityAnchor, max = 5): stri
   for (const title of anchor.knownForTitles.slice(0, 2)) {
     queries.push(`${title} ${name} ai concept trailer`);
   }
-  return queries.slice(0, max);
+  // Quota here is units, not money, and the announcement phrases are the ones
+  // most likely to surface a concept trailer cut this week — so they go in
+  // front of the standing set and lift the cap rather than displacing it.
+  const vigilance = anchor.vigilance
+    ? vigilancePhrases(name, anchor.vigilance, anchor.vigilance.phase === "peak" ? 3 : 2)
+    : [];
+  return [...vigilance, ...queries].slice(0, max + vigilance.length);
 }
 
 interface YouTubeSearchItem {

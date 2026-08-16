@@ -6,6 +6,7 @@ import TakedownsClient from "./takedowns-client";
 import FunnelCandidatesClient from "./funnel-candidates-client";
 import CronClient from "./cron-client";
 import PlatformsClient from "./platforms-client";
+import VigilanceClient from "./vigilance-client";
 
 export default async function AdminMonitorPage() {
   await requireAdmin();
@@ -30,6 +31,10 @@ export default async function AdminMonitorPage() {
       </div>
 
       <CronClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
+
+      <VigilanceClient />
 
       <hr style={{ borderColor: "var(--color-border)" }} />
 

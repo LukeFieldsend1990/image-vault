@@ -3,6 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { likenessMonitors, aiSettings, users } from "@/lib/db/schema";
 import { beginLikenessScan, failScan, runLikenessScan } from "@/lib/monitor/scan";
+import { talentsUnderVigilance } from "@/lib/monitor/events";
+import { surgeIntervalSeconds } from "@/lib/monitor/vigilance";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 /**
@@ -20,6 +22,9 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
  *   - daily  → due when now - last_scan_at >= 86400
  *   - weekly → due when now - last_scan_at >= 604800
  *   - null last_scan_at (never scanned) → due immediately
+ *   - any of the above, while an announcement window is open for that talent →
+ *     due on the surge interval instead (12h at peak, 24h after), except
+ *     `manual`, which is never auto-run whatever is happening in the news.
  */
 
 const CADENCE_SECONDS: Record<string, number> = {
@@ -74,8 +79,23 @@ export async function POST(req: NextRequest) {
     )
     .all();
 
+  // Talent inside an open announcement window sweep on a surge interval instead
+  // of their stored cadence. A weekly monitor is the wrong cadence for the week
+  // the content is being made: by the time the next weekly sweep runs, a
+  // peak-phase reel has had six days of unopposed reach. The window is bounded
+  // and decays (lib/monitor/vigilance.ts), so this is a temporary lift, not a
+  // permanent cadence change — and `manual` is still never auto-run.
+  let underVigilance = new Map<string, "peak" | "elevated">();
+  try {
+    underVigilance = await talentsUnderVigilance(db, now);
+  } catch (err) {
+    console.warn(`[cron] vigilance lookup failed: ${(err as Error).message}`);
+  }
+
   const shouldRun = due.filter((m) => {
-    const window = CADENCE_SECONDS[m.cadence] ?? Infinity;
+    const cadenceWindow = CADENCE_SECONDS[m.cadence] ?? Infinity;
+    const phase = underVigilance.get(m.talentId);
+    const window = phase ? Math.min(cadenceWindow, surgeIntervalSeconds(phase)) : cadenceWindow;
     return !m.lastScanAt || now - m.lastScanAt >= window;
   });
 
@@ -148,5 +168,10 @@ export async function POST(req: NextRequest) {
     await kickoff();
   }
 
-  return NextResponse.json({ ok: true, dueCount: shouldRun.length, ran: shouldRun.length });
+  return NextResponse.json({
+    ok: true,
+    dueCount: shouldRun.length,
+    ran: shouldRun.length,
+    surged: shouldRun.filter((m) => underVigilance.has(m.talentId)).length,
+  });
 }

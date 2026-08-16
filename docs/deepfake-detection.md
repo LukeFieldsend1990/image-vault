@@ -242,6 +242,67 @@ Two-stage scoring of `syntheticMediaScore`, cheapest evidence first:
   geometry fingerprints in licensed deliveries. Artifact detection buys
   coverage today; provenance-by-possession is the endgame.
 
+## Vigilance windows — event-driven focus (`lib/monitor/vigilance.ts`, `lib/monitor/events.ts`)
+
+Synthetic content is not evenly distributed in time. It arrives in waves, and
+the waves are triggered by public events: a cast announcement, a trailer drop, a
+premiere. The wave's vocabulary is the **character and the production**, not the
+actor — a synthetic reel cut the week a role is announced is tagged `#cyclops
+#xmen`, and often never names the actor at all. A name-anchored sweep does not
+ask for those terms and a name-anchored pre-filter discards what comes back.
+
+A vigilance event (`monitor_events` + `monitor_event_personas`, opened from
+`/admin/monitor`) attaches persona vocabulary to a talent for a bounded window
+and steers four stages:
+
+| Stage | Effect while a window is open |
+|---|---|
+| Query planning (`ingest/queries.ts`, `ingest/tiktok.ts`, `ingest/youtube.ts`) | Compound (`kitconnorcyclops`), character (`cyclopsai`) and production (`xmenai`) terms are planned first, and lift the query cap rather than displacing the standing plan |
+| Pre-filter (`ingest/instagram.ts`) | A corroborated persona reference counts as an identity match, so a hit that never names the actor survives to adjudication — stamped with `vigilanceMatchTerm` so the evidence trail says *why* |
+| Adjudication (`scan.ts`) | The window is described to the adjudicator, including that legitimate press material is *more* common inside it |
+| Cadence (`api/cron/monitor-sweeps`) | Due-ness switches to a surge interval — 12h at peak, 24h after — capped by the talent's stored cadence; `manual` is still never auto-run |
+
+Two invariants hold the design together:
+
+1. **A character alias alone is never an identity match.** "Storm", "Rogue" and
+   "Sinister" are ordinary English. An alias match needs corroboration: the
+   production title alongside it, or a compound tag fusing actor and role.
+2. **A window raises the prior, never lowers the bar.** The same announcement
+   that triggers the synthetic wave triggers a flood of studio posts, trade
+   coverage and junket clips. Widening discovery is right; relaxing the flag
+   criteria inside a window would flag the studio's own announcement reel.
+
+Windows decay (`peak` for 14 days, `elevated` until expiry, capped query budget
+per phase) and `expires_at` is mandatory — an open-ended window is a permanent
+widening of the paid query set for a news cycle that has ended. Hits detected
+under a window carry `likeness_hits.vigilance_event_id`, which is what makes the
+extra spend auditable after the fact.
+
+### Known limitations
+
+1. **Unrostered personas are tracked, not swept.** Detection is anchored to a
+   vault identity; a persona with no matching talent profile has nothing to
+   match against. They are recorded and shown as *not on roster*, and become
+   swept automatically once a profile with that name exists. This is the common
+   case for a fresh cast announcement, and it is the honest boundary of the
+   feature — the alternative would be a shadow hit store for people who are not
+   clients.
+2. **Persona→talent resolution is by name slug.** Two actors with the same name,
+   or a profile whose stored name differs from the announcement (initials,
+   married name, transliteration), will not resolve. The explicit `talent_id`
+   column on a persona is the escape hatch; there is no UI for setting it yet.
+3. **One window per talent per sweep.** When two windows overlap, the most
+   recent wins rather than merging vocabularies — merging would blow the query
+   budget on terms that are mostly duplicated between them.
+4. **Events are entered by hand.** No trade-press feed or calendar integration:
+   somebody has to notice the announcement. That is fine at current roster size
+   and is the obvious next automation.
+5. **Windows widen the identity gate, which is a recall/precision trade.** The
+   corroboration rule bounds it, but a production title that is a common phrase
+   ("Wicked", "Heat") makes corroboration cheap to hit by accident. Watch the
+   dismissal reasons on hits carrying a `vigilanceMatchTerm` before widening
+   this further.
+
 ### Third-party classifiers (deferred)
 
 A dedicated forensic model (Hive, Reality Defender, AWS detection APIs) would
@@ -261,3 +322,5 @@ pipeline.
    "Derived reference stills"); needs the Browser Rendering binding enabled
    by the operator before it produces anything.
 5. Consent-language review before enabling Rekognition broadly (limitation 5).
+6. Persona→talent link UI for vigilance events, so a name that does not slug
+   cleanly can be resolved by hand (vigilance limitation 2).

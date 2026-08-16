@@ -14,6 +14,7 @@
 import type { CandidateContent, DiscoverySource, TalentIdentityAnchor } from "../types";
 import { ApifyError, runActor } from "./apify";
 import { effectiveRunCost } from "./budget";
+import { vigilancePhrases } from "../vigilance";
 
 /** Keyword search actor. Unlike Instagram's, this one takes real phrases. */
 export const TIKTOK_ACTOR = "clockworks~tiktok-scraper";
@@ -27,13 +28,25 @@ export function buildTikTokQueries(
 ): string[] {
   const name = anchor.fullName.trim();
   if (!name) return [];
+  // An open announcement window goes first: TikTok takes phrases, and "Kit
+  // Connor Cyclops" is the least ambiguous query this surface will ever accept
+  // for a talent whose new role is three days old.
+  const vigilance = anchor.vigilance
+    ? vigilancePhrases(name, anchor.vigilance, anchor.vigilance.phase === "peak" ? 3 : 2)
+    : [];
   const base = TIKTOK_QUERY_SUFFIXES.map((s) => `${name} ${s}`);
   // Learned hashtags come in as bare tags (e.g. "tomhardyrayleigh") from
   // the mining pass. TikTok search takes phrases, so we prefix "#" and
   // append them after the base set — TIKTOK_QUERY_SUFFIXES is the tried
   // vocabulary, learned queries expand it.
   const learned = learnedHashtags.map((h) => `#${h}`);
-  return [...base, ...learned].slice(0, max + Math.min(learnedHashtags.length, 3));
+  // The window's phrases are additive to the cap for the same reason they are
+  // first: dropping proven vocabulary to make room for them would trade
+  // coverage for coverage rather than adding any.
+  return [...vigilance, ...base, ...learned].slice(
+    0,
+    max + vigilance.length + Math.min(learnedHashtags.length, 3)
+  );
 }
 
 interface TikTokItem {
