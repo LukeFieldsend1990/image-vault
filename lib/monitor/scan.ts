@@ -58,6 +58,7 @@ import { describeVigilance } from "./vigilance";
 import {
   computeDetectionCoverage,
   coverageInputFromReferences,
+  getVaultPackageSummary,
   presignReferenceUrls,
   syncReferenceSet,
   type ReferenceImage,
@@ -859,10 +860,16 @@ export async function runLikenessScan(
       .from(talentProfiles)
       .where(eq(talentProfiles.userId, opts.talentId))
       .get();
+    // Same vault summary the talent-facing coverage card uses, so the tier
+    // recorded against the sweep matches what they were shown.
+    const vault = await getVaultPackageSummary(db, opts.talentId).catch(() => null);
     const coverage = computeDetectionCoverage(
       coverageInputFromReferences(references, {
         geometryFingerprintCount: anchor.geometryFingerprintCount,
         hasProfileImage: !!profile?.url,
+        ...(vault
+          ? { vaultPackages: { total: vault.total, faceCount: vault.faceCount, bodyCount: vault.bodyCount } }
+          : {}),
       })
     );
     anchor.referenceImageCount = references.length;
