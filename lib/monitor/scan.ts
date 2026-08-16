@@ -1265,10 +1265,11 @@ export async function runLikenessScan(
         budget: siblingBudget,
         platforms: siblingPlatforms,
       });
-      if (stats.probed) {
+      if (stats.probed || stats.skipped) {
         console.log(
           `[monitor] cross-platform probes for ${opts.talentId}: ${stats.probed} run ` +
-            `(${stats.confirmed} confirmed, ${stats.nameOnly} name-only, ${stats.notFound} not found)`
+            `(${stats.confirmed} confirmed, ${stats.nameOnly} name-only, ${stats.notFound} not found), ` +
+            `${stats.skipped} already answered`
         );
       }
     } catch (err) {
