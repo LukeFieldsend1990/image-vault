@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { buildTemplates, composeUrlFor, profileUrlFor, type OutreachPurpose } from "@/lib/monitor/outreach-templates";
 import { platformBrand } from "@/lib/monitor/platform-brand";
+import ReasonMenu, { type ReasonOption } from "@/app/components/reason-menu";
 
 interface SecondaryActor {
   talentId: string | null;
@@ -431,14 +432,20 @@ function ContactModal({
   );
 }
 
-/** Two-step whitelist control. First click reveals reasons; picking one
- *  fires the POST. "Other" expands a text field. Structured reasons feed
- *  the admin panel so we can aggregate what talents whitelist and why. */
-const WHITELIST_OPTIONS: Array<{ reason: string; label: string }> = [
-  { reason: "false_positive", label: "False positive — not misuse" },
+/**
+ * Whitelist control for an account. Reasons and the free-text "other" branch
+ * come from the shared ReasonMenu, which lays its panel out against the
+ * viewport: the account card clips its own overflow, so an absolute dropdown
+ * was cut off at the card's bottom edge on desktop.
+ *
+ * Structured reasons feed the admin panel, so we can aggregate what talents
+ * whitelist and why.
+ */
+const WHITELIST_OPTIONS: ReasonOption[] = [
+  { reason: "false_positive", label: "False positive \u2014 not misuse" },
   { reason: "fan_fluff", label: "Harmless fan content" },
   { reason: "talent_approved", label: "Talent has approved this account" },
-  { reason: "other", label: "Other…" },
+  { reason: "other", label: "Other\u2026" },
 ];
 
 function WhitelistMenu({
@@ -450,107 +457,16 @@ function WhitelistMenu({
   onWhitelist: (id: string, reason: string, notes?: string) => void;
   busy: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [otherOpen, setOtherOpen] = useState(false);
-  const [notes, setNotes] = useState("");
-
-  const pick = (reason: string) => {
-    if (reason === "other") {
-      setOtherOpen(true);
-      return;
-    }
-    setOpen(false);
-    onWhitelist(accountId, reason);
-  };
-
-  const submitOther = () => {
-    const trimmed = notes.trim();
-    if (!trimmed) return;
-    setOpen(false);
-    setOtherOpen(false);
-    onWhitelist(accountId, "other", trimmed);
-  };
-
   return (
-    <div className="relative inline-flex">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        disabled={busy}
-        className="px-3 py-1.5 text-xs font-medium border transition disabled:opacity-50 inline-flex items-center gap-1"
-        style={{
-          borderColor: "var(--color-border)",
-          color: "var(--color-muted)",
-          borderRadius: "var(--radius)",
-        }}
-      >
-        Whitelist
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {open && (
-        <div
-          className="absolute z-10 right-0 top-full mt-1 w-64 rounded shadow-lg"
-          style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
-        >
-          {otherOpen ? (
-            <div className="p-2 space-y-2">
-              <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
-                Reason
-              </p>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                autoFocus
-                maxLength={500}
-                rows={3}
-                placeholder="Why is this account being whitelisted?"
-                className="w-full text-xs rounded px-2 py-1.5 resize-none"
-                style={{
-                  border: "1px solid var(--color-border)",
-                  background: "var(--color-surface)",
-                  color: "var(--color-ink)",
-                }}
-              />
-              <div className="flex gap-1 justify-end">
-                <button
-                  onClick={() => {
-                    setOtherOpen(false);
-                    setNotes("");
-                  }}
-                  className="text-xs px-2 py-1 rounded"
-                  style={{ color: "var(--color-muted)" }}
-                >
-                  Back
-                </button>
-                <button
-                  onClick={submitOther}
-                  disabled={!notes.trim()}
-                  className="text-xs px-2 py-1 rounded"
-                  style={{
-                    background: notes.trim() ? "var(--color-ink)" : "var(--color-surface)",
-                    color: notes.trim() ? "white" : "var(--color-muted)",
-                  }}
-                >
-                  Whitelist
-                </button>
-              </div>
-            </div>
-          ) : (
-            WHITELIST_OPTIONS.map((opt) => (
-              <button
-                key={opt.reason}
-                onClick={() => pick(opt.reason)}
-                className="block w-full text-left text-xs px-3 py-2 hover:opacity-80"
-                style={{ color: "var(--color-ink)" }}
-              >
-                {opt.label}
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
+    <ReasonMenu
+      triggerLabel="Whitelist"
+      options={WHITELIST_OPTIONS}
+      busy={busy}
+      width={256}
+      notesPlaceholder="Why is this account being whitelisted?"
+      confirmLabel="Whitelist"
+      onPick={(reason, notes) => onWhitelist(accountId, reason, notes)}
+    />
   );
 }
 

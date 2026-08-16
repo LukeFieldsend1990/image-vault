@@ -99,9 +99,9 @@ export default function CronClient() {
           Cron controls
         </h2>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Continuous sweeps run twice daily via ai-cron-worker, honouring each monitor&apos;s
-          cadence. Global toggle here overrides — flipping to Off pauses the fleet without
-          redeploying.
+          Scheduled sweeps run twice daily via ai-cron-worker, following each monitor&apos;s own
+          cadence. Setting this to Off pauses all scheduled sweeps without a redeploy; manual sweeps
+          still run.
         </p>
       </div>
 
@@ -188,8 +188,8 @@ export default function CronClient() {
               Watchlist re-harvest interval (hours)
             </p>
             <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-              How often known offenders get re-swept. Hype cycles for a talent can run weeks, so
-              raising this makes sense once the initial watchlist has stabilised.
+              How often watchlisted accounts are re-swept. Raise it once a talent&apos;s watchlist has
+              stabilised.
             </p>
           </div>
           <div className="flex gap-1">

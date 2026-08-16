@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { TalentIdentityForMonitor } from "./page";
 import { embedInfoFor } from "@/lib/monitor/embed-url";
 import { platformBrand } from "@/lib/monitor/platform-brand";
+import ReasonMenu, { type ReasonOption } from "@/app/components/reason-menu";
 
 // ── Types (mirror /api/monitor payloads) ────────────────────────────────────
 
@@ -630,22 +631,20 @@ function HitPreviewModal({ hit, onClose }: { hit: LikenessHit; onClose: () => vo
 }
 
 /**
- * Two-step dismiss control. First click reveals four typed reasons; picking
- * one fires the PATCH. "Other" expands a small text field. Structured
- * reasons feed the admin tuning panel — a hit dropped as `not_ai` is a
- * different tuning signal than one dropped as `not_me`, and merging them
- * costs us insight into the pre-filter's real error mix.
+ * Dismiss control for a hit. The reason list and its free-text "other" branch
+ * live in the shared ReasonMenu, which positions itself against the viewport —
+ * the hit card clips its own overflow for the platform accent edge, and an
+ * absolutely-positioned dropdown was getting cut off at the card boundary.
  *
- * The reason picker anchors to the button on desktop but becomes a bottom
- * sheet on narrow screens: the button sits in a wrapping action row, so a
- * right-anchored 13rem dropdown ran off the side of a phone viewport and the
- * reasons were unreachable.
+ * Structured reasons feed the admin tuning panel: a hit dropped as `not_ai` is
+ * a different tuning signal than one dropped as `not_me`, and merging them
+ * costs us insight into the pre-filter's real error mix.
  */
-const DISMISS_OPTIONS: Array<{ reason: string; label: string }> = [
+const DISMISS_OPTIONS: ReasonOption[] = [
   { reason: "not_me", label: "Not me" },
   { reason: "not_misuse", label: "Not misuse" },
   { reason: "not_ai", label: "Not AI" },
-  { reason: "other", label: "Other…" },
+  { reason: "other", label: "Other\u2026" },
 ];
 
 function DismissMenu({
@@ -657,127 +656,21 @@ function DismissMenu({
   onDismiss: (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => void;
   busy: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [otherOpen, setOtherOpen] = useState(false);
-  const [notes, setNotes] = useState("");
-
-  const close = () => {
-    setOpen(false);
-    setOtherOpen(false);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  const pick = (reason: string) => {
-    if (reason === "other") {
-      setOtherOpen(true);
-      return;
-    }
-    setOpen(false);
-    onDismiss(hitId, "dismissed", { dismissalReason: reason });
-  };
-
-  const submitOther = () => {
-    const trimmed = notes.trim();
-    if (!trimmed) return;
-    setOpen(false);
-    setOtherOpen(false);
-    onDismiss(hitId, "dismissed", { dismissalReason: "other", dismissalNotes: trimmed });
-  };
-
   return (
-    <div className="relative inline-flex">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        disabled={busy}
-        className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60"
-        style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
-      >
-        Dismiss
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {open && (
-        <>
-          {/* Dim backdrop on phones (the sheet is modal there); an invisible
-              catcher on desktop so clicking away closes the dropdown. */}
-          <div
-            onClick={close}
-            className="fixed inset-0 z-40 sm:hidden"
-            style={{ background: "rgba(0,0,0,0.45)" }}
-          />
-          <div onClick={close} className="fixed inset-0 z-40 hidden sm:block" />
-          <div
-            className="fixed z-50 inset-x-3 bottom-3 rounded shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-full sm:bottom-auto sm:mt-1 sm:w-52"
-            style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)" }}
-          >
-          {otherOpen ? (
-            <div className="p-2 space-y-2">
-              <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--color-muted)" }}>
-                Reason
-              </p>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                autoFocus
-                maxLength={500}
-                rows={3}
-                placeholder="Why is this being dismissed?"
-                className="w-full text-xs rounded px-2 py-1.5 resize-none"
-                style={{
-                  border: "1px solid var(--color-border)",
-                  background: "var(--color-surface)",
-                  color: "var(--color-ink)",
-                }}
-              />
-              <div className="flex gap-1 justify-end">
-                <button
-                  onClick={() => {
-                    setOtherOpen(false);
-                    setNotes("");
-                  }}
-                  className="text-xs px-2 py-1 rounded"
-                  style={{ color: "var(--color-muted)" }}
-                >
-                  Back
-                </button>
-                <button
-                  onClick={submitOther}
-                  disabled={!notes.trim()}
-                  className="text-xs px-2 py-1 rounded"
-                  style={{
-                    background: notes.trim() ? "var(--color-ink)" : "var(--color-surface)",
-                    color: notes.trim() ? "white" : "var(--color-muted)",
-                  }}
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          ) : (
-            DISMISS_OPTIONS.map((opt) => (
-              <button
-                key={opt.reason}
-                onClick={() => pick(opt.reason)}
-                className="block w-full text-left text-xs px-3 py-3 sm:py-2 hover:opacity-80"
-                style={{ color: "var(--color-ink)" }}
-              >
-                {opt.label}
-              </button>
-            ))
-          )}
-          </div>
-        </>
-      )}
-    </div>
+    <ReasonMenu
+      triggerLabel="Dismiss"
+      options={DISMISS_OPTIONS}
+      busy={busy}
+      width={208}
+      notesPlaceholder="Why is this being dismissed?"
+      confirmLabel="Dismiss"
+      onPick={(reason, notes) =>
+        onDismiss(hitId, "dismissed", {
+          dismissalReason: reason,
+          ...(notes ? { dismissalNotes: notes } : {}),
+        })
+      }
+    />
   );
 }
 
@@ -791,14 +684,14 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
   const open = hit.status === "new" || hit.status === "confirmed";
   const brand = platformBrand(hit.platform);
 
-  // Everything below the confidence bars folds away, so a page of hits reads
-  // as a scannable list. The action row stays out of the fold — triage is the
-  // point of the card and shouldn't cost an extra click.
+  // Match signals and the adjudicator note fold away so a page of hits reads
+  // as a scannable list. Two things deliberately stay out of the fold: the
+  // triage actions, because acting on a hit shouldn't cost an extra click, and
+  // the other actors identified in the content — a row of faces is the part
+  // that makes someone look twice, and hiding it wastes the card's best
+  // moment.
   const [expanded, setExpanded] = useState(false);
   const detailParts: string[] = [];
-  if (hit.secondaryActors?.length) {
-    detailParts.push(`${hit.secondaryActors.length} other actor${hit.secondaryActors.length === 1 ? "" : "s"}`);
-  }
   if (hit.matchSignals.length) {
     detailParts.push(`${hit.matchSignals.length} match signal${hit.matchSignals.length === 1 ? "" : "s"}`);
   }
@@ -843,6 +736,10 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
         <ConfidenceBar value={hit.aiGeneratedLikelihood} label="AI-generated" />
       </div>
 
+      {hit.secondaryActors && hit.secondaryActors.length > 0 && (
+        <SecondaryActorStack actors={hit.secondaryActors} />
+      )}
+
       {hasDetail && (
         <button
           onClick={() => setExpanded((v) => !v)}
@@ -865,10 +762,6 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
           </svg>
           {expanded ? "Hide detail" : detailParts.join(" · ")}
         </button>
-      )}
-
-      {expanded && hit.secondaryActors && hit.secondaryActors.length > 0 && (
-        <SecondaryActorStack actors={hit.secondaryActors} />
       )}
 
       {expanded && hit.matchSignals.length > 0 && (
@@ -942,14 +835,67 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
 
 // ── Review queue ────────────────────────────────────────────────────────────
 
-function QueueStat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+/**
+ * Count up to the figure once it lands.
+ *
+ * The queue numbers come from two fetches, so the tile sits on zeros for a
+ * beat and then snaps — which reads as a glitch. Ticking up from zero over
+ * half a second covers the gap and makes the arrival deliberate. Honours
+ * prefers-reduced-motion by jumping straight to the value.
+ */
+function useCountUp(target: number, ready: boolean, duration = 550): number {
+  const [value, setValue] = useState(0);
+  const shownRef = useRef(0);
+
+  useEffect(() => {
+    if (!ready) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const from = shownRef.current;
+    // Reduced motion runs the same loop with a zero-length ramp, so the first
+    // frame lands on the target. Everything still happens inside the frame
+    // callback rather than synchronously in the effect.
+    const span = reduced ? 0 : duration;
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = span === 0 ? 1 : Math.min(1, (now - start) / span);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const next = Math.round(from + (target - from) * eased);
+      shownRef.current = next;
+      setValue(next);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ready, duration]);
+
+  return value;
+}
+
+function QueueStat({
+  value,
+  label,
+  ready,
+  accent,
+  format = String,
+}: {
+  value: number;
+  label: string;
+  ready: boolean;
+  accent?: boolean;
+  format?: (n: number) => string;
+}) {
+  const shown = useCountUp(value, ready);
   return (
     <div>
       <p
-        className="font-mono text-2xl leading-none"
-        style={{ color: accent ? "var(--color-accent)" : "var(--color-ink)" }}
+        className="font-mono text-2xl leading-none tabular-nums transition-opacity"
+        style={{
+          color: accent && value > 0 ? "var(--color-accent)" : "var(--color-ink)",
+          opacity: ready ? 1 : 0.25,
+        }}
       >
-        {value}
+        {ready ? format(shown) : "\u2014"}
       </p>
       <p className="mt-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
         {label}
@@ -972,18 +918,21 @@ function ReviewQueueCard({
   openCount,
   accounts,
   loaded,
+  accountsLoaded,
   name,
 }: {
   newCount: number;
   openCount: number;
   accounts: OffenderAccountSummary[];
   loaded: boolean;
+  accountsLoaded: boolean;
   name: string;
 }) {
   const activeAccounts = accounts.filter((a) => a.status === "watchlist" || a.status === "reported");
   const reach = activeAccounts.reduce((sum, a) => sum + (a.cumulativeViews ?? 0), 0);
   const reported = accounts.filter((a) => a.status === "reported").length;
   const empty = newCount === 0 && openCount === 0 && activeAccounts.length === 0;
+  const settled = loaded && accountsLoaded;
 
   return (
     <div
@@ -1006,7 +955,7 @@ function ReviewQueueCard({
           )}
         </div>
 
-        {empty && loaded ? (
+        {empty && settled ? (
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
             Nothing waiting on you. Run a scan to check the monitored platforms for unauthorised use of{" "}
             {name}.
@@ -1014,13 +963,19 @@ function ReviewQueueCard({
         ) : (
           <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
             <QueueStat
-              value={String(newCount)}
+              value={newCount}
+              ready={loaded}
               label={`hit${newCount === 1 ? "" : "s"} awaiting review`}
-              accent={newCount > 0}
+              accent
             />
-            <QueueStat value={String(openCount)} label="open cases" />
-            <QueueStat value={String(activeAccounts.length)} label="accounts in play" />
-            <QueueStat value={formatCompact(reach)} label="views to remove" />
+            <QueueStat value={openCount} ready={loaded} label="open cases" />
+            <QueueStat value={activeAccounts.length} ready={accountsLoaded} label="accounts in play" />
+            <QueueStat
+              value={reach}
+              ready={accountsLoaded}
+              label="views to remove"
+              format={formatCompact}
+            />
           </div>
         )}
       </div>
@@ -1075,6 +1030,7 @@ export default function MonitorClient({ identity }: Props) {
   const [previewHit, setPreviewHit] = useState<LikenessHit | null>(null);
   const [refSet, setRefSet] = useState<ReferenceSetState | null>(null);
   const [accounts, setAccounts] = useState<OffenderAccountSummary[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
 
   const name = identity?.fullName ?? "your likeness";
 
@@ -1092,6 +1048,7 @@ export default function MonitorClient({ identity }: Props) {
       void fetch("/api/monitor/accounts")
         .then((r) => (r.ok ? (r.json() as Promise<{ accounts: OffenderAccountSummary[] }>) : null))
         .then((data) => data && setAccounts(data.accounts))
+        .finally(() => setAccountsLoaded(true))
         .catch(() => {});
 
       const res = await fetch("/api/monitor");
@@ -1283,6 +1240,7 @@ export default function MonitorClient({ identity }: Props) {
         newCount={newCount}
         openCount={openHits.length}
         accounts={accounts}
+        accountsLoaded={accountsLoaded}
         loaded={loaded}
         name={name}
       />

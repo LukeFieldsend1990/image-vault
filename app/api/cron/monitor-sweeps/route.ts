@@ -122,6 +122,9 @@ export async function POST(req: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
   const scanEnv = {
     AI: (env as unknown as { AI?: Ai }).AI,
+    // Scheduled sweeps capture hit previews into R2 too — otherwise the
+    // overnight hits are the ones with dead thumbnails by morning.
+    SCANS_BUCKET: (env as unknown as { SCANS_BUCKET?: R2Bucket }).SCANS_BUCKET,
     ANTHROPIC_API_KEY: (env as unknown as { ANTHROPIC_API_KEY?: string }).ANTHROPIC_API_KEY,
     APIFY_TOKEN: (env as unknown as { APIFY_TOKEN?: string }).APIFY_TOKEN,
     YOUTUBE_API_KEY: (env as unknown as { YOUTUBE_API_KEY?: string }).YOUTUBE_API_KEY,

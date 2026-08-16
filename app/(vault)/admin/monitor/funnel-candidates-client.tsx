@@ -51,9 +51,8 @@ export default function FunnelCandidatesClient() {
           Funnel candidates
         </h2>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Actors we&apos;ve identified in AI hits but who aren&apos;t on ImageVault yet. Ranked by how often
-          they show up. Every row is a real outreach pitch: &ldquo;we&apos;ve catalogued N pieces
-          featuring you, join us and we file the takedowns.&rdquo;
+          Actors identified in AI hits who do not have an ImageVault account, ranked by how often they
+          appear.
         </p>
       </div>
 

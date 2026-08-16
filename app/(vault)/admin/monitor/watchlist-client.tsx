@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface WatchAccount {
   id: string;
@@ -25,6 +25,10 @@ interface ImportedAccount {
 }
 
 const PLATFORMS = ["instagram", "tiktok", "youtube", "x"];
+
+/** The list runs to thousands of curated handles once a few imports have gone
+ *  through, so it pages rather than rendering the lot. */
+const PAGE_SIZE = 50;
 
 function compact(n: number | null): string {
   if (n == null) return "—";
@@ -168,6 +172,27 @@ export default function WatchlistClient() {
   const watchlist = accounts.filter((a) => a.status === "watchlist");
   const withHits = accounts.filter((a) => a.hitCount > 0);
 
+  // Biggest reach first — that is the order the list is worked in. Accounts
+  // with no recorded hits have no view count yet, so follower count breaks the
+  // tie and keeps freshly imported handles ranked sensibly against each other.
+  const [page, setPage] = useState(0);
+  const sorted = useMemo(
+    () =>
+      [...accounts].sort(
+        (a, b) =>
+          b.cumulativeViews - a.cumulativeViews ||
+          (b.followerCount ?? 0) - (a.followerCount ?? 0) ||
+          a.handle.localeCompare(b.handle)
+      ),
+    [accounts]
+  );
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const visible = sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  useEffect(() => {
+    // A prune (or a filter change) can drop the page out from under us.
+    setPage((p) => Math.min(p, pageCount - 1));
+  }, [pageCount]);
+
   return (
     <div className="space-y-8">
       <div>
@@ -175,9 +200,9 @@ export default function WatchlistClient() {
           Watched accounts
         </h2>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Every sweep re-harvests these, and their posts are name-matched against the whole roster —
-          so the cost divides across monitored talent rather than multiplying. Curated entries carry no
-          hits until a sweep proves one, and talent only ever see accounts that have actually hit them.
+          Accounts re-harvested on every sweep. Their posts are name-matched against the whole roster,
+          so one harvest covers every monitored talent. A curated entry carries no hits until a sweep
+          records one, and talent only see accounts that have hit them.
         </p>
       </div>
 
@@ -213,9 +238,7 @@ export default function WatchlistClient() {
         </h3>
         <p className="text-xs" style={{ color: "var(--color-muted)" }}>
           Follow offending accounts from a dedicated Instagram account, then import that account&rsquo;s
-          follows here. Instagram&rsquo;s own search finds this content easily and no API exposes that to
-          us — so judgement stays with a person and volume goes to the machine. Nothing is written until
-          you confirm the list below.
+          follows here. Nothing is written until you confirm the list below.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -309,12 +332,11 @@ export default function WatchlistClient() {
         style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
       >
         <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-          Paste handles
+          Add to watchlist
         </h3>
         <p className="text-xs" style={{ color: "var(--color-muted)" }}>
           One per line, or comma-separated. Accepts <code>@handle</code>, bare handles, or full profile
-          URLs. Always works, regardless of what the scrapers are doing — and re-running the same paste
-          is safe, since existing entries are skipped rather than duplicated.
+          URLs. Re-running the same paste is safe: existing entries are skipped rather than duplicated.
         </p>
         <textarea
           value={pasteText}
@@ -392,7 +414,7 @@ export default function WatchlistClient() {
             <table className="w-full text-xs">
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-                  {["Handle", "Platform", "Hits", "Reach", "Talent", "Status", ""].map((h) => (
+                  {["Handle", "Platform", "Hits", "Reach", "Followers", "Talent", "Status", ""].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-2.5 text-left font-medium tracking-widest uppercase"
@@ -404,7 +426,7 @@ export default function WatchlistClient() {
                 </tr>
               </thead>
               <tbody>
-                {accounts.map((a) => (
+                {visible.map((a) => (
                   <tr key={a.id} style={{ borderTop: "1px solid var(--color-border)" }}>
                     <td className="px-4 py-2.5 font-mono" style={{ color: "var(--color-ink)" }}>
                       @{a.handle}
@@ -417,6 +439,9 @@ export default function WatchlistClient() {
                     </td>
                     <td className="px-4 py-2.5 font-mono" style={{ color: "var(--color-text)" }}>
                       {compact(a.cumulativeViews)}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono" style={{ color: "var(--color-muted)" }}>
+                      {compact(a.followerCount)}
                     </td>
                     <td className="px-4 py-2.5 font-mono" style={{ color: "var(--color-text)" }}>
                       {a.talentAffectedCount || "—"}
@@ -438,6 +463,38 @@ export default function WatchlistClient() {
                 ))}
               </tbody>
             </table>
+            {pageCount > 1 && (
+              <div
+                className="flex items-center justify-between gap-3 px-4 py-3"
+                style={{ borderTop: "1px solid var(--color-border)" }}
+              >
+                <p style={{ color: "var(--color-muted)" }}>
+                  {page * PAGE_SIZE + 1}&ndash;{Math.min(sorted.length, (page + 1) * PAGE_SIZE)} of{" "}
+                  {sorted.length}, by reach
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="underline underline-offset-2 disabled:opacity-40"
+                    style={{ color: "var(--color-muted)" }}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ color: "var(--color-muted)" }}>
+                    {page + 1} / {pageCount}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                    disabled={page >= pageCount - 1}
+                    className="underline underline-offset-2 disabled:opacity-40"
+                    style={{ color: "var(--color-muted)" }}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

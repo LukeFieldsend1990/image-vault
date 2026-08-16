@@ -419,6 +419,28 @@ export default async function SettingsPage({
         </div>
       )}
 
+      {/* Leak trace-back (talent + rep). Lives here rather than in the sidebar:
+          it is a tool you reach for when a file turns up somewhere it
+          shouldn't, not a screen anyone works in day to day. */}
+      {(user?.role === "talent" || user?.role === "rep") && (
+        <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Trace</h2>
+          <Link
+            href="/trace"
+            className="flex items-center justify-between text-sm"
+            style={{ color: "var(--color-ink)" }}
+          >
+            <span>Trace a leaked file</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-muted)" }}>
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </Link>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+            Check a file hash against every delivery made under your licences to find which one it came from.
+          </p>
+        </div>
+      )}
+
       {/* AI & Likeness Licensing — dedicated RSL page (talent only) */}
       {user?.role === "talent" && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
