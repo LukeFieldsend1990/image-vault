@@ -6,6 +6,7 @@ import {
   computeDetectionCoverage,
   coverageInputFromReferences,
   getActiveReferences,
+  getVaultPackageSummary,
   syncReferenceSet,
   type ReferenceImage,
 } from "@/lib/monitor/reference-set";
@@ -39,10 +40,16 @@ async function buildPayload(db: ReturnType<typeof getDb>, talentId: string, refs
     .where(eq(talentProfiles.userId, talentId))
     .get();
 
+  // What the vault actually holds, so coverage never asks for a scan type the
+  // talent has already uploaded — including packages whose files are all
+  // meshes and textures and so contribute no reference stills.
+  const vault = await getVaultPackageSummary(db, talentId);
+
   const coverage = computeDetectionCoverage(
     coverageInputFromReferences(refs, {
       geometryFingerprintCount: fingerprintCount,
       hasProfileImage: !!profile?.url,
+      vaultPackages: { total: vault.total, faceCount: vault.faceCount, bodyCount: vault.bodyCount },
     })
   );
 
@@ -56,6 +63,11 @@ async function buildPayload(db: ReturnType<typeof getDb>, talentId: string, refs
       id,
       name: packageNames.get(id) ?? "Scan package",
     })),
+    vaultPackages: {
+      total: vault.total,
+      faceCount: vault.faceCount,
+      bodyCount: vault.bodyCount,
+    },
     geometryFingerprintCount: fingerprintCount,
     hasProfileImage: !!profile?.url,
   };
