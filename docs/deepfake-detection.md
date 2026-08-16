@@ -395,6 +395,14 @@ admin monitor page reads those verdicts back as a tuning signal:
   verdict. This is the replay set for threshold tuning or evaluating a
   third-party classifier before paying for it. Talent ids only, no PII —
   the file is expected to leave the console.
+- **MCP access** (`lib/mcp/tools/detection-feedback.ts`) — the same signal
+  over the admin MCP server for agent-driven tuning sessions:
+  `get_detection_feedback_summary` returns the aggregates, and
+  `export_detection_feedback_labels` returns labelled examples with a
+  `since` cursor (unix seconds against the verdict time) so a periodic
+  agent pulls only what was adjudicated since its last run. Both are
+  read-scope, non-mutating; aggregation is shared with the admin routes
+  via `lib/monitor/feedback.ts`.
 
 ### Known limitations
 

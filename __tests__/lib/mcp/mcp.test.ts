@@ -30,6 +30,9 @@ describe("mcp tool registry", () => {
     expect(names).toContain("invite_user");
     expect(names).toContain("create_production");
     expect(names).toContain("create_licence_request");
+    // Detection feedback
+    expect(names).toContain("get_detection_feedback_summary");
+    expect(names).toContain("export_detection_feedback_labels");
     // Production cast
     expect(names).toContain("list_productions");
     expect(names).toContain("list_production_cast");
@@ -46,7 +49,7 @@ describe("mcp tool registry", () => {
     ]) {
       expect(getMcpTool(name)?.mutating, name).toBe(true);
     }
-    for (const name of ["get_platform_overview", "list_users", "list_licences", "list_packages", "get_ai_costs", "list_concepts", "list_productions", "list_production_cast"]) {
+    for (const name of ["get_platform_overview", "list_users", "list_licences", "list_packages", "get_ai_costs", "list_concepts", "list_productions", "list_production_cast", "get_detection_feedback_summary", "export_detection_feedback_labels"]) {
       expect(getMcpTool(name)?.mutating, name).toBe(false);
     }
   });

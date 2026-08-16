@@ -11,3 +11,4 @@ import "./onboarding";
 import "./production-cast";
 import "./tmdb-cast";
 import "./likeness-monitor";
+import "./detection-feedback";
