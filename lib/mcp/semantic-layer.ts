@@ -147,8 +147,10 @@ export const CONCEPTS: ConceptEntry[] = [
       "tier (unanchored/baseline/anchored/fortified) with next-upload suggestions, so detection strengthens as talent adds scans. syntheticMediaScore is produced by lib/monitor/synthetic-check.ts: " +
       "embedded provenance markers (IPTC trainedAlgorithmicMedia, generator signatures — near-conclusive), then Claude Haiku vision (budget-gated; structured verdict with generator-family attribution and face-swap evidence, filtered-real guard) with LLaVA fallback. Layering and limits: docs/deepfake-detection.md. Hits persist to likenessHits with confidence, risk level and rationale; " +
       "new hits notify the talent and their reps in-app and email the content link. Triage transitions: new → confirmed/dismissed/takedown_requested/resolved. " +
-      "Talent UI at /vault/monitor (gated with the royalty-meter flag); admin visibility via the list_likeness_hits MCP tool.",
-    codePaths: ["lib/monitor/", "app/api/monitor/", "app/(vault)/vault/monitor/", "lib/mcp/tools/likeness-monitor.ts"],
+      "Talent UI at /vault/monitor (gated with the royalty-meter flag); admin visibility via the list_likeness_hits MCP tool. " +
+      "Human verdicts feed back into model tuning: dismissal reasons partition detector error (not_me = likeness matcher, not_ai = synthetic check) from policy calls (not_misuse), " +
+      "aggregated on the admin Detection feedback panel and over MCP via get_detection_feedback_summary and export_detection_feedback_labels (labelled examples with a `since` cursor for periodic incremental pulls).",
+    codePaths: ["lib/monitor/", "lib/monitor/feedback.ts", "app/api/monitor/", "app/(vault)/vault/monitor/", "lib/mcp/tools/likeness-monitor.ts", "lib/mcp/tools/detection-feedback.ts"],
     related: ["ai-infrastructure", "vault-packages", "security-model"],
   },
   {
