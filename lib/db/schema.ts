@@ -1901,9 +1901,73 @@ export const monitorReferenceImages = sqliteTable(
     // active — usable as a match source; rejected — vision model found no
     // face (kept so re-syncs don't retry the same file every sweep).
     status: text("status", { enum: ["active", "rejected"] }).notNull().default("active"),
+    // vault_still — photographic capture; derived_render — turntable render
+    // or 360°-video frame grab produced by the derived-stills job. Derived
+    // stills count at half weight in the coverage score.
+    source: text("source", { enum: ["vault_still", "derived_render"] })
+      .notNull()
+      .default("vault_still"),
     createdAt: integer("created_at").notNull(),
   },
   (t) => ({
     uniqScanFile: unique().on(t.scanFileId),
   })
 );
+
+// Perceptual-hash derivation index: one 64-bit dHash per reference still,
+// so a sweep can hash candidate thumbnails and produce the
+// perceptualHashDistance reading (0-64 Hamming; <=16 reads as derivation
+// from vault imagery). 'failed' rows record undecodable stills so re-syncs
+// skip them — same rationale as monitorReferenceImages 'rejected'.
+export const monitorPhashIndex = sqliteTable(
+  "monitor_phash_index",
+  {
+    id: text("id").primaryKey(),
+    talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    packageId: text("package_id").references(() => scanPackages.id, { onDelete: "cascade" }),
+    scanFileId: text("scan_file_id").references(() => scanFiles.id, { onDelete: "cascade" }),
+    r2Key: text("r2_key").notNull(),
+    source: text("source", { enum: ["scan_still", "derived_render"] })
+      .notNull()
+      .default("scan_still"),
+    algorithm: text("algorithm").notNull().default("dhash-v1"),
+    hashHex: text("hash_hex"), // 16 hex chars; null when status = 'failed'
+    width: integer("width"),
+    height: integer("height"),
+    status: text("status", { enum: ["hashed", "failed"] }).notNull().default("hashed"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => ({
+    uniqKeyAlgo: unique().on(t.r2Key, t.algorithm),
+  })
+);
+
+// Body-geometry context from full-body scan meshes: relative proportions
+// only (no absolute scale exists in an OBJ). Feeds one guarded adjudicator
+// prompt line behind the `body_context_enabled` ai_settings key (default
+// off) — never a detection signal, never a flag reason.
+export const talentBodyProfiles = sqliteTable("talent_body_profiles", {
+  talentId: text("talent_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  packageId: text("package_id").references(() => scanPackages.id, { onDelete: "set null" }),
+  algorithm: text("algorithm").notNull().default("width-profile-v1"),
+  metricsJson: text("metrics_json").notNull(),
+  computedAt: integer("computed_at").notNull(),
+});
+
+// One derived-stills render job per package: turntable renders from a mesh,
+// or frame grabs from a 360° reference video, that anchor mesh-only
+// packages in the likeness monitor. 'skipped' records that the Browser
+// Rendering binding was absent — graceful degradation, never a pipeline
+// failure.
+export const derivedRenderJobs = sqliteTable("derived_render_jobs", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["queued", "running", "complete", "failed", "skipped"] })
+    .notNull()
+    .default("queued"),
+  strategy: text("strategy", { enum: ["video_frames", "mesh_turntable"] }),
+  stillsCreated: integer("stills_created").notNull().default(0),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+  completedAt: integer("completed_at"),
+});

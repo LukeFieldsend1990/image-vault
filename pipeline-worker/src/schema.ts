@@ -212,6 +212,49 @@ export const pipelineOutputs = sqliteTable("pipeline_outputs", {
   createdAt: integer("created_at").notNull(),
 });
 
+// Mirror of the app schema's talent_body_profiles — written by the
+// derived-stills job's body-metrics pass.
+export const talentBodyProfiles = sqliteTable("talent_body_profiles", {
+  talentId: text("talent_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  packageId: text("package_id").references(() => scanPackages.id, { onDelete: "set null" }),
+  algorithm: text("algorithm").notNull().default("width-profile-v1"),
+  metricsJson: text("metrics_json").notNull(),
+  computedAt: integer("computed_at").notNull(),
+});
+
+// Mirror of the app schema's derived_render_jobs — the derived-stills job
+// records its own progress here.
+export const derivedRenderJobs = sqliteTable("derived_render_jobs", {
+  id: text("id").primaryKey(),
+  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["queued", "running", "complete", "failed", "skipped"] })
+    .notNull()
+    .default("queued"),
+  strategy: text("strategy", { enum: ["video_frames", "mesh_turntable"] }),
+  stillsCreated: integer("stills_created").notNull().default(0),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+  completedAt: integer("completed_at"),
+});
+
+// Mirror of the app schema's monitor_phash_index — the derived-stills job
+// hashes renders it just produced so the monitor's derivation layer covers
+// them without a separate sync pass.
+export const monitorPhashIndex = sqliteTable("monitor_phash_index", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  packageId: text("package_id").references(() => scanPackages.id, { onDelete: "cascade" }),
+  scanFileId: text("scan_file_id").references(() => scanFiles.id, { onDelete: "cascade" }),
+  r2Key: text("r2_key").notNull(),
+  source: text("source", { enum: ["scan_still", "derived_render"] }).notNull().default("scan_still"),
+  algorithm: text("algorithm").notNull().default("dhash-v1"),
+  hashHex: text("hash_hex"),
+  width: integer("width"),
+  height: integer("height"),
+  status: text("status", { enum: ["hashed", "failed"] }).notNull().default("hashed"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const downloadEvents = sqliteTable("download_events", {
   id: text("id").primaryKey(), // UUID
   licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }), // null for talent's own downloads

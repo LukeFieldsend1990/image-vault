@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { buildTemplates, composeUrlFor, type OutreachPurpose } from "@/lib/monitor/outreach-templates";
+import { buildTemplates, composeUrlFor, profileUrlFor, type OutreachPurpose } from "@/lib/monitor/outreach-templates";
+import { platformBrand } from "@/lib/monitor/platform-brand";
 
 interface SecondaryActor {
   talentId: string | null;
@@ -66,6 +67,10 @@ const PLATFORM_LABELS: Record<string, string> = {
   tiktok: "TikTok",
   youtube: "YouTube",
   x: "X",
+  pinterest: "Pinterest",
+  google: "Google",
+  getty: "Getty / Shutterstock",
+  midjourney: "AI Platforms",
 };
 
 function formatCompact(n: number): string {
@@ -522,20 +527,26 @@ function AccountCard({
   const [expanded, setExpanded] = useState(false);
   const status = STATUS_META[account.status] ?? STATUS_META.watchlist;
   const active = account.status === "watchlist" || account.status === "reported";
+  const brand = platformBrand(account.platform);
 
   return (
     <div
-      className="rounded-md border"
+      className="relative overflow-hidden rounded-md border"
       style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
     >
-      <div className="p-5 space-y-4">
+      {/* Platform accent edge — matches the hit cards on the monitor page. */}
+      <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: brand.edge }} />
+      <div className="p-5 pl-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-mono text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
                 @{account.handle}
               </h3>
-              <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{ background: brand.tint, color: brand.color }}
+              >
                 {PLATFORM_LABELS[account.platform] ?? account.platform}
               </span>
               <span
@@ -612,16 +623,20 @@ function AccountCard({
           >
             {expanded ? "Hide" : `Show ${account.hitsForTalent} flagged ${account.hitsForTalent === 1 ? "post" : "posts"}`}
           </button>
-          <span style={{ color: "var(--color-border)" }}>·</span>
-          <a
-            href={`https://www.instagram.com/${account.handle}/`}
-            target="_blank"
-            rel="noopener noreferrer nofollow"
-            className="text-xs font-medium underline underline-offset-2"
-            style={{ color: "var(--color-muted)" }}
-          >
-            Open account
-          </a>
+          {profileUrlFor(account.platform, account.handle) && (
+            <>
+              <span style={{ color: "var(--color-border)" }}>·</span>
+              <a
+                href={profileUrlFor(account.platform, account.handle)!}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="text-xs font-medium underline underline-offset-2"
+                style={{ color: "var(--color-muted)" }}
+              >
+                Open account
+              </a>
+            </>
+          )}
 
           <div className="ml-auto flex items-center gap-2">
             {account.status !== "reported" && account.status !== "suspended" && (

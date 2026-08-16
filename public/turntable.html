@@ -1,0 +1,163 @@
+<!doctype html>
+<!--
+  Derived-stills render page, driven headlessly by pipeline-worker's
+  derived-stills job via Cloudflare Browser Rendering.
+
+  Contract:
+    ?src=<presigned R2 URL>&mode=obj|video[&frames=N]
+    - obj:   loads the OBJ, renders N yaw angles (default 6), two framings
+             each (face crop + full body) with a neutral material and
+             three-point lighting.
+    - video: seeks a turntable/reference MP4 at N fractions (default 4)
+             and grabs photographic frames.
+  On success the page sets window.__frames = [{ name, dataUrl }] and then
+  window.__framesReady = true. On failure it sets window.__error instead.
+  Filenames are load-bearing: they must pass isReferenceCandidate and
+  classify via FACE_HINTS / BODY_HINTS in lib/monitor/reference-set.ts
+  (never use the word "mesh" — it is a NON_REFERENCE_HINT).
+
+  Operator prerequisite: the scans bucket needs a CORS rule allowing GET
+  from the app origin, or every cross-origin fetch/draw here fails.
+  Vendored three.js lives in /vendor (no CDN at render time).
+-->
+<html>
+<head>
+<meta charset="utf-8" />
+<title>turntable</title>
+<style>html,body{margin:0;background:#202020}canvas{display:block}</style>
+<script type="importmap">
+  { "imports": { "three": "/vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="c" width="768" height="768"></canvas>
+<script type="module">
+  import * as THREE from "three";
+  import { OBJLoader } from "/vendor/OBJLoader.js";
+
+  const params = new URLSearchParams(location.search);
+  const src = params.get("src");
+  const mode = params.get("mode");
+  const canvas = document.getElementById("c");
+  const SIZE = 768;
+
+  const finish = (frames) => {
+    window.__frames = frames;
+    window.__framesReady = true;
+  };
+  const fail = (message) => {
+    window.__error = String(message);
+    window.__framesReady = true;
+    window.__frames = [];
+  };
+
+  async function renderObj(frameCount) {
+    const object = await new OBJLoader().loadAsync(src);
+
+    // Normalise to a unit-height object centred at the origin so camera
+    // maths is scale-independent.
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const scale = 1 / (size.y || 1);
+    object.position.sub(center);
+    object.scale.setScalar(scale);
+
+    const neutral = new THREE.MeshStandardMaterial({ color: 0xb8ada2, roughness: 0.62, metalness: 0.02 });
+    object.traverse((child) => {
+      if (child.isMesh) child.material = neutral;
+    });
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x202020);
+    scene.add(object);
+    scene.add(new THREE.HemisphereLight(0xf4efe9, 0x2a2a2a, 0.9));
+    const key = new THREE.DirectionalLight(0xffffff, 1.6);
+    key.position.set(1.4, 1.6, 1.8);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0xdfe8ff, 0.7);
+    rim.position.set(-1.6, 0.8, -1.4);
+    scene.add(rim);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(SIZE, SIZE, false);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 50);
+    const fovRad = (camera.fov * Math.PI) / 180;
+    const distanceFor = (height) => (height * 1.15) / (2 * Math.tan(fovRad / 2));
+
+    // After normalisation the object spans y ∈ [-0.5, 0.5]. The face
+    // occupies roughly the top 18% of a full-body capture; a head-only
+    // scan just gets a tighter orbit of the same head.
+    const framings = [
+      { hint: "face", targetY: 0.5 - 0.09, height: 0.18 },
+      { hint: "fullbody", targetY: 0, height: 1.0 },
+    ];
+
+    const frames = [];
+    for (const framing of framings) {
+      const dist = distanceFor(framing.height);
+      for (let i = 0; i < frameCount; i++) {
+        const yaw = (i / frameCount) * Math.PI * 2;
+        camera.position.set(
+          Math.sin(yaw) * dist,
+          framing.targetY + dist * 0.12,
+          Math.cos(yaw) * dist
+        );
+        camera.lookAt(0, framing.targetY, 0);
+        renderer.render(scene, camera);
+        frames.push({
+          name: `derived_${framing.hint}_turntable_${String(i).padStart(3, "0")}.png`,
+          dataUrl: canvas.toDataURL("image/png"),
+        });
+      }
+    }
+    return frames;
+  }
+
+  async function renderVideo(frameCount) {
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.preload = "auto";
+    video.src = src;
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = resolve;
+      video.onerror = () => reject(new Error("video failed to load"));
+    });
+    const ctx = canvas.getContext("2d");
+
+    const frames = [];
+    for (let i = 0; i < frameCount; i++) {
+      // Skip the clapper/settle at the very start and end of the take.
+      const t = video.duration * (0.05 + (0.9 * i) / Math.max(1, frameCount - 1));
+      await new Promise((resolve, reject) => {
+        video.onseeked = resolve;
+        video.onerror = () => reject(new Error("video seek failed"));
+        video.currentTime = t;
+      });
+      const scale = Math.min(SIZE / video.videoWidth, SIZE / video.videoHeight);
+      const w = Math.round(video.videoWidth * scale);
+      const h = Math.round(video.videoHeight * scale);
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+      frames.push({
+        name: `derived_face_turntable_video_${String(i).padStart(3, "0")}.png`,
+        dataUrl: canvas.toDataURL("image/png"),
+      });
+    }
+    return frames;
+  }
+
+  (async () => {
+    try {
+      if (!src || !mode) throw new Error("src and mode are required");
+      const frameCount = Math.max(1, Math.min(12, Number(params.get("frames")) || (mode === "obj" ? 6 : 4)));
+      finish(mode === "obj" ? await renderObj(frameCount) : await renderVideo(frameCount));
+    } catch (err) {
+      fail(err && err.message ? err.message : err);
+    }
+  })();
+</script>
+</body>
+</html>

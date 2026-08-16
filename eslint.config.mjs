@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored three.js for the derived-stills render page.
+    "public/vendor/**",
   ]),
 ]);
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { TalentIdentityForMonitor } from "./page";
 import { embedInfoFor } from "@/lib/monitor/embed-url";
+import { platformBrand } from "@/lib/monitor/platform-brand";
 
 // ── Types (mirror /api/monitor payloads) ────────────────────────────────────
 
@@ -77,6 +78,8 @@ interface ReferenceSetState {
   };
   /** What the vault holds — the only thing the coverage card talks about. */
   vaultPackages?: { total: number; faceCount: number; bodyCount: number };
+  /** Reference stills fingerprinted into the derivation (pHash) index. */
+  phashIndexedCount?: number;
 }
 
 interface OffenderAccountSummary {
@@ -400,6 +403,12 @@ function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
         <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
           <div className="h-full rounded-full transition-all" style={{ width: `${refSet.coverage.score}%`, background: tier.color }} />
         </div>
+        {(refSet.phashIndexedCount ?? 0) > 0 && (
+          <p className="mt-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
+            Derivation index: {refSet.phashIndexedCount} still{refSet.phashIndexedCount === 1 ? "" : "s"} fingerprinted —
+            reposts and edits of your vault imagery are matched directly.
+          </p>
+        )}
       </div>
 
       {refSet.coverage.improvements.length > 0 && (
@@ -780,6 +789,7 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
 }) {
   const risk = RISK_COLORS[hit.riskLevel] ?? RISK_COLORS.medium;
   const open = hit.status === "new" || hit.status === "confirmed";
+  const brand = platformBrand(hit.platform);
 
   // Everything below the confidence bars folds away, so a page of hits reads
   // as a scannable list. The action row stays out of the fold — triage is the
@@ -794,13 +804,14 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
   }
   if (hit.aiRationale) detailParts.push("adjudicator note");
   const hasDetail = detailParts.length > 0;
-
   return (
-    <div className="rounded-md border p-4 space-y-3"
+    <div className="relative overflow-hidden rounded-md border p-4 pl-5 space-y-3"
       style={{ borderColor: hit.status === "new" ? "rgba(239,68,68,0.35)" : "var(--color-border)", background: "var(--color-bg)" }}>
+      {/* Platform accent edge — the one brand element each card carries. */}
+      <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: brand.edge }} />
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
-          style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}>
+          style={{ background: brand.tint, color: brand.color }}>
           {PLATFORM_ICONS[hit.platform] ?? <GettyIcon />}
         </div>
         <div className="flex-1 min-w-0">

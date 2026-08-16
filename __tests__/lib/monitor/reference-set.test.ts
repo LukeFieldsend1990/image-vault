@@ -248,6 +248,41 @@ describe("computeDetectionCoverage", () => {
       expect(text).not.toMatch(/public photo|profile photo|fingerprint|matcher|relies|fallback/);
     }
   });
+
+  it("anchors a mesh-only package through derived renders at half weight", () => {
+    const coverage = computeDetectionCoverage({
+      faceReferenceCount: 0,
+      bodyReferenceCount: 0,
+      unknownReferenceCount: 0,
+      derivedFaceReferenceCount: 4,
+      derivedBodyReferenceCount: 2,
+      packageCount: 1,
+      geometryFingerprintCount: 0,
+      hasProfileImage: false,
+    });
+    // 4 derived face = 2 face-equivalents (24) + 2 derived body = 1 body-equivalent (12).
+    expect(coverage.tier).toBe("anchored");
+    expect(coverage.score).toBe(36);
+    // The derived-only case gets its own honest improvement line.
+    expect(coverage.improvements[0]).toMatch(/Turntable renders/);
+  });
+
+  it("derived renders never reach fortified on their own", () => {
+    const coverage = computeDetectionCoverage({
+      faceReferenceCount: 0,
+      bodyReferenceCount: 0,
+      unknownReferenceCount: 0,
+      derivedFaceReferenceCount: 8,
+      derivedBodyReferenceCount: 4,
+      packageCount: 1,
+      geometryFingerprintCount: 0,
+      hasProfileImage: true,
+    });
+    // 48 face-capped + 24 body-capped + 5 profile = 77 < 80: photographic
+    // session diversity still required for fortified.
+    expect(coverage.tier).toBe("anchored");
+    expect(coverage.score).toBe(77);
+  });
 });
 
 describe("coverageInputFromReferences", () => {
@@ -262,6 +297,8 @@ describe("coverageInputFromReferences", () => {
       faceReferenceCount: 1,
       bodyReferenceCount: 1,
       unknownReferenceCount: 1,
+      derivedFaceReferenceCount: 0,
+      derivedBodyReferenceCount: 0,
       packageCount: 2,
       geometryFingerprintCount: 3,
       hasProfileImage: true,
@@ -275,5 +312,51 @@ describe("coverageInputFromReferences", () => {
       vaultPackages: { total: 2, faceCount: 1, bodyCount: 1 },
     });
     expect(input.vaultPackages).toEqual({ total: 2, faceCount: 1, bodyCount: 1 });
+  });
+
+  it("splits derived renders out of the photographic counts", () => {
+    const refs: ReferenceImage[] = [
+      { id: "1", packageId: "pkg-a", scanFileId: "f1", r2Key: "scans/x/face.jpg", kind: "face" },
+      {
+        id: "2",
+        packageId: "pkg-a",
+        scanFileId: "f2",
+        r2Key: "derived/pkg-a/derived_face_turntable_000.png",
+        kind: "face",
+        source: "derived_render",
+      },
+      {
+        id: "3",
+        packageId: "pkg-a",
+        scanFileId: "f3",
+        r2Key: "derived/pkg-a/derived_fullbody_turntable_000.png",
+        kind: "full_body",
+        source: "derived_render",
+      },
+    ];
+    const input = coverageInputFromReferences(refs, { geometryFingerprintCount: 0, hasProfileImage: false });
+    expect(input.faceReferenceCount).toBe(1);
+    expect(input.bodyReferenceCount).toBe(0);
+    expect(input.derivedFaceReferenceCount).toBe(1);
+    expect(input.derivedBodyReferenceCount).toBe(1);
+  });
+});
+
+describe("derived still filenames", () => {
+  it("pass eligibility and classify by kind from the job's naming scheme", () => {
+    const face = {
+      filename: "derived_face_turntable_000.png",
+      contentType: "image/png",
+      sizeBytes: 180_000,
+    };
+    const body = {
+      filename: "derived_fullbody_turntable_000.png",
+      contentType: "image/png",
+      sizeBytes: 220_000,
+    };
+    expect(isReferenceCandidate(face)).toBe(true);
+    expect(isReferenceCandidate(body)).toBe(true);
+    expect(classifyReferenceKind(face.filename)).toBe("face");
+    expect(classifyReferenceKind(body.filename)).toBe("full_body");
   });
 });

@@ -129,6 +129,11 @@ export interface TalentIdentityAnchor {
   referenceImageCount?: number;
   /** Detection-coverage tier computed from the reference set. */
   coverageTier?: "unanchored" | "baseline" | "anchored" | "fortified";
+  /** One sentence of body-build context from the talent's full-body scan
+   *  (lib/monitor/body-profile.ts). Adjudicator context only — never a
+   *  signal, never a flag reason. Present only when `body_context_enabled`
+   *  is on and a profile exists. */
+  bodyBuildSummary?: string;
   /** Open announcement window focusing this sweep, if any. */
   vigilance?: VigilanceAnchor | null;
 }

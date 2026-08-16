@@ -84,6 +84,37 @@ export function buildTemplates(input: TemplateInput): Template[] {
  * YouTube require manually visiting the profile and clicking through, so
  * we fall back to their profile URL and let the caller click Message.
  */
+/**
+ * Public profile URL for an offender account. For the SERP-backed surfaces
+ * (google, getty) the "handle" is the hosting domain, so the profile IS the
+ * site. Returns null when no sensible URL exists.
+ */
+export function profileUrlFor(platform: string, handle: string): string | null {
+  const clean = handle.replace(/^@/, "");
+  if (!clean) return null;
+  switch (platform) {
+    case "instagram":
+      return `https://www.instagram.com/${clean}/`;
+    case "tiktok":
+      return `https://www.tiktok.com/@${clean}`;
+    case "youtube":
+      return `https://www.youtube.com/@${clean}`;
+    case "x":
+      return `https://x.com/${clean}`;
+    case "pinterest":
+      return `https://www.pinterest.com/${clean}/`;
+    case "midjourney":
+      // AI-platform hits come from Civitai's model registry.
+      return `https://civitai.com/user/${clean}`;
+    case "google":
+    case "getty":
+      // SERP surfaces record the hosting domain as the handle.
+      return clean.includes(".") ? `https://${clean}` : null;
+    default:
+      return null;
+  }
+}
+
 export function composeUrlFor(platform: string, handle: string): string | null {
   const clean = handle.replace(/^@/, "");
   switch (platform) {
