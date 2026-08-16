@@ -280,13 +280,16 @@ extra spend auditable after the fact.
 
 ### Known limitations
 
-1. **Unrostered personas are tracked, not swept.** Detection is anchored to a
-   vault identity; a persona with no matching talent profile has nothing to
-   match against. They are recorded and shown as *not on roster*, and become
-   swept automatically once a profile with that name exists. This is the common
-   case for a fresh cast announcement, and it is the honest boundary of the
-   feature — the alternative would be a shadow hit store for people who are not
-   clients.
+1. **Unrostered personas are tracked, not swept.** A sweep needs two things
+   that only a client has: a talent record (which the monitor and its cadence
+   hang off) and vault scans (which identity matching compares against). A
+   persona with no matching talent profile has neither, so no sweep runs for
+   them at all — they are recorded, shown as *not on roster*, and are worth
+   having only as a pre-built window and an outreach list. If that person later
+   joins the roster, the slug match attaches the window with no manual step and
+   their first sweep carries it. This is the common case for a fresh cast
+   announcement, and it is the honest boundary of the feature — the alternative
+   would be a shadow hit store for people who are not clients.
 2. **Persona→talent resolution is by name slug.** Two actors with the same name,
    or a profile whose stored name differs from the announcement (initials,
    married name, transliteration), will not resolve. The explicit `talent_id`

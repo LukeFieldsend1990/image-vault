@@ -301,9 +301,10 @@ export default function VigilanceClient() {
 
               {event.personas.some((p) => !p.protectedTalentId) && (
                 <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-                  Personas marked <em>not on roster</em> have no vault identity to match against, so
-                  they are tracked but not swept. They become swept automatically on their next sweep
-                  once a talent profile with that name exists.
+                  Personas marked <em>not on roster</em> are not clients — there is no account and no
+                  vault scans to match against, so nothing is swept for them. The window is recorded
+                  and ready: if one of them joins the roster, their name matches automatically and
+                  their first sweep runs this window&apos;s vocabulary.
                 </p>
               )}
             </div>
