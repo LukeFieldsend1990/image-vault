@@ -303,6 +303,54 @@ extra spend auditable after the fact.
    dismissal reasons on hits carrying a `vigilanceMatchTerm` before widening
    this further.
 
+## Cross-platform siblings (`lib/monitor/cross-platform.ts`)
+
+Operators are building an audience, not a feed. `@ultimatestudiosofficial`
+publishes the same AI trailer to Instagram and TikTok under the same name, so a
+takedown on one platform leaves both the content and most of the reach intact.
+After each sweep, the highest-reach quarter of the watchlist is probed for the
+same handle on the other platforms.
+
+Three rules keep it cheap and honest:
+
+1. **Only accounts that have earned the spend.** Selection is by count, not a
+   percentile threshold (`topByReach`): the top 25% of accounts that have any
+   reach at all. Reach is views on flagged posts, falling back to follower
+   count discounted 10× — a big account that has not hit anyone yet is not the
+   same as one that has.
+2. **Name gets you a probe, not a finding.** `handleVariants` yields the handle
+   plus the spellings crossposters actually use (punctuation stripped,
+   "official" appended). One actor run per spelling, gated on the same Apify
+   budget every other discovery run answers to, capped at
+   `MAX_PROBES_PER_SWEEP` per sweep.
+3. **Content decides.** A probe is `confirmed` only when the probed account's
+   recent captions repeat captions already flagged on the source account
+   (Jaccard token overlap ≥ `CROSSPOST_SIMILARITY`). Confirmed siblings join
+   the shared watchlist and are harvested like any other watched account from
+   the next sweep on — they are *not* flagged, and their posts still go through
+   the pre-filter and adjudicator. Anything that exists but does not match is
+   recorded as `name_only` for an admin decision at `/admin/monitor`.
+
+Every probe is written to `monitor_account_links`, negatives included. That row
+is what stops the next sweep paying to ask the same question again.
+
+### Known limitations
+
+1. **Handle reuse across platforms is common.** Two unrelated accounts can
+   share a name, which is exactly why confirmation is content-based. The cost
+   of the caution is real: an operator who writes fresh captions per platform
+   never gets past `name_only`, and needs a human to judge the lead.
+2. **YouTube existence only.** `search.list` returns the channel, not its
+   uploads, so a YouTube probe can confirm a channel exists but never
+   auto-confirms a crosspost. It always lands as `name_only`.
+3. **Captions are the only content signal.** Two visually identical videos with
+   different captions do not match. The pHash index already covers derivation
+   from vault imagery; extending it across candidate media would close this,
+   at the cost of downloading both sides.
+4. **The variant list is deliberately short.** Handle spellings that reorder
+   words ("studiosultimate") or swap a suffix are missed. Widening it
+   multiplies probes per account, which is spend.
+
 ### Third-party classifiers (deferred)
 
 A dedicated forensic model (Hive, Reality Defender, AWS detection APIs) would
@@ -324,3 +372,5 @@ pipeline.
 5. Consent-language review before enabling Rekognition broadly (limitation 5).
 6. Persona→talent link UI for vigilance events, so a name that does not slug
    cleanly can be resolved by hand (vigilance limitation 2).
+7. Media-level crosspost matching for sibling probes, so a re-captioned
+   repost still confirms (cross-platform limitation 3).
