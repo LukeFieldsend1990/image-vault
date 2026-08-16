@@ -65,6 +65,7 @@ import {
   type ReferenceImage,
 } from "./reference-set";
 import { ensurePhashIndex, loadPhashIndex, scoreCandidatesPhash } from "./phash-index";
+import { captureThumbnail } from "./thumbnail-proxy";
 import { buildBodyBuildSummary, parseBodyMetrics } from "./body-profile";
 
 type Db = ReturnType<typeof getDb>;
@@ -842,6 +843,8 @@ export async function failScan(db: Db, scanId: string, message: string): Promise
 export async function runLikenessScan(
   env: {
     AI?: Ai;
+    // Bucket for captured hit previews (lib/monitor/thumbnail-proxy.ts).
+    SCANS_BUCKET?: R2Bucket;
     ANTHROPIC_API_KEY?: string;
     APIFY_TOKEN?: string;
     YOUTUBE_API_KEY?: string;
@@ -1117,6 +1120,7 @@ export async function runLikenessScan(
   }
 
   const newHits: LikenessHitRecord[] = [];
+  const thumbnailCaptures: Array<{ hitId: string; url: string }> = [];
   for (const verdict of flagged) {
     const candidate = candidates[verdict.index];
     if (seen.has(candidate.contentUrl)) continue;
@@ -1160,6 +1164,35 @@ export async function runLikenessScan(
       detectedAt: now,
     });
     newHits.push(hit);
+    const thumbnailUrl = candidate.media?.thumbnailUrl;
+    if (thumbnailUrl) thumbnailCaptures.push({ hitId: hit.id, url: thumbnailUrl });
+  }
+
+  // Copy each preview into R2 while the platform URL is still valid. These
+  // URLs are signed and expire within days, so a hit opened this week shows a
+  // broken image next week if we only keep the link. Bounded concurrency,
+  // non-fatal: a preview we cannot capture just falls back to the live URL and
+  // then to a placeholder.
+  if (env.SCANS_BUCKET && thumbnailCaptures.length) {
+    const bucket = env.SCANS_BUCKET;
+    let captured = 0;
+    for (let i = 0; i < thumbnailCaptures.length; i += 4) {
+      await Promise.all(
+        thumbnailCaptures.slice(i, i + 4).map(async ({ hitId, url }) => {
+          try {
+            const key = await captureThumbnail(bucket, hitId, url);
+            if (!key) return;
+            await db.update(likenessHits).set({ thumbnailKey: key }).where(eq(likenessHits.id, hitId));
+            captured++;
+          } catch (err) {
+            console.warn(`[monitor] thumbnail capture failed for ${hitId}: ${(err as Error).message}`);
+          }
+        })
+      );
+    }
+    console.log(
+      `[monitor] captured ${captured}/${thumbnailCaptures.length} hit preview(s) for ${opts.talentId}`
+    );
   }
 
   await db

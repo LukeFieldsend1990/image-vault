@@ -136,9 +136,8 @@ export default function TakedownsClient() {
             Takedown backlog
           </h2>
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-            Every hit a talent asked us to file a takedown for. Once the Meta contact loop lands, this
-            list is what it drains. Stale (≥ 3d) means the request has been sitting long enough that a
-            human should probably chase it now.
+            Hits a talent has requested a takedown for. Stale (≥ 3d) means the request has been open
+            long enough to be worth chasing manually.
           </p>
         </div>
         <div className="flex gap-1 text-xs">

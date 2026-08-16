@@ -22,11 +22,11 @@ export default async function AdminMonitorPage() {
           ← Admin
         </Link>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-          Likeness Monitor — Discovery Spend
+          Likeness monitor
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Apify runs the platform sweeps that feed the likeness monitor. It bills per result, so spend is
-          gated rather than merely reported.
+          Operational controls for the discovery sweeps: schedule, vigilance windows, platform coverage,
+          Apify spend, the takedown backlog, and the shared account watchlist.
         </p>
       </div>
 

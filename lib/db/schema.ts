@@ -1616,6 +1616,10 @@ export const likenessHits = sqliteTable("likeness_hits", {
   aiRationale: text("ai_rationale"),
   // Stage 2/3 input, captured at discovery so the detectors need no re-fetch.
   thumbnailUrl: text("thumbnail_url"),
+  // R2 key for the preview bytes, captured at discovery. Platform CDN URLs are
+  // signed and expire within days, so the URL above stops resolving long before
+  // the hit is resolved — the stored copy is what the talent actually sees.
+  thumbnailKey: text("thumbnail_key"),
   // Which query surfaced this — shown to the talent, and the tuning signal for
   // query weighting ("#tomhardyai finds 8x what #tomhardyfaceswap does").
   discoverySource: text("discovery_source"),

@@ -121,11 +121,12 @@ export default function VigilanceClient() {
           Vigilance windows
         </h2>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Synthetic content arrives in waves, and the waves are triggered — a cast reveal, a trailer,
-          a premiere. While a window is open, sweeps for the named personas add the wave&apos;s own
-          vocabulary (character and production, not just the actor&apos;s name), accept a corroborated
-          role reference as an identity match, and run on a surge interval. Windows decay and expire;
-          they raise the priority of a sweep, never lower its evidence bar.
+          A window marks an event — a cast reveal, a trailer, a premiere — that is usually followed by a
+          spike in synthetic content. While one is open, sweeps for the named personas also search the
+          event&apos;s vocabulary (character and production names, not just the actor&apos;s), treat a
+          corroborated role reference as an identity match, and run on a shorter interval. Windows decay
+          and expire on their own. They change sweep priority only; the evidence bar for a hit is
+          unchanged.
         </p>
       </div>
 
