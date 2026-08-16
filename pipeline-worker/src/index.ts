@@ -22,6 +22,7 @@ import {
   scanPackages,
   users,
 } from "./schema";
+import { processDerivedStills } from "./derived-stills";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,11 +36,16 @@ interface Env {
   MESHY_API_KEY?: string;
   RESEND_FROM_EMAIL: string;
   APP_URL: string;
+  // Derived-stills job (optional — job records 'skipped' when absent).
+  BROWSER?: Fetcher;
+  CF_ACCOUNT_ID?: string;
+  R2_BUCKET_NAME?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
 }
 
-interface JobMessage {
-  jobId: string;
-}
+/** Bundle-pipeline jobs carry a jobId; task messages discriminate on `task`. */
+type JobMessage = { jobId: string } | { task: "derived_stills"; packageId: string };
 
 // ── File classification ────────────────────────────────────────────────────
 
@@ -288,6 +294,9 @@ async function stage1Validate(
   };
 
   for (const f of files) {
+    // Derived reference stills are detection artifacts for the likeness
+    // monitor, not scan deliverables — keep them out of licensed bundles.
+    if (f.r2Key.startsWith("derived/")) continue;
     const cat = categoryOf(f.filename);
     const entry = { filename: f.filename, r2Key: f.r2Key, sizeBytes: f.sizeBytes };
     if (cat === "mesh") manifest.meshes.push({ ...entry, lod: lodOf(f.filename) });
@@ -837,7 +846,14 @@ export default {
     for (const message of batch.messages) {
       const body = message.body as JobMessage;
       try {
-        await processJob(env, body.jobId);
+        if ("task" in body && body.task === "derived_stills") {
+          // Records its own outcome (complete/failed/skipped) in
+          // derived_render_jobs and never throws — no retry storms for an
+          // enhancement job.
+          await processDerivedStills(env, body.packageId);
+        } else if ("jobId" in body) {
+          await processJob(env, body.jobId);
+        }
         message.ack();
       } catch {
         message.retry();

@@ -15,7 +15,7 @@ always means "not measured", never "low".
 |---|---|---|
 | `faceEmbeddingSimilarity` | The person shown is the talent | LLaVA verdict (default) or Rekognition vs the vault reference set |
 | `syntheticMediaScore` | The media is AI-generated/modified | Embedded provenance markers + LLaVA artifact check (`lib/monitor/synthetic-check.ts`) |
-| `perceptualHashDistance` | The media was derived from vault imagery | pHash index — **not yet built** |
+| `perceptualHashDistance` | The media was derived from vault imagery | dHash index over reference stills (`lib/monitor/phash.ts`, `lib/monitor/phash-index.ts`) |
 | `geometryFingerprintCorrelation` | Licensed scan data was the source | Fingerprint bits watermarked into deliveries |
 
 A flag requires likeness **and** synthesis/derivation evidence together. The
@@ -50,11 +50,12 @@ Recorded 2026-08 when the reference set shipped; revisit before scaling.
    feeding takedown workflows. The `rejected` status exists in the schema but
    nothing populates it yet — a sync-time face-presence/identity vetting pass
    is the missing piece.
-3. **Mesh-only packages score "unanchored".** Packages with no photographic
-   stills (mesh + texture + HDR only) contribute nothing, so a talent with
-   premium scans can see the worst tier. Fixing this properly means rendering
-   turntable stills from meshes in the pipeline worker — real compute, not
-   yet scheduled.
+3. **Mesh-only packages score "unanchored".** ~~Packages with no
+   photographic stills (mesh + texture + HDR only) contribute nothing.~~
+   Addressed 2026-08 by the derived-stills job (see "Derived reference
+   stills") — mesh/video-only packages can now reach "anchored" at half
+   weight. Requires the Browser Rendering binding to be enabled; without it
+   the job records 'skipped' and this limitation stands as written.
 4. **Cost is up on the paid path only.** Rekognition denials now cost up to 3
    compares (~$0.006/candidate vs $0.002); confirms early-exit at 1. A
    60-candidate sweep: ~$0.12 → ~$0.35 worst case. LLaVA path is free and
@@ -76,6 +77,119 @@ Recorded 2026-08 when the reference set shipped; revisit before scaling.
    about reference quality, not a detection guarantee — discovery is bounded
    by Apify budget, platform list and query vocabulary. Keep the card copy
    modest.
+
+## Derived reference stills (`pipeline-worker/src/derived-stills.ts`)
+
+Mesh/video-only packages get reference stills produced from what they do
+carry, so premium scans stop scoring "unanchored" (limitation 3). Enqueued
+from upload-complete and from the reference-set re-sync endpoint
+(`lib/monitor/derived-stills.ts`); rendered via **Cloudflare Browser
+Rendering** driving `public/turntable.html` (vendored three.js — no CDN at
+render time). Two strategies, **video first**:
+
+1. **Frame grabs from the package's 360°/turntable MP4** — photographic
+   stills of the actual person; strictly better references than any render.
+2. **three.js turntable of the OBJ mesh** — neutral material, three-point
+   lighting, six yaw angles with face-crop and full-body framings.
+
+Stills land in R2 under `derived/<packageId>/`, are inserted as
+`scan_files` rows (so `syncReferenceSet` picks them up with no query
+changes; filenames are chosen to pass the reference classifier), get
+stamped `source = 'derived_render'` on their reference rows, and are
+hashed straight into the pHash derivation index.
+
+### What derived stills are — and are not
+
+- **Half weight in the coverage score.** A mesh render is geometry-true but
+  texture/lighting-untrue; the tier caps out at "anchored" — "fortified"
+  still requires photographic diversity. The card says so ("Turntable
+  renders are anchoring detection — photographic stills … would strengthen
+  matching further").
+- **They only reach the matcher on the Rekognition path** (limitation 1
+  applies to all references, derived or not). Their immediate value on the
+  default path is the pHash index and the honest coverage tier.
+- **Never deliverables.** `stage1Validate` excludes `derived/` keys from
+  licensed bundles — these are detection artifacts, not scan data.
+- **Graceful degradation is the contract.** No `BROWSER` binding, no R2
+  API credentials, no renderable source → `derived_render_jobs` records
+  `skipped`, nothing fails, and re-syncing the reference set can retry
+  later. Operator prerequisites: Workers Paid (Browser Rendering), R2
+  presigning credentials on the pipeline worker, and a CORS rule on the
+  scans bucket allowing GET from the app origin.
+
+## Body-geometry context (`pipeline-worker/src/body-metrics.ts`, `lib/monitor/body-profile.ts`)
+
+A streaming width-profile pass over the talent's full-body OBJ (riding the
+derived-stills job) yields relative proportions — shoulder/hip/waist ratios
+of bounding-box height — stored per talent in `talent_body_profiles` and
+rendered as **one guarded line of the adjudicator prompt**, gated behind
+the `body_context_enabled` ai_settings key. **Default off** until
+adjudicator rationale quality is spot-checked on live sweeps.
+
+Honest limits, which are the design:
+
+- **Proves only that the talent's scan has these proportions.** An OBJ has
+  no absolute scale (no real height), width heuristics cannot tell muscle
+  from clothing from scan artifacts, and there is **no candidate-side
+  measurement** — we do not run pose estimation on thumbnails.
+- Therefore it is **context, never a signal**: it does not appear in
+  `CandidateSignals`, cannot flag, and cannot raise confidence. The prompt
+  line explicitly instructs the adjudicator that at most it may *lower*
+  confidence in a full-body likeness claim that clearly contradicts the
+  profile.
+- Coverage is limited to talent whose mesh-only package rode the
+  derived-stills job (that is the one compute point today); packages with
+  photographic stills never enqueue it, so their talent have no profile.
+  Acceptable while the feature is gated off; revisit if it graduates.
+- Decay: none (geometry doesn't decay), but the ceiling is low by design.
+  A future body-matching *signal* would need candidate-side measurement
+  and its own decision record here first.
+
+## Perceptual-hash derivation index (`lib/monitor/phash.ts`, `phash-index.ts`)
+
+The derivation layer's first real reading. Each reference still is hashed
+into a 64-bit dHash (`monitor_phash_index`, algorithm `dhash-v1`); at sweep
+time candidate thumbnails are hashed the same way and
+`perceptualHashDistance` becomes the minimum Hamming distance against the
+whole index. The `<=16 ⇒ derivation` interpretation the adjudicator prompt
+has carried since Phase 1 is unchanged — this layer just finally produces
+the number. Indexing is lazy (capped at 4 new stills per sweep, so a full
+gallery indexes within three sweeps and is then free); scoring is pure CPU
+with pure-JS decoders (`jpeg-js`, `upng-js`) — no AI spend, no third-party
+calls, bytes never leave the platform boundary.
+
+### What a reading proves — and what it never can
+
+- **A low distance proves global near-duplication of vault imagery**: a
+  repost, leak, screenshot, re-render or lightly edited copy of a scan
+  still (or of a derived render, once those exist). Robust to
+  recompression, resizing and mild colour shifts.
+- **It does not catch novel synthesis.** A face-swap *generated from* a
+  scan still will normally not match — the composition differs. Crops and
+  flips also defeat it. The identity and synthetic layers own those claims.
+- **Distance > 16 is not exoneration.** An unmatched candidate reports its
+  real minimum distance (a measurement), and null still means "not
+  measured" — thumbnail unavailable, oversized, or an undecodable format.
+  Neither reading may ever be presented as evidence of authenticity.
+- **Never a sole flag.** The flag criterion (likeness AND
+  synthesis/derivation) is unchanged; pHash contributes the derivation half
+  only.
+- **Decay: none.** Unlike artifact detection, near-duplicate matching does
+  not weaken as generators improve — but its coverage is permanently
+  limited to derivation-style misuse.
+
+### v1 scope decisions
+
+- **WebP/GIF thumbnails are unmeasured** (null), not zero — the pure-JS
+  decoder set covers JPEG and PNG. Follow-up option: a wasm decoder
+  (e.g. photon) if webp-heavy platforms dominate the unmeasured bucket.
+- **Size gates are load-bearing**: decode is full-frame RGBA against a
+  128MB worker limit, so stills over 4.2MP or 3MB encoded are recorded as
+  `failed` and never retried — honest nulls over OOM.
+- The index count is surfaced on the coverage card as its own line
+  ("Derivation index: N stills fingerprinted") and deliberately does
+  **not** move the coverage score — it strengthens the derivation layer,
+  not face matching.
 
 ## Synthetic-media detection (`lib/monitor/synthetic-check.ts`)
 
@@ -140,7 +254,10 @@ pipeline.
 
 1. Vet the reference gallery at sync time (fixes limitation 2, uses `rejected`).
 2. Surface the live identity provider on the coverage card (limitation 1).
-3. pHash index over reference imagery → `perceptualHashDistance` (limitation 7;
-   requires pixel decoding — the first real image-processing cost in a worker).
-4. Turntable renders for mesh-only packages (limitation 3).
+3. ~~pHash index over reference imagery → `perceptualHashDistance`~~ —
+   shipped 2026-08 (see "Perceptual-hash derivation index"); limitation 7's
+   derivation gap is closed for JPEG/PNG thumbnails.
+4. ~~Turntable renders for mesh-only packages~~ — shipped 2026-08 (see
+   "Derived reference stills"); needs the Browser Rendering binding enabled
+   by the operator before it produces anything.
 5. Consent-language review before enabling Rekognition broadly (limitation 5).

@@ -44,6 +44,14 @@ preview_bucket_name = "image-vault-pipeline-dev"
 binding = "AI"
 
 # -------------------------------------------------------------------
+# Browser Rendering (derived-stills turntable renders — Workers Paid).
+# Optional: without this binding the derived-stills job records 'skipped'
+# and everything else runs unchanged. Uncomment to enable.
+# -------------------------------------------------------------------
+# [browser]
+# binding = "BROWSER"
+
+# -------------------------------------------------------------------
 # Service bindings (worker-to-worker, zero-latency)
 # -------------------------------------------------------------------
 [[services]]
@@ -62,3 +70,11 @@ APP_URL = "https://imagevault.ai"
 # -------------------------------------------------------------------
 # RESEND_API_KEY  - Email notifications
 # MESHY_API_KEY   - GLB preview generation (optional; stage skipped if absent)
+#
+# Derived-stills job (optional; job records 'skipped' when absent):
+# CF_ACCOUNT_ID          - account for R2 S3-API presigning
+# R2_ACCESS_KEY_ID       - R2 API token key (presigns the render source for
+# R2_SECRET_ACCESS_KEY     the Browser Rendering page)
+# R2_BUCKET_NAME         - defaults to image-vault-scans
+# NOTE: the scans bucket also needs a CORS rule allowing GET from APP_URL,
+# or the render page's cross-origin OBJ/video fetch fails.
