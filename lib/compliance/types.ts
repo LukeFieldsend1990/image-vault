@@ -26,7 +26,16 @@ export type ComplianceEventType =
   | "licence.revoked"
   | "replica.scrub_attested"
   | "package.attached"
-  | "consent.counter_proposed";
+  | "consent.counter_proposed"
+  // Model-probe evidence events (training-data attribution). Recorded on the
+  // talent chain for the chain of custody; not tied to any obligation's
+  // satisfiedBy, so they never affect the compliance health score. Unlike the
+  // rest of the ledger these embed their own timestamp + actor + artifact hash
+  // INSIDE the hashed payload (see lib/probe/ledger.ts) so a probe report's
+  // "run completed at" is itself tamper-evident.
+  | "probe.run_started"
+  | "probe.run_completed"
+  | "probe.report_sealed";
 
 // Scope dimensions carried on consent + use events.
 export interface ComplianceScope {

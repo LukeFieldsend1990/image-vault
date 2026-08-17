@@ -104,6 +104,9 @@ const LEDGER_TONE: Record<string, Tone> = {
   "licence.denied": "brick",
   "licence.revoked": "brick",
   "package.attached": "ink",
+  "probe.run_started": "ochre",
+  "probe.run_completed": "ochre",
+  "probe.report_sealed": "olive",
 };
 
 /**

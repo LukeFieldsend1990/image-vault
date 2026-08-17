@@ -52,6 +52,14 @@ binding = "AI"
 # binding = "BROWSER"
 
 # -------------------------------------------------------------------
+# Queue producer — the probe executor re-enqueues its own next batch
+# (resumable probe_batch jobs). Same queue it consumes from.
+# -------------------------------------------------------------------
+[[queues.producers]]
+binding = "PIPELINE_QUEUE"
+queue = "pipeline-jobs"
+
+# -------------------------------------------------------------------
 # Service bindings (worker-to-worker, zero-latency)
 # -------------------------------------------------------------------
 [[services]]
@@ -78,3 +86,13 @@ APP_URL = "https://imagevault.ai"
 # R2_BUCKET_NAME         - defaults to image-vault-scans
 # NOTE: the scans bucket also needs a CORS rule allowing GET from APP_URL,
 # or the render page's cross-origin OBJ/video fetch fails.
+#
+# Model Probe Protocol (optional; probe_batch jobs only):
+# REPLICATE_API_TOKEN          - image generation API
+# REPLICATE_MODEL_VERSION      - base model version id (hosted_model targets)
+# REPLICATE_LORA_MODEL_VERSION - a LoRA-runner version that accepts a `lora` url
+#                                (civitai_lora targets); falls back to the base
+# REPLICATE_PER_IMAGE_USD      - nominal per-image cost for spend recording
+# AWS_ACCESS_KEY_ID            - Rekognition CompareFaces (identity scoring);
+# AWS_SECRET_ACCESS_KEY          absent → identity channel skipped, pHash only
+# AWS_REGION                   - defaults to us-east-1

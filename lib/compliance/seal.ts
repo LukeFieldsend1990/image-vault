@@ -189,8 +189,8 @@ export function mintRef(): string {
   return out.join("");
 }
 
-export type SealKind = "custody_record" | "consent_receipt" | "certificate";
-export type SealSubjectType = "package" | "licence" | "cast" | "talent";
+export type SealKind = "custody_record" | "consent_receipt" | "certificate" | "probe_report";
+export type SealSubjectType = "package" | "licence" | "cast" | "talent" | "probe_run";
 
 export interface MintSealInput {
   kind: SealKind;

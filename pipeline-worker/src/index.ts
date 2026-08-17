@@ -23,6 +23,7 @@ import {
   users,
 } from "./schema";
 import { processDerivedStills } from "./derived-stills";
+import { processProbeBatch } from "./probe";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,10 +43,24 @@ interface Env {
   R2_BUCKET_NAME?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
+  // Model Probe Protocol (optional — probe_batch messages only). Absent, the
+  // executor marks samples failed with a clear message; the rest of the
+  // pipeline is unaffected.
+  PIPELINE_QUEUE?: Queue;
+  REPLICATE_API_TOKEN?: string;
+  REPLICATE_MODEL_VERSION?: string;
+  REPLICATE_LORA_MODEL_VERSION?: string;
+  REPLICATE_PER_IMAGE_USD?: string;
+  AWS_ACCESS_KEY_ID?: string;
+  AWS_SECRET_ACCESS_KEY?: string;
+  AWS_REGION?: string;
 }
 
 /** Bundle-pipeline jobs carry a jobId; task messages discriminate on `task`. */
-type JobMessage = { jobId: string } | { task: "derived_stills"; packageId: string };
+type JobMessage =
+  | { jobId: string }
+  | { task: "derived_stills"; packageId: string }
+  | { task: "probe_batch"; runId: string };
 
 // ── File classification ────────────────────────────────────────────────────
 
@@ -851,6 +866,12 @@ export default {
           // derived_render_jobs and never throws — no retry storms for an
           // enhancement job.
           await processDerivedStills(env, body.packageId);
+        } else if ("task" in body && body.task === "probe_batch") {
+          // Generates + scores one batch of probe samples and re-enqueues the
+          // next, or hands off to the app finalizer by marking the run
+          // 'summarising'. Own error handling per sample; a whole-batch failure
+          // retries via the catch below.
+          await processProbeBatch(env, body.runId);
         } else if ("jobId" in body) {
           await processJob(env, body.jobId);
         }

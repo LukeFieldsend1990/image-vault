@@ -385,3 +385,17 @@ pipeline.
    cleanly can be resolved by hand (vigilance limitation 2).
 7. Media-level crosspost matching for sibling probes, so a re-captioned
    repost still confirms (cross-platform limitation 3).
+
+## Beyond detection: model probing
+
+Detection finds misuse *in the wild*. The complementary question — has a
+generative model actually **learned** a talent's likeness, such that they should
+be paid — is answered by *interrogating the model*, not crawling platforms. That
+is the **Model Probe Protocol** (`lib/probe/`, admin console `/admin/probe`),
+documented in full in [`docs/training-attribution.md`](./training-attribution.md).
+It reuses this stack's primitives — the vault reference set, AWS Rekognition
+CompareFaces, and the pHash derivation index — to score images a model generates,
+against a pre-registered control cohort, and seals the result as a Likeness
+Encoding Report. Note the honest boundary it keeps: name→likeness fidelity proves
+the model *encodes* an identity, not that it was *trained on the vault scans* —
+that stronger claim needs a pHash regurgitation or an unpublished-look match.

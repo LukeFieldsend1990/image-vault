@@ -255,6 +255,84 @@ export const monitorPhashIndex = sqliteTable("monitor_phash_index", {
   createdAt: integer("created_at").notNull(),
 });
 
+// Mirror of the app schema's monitor_reference_images — the probe executor
+// reads probe-grade rows to know which vault stills to score generated images
+// against. Only the columns the worker needs.
+export const monitorReferenceImages = sqliteTable("monitor_reference_images", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  packageId: text("package_id").notNull().references(() => scanPackages.id, { onDelete: "cascade" }),
+  scanFileId: text("scan_file_id").notNull().references(() => scanFiles.id, { onDelete: "cascade" }),
+  r2Key: text("r2_key").notNull(),
+  kind: text("kind", { enum: ["face", "full_body", "unknown"] }).notNull().default("unknown"),
+  status: text("status", { enum: ["active", "rejected"] }).notNull().default("active"),
+  source: text("source", { enum: ["vault_still", "derived_render"] }).notNull().default("vault_still"),
+  probeGrade: integer("probe_grade", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull(),
+});
+
+// Mirror of the app schema's probe_runs / probe_samples / probe_usage — the
+// pipeline worker generates + scores samples and checkpoints progress here.
+// See lib/db/schema.ts for the authoritative definitions and column docs.
+export const probeRuns = sqliteTable("probe_runs", {
+  id: text("id").primaryKey(),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  hitId: text("hit_id"),
+  targetKind: text("target_kind").notNull(),
+  targetRef: text("target_ref").notNull(),
+  targetFileSha256: text("target_file_sha256"),
+  targetMetaJson: text("target_meta_json").notNull().default("{}"),
+  protocolJson: text("protocol_json").notNull().default("{}"),
+  status: text("status").notNull().default("queued"),
+  samplesTotal: integer("samples_total").notNull().default(0),
+  samplesGenerated: integer("samples_generated").notNull().default(0),
+  samplesScored: integer("samples_scored").notNull().default(0),
+  costEstimateUsd: real("cost_estimate_usd").notNull().default(0),
+  costActualUsd: real("cost_actual_usd").notNull().default(0),
+  manifestR2Key: text("manifest_r2_key"),
+  manifestSha256: text("manifest_sha256"),
+  verdictJson: text("verdict_json"),
+  sealRef: text("seal_ref"),
+  error: text("error"),
+  createdBy: text("created_by"),
+  createdAt: integer("created_at").notNull(),
+  completedAt: integer("completed_at"),
+});
+
+export const probeSamples = sqliteTable("probe_samples", {
+  id: text("id").primaryKey(),
+  runId: text("run_id").notNull().references(() => probeRuns.id, { onDelete: "cascade" }),
+  condition: text("condition").notNull(),
+  conditionLabel: text("condition_label"),
+  prompt: text("prompt").notNull(),
+  negativePrompt: text("negative_prompt"),
+  seed: integer("seed").notNull(),
+  providerPredictionId: text("provider_prediction_id"),
+  r2Key: text("r2_key"),
+  imageSha256: text("image_sha256"),
+  rekognitionSimilarity: real("rekognition_similarity"),
+  rekognitionMatches: integer("rekognition_matches"),
+  rekognitionUnmatched: integer("rekognition_unmatched"),
+  phashHex: text("phash_hex"),
+  phashMinDistance: integer("phash_min_distance"),
+  status: text("status").notNull().default("pending"),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+  scoredAt: integer("scored_at"),
+});
+
+export const probeUsage = sqliteTable("probe_usage", {
+  id: text("id").primaryKey(),
+  runId: text("run_id"),
+  talentId: text("talent_id"),
+  provider: text("provider").notNull(),
+  kind: text("kind").notNull(),
+  units: integer("units").notNull().default(0),
+  costUsd: real("cost_usd").notNull().default(0),
+  costEstimated: integer("cost_estimated", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const downloadEvents = sqliteTable("download_events", {
   id: text("id").primaryKey(), // UUID
   licenceId: text("licence_id").references(() => licences.id, { onDelete: "cascade" }), // null for talent's own downloads

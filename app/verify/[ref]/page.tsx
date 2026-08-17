@@ -15,6 +15,7 @@ const KIND_LABEL: Record<SealVerdict["kind"], string> = {
   custody_record: "Chain of custody record",
   consent_receipt: "Consent receipt",
   certificate: "Compliance certificate",
+  probe_report: "Likeness encoding report",
 };
 
 interface Look {

@@ -1712,8 +1712,8 @@ export const ledgerAppendFailures = sqliteTable("ledger_append_failures", {
 export const documentSeals = sqliteTable("document_seals", {
   id: text("id").primaryKey(), // UUID
   ref: text("ref").notNull().unique(), // opaque URL-safe token
-  kind: text("kind", { enum: ["custody_record", "consent_receipt", "certificate"] }).notNull(),
-  subjectType: text("subject_type", { enum: ["package", "licence", "cast", "talent"] }).notNull(),
+  kind: text("kind", { enum: ["custody_record", "consent_receipt", "certificate", "probe_report"] }).notNull(),
+  subjectType: text("subject_type", { enum: ["package", "licence", "cast", "talent", "probe_run"] }).notNull(),
   subjectId: text("subject_id").notNull(),
   subjectLabel: text("subject_label"), // initials + short code ONLY — never a name or email
   chainKeysJson: text("chain_keys_json").notNull().default("[]"),
@@ -1952,6 +1952,11 @@ export const monitorReferenceImages = sqliteTable(
     source: text("source", { enum: ["vault_still", "derived_render"] })
       .notNull()
       .default("vault_still"),
+    // Vetted for model-probe scoring: frontal, single face, well-lit. Probe
+    // runs score against probe-grade references only, so a capture still with
+    // a technician in frame can't corrupt the false-positive baseline. 0 =
+    // unvetted (default), 1 = graded.
+    probeGrade: integer("probe_grade", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at").notNull(),
   },
   (t) => ({
@@ -1985,6 +1990,103 @@ export const monitorPhashIndex = sqliteTable(
   (t) => ({
     uniqKeyAlgo: unique().on(t.r2Key, t.algorithm),
   })
+);
+
+// ── Model Probe Protocol (training-data attribution) ─────────────────────────
+//
+// The monitor finds distributable likeness models; these tables let an admin
+// interrogate one. A run generates a pre-registered set of images from the
+// target, scores each against the vault reference set (Rekognition) and the
+// derivation index (pHash), runs the same generation against control
+// identities, and produces a sealed "Likeness Encoding Report". What a run
+// proves — identity encoding — and what it does not — training on the vault
+// scans specifically — is documented in docs/training-attribution.md.
+
+export const probeRuns = sqliteTable(
+  "probe_runs",
+  {
+    id: text("id").primaryKey(),
+    talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    // The hit that prompted this run, if any. No cascade to deletion — losing
+    // the run when a stale hit is cleaned up would be worse than a dangling id.
+    hitId: text("hit_id").references(() => likenessHits.id, { onDelete: "set null" }),
+    targetKind: text("target_kind", { enum: ["civitai_lora", "hosted_model"] }).notNull(),
+    targetRef: text("target_ref").notNull(), // "modelId@versionId" | hosted slug
+    // The probed file's own SHA-256 where the provider publishes one — locks
+    // which artifact was tested. Null for hosted models with no exposed hash.
+    targetFileSha256: text("target_file_sha256"),
+    targetMetaJson: text("target_meta_json").notNull().default("{}"),
+    // The full pre-registered design, captured at creation for reproducibility.
+    protocolJson: text("protocol_json").notNull().default("{}"),
+    status: text("status", {
+      enum: ["queued", "generating", "scoring", "summarising", "complete", "failed"],
+    })
+      .notNull()
+      .default("queued"),
+    // Resumable-batch checkpoint.
+    samplesTotal: integer("samples_total").notNull().default(0),
+    samplesGenerated: integer("samples_generated").notNull().default(0),
+    samplesScored: integer("samples_scored").notNull().default(0),
+    costEstimateUsd: real("cost_estimate_usd").notNull().default(0),
+    costActualUsd: real("cost_actual_usd").notNull().default(0),
+    manifestR2Key: text("manifest_r2_key"),
+    manifestSha256: text("manifest_sha256"),
+    verdictJson: text("verdict_json"),
+    sealRef: text("seal_ref"),
+    error: text("error"),
+    createdBy: text("created_by").references(() => users.id),
+    createdAt: integer("created_at").notNull(),
+    completedAt: integer("completed_at"),
+  }
+);
+
+export const probeSamples = sqliteTable(
+  "probe_samples",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id").notNull().references(() => probeRuns.id, { onDelete: "cascade" }),
+    // target — actor name/trigger (the condition under test); control_distractor
+    // — a matched fictitious name (scorer false-positive rate); control_baseline
+    // — descriptors only (the model's default face).
+    condition: text("condition", {
+      enum: ["target", "control_distractor", "control_baseline"],
+    }).notNull(),
+    conditionLabel: text("condition_label"),
+    prompt: text("prompt").notNull(),
+    negativePrompt: text("negative_prompt"),
+    seed: integer("seed").notNull(),
+    providerPredictionId: text("provider_prediction_id"),
+    r2Key: text("r2_key"),
+    imageSha256: text("image_sha256"),
+    rekognitionSimilarity: real("rekognition_similarity"), // 0-1, null = not measured
+    rekognitionMatches: integer("rekognition_matches"),
+    rekognitionUnmatched: integer("rekognition_unmatched"),
+    phashHex: text("phash_hex"),
+    phashMinDistance: integer("phash_min_distance"), // <=16 reads as regurgitation
+    status: text("status", { enum: ["pending", "generated", "scored", "failed"] })
+      .notNull()
+      .default("pending"),
+    error: text("error"),
+    createdAt: integer("created_at").notNull(),
+    scoredAt: integer("scored_at"),
+  }
+);
+
+// Every billed generation/scoring call, one row — real spend, not an estimate,
+// so the probe budget ceiling is an actual limit. Mirrors apifyUsage.
+export const probeUsage = sqliteTable(
+  "probe_usage",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id").references(() => probeRuns.id, { onDelete: "set null" }),
+    talentId: text("talent_id").references(() => users.id, { onDelete: "set null" }),
+    provider: text("provider").notNull(), // replicate | rekognition
+    kind: text("kind").notNull(), // generation | face_compare
+    units: integer("units").notNull().default(0),
+    costUsd: real("cost_usd").notNull().default(0),
+    costEstimated: integer("cost_estimated", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at").notNull(),
+  }
 );
 
 // Body-geometry context from full-body scan meshes: relative proportions

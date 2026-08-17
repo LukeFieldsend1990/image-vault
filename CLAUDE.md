@@ -255,6 +255,8 @@ Key secrets: `JWT_SECRET`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `TMDB_API_KEY`
 
 The deepfake-detection stack (detector signals, vault-anchored reference set, synthetic-media checks) is documented in `docs/deepfake-detection.md` — including its **known limitations and open questions**; read that before extending `lib/monitor/` detection layers, and keep it current.
 
+The **Model Probe Protocol** (`lib/probe/`, admin console `/admin/probe`, executor in `pipeline-worker/src/probe.ts`) is the training-data-attribution counterpart: it interrogates a generative model (a Civitai LoRA or a hosted model) to test whether it encodes a talent's likeness, scoring generated images against the vault reference set (Rekognition) and pHash index versus a pre-registered control cohort, then seals a **Likeness Encoding Report** verifiable at `/verify/[ref]`. Its evidence boundary and phased roadmap are in `docs/training-attribution.md` — read and keep it current before extending `lib/probe/`. Probe spend has its own budget (`probe_budget_usd` in `aiSettings`), separate from the `callAi` ceiling.
+
 ## Workers
 
 | Worker | Queue | Purpose |

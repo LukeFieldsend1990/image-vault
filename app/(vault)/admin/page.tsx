@@ -187,6 +187,12 @@ export default async function AdminOverviewPage() {
       sub: "provision · invite agents",
       href: "/admin/agencies",
     },
+    {
+      label: "Model Probe",
+      value: "Likeness",
+      sub: "training-data attribution",
+      href: "/admin/probe",
+    },
   ];
 
   return (
