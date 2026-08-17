@@ -44,7 +44,12 @@ import {
 import { hasAiIntent, hashtagsHaveAiIntent, planWatchlistHarvest, queryImpliesAiIntent } from "./ingest/queries";
 import { apifyToken, type ActorBudget } from "./ingest/apify";
 import { discoverInstagram, preFilter } from "./ingest/instagram";
-import { checkApifyBudget, logApifyUsage } from "./ingest/budget";
+import {
+  checkApifyBudget,
+  clearApifyCreditsExhausted,
+  logApifyUsage,
+  noteApifyCreditsExhausted,
+} from "./ingest/budget";
 import { discoverYouTube, youtubeApiKey } from "./ingest/youtube";
 import { discoverTikTok } from "./ingest/tiktok";
 import { discoverX } from "./ingest/x";
@@ -649,6 +654,11 @@ async function discoverCandidates(
     };
   }
 
+  // Set when any surface stops because Apify itself refused runs (402) —
+  // distinct from our internal ceiling, which is a choice rather than a wall.
+  let creditsStopSeen = false;
+  const CREDITS_STOP = "Apify account out of credits";
+
   // One spend gate + usage ledger shared by every Apify-backed surface below.
   const budget: ActorBudget = {
     check: async () => {
@@ -668,6 +678,11 @@ async function discoverCandidates(
         status: entry.status,
         error: entry.error ?? null,
       });
+      // A successful run proves the account has credits — clear any standing
+      // exhaustion marker so the admin banner comes down after a top-up.
+      if (entry.status === "succeeded") {
+        await clearApifyCreditsExhausted(db).catch(() => {});
+      }
       // Account harvests feed the harvest log: the next sweep skips this
       // handle for the cooldown window and, after that, asks the actor only
       // for posts newer than now. Account mode is Instagram-only today.
@@ -748,6 +763,7 @@ async function discoverCandidates(
 
     // A sweep cut short mid-way still produced real candidates, so it is not an
     // error — but the talent must not read it as full coverage.
+    if (diagnostics.budgetStopped === CREDITS_STOP) creditsStopSeen = true;
     if (diagnostics.budgetStopped && !diagnostics.fatalError) {
       console.warn(
         `[monitor] sweep for ${opts.talentId} stopped early: ${diagnostics.budgetStopped} ` +
@@ -769,6 +785,7 @@ async function discoverCandidates(
       const tt = await discoverTikTok({ token, anchor: opts.anchor, learnedHashtags, budget });
       const { kept } = preFilter(tt.candidates, filterOpts);
       tiktok.push(...kept);
+      if (tt.budgetStopped === CREDITS_STOP) creditsStopSeen = true;
       if (tt.budgetStopped) {
         console.warn(
           `[monitor] TikTok sweep for ${opts.talentId} stopped early: ${tt.budgetStopped}`
@@ -788,6 +805,7 @@ async function discoverCandidates(
       const res = await discoverX({ token, anchor: opts.anchor, budget });
       const { kept } = preFilter(res.candidates, filterOpts);
       xCandidates.push(...kept);
+      if (res.budgetStopped === CREDITS_STOP) creditsStopSeen = true;
       if (res.budgetStopped) {
         console.warn(`[monitor] X sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`);
       }
@@ -802,6 +820,7 @@ async function discoverCandidates(
       const res = await discoverPinterest({ token, anchor: opts.anchor, budget });
       const { kept } = preFilter(res.candidates, filterOpts);
       pinterest.push(...kept);
+      if (res.budgetStopped === CREDITS_STOP) creditsStopSeen = true;
       if (res.budgetStopped) {
         console.warn(
           `[monitor] Pinterest sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`
@@ -840,6 +859,14 @@ async function discoverCandidates(
     ...serp,
     ...aiPlatforms,
   ];
+
+  // A credits stop anywhere in the sweep marks the account exhausted, so the
+  // admin panel can say "Apify is refusing runs" instead of showing ledger
+  // headroom that does not exist. Cleared by the next successful run.
+  if (creditsStopSeen) {
+    await noteApifyCreditsExhausted(db).catch(() => {});
+  }
+
   return {
     candidates: combined,
     discoveryError: combined.length ? null : instagramFatal,

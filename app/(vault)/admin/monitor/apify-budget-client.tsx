@@ -26,10 +26,16 @@ interface UsageRun {
   createdAt: number;
 }
 
+type AccountUsage =
+  | { available: true; monthlyUsageUsd: number; maxMonthlyUsageUsd: number | null }
+  | { available: false; reason: string };
+
 interface Payload {
   budget: Budget;
   runs: UsageRun[];
   byTalent: Array<{ talentId: string | null; cost: number; runs: number }>;
+  account?: AccountUsage;
+  creditsExhaustedAt?: number | null;
 }
 
 const usd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
@@ -111,8 +117,61 @@ export default function ApifyBudgetClient() {
   const pct = budget.ceiling > 0 ? Math.min(100, (budget.spent / budget.ceiling) * 100) : 0;
   const barColor = budget.exhausted ? "#dc2626" : pct > 75 ? "#d97706" : "var(--color-accent)";
 
+  const account = data.account;
+
   return (
     <div className="space-y-8">
+      {/* ── Apify said no: the account itself is out of credits ── */}
+      {data.creditsExhaustedAt ? (
+        <div
+          className="rounded-md border px-5 py-4"
+          style={{ background: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.3)" }}
+        >
+          <p className="text-sm font-semibold" style={{ color: "#dc2626" }}>
+            Apify is refusing runs — the account is out of credits
+          </p>
+          <p className="text-xs mt-1" style={{ color: "var(--color-muted)" }}>
+            Last refusal {when(data.creditsExhaustedAt)}. The ledger below only counts runs this app
+            booked, so it can show headroom the account no longer has. Top up (or wait for the
+            monthly reset) — this banner clears on the next successful run.
+          </p>
+        </div>
+      ) : null}
+
+      {/* ── The account's real usage, from Apify itself ── */}
+      {account && (
+        <div
+          className="rounded-md border px-5 py-4"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+        >
+          {account.available ? (
+            <div className="flex items-baseline justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
+                  Apify account usage this cycle
+                </p>
+                <p className="font-mono text-xl mt-1" style={{ color: "var(--color-ink)" }}>
+                  {usd(account.monthlyUsageUsd)}
+                  {account.maxMonthlyUsageUsd !== null && (
+                    <span className="text-base" style={{ color: "var(--color-muted)" }}>
+                      {" "}/ {usd(account.maxMonthlyUsageUsd)}
+                    </span>
+                  )}
+                </p>
+              </div>
+              <p className="text-xs max-w-xs text-right" style={{ color: "var(--color-muted)" }}>
+                Apify&rsquo;s own figure — includes runs, proxy and storage the ledger below never sees.
+                This is the number that decides whether the next run is refused.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+              Account-level usage unavailable: {account.reason}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ── Spend against ceiling ── */}
       <div
         className="rounded-md border p-5 space-y-4"
@@ -147,9 +206,10 @@ export default function ApifyBudgetClient() {
 
         <p className="text-xs" style={{ color: "var(--color-muted)" }}>
           Checked before every actor run, not once per sweep — a sweep issues up to a dozen runs and stops
-          mid-way when the ceiling is hit. Costs are Apify&rsquo;s own <code>usageTotalUsd</code> per run, so
-          this total is what they bill. This is a second line of defence: the authoritative cap is the max
-          spend setting in the Apify console.
+          mid-way when the ceiling is hit. This counts <em>only runs this app booked</em>: admin tools that
+          ran actors before 2026-08 went unbooked, and Apify also bills proxy, storage and platform
+          overheads that never appear here — so real credit burn runs ahead of this figure. The
+          authoritative number is the account usage above (and the max spend setting in the Apify console).
         </p>
       </div>
 

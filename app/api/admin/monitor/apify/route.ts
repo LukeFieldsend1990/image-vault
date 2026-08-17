@@ -7,8 +7,12 @@ import {
   APIFY_CEILING_KEY,
   APIFY_ENABLED_KEY,
   APIFY_SINCE_KEY,
+  getApifyAccountUsage,
   getApifyBudget,
+  getApifyCreditsExhaustedAt,
 } from "@/lib/monitor/ingest/budget";
+import { apifyToken } from "@/lib/monitor/ingest/apify";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { desc, eq, sql } from "drizzle-orm";
 
 async function guard(req: NextRequest) {
@@ -38,6 +42,22 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   const budget = await getApifyBudget(db);
 
+  // The account's real usage, straight from Apify — the internal ledger only
+  // sees runs this app booked, and 2026-08-17 proved those can diverge far
+  // enough for the panel to show headroom while Apify refuses runs.
+  let token: string | null = null;
+  try {
+    token = apifyToken(getCloudflareContext().env as { APIFY_TOKEN?: string });
+  } catch {
+    token = apifyToken({ APIFY_TOKEN: process.env.APIFY_TOKEN });
+  }
+  const [account, creditsExhaustedAt] = await Promise.all([
+    token
+      ? getApifyAccountUsage(token)
+      : Promise.resolve({ available: false as const, reason: "APIFY_TOKEN is not configured." }),
+    getApifyCreditsExhaustedAt(db),
+  ]);
+
   const [runs, byTalent] = await Promise.all([
     db.select().from(apifyUsage).orderBy(desc(apifyUsage.createdAt)).limit(50).all(),
     db
@@ -54,7 +74,7 @@ export async function GET(req: NextRequest) {
       .all(),
   ]);
 
-  return NextResponse.json({ budget, runs, byTalent });
+  return NextResponse.json({ budget, runs, byTalent, account, creditsExhaustedAt });
 }
 
 // PATCH /api/admin/monitor/apify — { ceilingUsd?: number, enabled?: boolean }

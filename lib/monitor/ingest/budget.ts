@@ -29,6 +29,7 @@ type Db = ReturnType<typeof getDb>;
 export const APIFY_ENABLED_KEY = "apify_enabled";
 export const APIFY_CEILING_KEY = "apify_budget_ceiling_usd";
 export const APIFY_SINCE_KEY = "apify_budget_since";
+export const APIFY_CREDITS_EXHAUSTED_KEY = "apify_credits_exhausted_at";
 
 /** Conservative default while testing. Overridable from /admin/monitor. */
 export const DEFAULT_APIFY_CEILING_USD = 5.0;
@@ -153,6 +154,100 @@ export async function checkApifyBudget(db: Db, projectedCost = 0): Promise<Budge
     };
   }
   return { ok: true, reason: null, state };
+}
+
+// ── Credits-exhaustion marker ────────────────────────────────────────────────
+//
+// The internal ledger only sees runs this app booked; the Apify account also
+// burns credit on unbooked runs, proxy, storage and estimate drift. Observed
+// live (2026-08-17): the panel showed $2.02 of a $5.00 ceiling while Apify was
+// refusing runs with 402. When a 402 lands we write the moment down, and the
+// admin panel shows it in red until a later run succeeds — a signal that works
+// regardless of what the ledger believes or what the token may read.
+
+/** Record that Apify refused a run for lack of credits. */
+export async function noteApifyCreditsExhausted(db: Db): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const existing = await readSetting(db, APIFY_CREDITS_EXHAUSTED_KEY);
+  if (existing) {
+    await db
+      .update(aiSettings)
+      .set({ value: String(now), updatedAt: now })
+      .where(eq(aiSettings.key, APIFY_CREDITS_EXHAUSTED_KEY));
+  } else {
+    await db.insert(aiSettings).values({
+      key: APIFY_CREDITS_EXHAUSTED_KEY,
+      value: String(now),
+      updatedBy: null,
+      updatedAt: now,
+    });
+  }
+}
+
+/** A run succeeded, so the account has credits again — clear the marker. */
+export async function clearApifyCreditsExhausted(db: Db): Promise<void> {
+  await db.delete(aiSettings).where(eq(aiSettings.key, APIFY_CREDITS_EXHAUSTED_KEY));
+}
+
+export async function getApifyCreditsExhaustedAt(db: Db): Promise<number | null> {
+  const raw = await readSetting(db, APIFY_CREDITS_EXHAUSTED_KEY);
+  const parsed = parseInt(raw ?? "", 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+// ── Account-level usage (Apify's own numbers) ───────────────────────────────
+
+export type ApifyAccountUsage =
+  | { available: true; monthlyUsageUsd: number; maxMonthlyUsageUsd: number | null }
+  | { available: false; reason: string };
+
+/**
+ * The account's real usage for the current billing cycle, from Apify's
+ * /users/me/limits. This is the figure the internal ledger cannot see —
+ * unbooked runs, proxy, storage — and the one that actually decides whether
+ * the next run is refused. Requires a token with the "User: read" permission;
+ * scoped run-only tokens get a clear unavailable reason instead of an error.
+ */
+export async function getApifyAccountUsage(token: string): Promise<ApifyAccountUsage> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch("https://api.apify.com/v2/users/me/limits", {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+    if (res.status === 401 || res.status === 403) {
+      return {
+        available: false,
+        reason: "Token cannot read account usage — mint one with the \"User: read\" permission to see real credit burn here.",
+      };
+    }
+    if (!res.ok) {
+      return { available: false, reason: `Apify returned ${res.status} for account usage.` };
+    }
+    const body = (await res.json()) as {
+      data?: {
+        current?: { monthlyUsageUsd?: number };
+        limits?: { maxMonthlyUsageUsd?: number };
+      };
+    };
+    const used = body.data?.current?.monthlyUsageUsd;
+    if (typeof used !== "number") {
+      return { available: false, reason: "Apify account usage response had no usage figure." };
+    }
+    return {
+      available: true,
+      monthlyUsageUsd: used,
+      maxMonthlyUsageUsd:
+        typeof body.data?.limits?.maxMonthlyUsageUsd === "number"
+          ? body.data.limits.maxMonthlyUsageUsd
+          : null,
+    };
+  } catch {
+    return { available: false, reason: "Could not reach Apify for account usage." };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export interface ApifyUsageEntry {
