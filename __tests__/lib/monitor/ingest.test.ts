@@ -12,6 +12,7 @@ import {
   hashtagsHaveAiIntent,
   nameSlug,
   nameVariants,
+  planWatchlistHarvest,
   queryImpliesAiIntent,
   rosterHashtagQueries,
 } from "@/lib/monitor/ingest/queries";
@@ -104,6 +105,61 @@ describe("query planning", () => {
 });
 
 // ── AI intent ────────────────────────────────────────────────────────────────
+
+describe("watchlist harvest planning", () => {
+  const now = 1_700_000_000;
+  const hours = (n: number) => n * 3600;
+
+  it("skips handles harvested inside the cooldown", () => {
+    const plan = planWatchlistHarvest(
+      [
+        { handle: "fresh", lastHarvestedAt: now - hours(2) },
+        { handle: "stale", lastHarvestedAt: now - hours(200) },
+        { handle: "never", lastHarvestedAt: null },
+      ],
+      { nowUnix: now, cooldownHours: 168, cap: 20 }
+    );
+    expect(plan.handles).toEqual(["never", "stale"]);
+    expect(plan.skipped).toEqual(["fresh"]);
+  });
+
+  it("rotates stalest-first under the cap so every account is reached across sweeps", () => {
+    const plan = planWatchlistHarvest(
+      [
+        { handle: "a", lastHarvestedAt: now - hours(300) },
+        { handle: "b", lastHarvestedAt: now - hours(400) },
+        { handle: "c", lastHarvestedAt: null },
+      ],
+      { nowUnix: now, cooldownHours: 168, cap: 2 }
+    );
+    // Never-harvested first, then oldest harvest; the freshest end is trimmed.
+    expect(plan.handles).toEqual(["c", "b"]);
+  });
+
+  it("carries a newer-than date for previously harvested handles only", () => {
+    const plan = planWatchlistHarvest(
+      [
+        { handle: "@Seen", lastHarvestedAt: now - hours(200) },
+        { handle: "new_account", lastHarvestedAt: null },
+      ],
+      { nowUnix: now, cooldownHours: 168, cap: 20 }
+    );
+    expect(plan.newerThan["seen"]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(plan.newerThan["new_account"]).toBeUndefined();
+  });
+
+  it("normalises and dedupes handles", () => {
+    const plan = planWatchlistHarvest(
+      [
+        { handle: "@Dupe", lastHarvestedAt: null },
+        { handle: "dupe", lastHarvestedAt: null },
+        { handle: "  ", lastHarvestedAt: null },
+      ],
+      { nowUnix: now, cooldownHours: 168, cap: 20 }
+    );
+    expect(plan.handles).toEqual(["dupe"]);
+  });
+});
 
 describe("AI intent detection", () => {
   it("reads intent out of prose", () => {

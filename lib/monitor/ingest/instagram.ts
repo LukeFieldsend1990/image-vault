@@ -230,6 +230,13 @@ export interface DiscoveryDiagnostics {
 
 export interface DiscoverInstagramOptions extends PreFilterOptions, DiscoveryPlanOptions {
   token: string;
+  /**
+   * Per-handle ISO date (YYYY-MM-DD) for account harvests: the actor only
+   * returns posts newer than this, so a re-harvest bills new posts instead of
+   * re-buying the whole profile. Built by planWatchlistHarvest from the
+   * harvest log; handles absent from the map are harvested in full.
+   */
+  accountNewerThan?: Record<string, string>;
   /** Per-run ceiling handed to Apify, so a runaway actor cannot bill freely. */
   maxItemsPerQuery?: number;
   signal?: AbortSignal;
@@ -253,7 +260,10 @@ export interface DiscoverInstagramOptions extends PreFilterOptions, DiscoveryPla
   };
 }
 
-function actorInputFor(query: DiscoveryQuery): { actorId: string; input: Record<string, unknown> } | null {
+function actorInputFor(
+  query: DiscoveryQuery,
+  newerThan?: string
+): { actorId: string; input: Record<string, unknown> } | null {
   switch (query.mode) {
     case "hashtag":
       return {
@@ -272,6 +282,9 @@ function actorInputFor(query: DiscoveryQuery): { actorId: string; input: Record<
           directUrls: [`https://www.instagram.com/${query.value}/`],
           resultsType: "posts",
           resultsLimit: query.resultsLimit,
+          // Incremental harvest: only posts since the last harvest (with
+          // overlap) are returned and billed. Omitted on first harvest.
+          ...(newerThan ? { onlyPostsNewerThan: newerThan } : {}),
         },
       };
     default:
@@ -304,7 +317,10 @@ export async function discoverInstagram(
   const failures: string[] = [];
 
   for (const query of plan) {
-    const spec = actorInputFor(query);
+    const spec = actorInputFor(
+      query,
+      query.mode === "account" ? opts.accountNewerThan?.[query.value] : undefined
+    );
     if (!spec) continue;
 
     // Gate immediately before each run, never once for the sweep.
