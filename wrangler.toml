@@ -3,6 +3,13 @@ main = ".open-next/worker.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Persistent Workers Logs. Likeness sweeps run as background work whose
+# console.warn diagnostics — and whose isolate-kill outcomes (exceededCpu,
+# OOM, eviction) — were previously observable only through a live `wrangler
+# tail`. Silent sweep deaths (2026-08-17) motivated turning this on.
+[observability]
+enabled = true
+
 # Static assets emitted by the OpenNext build (replaces Pages' pages_build_output_dir).
 [assets]
 directory = ".open-next/assets"

@@ -24,6 +24,7 @@ export const ACTORS = {
 
 export type ApifyFailureReason =
   | "auth"
+  | "credits"
   | "run_failed"
   | "timeout"
   | "network"
@@ -95,15 +96,36 @@ export interface RunActorOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Ceiling on any single HTTP round-trip to Apify. The API normally answers in
+ * milliseconds; a request that hangs (observed on out-of-credit accounts) used
+ * to stall the whole sweep inside waitUntil until the isolate was silently
+ * reclaimed — leaving the scan "running" forever with nothing recorded.
+ */
+const APIFY_FETCH_TIMEOUT_MS = 30_000;
+
 async function apifyFetch(url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), APIFY_FETCH_TIMEOUT_MS);
+  const onAbort = () => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", onAbort, { once: true });
+
   let res: Response;
   try {
-    res = await fetch(url, { ...init, signal });
+    res = await fetch(url, { ...init, signal: controller.signal });
   } catch (err) {
     throw new ApifyError("network", `Apify request failed: ${(err as Error).message}`);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
   }
   if (res.status === 401 || res.status === 403) {
     throw new ApifyError("auth", "Apify rejected the token (401/403)");
+  }
+  if (res.status === 402) {
+    // Out of platform credits. Every subsequent run in the sweep will be
+    // refused identically, so callers should stop the discovery loop.
+    throw new ApifyError("credits", "Apify refused the run: account is out of credits (402)");
   }
   if (!res.ok) {
     throw new ApifyError("bad_response", `Apify returned ${res.status} for ${new URL(url).pathname}`);

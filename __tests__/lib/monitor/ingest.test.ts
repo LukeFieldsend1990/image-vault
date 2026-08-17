@@ -348,6 +348,13 @@ describe("Apify client", () => {
     });
   });
 
+  it("surfaces an exhausted-credits refusal distinctly so the sweep stops discovery", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("payment required", { status: 402 })));
+    await expect(runActor({ token: "t", actorId: "apify~x", input: {} })).rejects.toMatchObject({
+      reason: "credits",
+    });
+  });
+
   it("fails the run rather than silently returning nothing", async () => {
     vi.stubGlobal(
       "fetch",
