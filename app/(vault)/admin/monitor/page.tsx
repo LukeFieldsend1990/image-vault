@@ -5,6 +5,7 @@ import WatchlistClient from "./watchlist-client";
 import TakedownsClient from "./takedowns-client";
 import FunnelCandidatesClient from "./funnel-candidates-client";
 import CronClient from "./cron-client";
+import SweepsClient from "./sweeps-client";
 import PlatformsClient from "./platforms-client";
 import VigilanceClient from "./vigilance-client";
 import CrossPlatformClient from "./cross-platform-client";
@@ -34,6 +35,10 @@ export default async function AdminMonitorPage() {
       </div>
 
       <CronClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
+
+      <SweepsClient />
 
       <hr style={{ borderColor: "var(--color-border)" }} />
 
