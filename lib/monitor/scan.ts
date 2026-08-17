@@ -14,6 +14,7 @@ import {
   likenessMonitors,
   monitorScans,
   monitorAccounts,
+  monitorHarvests,
   likenessHits,
   talentProfiles,
   scanPackages,
@@ -40,7 +41,7 @@ import {
   type MonitorScope,
   type TalentIdentityAnchor,
 } from "./types";
-import { hasAiIntent, hashtagsHaveAiIntent, queryImpliesAiIntent } from "./ingest/queries";
+import { hasAiIntent, hashtagsHaveAiIntent, planWatchlistHarvest, queryImpliesAiIntent } from "./ingest/queries";
 import { apifyToken, type ActorBudget } from "./ingest/apify";
 import { discoverInstagram, preFilter } from "./ingest/instagram";
 import { checkApifyBudget, logApifyUsage } from "./ingest/budget";
@@ -654,8 +655,8 @@ async function discoverCandidates(
       const v = await checkApifyBudget(db);
       return { ok: v.ok, reason: v.reason };
     },
-    record: (entry) =>
-      logApifyUsage(db, {
+    record: async (entry) => {
+      await logApifyUsage(db, {
         runId: entry.runId,
         actorId: entry.actorId,
         mode: entry.mode,
@@ -666,25 +667,71 @@ async function discoverCandidates(
         costUsd: entry.costUsd,
         status: entry.status,
         error: entry.error ?? null,
-      }),
+      });
+      // Account harvests feed the harvest log: the next sweep skips this
+      // handle for the cooldown window and, after that, asks the actor only
+      // for posts newer than now. Account mode is Instagram-only today.
+      if (entry.mode === "account" && entry.status === "succeeded") {
+        const ts = Math.floor(Date.now() / 1000);
+        await db
+          .insert(monitorHarvests)
+          .values({
+            id: crypto.randomUUID(),
+            platform: "instagram",
+            handle: entry.query.replace(/^@/, "").trim().toLowerCase(),
+            lastHarvestedAt: ts,
+            lastItemCount: entry.itemCount,
+          })
+          .onConflictDoUpdate({
+            target: [monitorHarvests.platform, monitorHarvests.handle],
+            set: { lastHarvestedAt: ts, lastItemCount: entry.itemCount },
+          });
+      }
+    },
   };
 
   // ── Instagram ─────────────────────────────────────────────────────────────
   let instagram: CandidateContent[] = [];
   let instagramFatal: string | null = null;
   if (on("instagram")) {
-    // Known offenders are re-harvested every sweep — the repost-after-takedown
-    // pattern is invisible to hashtag discovery. Seeded AI-content accounts join
-    // them: content on those accounts routinely carries no hashtags at all.
+    // Known offenders are re-harvested on the admin's re-harvest cadence — the
+    // repost-after-takedown pattern is invisible to hashtag discovery. Seeded
+    // AI-content accounts join them: content on those accounts routinely
+    // carries no hashtags at all. Handles harvested within the cooldown are
+    // skipped, the rest rotate stalest-first, and previously harvested handles
+    // are fetched incrementally (onlyPostsNewerThan) — re-sweeping the full
+    // watchlist every scan was re-billing the identical posts each time.
     const watched = await db
       .select({ handle: monitorAccounts.handle })
       .from(monitorAccounts)
       .where(and(eq(monitorAccounts.platform, "instagram"), eq(monitorAccounts.status, "watchlist")))
-      .limit(20)
+      .limit(100)
       .all();
-    const watchedHandles = [
-      ...new Set([...watched.map((w) => w.handle), ...seedHandlesFor("instagram")]),
-    ];
+    const reharvestRow = await db
+      .select({ value: aiSettings.value })
+      .from(aiSettings)
+      .where(eq(aiSettings.key, "watchlist_reharvest_hours"))
+      .get();
+    const cooldownHours = Math.max(1, parseInt(reharvestRow?.value ?? "", 10) || 168);
+    const harvestLog = await db
+      .select({ handle: monitorHarvests.handle, lastHarvestedAt: monitorHarvests.lastHarvestedAt })
+      .from(monitorHarvests)
+      .where(eq(monitorHarvests.platform, "instagram"))
+      .all();
+    const lastHarvest = new Map(harvestLog.map((h) => [h.handle, h.lastHarvestedAt]));
+    const harvestPlan = planWatchlistHarvest(
+      [...new Set([...watched.map((w) => w.handle), ...seedHandlesFor("instagram")])].map((h) => ({
+        handle: h,
+        lastHarvestedAt: lastHarvest.get(h.replace(/^@/, "").trim().toLowerCase()) ?? null,
+      })),
+      { nowUnix: Math.floor(Date.now() / 1000), cooldownHours, cap: 20 }
+    );
+    if (harvestPlan.skipped.length) {
+      console.log(
+        `[monitor] instagram watchlist: ${harvestPlan.handles.length} handle(s) due, ` +
+          `${harvestPlan.skipped.length} inside the ${cooldownHours}h re-harvest cooldown`
+      );
+    }
 
     const { candidates, diagnostics } = await discoverInstagram({
       token,
@@ -692,7 +739,8 @@ async function discoverCandidates(
       scope: opts.scope,
       allowlist: opts.allowlist,
       seenUrls: previousUrls,
-      watchedHandles,
+      watchedHandles: harvestPlan.handles,
+      accountNewerThan: harvestPlan.newerThan,
       budget,
     });
     instagram = candidates;

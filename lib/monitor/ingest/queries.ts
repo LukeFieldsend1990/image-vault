@@ -188,8 +188,75 @@ export function nameVariants(fullName: string): string[] {
   return [...variants];
 }
 
+export interface WatchlistHarvestInput {
+  handle: string;
+  /** Unix seconds of the last successful harvest; null if never harvested. */
+  lastHarvestedAt: number | null;
+}
+
+export interface WatchlistHarvestPlan {
+  /** Handles to harvest this sweep, stalest first. */
+  handles: string[];
+  /** Per-handle ISO date (YYYY-MM-DD) for the actor's onlyPostsNewerThan. */
+  newerThan: Record<string, string>;
+  /** Handles skipped because their last harvest is within the cooldown. */
+  skipped: string[];
+}
+
+/**
+ * Overlap subtracted from the last-harvest time when asking the actor for
+ * "posts newer than" — late-indexed or edited posts near the boundary get a
+ * second look, and the pre-filter drops any re-surfaced duplicates for free.
+ */
+const HARVEST_OVERLAP_SECONDS = 48 * 3600;
+
+/**
+ * Decide which watched accounts this sweep actually harvests.
+ *
+ * Re-scraping every watched handle in full every sweep bills the same posts
+ * over and over (observed: identical item counts from the same account across
+ * sweeps). Instead: handles inside the cooldown window are skipped, the rest
+ * go stalest-first under the cap so the whole watchlist rotates across sweeps,
+ * and previously harvested handles carry a newer-than date so the actor only
+ * returns (and bills) posts we have not seen.
+ */
+export function planWatchlistHarvest(
+  accounts: WatchlistHarvestInput[],
+  opts: { nowUnix: number; cooldownHours: number; cap: number }
+): WatchlistHarvestPlan {
+  const cutoff = opts.nowUnix - opts.cooldownHours * 3600;
+
+  const seen = new Set<string>();
+  const eligible: WatchlistHarvestInput[] = [];
+  const skipped: string[] = [];
+  for (const a of accounts) {
+    const handle = a.handle.replace(/^@/, "").trim().toLowerCase();
+    if (!handle || seen.has(handle)) continue;
+    seen.add(handle);
+    if (a.lastHarvestedAt !== null && a.lastHarvestedAt > cutoff) {
+      skipped.push(handle);
+    } else {
+      eligible.push({ handle, lastHarvestedAt: a.lastHarvestedAt });
+    }
+  }
+
+  // Never-harvested first, then oldest harvest first: the cap trims the
+  // freshest end, so every account is reached within a few sweeps.
+  eligible.sort((a, b) => (a.lastHarvestedAt ?? 0) - (b.lastHarvestedAt ?? 0));
+  const chosen = eligible.slice(0, Math.max(0, opts.cap));
+
+  const newerThan: Record<string, string> = {};
+  for (const a of chosen) {
+    if (a.lastHarvestedAt === null) continue;
+    const since = new Date((a.lastHarvestedAt - HARVEST_OVERLAP_SECONDS) * 1000);
+    newerThan[a.handle] = since.toISOString().slice(0, 10);
+  }
+
+  return { handles: chosen.map((a) => a.handle), newerThan, skipped };
+}
+
 export interface DiscoveryPlanOptions {
-  /** Handles already on the watchlist — harvested in full every sweep. */
+  /** Watched handles due for harvest this sweep (see planWatchlistHarvest). */
   watchedHandles?: string[];
   /** Cap on total queries, to keep per-sweep spend predictable. */
   maxQueries?: number;

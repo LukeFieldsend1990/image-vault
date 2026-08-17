@@ -1626,6 +1626,28 @@ export const monitorAccountLinks = sqliteTable(
   })
 );
 
+/**
+ * Account-harvest log, one row per (platform, handle) — watchlist and seeded
+ * handles alike. Powers the re-harvest cooldown (skip handles harvested within
+ * watchlist_reharvest_hours) and incremental harvesting (only posts newer than
+ * the last harvest are requested from the actor, so re-sweeps stop re-billing
+ * the same posts). Deliberately separate from monitorAccounts: seeds are not
+ * offenders, and a harvest is not a sighting.
+ */
+export const monitorHarvests = sqliteTable(
+  "monitor_harvests",
+  {
+    id: text("id").primaryKey(),
+    platform: text("platform").notNull(),
+    handle: text("handle").notNull(),
+    lastHarvestedAt: integer("last_harvested_at").notNull(),
+    lastItemCount: integer("last_item_count").notNull().default(0),
+  },
+  (t) => ({
+    uniqHarvest: unique().on(t.platform, t.handle),
+  })
+);
+
 export const monitorScans = sqliteTable("monitor_scans", {
   id: text("id").primaryKey(),
   monitorId: text("monitor_id").notNull().references(() => likenessMonitors.id, { onDelete: "cascade" }),
