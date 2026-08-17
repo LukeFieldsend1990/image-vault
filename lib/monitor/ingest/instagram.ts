@@ -363,8 +363,13 @@ export async function discoverInstagram(
         costUsd += apifyErr.costUsd ?? 0; // failed runs return no items to estimate from
       }
 
-      // An auth failure will hit every remaining query identically; stop paying
-      // the latency cost of proving that.
+      // An auth or out-of-credits failure will hit every remaining query
+      // identically; stop paying the latency cost of proving that. Credits
+      // exhaustion reads as a coverage stop, same as the internal ceiling.
+      if (apifyErr?.reason === "credits") {
+        budgetStopped = "Apify account out of credits";
+        break;
+      }
       if (apifyErr?.reason === "auth") break;
     }
   }

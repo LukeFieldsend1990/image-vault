@@ -161,6 +161,12 @@ export async function discoverPinterest(opts: {
         });
         costUsd += apifyErr.costUsd ?? 0;
       }
+      // Credits exhaustion hits every remaining query identically and reads
+      // as a coverage stop, same as the internal spend ceiling.
+      if (apifyErr?.reason === "credits") {
+        budgetStopped = "Apify account out of credits";
+        break;
+      }
       if (apifyErr?.reason === "auth") break;
     }
   }
