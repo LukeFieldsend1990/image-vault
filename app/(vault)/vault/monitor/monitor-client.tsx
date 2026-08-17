@@ -50,6 +50,7 @@ interface ScanRecord {
   id: string;
   startedAt: number;
   status: string;
+  error?: string | null;
   platformsChecked: number;
   candidatesAnalysed: number;
   hitsFound: number;
@@ -1028,6 +1029,10 @@ export default function MonitorClient({ identity }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [triaging, setTriaging] = useState<string | null>(null);
   const [previewHit, setPreviewHit] = useState<LikenessHit | null>(null);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  // Scan id currently being polled — by runScan or by the resume effect after
+  // a page reload — so the two never double-track the same sweep.
+  const trackingScanRef = useRef<string | null>(null);
   const [refSet, setRefSet] = useState<ReferenceSetState | null>(null);
   const [accounts, setAccounts] = useState<OffenderAccountSummary[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
@@ -1092,12 +1097,35 @@ export default function MonitorClient({ identity }: Props) {
     void refresh();
   }, [refresh]);
 
+  // Poll a sweep until it settles. A sweep chains several 1-3 minute Apify
+  // runs and the server marks runs dead after 15 minutes, so this outlasts
+  // that timeout (~18 minutes) — a scan can no longer "time out" client-side
+  // while it is genuinely still running. Past the typical duration it swaps
+  // the spinner copy for a note instead of giving up.
+  const pollScan = useCallback(async (scanId: string): Promise<ScanResponse> => {
+    for (let attempt = 0; attempt < 220; attempt++) {
+      await new Promise((r) => setTimeout(r, attempt < 5 ? 1_000 : attempt < 100 ? 3_000 : 6_000));
+      if (attempt === 100) {
+        setScanNote(
+          "Still sweeping — large sweeps can take up to 15 minutes. You can leave this page; the scan keeps running and results will be here when you return."
+        );
+      }
+      const poll = await fetch(`/api/monitor/scans/${scanId}`);
+      if (!poll.ok) continue;
+      const scan = (await poll.json()) as ScanResponse;
+      if (scan.status === "complete") return scan;
+      if (scan.status === "error") throw new Error(scan.error ?? "Scan failed");
+    }
+    throw new Error("Lost track of the sweep — refresh the page to see where it got to.");
+  }, []);
+
   const runScan = useCallback(async () => {
     if (scanning) return;
 
     setScanning(true);
     setLastResult(null);
     setScanError(null);
+    setScanNote(null);
     const activePlatforms = enabledIds
       ? INITIAL_PLATFORMS.filter((p) => enabledIds.includes(p.id))
       : INITIAL_PLATFORMS;
@@ -1109,22 +1137,23 @@ export default function MonitorClient({ identity }: Props) {
     // longer decides when the scan is finished.
     const request = (async () => {
       const res = await fetch("/api/monitor/scan", { method: "POST" });
+      if (res.status === 409) {
+        // A sweep is already mid-flight (started elsewhere, or this page's
+        // state was stale) — attach to it rather than reporting an error.
+        const body = (await res.json().catch(() => ({}))) as { error?: string; scanId?: string };
+        if (body.scanId) {
+          trackingScanRef.current = body.scanId;
+          return pollScan(body.scanId);
+        }
+        throw new Error(body.error ?? "A scan is already in progress");
+      }
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? "Scan failed");
       }
       const { scanId } = (await res.json()) as { scanId: string };
-
-      // Up to ~5 minutes: an Apify run is 1-3, and a sweep chains several.
-      for (let attempt = 0; attempt < 100; attempt++) {
-        await new Promise((r) => setTimeout(r, attempt < 5 ? 1_000 : 3_000));
-        const poll = await fetch(`/api/monitor/scans/${scanId}`);
-        if (!poll.ok) continue;
-        const scan = (await poll.json()) as ScanResponse;
-        if (scan.status === "complete") return scan;
-        if (scan.status === "error") throw new Error(scan.error ?? "Scan failed");
-      }
-      throw new Error("Scan timed out — it may still be running; refresh in a minute.");
+      trackingScanRef.current = scanId;
+      return pollScan(scanId);
     })();
 
     const animation = (async () => {
@@ -1153,8 +1182,40 @@ export default function MonitorClient({ identity }: Props) {
       setScanError(err instanceof Error ? err.message : "Scan failed");
     } finally {
       setScanning(false);
+      setScanNote(null);
     }
-  }, [scanning, refresh, enabledIds]);
+  }, [scanning, refresh, enabledIds, pollScan]);
+
+  // Resume tracking a sweep that is already running — one triggered before a
+  // page reload, or from another tab. Without this, a reload mid-sweep lost
+  // the spinner and the result silently; now the page picks the sweep back up
+  // and finishes it on screen.
+  useEffect(() => {
+    const running = scans.find((s) => s.status === "running");
+    if (!running || scanning || trackingScanRef.current === running.id) return;
+    trackingScanRef.current = running.id;
+    setScanning(true);
+    setScanNote(`A sweep started ${formatRelative(running.startedAt)} is still running — results will appear here when it completes.`);
+    setPlatforms((prev) => prev.map((p) => ({ ...p, status: "checking" as ScanStatus })));
+
+    void (async () => {
+      try {
+        const result = await pollScan(running.id);
+        const hitPlatforms = new Set(result.newHits.map((h) => h.platform));
+        setPlatforms((prev) =>
+          prev.map((p) => (hitPlatforms.has(p.id) ? { ...p, status: "flagged" } : { ...p, status: "clear" }))
+        );
+        setLastResult(result);
+        await refresh();
+      } catch (err) {
+        setScanError(err instanceof Error ? err.message : "Scan failed");
+        await refresh();
+      } finally {
+        setScanning(false);
+        setScanNote(null);
+      }
+    })();
+  }, [scans, scanning, pollScan, refresh]);
 
   const triageHit = useCallback(async (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => {
     setTriaging(id);
@@ -1271,6 +1332,16 @@ export default function MonitorClient({ identity }: Props) {
       )}
 
       {/* ── Status banner ── */}
+      {scanNote && !scanError && (
+        <div className="flex items-center gap-3 rounded-md border px-5 py-4"
+          style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+          <svg className="animate-spin shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" strokeWidth="2.5">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <p className="text-sm" style={{ color: "var(--color-muted)" }}>{scanNote}</p>
+        </div>
+      )}
+
       {scanError && (
         <div className="flex items-center gap-4 rounded-md border px-5 py-4"
           style={{ background: "rgba(217,119,6,0.06)", borderColor: "rgba(217,119,6,0.25)" }}>
@@ -1427,24 +1498,49 @@ export default function MonitorClient({ identity }: Props) {
               style={{ borderColor: "var(--color-border)" }}>
               <div>
                 <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-                  {record.hitsFound === 0
-                    ? `Clean — no violations found for ${name}`
-                    : `${record.hitsFound} violation${record.hitsFound === 1 ? "" : "s"} detected`}
+                  {record.status === "running"
+                    ? "Sweep in progress…"
+                    : record.status === "error"
+                      ? "Sweep failed"
+                      : record.hitsFound === 0
+                        ? `Clean — no violations found for ${name}`
+                        : `${record.hitsFound} violation${record.hitsFound === 1 ? "" : "s"} detected`}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>
-                  {formatDate(record.startedAt)} · {record.platformsChecked} platforms · {record.candidatesAnalysed} candidates
-                  {record.aiProvider === "ai" ? " · AI adjudicated" : record.aiProvider === "heuristic" ? " · heuristic thresholds" : ""}
+                  {record.status === "running" ? (
+                    <>Started {formatRelative(record.startedAt)} · {record.platformsChecked} platforms</>
+                  ) : record.status === "error" ? (
+                    <>{formatDate(record.startedAt)} · {record.error ?? "No error recorded"}</>
+                  ) : (
+                    <>
+                      {formatDate(record.startedAt)} · {record.platformsChecked} platforms · {record.candidatesAnalysed} candidates
+                      {record.aiProvider === "ai" ? " · AI adjudicated" : record.aiProvider === "heuristic" ? " · heuristic thresholds" : ""}
+                    </>
+                  )}
                 </p>
               </div>
               <span
                 className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
                 style={
-                  record.hitsFound === 0
-                    ? { background: "rgba(34,197,94,0.10)", color: "#16a34a" }
-                    : { background: "rgba(239,68,68,0.10)", color: "#dc2626" }
+                  record.status === "running"
+                    ? { background: "rgba(217,119,6,0.10)", color: "#d97706" }
+                    : record.status === "error"
+                      ? { background: "rgba(107,114,128,0.10)", color: "var(--color-muted)" }
+                      : record.hitsFound === 0
+                        ? { background: "rgba(34,197,94,0.10)", color: "#16a34a" }
+                        : { background: "rgba(239,68,68,0.10)", color: "#dc2626" }
                 }
               >
-                {record.hitsFound === 0 ? (
+                {record.status === "running" ? (
+                  <>
+                    <svg className="animate-spin" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                    </svg>
+                    Running
+                  </>
+                ) : record.status === "error" ? (
+                  "Failed"
+                ) : record.hitsFound === 0 ? (
                   <>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />

@@ -24,7 +24,7 @@ import {
   aiSettings,
   talentBodyProfiles,
 } from "@/lib/db/schema";
-import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { callAi } from "@/lib/ai/providers";
 import { notifyTalentAndReps } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
@@ -831,6 +831,35 @@ export async function beginLikenessScan(
 }
 
 /**
+ * A running scan older than this is dead. A sweep chains several 1-3 minute
+ * Apify runs, so a live one can legitimately take ten-plus minutes; past 15
+ * the worker that owned the row is gone and nothing will ever settle it.
+ */
+export const SCAN_TIMEOUT_SECONDS = 15 * 60;
+
+/**
+ * Settle running scans nothing can finish. failScan() covers errors the worker
+ * survives long enough to record; a worker that is killed mid-sweep records
+ * nothing, and its row would say "running" forever. Every read path calls this
+ * first so talent, rep and admin views all agree a dead run is dead.
+ */
+export async function timeOutStaleScans(db: Db, talentId?: string): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const stale = and(
+    eq(monitorScans.status, "running"),
+    lt(monitorScans.startedAt, now - SCAN_TIMEOUT_SECONDS)
+  );
+  await db
+    .update(monitorScans)
+    .set({
+      status: "error",
+      error: "Timed out — the sweep stopped reporting before it completed.",
+      completedAt: now,
+    })
+    .where(talentId ? and(stale, eq(monitorScans.talentId, talentId)) : stale);
+}
+
+/**
  * Mark a scan failed. Nothing awaits the async worker, so a thrown error would
  * otherwise leave the row "running" forever and the UI spinning.
  */
@@ -1326,6 +1355,7 @@ async function alertTalent(
 
 /** Poll target for an in-flight sweep. Scoped to the talent by the caller. */
 export async function getScanStatus(db: Db, scanId: string, talentId: string) {
+  await timeOutStaleScans(db, talentId);
   const scan = await db
     .select()
     .from(monitorScans)
@@ -1342,6 +1372,7 @@ export async function getScanStatus(db: Db, scanId: string, talentId: string) {
     scanId: scan.id,
     status: scan.status,
     error: scan.error,
+    startedAt: scan.startedAt,
     candidatesAnalysed: scan.candidatesAnalysed,
     hitsFound: scan.hitsFound,
     aiProvider: scan.aiProvider,
@@ -1365,6 +1396,7 @@ export async function getScanStatus(db: Db, scanId: string, talentId: string) {
 }
 
 export async function getMonitorState(db: Db, talentId: string) {
+  await timeOutStaleScans(db, talentId);
   const monitor = await db
     .select()
     .from(likenessMonitors)
@@ -1406,6 +1438,12 @@ export async function getMonitorState(db: Db, talentId: string) {
       )
     : eq(likenessHits.talentId, talentId);
 
+  // Hits from the last day jump the reach ordering: a talent who just
+  // triggered a sweep is looking for what it found, and burying a fresh hit
+  // under older high-reach ones reads as "the scan found nothing". After 24
+  // hours the hit falls back into the reach-weighted order below.
+  const freshCutoff = Math.floor(Date.now() / 1000) - 86400;
+
   const [hitRows, scans] = await Promise.all([
     db
       .select({
@@ -1416,6 +1454,8 @@ export async function getMonitorState(db: Db, talentId: string) {
       .leftJoin(monitorAccounts, eq(monitorAccounts.id, likenessHits.accountId))
       .where(hitWhere)
       .orderBy(
+        sql`(${likenessHits.detectedAt} >= ${freshCutoff}) DESC`,
+        sql`CASE WHEN ${likenessHits.detectedAt} >= ${freshCutoff} THEN ${likenessHits.detectedAt} END DESC`,
         sql`${monitorAccounts.cumulativeViews} IS NULL`,
         desc(monitorAccounts.cumulativeViews),
         desc(likenessHits.detectedAt)

@@ -3,8 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { monitorScans } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
-import { beginLikenessScan, failScan, runLikenessScan } from "@/lib/monitor/scan";
-import { and, eq, gt } from "drizzle-orm";
+import { beginLikenessScan, failScan, runLikenessScan, timeOutStaleScans } from "@/lib/monitor/scan";
+import { and, eq } from "drizzle-orm";
 
 // POST /api/monitor/scan — start a likeness sweep for the session talent.
 //
@@ -25,21 +25,21 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
-  // One scan at a time per talent; a "running" row younger than 2 minutes
-  // means another request is mid-flight (older ones are treated as stale).
+  // One scan at a time per talent. Dead runs are settled first (marked as
+  // errors past the 15-minute timeout), so any row still "running" here really
+  // is mid-flight — a sweep chains several 1-3 minute Apify runs, and a second
+  // concurrent sweep would double the Apify spend for identical results.
+  await timeOutStaleScans(db, session.sub);
   const inFlight = await db
     .select({ id: monitorScans.id })
     .from(monitorScans)
-    .where(
-      and(
-        eq(monitorScans.talentId, session.sub),
-        eq(monitorScans.status, "running"),
-        gt(monitorScans.startedAt, Math.floor(Date.now() / 1000) - 120)
-      )
-    )
+    .where(and(eq(monitorScans.talentId, session.sub), eq(monitorScans.status, "running")))
     .get();
   if (inFlight) {
-    return NextResponse.json({ error: "A scan is already in progress" }, { status: 409 });
+    return NextResponse.json(
+      { error: "A scan is already in progress", scanId: inFlight.id },
+      { status: 409 }
+    );
   }
 
   type ScanEnv = {
