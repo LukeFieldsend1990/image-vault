@@ -32,7 +32,7 @@ All **Edit** unless noted:
 | Account · Workers KV Storage — Edit | KV bindings (sessions, tokens) |
 | Account · Workers R2 Storage — Edit | R2 bindings **and the `cors set` step** |
 | Account · D1 — Edit | D1 binding / migrations |
-| Account · Queues — Edit | pipeline / inbound queue bindings |
+| Account · Queues — Edit | pipeline / inbound / monitor-sweeps queue bindings |
 | Account · Vectorize — Edit | `package-search` binding |
 | Account · Workers AI — Read | `[ai]` binding |
 | Account · Account Settings — Read | resolve the account |
@@ -45,6 +45,14 @@ avoid a permission error mid-deploy.
 
 Run from the repo root. The main app is an OpenNext build (slowest); the rest are
 plain Wrangler Workers.
+
+The main app consumes its own `monitor-sweeps` queue (durable likeness sweeps —
+see `worker.ts`). The queue must exist before the first deploy that references
+it, or the deploy fails validation:
+
+```bash
+wrangler queues create monitor-sweeps
+```
 
 ```bash
 npm run deploy                     # main app (imagevault.ai) — OpenNext build + deploy

@@ -262,6 +262,20 @@ The deepfake-detection stack (detector signals, vault-anchored reference set, sy
 | `pipeline-worker` | `pipeline-jobs` | Scan processing: validate → classify → assemble → bundle |
 | `comms-worker` | `inbound-email` | Email intake → AI triage |
 | `ai-cron-worker` | cron trigger | Batch rep suggestions |
+| main app (`worker.ts`) | `monitor-sweeps` | Durable likeness sweeps — the app Worker consumes its own queue |
+
+The main app's wrangler `main` is `worker.ts`, a custom OpenNext entrypoint: it
+delegates fetch to the generated `.open-next/worker.js` and adds the
+`monitor-sweeps` queue consumer. Sweeps run 5-15 minutes — past what a
+request-path `waitUntil()` survives — so `POST /api/monitor/scan` and the cron
+route call `beginLikenessScan()`, enqueue, and return 202; the consumer
+(`lib/monitor/sweep-queue.ts`) runs `runLikenessScan()` with the existing
+scanId. The queue handler is wrapped in `runWithCloudflareRequestContext()`, so
+`getCloudflareContext()` (and therefore all of `lib/`) works inside it. Retry
+semantics: consumer errors are recorded via `failScan()` and acked (never
+retried — discovery may have spent Apify budget); a redelivery after a consumer
+death only re-runs if the scan has no `apify_usage` rows yet, otherwise it
+settles the scan as an error. Local `next dev` keeps the inline-await fallback.
 
 ## Inbound Email Triage
 
