@@ -167,7 +167,9 @@ export async function fetchFollowing(opts: {
       error:
         reason === "auth"
           ? "Apify rejected the token for this actor."
-          : `Follows import failed (${reason}). Paste the handles instead, or change the actor in settings.`,
+          : reason === "credits"
+            ? "The Apify account is out of credits — top up or wait for the monthly reset."
+            : `Follows import failed (${reason}). Paste the handles instead, or change the actor in settings.`,
     };
   }
 }
