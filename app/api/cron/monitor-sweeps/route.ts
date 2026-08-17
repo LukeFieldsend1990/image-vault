@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
-import { likenessMonitors, aiSettings, users } from "@/lib/db/schema";
-import { beginLikenessScan, failScan, runLikenessScan } from "@/lib/monitor/scan";
+import { likenessMonitors, monitorScans, aiSettings, users } from "@/lib/db/schema";
+import { beginLikenessScan, failScan, runLikenessScan, timeOutStaleScans } from "@/lib/monitor/scan";
+import type { SweepQueueMessage } from "@/lib/monitor/sweep-queue";
 import { talentsUnderVigilance } from "@/lib/monitor/events";
 import { surgeIntervalSeconds } from "@/lib/monitor/vigilance";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 /**
  * POST /api/cron/monitor-sweeps — the scheduled entrypoint the ai-cron-worker
@@ -113,8 +114,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, dueCount: 0, ran: 0 });
   }
 
-  // waitUntil keeps the worker alive while the scans finish (~5 min each).
-  // The response returns immediately so cron doesn't hold the connection.
+  // In-flight guard: a queued sweep can wait its turn behind others (the
+  // consumer runs one sweep at a time), so a talent's previous sweep may
+  // still be pending or mid-run when the next cron tick fires. Settle dead
+  // runs first so a stranded row doesn't block its talent forever, then skip
+  // any talent with a live scan rather than double-enqueueing identical work.
+  await timeOutStaleScans(db);
+  const running = await db
+    .select({ talentId: monitorScans.talentId })
+    .from(monitorScans)
+    .where(eq(monitorScans.status, "running"))
+    .all();
+  const inFlight = new Set(running.map((r) => r.talentId));
+
+  // waitUntil keeps the worker alive if any sweep has to run on the request
+  // path (queue unavailable). The response returns immediately either way.
   const waitUntil = (getCloudflareContext().ctx?.waitUntil?.bind(getCloudflareContext().ctx)) as
     | ((p: Promise<unknown>) => void)
     | undefined;
@@ -138,43 +152,101 @@ export async function POST(req: NextRequest) {
     R2_SECRET_ACCESS_KEY: (env as unknown as { R2_SECRET_ACCESS_KEY?: string }).R2_SECRET_ACCESS_KEY,
   };
 
+  // Durable path: open the scan row, hand the sweep to the monitor-sweeps
+  // queue (consumed by this same Worker — see worker.ts), move on. The queue
+  // serialises sweeps globally, which preserves the old serial-kickoff
+  // property that mattered: one sweep at a time against the shared Apify
+  // budget ceiling. NODE_ENV guard as in POST /api/monitor/scan — `next dev`
+  // has a producer binding with no consumer behind it.
+  const queue = (env as unknown as { MONITOR_SWEEP_QUEUE?: Queue }).MONITOR_SWEEP_QUEUE;
+  const useQueue = !!queue && process.env.NODE_ENV !== "development";
+
+  let queued = 0;
+  let skippedInFlight = 0;
+  const inlineRuns: { talentId: string; scanId?: string }[] = [];
+
+  for (const monitor of shouldRun) {
+    if (inFlight.has(monitor.talentId)) {
+      skippedInFlight++;
+      continue;
+    }
+    if (!useQueue) {
+      inlineRuns.push({ talentId: monitor.talentId });
+      continue;
+    }
+    try {
+      const { scanId } = await beginLikenessScan(db, {
+        talentId: monitor.talentId,
+        trigger: "scheduled",
+      });
+      try {
+        const message: SweepQueueMessage = {
+          type: "likeness_sweep",
+          scanId,
+          talentId: monitor.talentId,
+          trigger: "scheduled",
+        };
+        await queue!.send(message);
+        queued++;
+      } catch (err) {
+        // Row is already open and the client-visible contract is that it will
+        // settle — fall back to the request-path run with the same scanId.
+        console.warn(
+          `[cron] sweep enqueue for ${monitor.talentId} failed, running on request path: ${(err as Error).message}`
+        );
+        inlineRuns.push({ talentId: monitor.talentId, scanId });
+      }
+    } catch (err) {
+      console.warn(`[cron] could not open scan for ${monitor.talentId}: ${(err as Error).message}`);
+    }
+  }
+
   const kickoff = async () => {
-    for (const monitor of shouldRun) {
+    for (const run of inlineRuns) {
       // Serial rather than parallel: each scan chews Apify budget, and one
       // talent's sweep at a time is fine when cron runs twice daily. Parallel
       // would risk multiple sweeps racing the same budget ceiling check.
+      let scanId = run.scanId;
       try {
-        const { scanId } = await beginLikenessScan(db, {
-          talentId: monitor.talentId,
-          trigger: "scheduled",
-        });
+        scanId ??= (
+          await beginLikenessScan(db, { talentId: run.talentId, trigger: "scheduled" })
+        ).scanId;
         await runLikenessScan(scanEnv, db, {
-          talentId: monitor.talentId,
+          talentId: run.talentId,
           trigger: "scheduled",
           baseUrl,
           scanId,
         });
       } catch (err) {
         console.warn(
-          `[cron] monitor sweep for ${monitor.talentId} failed: ${(err as Error).message}`
+          `[cron] monitor sweep for ${run.talentId} failed: ${(err as Error).message}`
         );
+        if (scanId) {
+          await failScan(db, scanId, err instanceof Error ? err.message : "Scan failed").catch(
+            () => {}
+          );
+        }
       }
     }
   };
 
-  if (waitUntil) {
-    waitUntil(kickoff());
-  } else {
-    // Non-Cloudflare context (local dev without waitUntil binding): run
-    // inline. Response takes minutes, which is fine because there's no
-    // real cron scheduler here to worry about.
-    await kickoff();
+  if (inlineRuns.length) {
+    if (waitUntil) {
+      waitUntil(kickoff());
+    } else {
+      // Non-Cloudflare context (local dev without waitUntil binding): run
+      // inline. Response takes minutes, which is fine because there's no
+      // real cron scheduler here to worry about.
+      await kickoff();
+    }
   }
 
   return NextResponse.json({
     ok: true,
     dueCount: shouldRun.length,
-    ran: shouldRun.length,
+    ran: queued + inlineRuns.length,
+    queued,
+    skippedInFlight,
     surged: shouldRun.filter((m) => underVigilance.has(m.talentId)).length,
   });
 }

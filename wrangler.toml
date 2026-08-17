@@ -1,7 +1,15 @@
 name = "image-vault"
-main = ".open-next/worker.js"
+# Custom entrypoint: wraps the OpenNext-generated .open-next/worker.js and adds
+# the monitor-sweeps queue consumer (durable likeness sweeps). See worker.ts.
+main = "worker.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+
+# Likeness sweeps consume the monitor-sweeps queue in this Worker; a sweep is
+# I/O-bound (Apify polling) but can accumulate CPU across a 10-minute run.
+# Ceiling only — billing is on actual usage. Matches pipeline-worker.
+[limits]
+cpu_ms = 300000
 
 # Persistent Workers Logs. Likeness sweeps run as background work whose
 # console.warn diagnostics — and whose isolate-kill outcomes (exceededCpu,
@@ -80,6 +88,24 @@ queue = "geo-fingerprint-jobs"
 [[queues.producers]]
 binding = "PITCH_QUEUE"
 queue = "pitch-jobs"
+
+[[queues.producers]]
+binding = "MONITOR_SWEEP_QUEUE"
+queue = "monitor-sweeps"
+
+# -------------------------------------------------------------------
+# Queue consumer — the app Worker consumes its own monitor-sweeps queue
+# (worker.ts custom entrypoint), so sweeps get the full lib/ graph plus all
+# app secrets/bindings without duplicating them into a dedicated worker.
+# Create the queue once before deploying: wrangler queues create monitor-sweeps
+# -------------------------------------------------------------------
+[[queues.consumers]]
+queue = "monitor-sweeps"
+max_batch_size = 1        # one sweep per invocation — they run 5-15 minutes
+max_concurrency = 1       # sweeps serialise globally: shared Apify budget ceiling
+max_retries = 3           # redeliveries only fire when the consumer dies outright;
+                          # the spend guard in lib/monitor/sweep-queue.ts decides
+                          # whether a redelivery re-runs or settles the scan
 
 # -------------------------------------------------------------------
 # Vectorize (semantic search)

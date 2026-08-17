@@ -16,6 +16,7 @@ declare global {
     INBOUND_QUEUE: Queue;
     GEO_FINGERPRINT_QUEUE: Queue;
     PITCH_QUEUE: Queue;
+    MONITOR_SWEEP_QUEUE: Queue;
     JWT_SECRET: string;
     ENVIRONMENT: string;
     APP_URL: string;
