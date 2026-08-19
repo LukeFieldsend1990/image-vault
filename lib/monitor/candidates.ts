@@ -81,6 +81,8 @@ function contentUrlFor(platform: MonitorPlatformId, handle: string): { url: stri
       return { url: `https://www.youtube.com/shorts/${randomId(11)}`, type: "short" };
     case "pinterest":
       return { url: `https://www.pinterest.com/pin/${randomDigits(18)}/`, type: "post" };
+    case "reddit":
+      return { url: `https://www.reddit.com/r/aivideo/comments/${randomId(7).toLowerCase()}/`, type: "post" };
     case "google":
       return { url: `https://${handle.replace(/\./g, "-")}.example.net/gallery/${randomId(8)}`, type: "image" };
     case "getty":

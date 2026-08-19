@@ -103,6 +103,8 @@ export function profileUrlFor(platform: string, handle: string): string | null {
       return `https://x.com/${clean}`;
     case "pinterest":
       return `https://www.pinterest.com/${clean}/`;
+    case "reddit":
+      return `https://www.reddit.com/user/${clean.replace(/^u\//, "")}/`;
     case "midjourney":
       // AI-platform hits come from Civitai's model registry.
       return `https://civitai.com/user/${clean}`;
@@ -128,6 +130,8 @@ export function composeUrlFor(platform: string, handle: string): string | null {
       return `https://www.youtube.com/@${clean}`;
     case "x":
       return `https://x.com/messages/compose?recipient_id=${clean}`;
+    case "reddit":
+      return `https://www.reddit.com/message/compose/?to=${clean.replace(/^u\//, "")}`;
     default:
       return null;
   }

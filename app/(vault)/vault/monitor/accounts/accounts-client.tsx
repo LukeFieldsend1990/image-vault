@@ -69,6 +69,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   youtube: "YouTube",
   x: "X",
   pinterest: "Pinterest",
+  reddit: "Reddit",
   google: "Google",
   getty: "Getty / Shutterstock",
   midjourney: "AI Platforms",

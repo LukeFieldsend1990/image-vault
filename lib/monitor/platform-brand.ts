@@ -52,6 +52,11 @@ export const PLATFORM_BRANDS: Record<string, PlatformBrand> = {
     edge: "#e60023",
     tint: "rgba(230, 0, 35, 0.08)",
   },
+  reddit: {
+    color: "#ff4500",
+    edge: "#ff4500",
+    tint: "rgba(255, 69, 0, 0.08)",
+  },
   google: {
     color: "#4285f4",
     edge: "linear-gradient(180deg, #4285f4 0%, #34a853 40%, #fbbc05 70%, #ea4335 100%)",
