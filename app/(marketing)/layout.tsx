@@ -23,10 +23,11 @@ export default function MarketingLayout({
 
           <nav className="hidden items-center gap-8 md:flex">
             {[
-              ["Platform", "#platform"],
-              ["Features", "#features"],
-              ["Security", "#security"],
-              ["How it works", "#how-it-works"],
+              ["Platform", "/product#platform"],
+              ["Features", "/product#features"],
+              ["Monitor", "/product/likeness-monitor"],
+              ["Security", "/product#security"],
+              ["How it works", "/product#how-it-works"],
               ["Calculator", "/calculator"],
               ["Contact", "/contact"],
             ].map(([label, href]) => (

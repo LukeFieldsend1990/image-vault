@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { VaultMockup, LicenceMockup, InboxMockup, RoyaltiesMockup, ComplianceMockup } from "./mockups";
+import { VaultMockup, LicenceMockup, InboxMockup, RoyaltiesMockup, ComplianceMockup, MonitorMockup } from "./mockups";
 import ExplainerFilm from "./explainer-film";
 
 export const metadata: Metadata = {
@@ -246,6 +246,45 @@ export default function ProductPage() {
             <div className="md:order-1">
               <ComplianceMockup />
             </div>
+          </div>
+
+          {/* Likeness Monitor */}
+          <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
+            <div>
+              <SectionLabel>Likeness Monitor</SectionLabel>
+              <h3 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+                The vault that watches back
+              </h3>
+              <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
+                The monitor sweeps public platforms for deepfakes and
+                unauthorised use — and scores what it finds against the
+                ground-truth capture data only the vault holds. Identity is
+                matched to the performer&apos;s own scan stills, derivation is
+                caught by perceptual fingerprints of vault imagery, and
+                licensed deliveries carry geometry watermarks that trace misuse
+                back to the exact licence that released the files.
+              </p>
+              <ul className="mt-6 space-y-2.5">
+                {[
+                  "Four independent detection layers — a flag needs likeness and synthesis evidence together",
+                  "Event-aware sweeps that surge around announcements and trailer drops",
+                  "Every scan archived measurably strengthens detection coverage",
+                ].map((item) => (
+                  <li key={item} className="flex gap-3 text-sm" style={{ color: "var(--color-text)" }}>
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full" style={{ background: "var(--color-accent)" }} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/product/likeness-monitor"
+                className="mt-6 inline-block text-sm font-medium transition hover:opacity-60"
+                style={{ color: "var(--color-accent)" }}
+              >
+                Explore the Likeness Monitor →
+              </Link>
+            </div>
+            <MonitorMockup />
           </div>
         </div>
       </section>
