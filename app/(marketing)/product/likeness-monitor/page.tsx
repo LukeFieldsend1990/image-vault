@@ -289,7 +289,7 @@ export default function LikenessMonitorPage() {
       <section className="border-y" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px px-6 py-10 md:grid-cols-4">
           {[
-            ["Vault-anchored", "Detection compares against the canonical scan — not scraped public photos."],
+            ["Vault-anchored", "Detection compares against the canonical scan — the highest-fidelity record of a performer that exists."],
             ["Four independent signals", "Identity, synthesis, derivation, and geometry fingerprints — each proves something different."],
             ["Event-aware", "Sweeps surge around cast announcements and trailer drops, when synthetic waves actually arrive."],
             ["Evidence-grade", "Every flag carries specific, reviewable rationale — ready for a takedown letter, not just a score."],
@@ -326,13 +326,17 @@ export default function LikenessMonitorPage() {
                 Only the vault can compare.
               </h2>
               <p className="mt-6 text-base leading-relaxed" style={{ color: "var(--color-sidebar-muted)" }}>
-                Generic monitoring services match suspect content against
-                scraped public photos — the same imagery the deepfake was
-                probably made from. ImageVault matches against the performer&apos;s
-                own archived captures: calibrated scan stills, mesh geometry,
-                and the exact files every licence released. As generators
-                improve and visual artifacts disappear, detection built on
-                possession of the source is the approach that keeps working.
+                A convincing fake can be trained from anything — press photos,
+                red-carpet footage, a leaked still, or the scan data itself.
+                Generic monitoring services can only compare suspect content
+                against the same public imagery everyone else can see.
+                ImageVault matches against the performer&apos;s own archived
+                captures: calibrated scan stills, mesh geometry, and the exact
+                files every licence released. When the source of a fake is
+                scan-grade data, the party holding the original scans is the
+                only one who can prove it — and as generators improve and
+                visual artifacts disappear, detection built on possession of
+                the source is the approach that keeps working.
               </p>
               <p className="mt-4 text-base leading-relaxed" style={{ color: "var(--color-sidebar-muted)" }}>
                 Every scan a performer archives makes their monitoring
