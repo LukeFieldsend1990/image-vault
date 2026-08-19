@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MonitorMockup } from "../mockups";
+import ExplainerFilm from "../explainer-film";
 
 export const metadata: Metadata = {
   title: "Likeness Monitor — ImageVault",
@@ -304,6 +305,25 @@ export default function LikenessMonitorPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* ─────────────── Explainer film ─────────────── */}
+      <section className="mx-auto max-w-6xl px-6 pt-12 pb-2 md:pt-16">
+        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <p
+            className="text-xs font-medium tracking-widest uppercase"
+            style={{ color: "var(--color-accent)" }}
+          >
+            What the monitor does
+          </p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            A ninety-second tour
+          </p>
+        </div>
+        <ExplainerFilm
+          src="/explainer/imagevault-likeness-monitor.html"
+          title="The Likeness Monitor — a ninety-second explainer film"
+        />
       </section>
 
       {/* ─────────────── Why the vault wins ─────────────── */}
