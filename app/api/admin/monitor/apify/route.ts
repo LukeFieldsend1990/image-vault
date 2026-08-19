@@ -12,6 +12,7 @@ import {
   getApifyCreditsExhaustedAt,
 } from "@/lib/monitor/ingest/budget";
 import { apifyToken } from "@/lib/monitor/ingest/apify";
+import { listTalentMeters } from "@/lib/monitor/metering";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { desc, eq, sql } from "drizzle-orm";
 
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
     getApifyCreditsExhaustedAt(db),
   ]);
 
-  const [runs, byTalent] = await Promise.all([
+  const [runs, byTalent, meters] = await Promise.all([
     db.select().from(apifyUsage).orderBy(desc(apifyUsage.createdAt)).limit(50).all(),
     db
       .select({
@@ -72,9 +73,12 @@ export async function GET(req: NextRequest) {
       .orderBy(sql`sum(cost_usd) desc`)
       .limit(10)
       .all(),
+    // Per-talent meters for the current calendar month — the per-customer
+    // view the shared ceiling can't give (lib/monitor/metering.ts).
+    listTalentMeters(db),
   ]);
 
-  return NextResponse.json({ budget, runs, byTalent, account, creditsExhaustedAt });
+  return NextResponse.json({ budget, runs, byTalent, meters, account, creditsExhaustedAt });
 }
 
 // PATCH /api/admin/monitor/apify — { ceilingUsd?: number, enabled?: boolean }

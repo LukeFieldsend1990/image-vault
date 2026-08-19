@@ -416,6 +416,44 @@ admin monitor page reads those verdicts back as a tuning signal:
    validates the stack end-to-end, not the individual signals — per-signal
    attribution would need the verdict UI to ask more of the human.
 
+## Per-talent metering (`lib/monitor/metering.ts`)
+
+Groundwork for selling the monitor as a monthly add-on. The Apify ceiling
+(`lib/monitor/ingest/budget.ts`) is one shared pot protecting the account;
+metering adds the per-customer gate on top: each talent's monitor carries a
+`plan` (`internal | watch | guard | shield`) whose monthly discovery allowance
+— overridable per talent via `monthly_budget_usd` — is enforced against the
+same `apify_usage` ledger, summed per UTC calendar month. Allowance amounts
+are placeholders pending commercial sign-off, same status as
+`lib/financial/config.ts`.
+
+Design decisions worth not rediscovering:
+
+- **Both gates apply, global first.** Every `ActorBudget.check` in a sweep
+  (discovery and sibling probes alike) asks the ceiling and then the meter,
+  between every run. A sweep stops at whichever bites first.
+- **An exhausted meter degrades, never disables.** Free surfaces (YouTube
+  quota, Civitai, pHash, provenance scan, LLaVA) keep running; only paid actor
+  runs stop. Cadence, cron and the scan lifecycle are untouched — a scan row
+  under an exhausted meter settles normally with reduced coverage, exactly
+  like a sweep under an exhausted global ceiling.
+- **No balance table.** Spend is summed from `apify_usage` (which has carried
+  `talent_id` from the start), so the meter cannot drift from the spend panel
+  or the invoice, and lapsing/upgrading a plan needs only the monitor row.
+- **`internal` is the default and means unmetered** — existing monitors
+  behave exactly as before the migration (0124).
+- Admin: plan + override per talent at
+  `/api/admin/talent/[talentId]/monitor-plan`; fleet view in the `meters`
+  array of `/api/admin/monitor/apify`. Talent-facing state carries the meter
+  via `getMonitorState`.
+
+Known gaps, deliberate for v1: AI adjudication/synthetic-check spend is not
+attributed per talent (`ai_cost_log` has no `talent_id`; Apify dominates COGS
+by an order of magnitude), periods are calendar months rather than each
+subscriber's billing anchor, and nothing notifies anyone when a meter
+exhausts mid-month — surfacing that on the talent's monitor page and the
+admin panel is UI work still to do.
+
 ## Roadmap order
 
 1. Vet the reference gallery at sync time (fixes limitation 2, uses `rejected`).

@@ -1516,6 +1516,13 @@ export const likenessMonitors = sqliteTable("likeness_monitors", {
   // a real red-carpet clip is not what anyone signed up to be alerted about.
   scope: text("scope", { enum: ["ai_only", "all_likeness"] }).notNull().default("ai_only"),
   cadence: text("cadence", { enum: ["manual", "weekly", "daily"] }).notNull().default("weekly"),
+  // Per-talent metering plan (lib/monitor/metering.ts). "internal" is the
+  // pre-billing default: no per-talent allowance, only the global Apify
+  // ceiling applies — which is exactly what every monitor did before plans.
+  plan: text("plan", { enum: ["internal", "watch", "guard", "shield"] }).notNull().default("internal"),
+  // Explicit monthly discovery allowance override in USD. Null = the plan
+  // default. Set on "internal" it still meters — that is the point.
+  monthlyBudgetUsd: real("monthly_budget_usd"),
   // Handles that can never be flagged: the talent's own account, their agency,
   // studios, distributors, press. JSON string[].
   allowlistJson: text("allowlist_json").notNull().default("[]"),

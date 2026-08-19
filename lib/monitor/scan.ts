@@ -71,6 +71,7 @@ import {
   type ReferenceImage,
 } from "./reference-set";
 import { ensurePhashIndex, loadPhashIndex, scoreCandidatesPhash } from "./phash-index";
+import { checkTalentBudget, getTalentMeter } from "./metering";
 import { captureThumbnail } from "./thumbnail-proxy";
 import { findCrossPlatformSiblings, isSiblingPlatform, type SiblingPlatform } from "./cross-platform";
 import { buildBodyBuildSummary, parseBodyMetrics } from "./body-profile";
@@ -465,6 +466,8 @@ export async function ensureMonitor(db: Db, talentId: string) {
     sensitivity: "balanced" as const,
     scope: "ai_only" as const,
     cadence: "weekly" as const,
+    plan: "internal" as const,
+    monthlyBudgetUsd: null,
     allowlistJson: "[]",
     platformOverridesJson: "{}",
     lastScanAt: null,
@@ -654,16 +657,33 @@ async function discoverCandidates(
     };
   }
 
+  // Per-talent gate, same contract. A talent whose monthly allowance is spent
+  // keeps the free surfaces above but buys no more actor runs — without this,
+  // one subscriber's sweeps drain the shared ceiling for everyone else.
+  const meterGate = await checkTalentBudget(db, opts.talentId);
+  if (!meterGate.ok) {
+    console.warn(`[monitor] talent meter refused paid discovery for ${opts.talentId}: ${meterGate.reason}`);
+    return {
+      candidates: freeSurfaces,
+      discoveryError: freeSurfaces.length ? null : meterGate.reason,
+    };
+  }
+
   // Set when any surface stops because Apify itself refused runs (402) —
   // distinct from our internal ceiling, which is a choice rather than a wall.
   let creditsStopSeen = false;
   const CREDITS_STOP = "Apify account out of credits";
 
   // One spend gate + usage ledger shared by every Apify-backed surface below.
+  // Both limits are re-checked between runs: global ceiling first (protects
+  // the Apify account), then the talent's meter (protects one subscription's
+  // margin) — a sweep stops at whichever bites first.
   const budget: ActorBudget = {
     check: async () => {
       const v = await checkApifyBudget(db);
-      return { ok: v.ok, reason: v.reason };
+      if (!v.ok) return { ok: false, reason: v.reason };
+      const m = await checkTalentBudget(db, opts.talentId);
+      return { ok: m.ok, reason: m.reason };
     },
     record: async (entry) => {
       await logApifyUsage(db, {
@@ -1348,7 +1368,9 @@ export async function runLikenessScan(
       const siblingBudget: ActorBudget = {
         check: async () => {
           const v = await checkApifyBudget(db);
-          return { ok: v.ok, reason: v.reason };
+          if (!v.ok) return { ok: false, reason: v.reason };
+          const m = await checkTalentBudget(db, opts.talentId);
+          return { ok: m.ok, reason: m.reason };
         },
         record: (entry) =>
           logApifyUsage(db, {
@@ -1472,11 +1494,14 @@ export async function getScanStatus(db: Db, scanId: string, talentId: string) {
 
 export async function getMonitorState(db: Db, talentId: string) {
   await timeOutStaleScans(db, talentId);
-  const monitor = await db
-    .select()
-    .from(likenessMonitors)
-    .where(eq(likenessMonitors.talentId, talentId))
-    .get();
+  const [monitor, meter] = await Promise.all([
+    db
+      .select()
+      .from(likenessMonitors)
+      .where(eq(likenessMonitors.talentId, talentId))
+      .get(),
+    getTalentMeter(db, talentId),
+  ]);
 
   // Admin platform toggles (global, then this talent's overrides), surfaced so
   // the monitor page shows the coverage a sweep will actually have rather than
@@ -1580,6 +1605,7 @@ export async function getMonitorState(db: Db, talentId: string) {
 
   return {
     monitor: monitor ?? null,
+    meter,
     enabledPlatforms: [...enabledPlatforms],
     hits: hits.map((h) => ({
       id: h.id,
