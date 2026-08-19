@@ -24,6 +24,8 @@ function subscribeCoarsePointer(onChange: () => void) {
  * The film preloads but holds its opening frame until it scrolls into view:
  * the bundled asset waits for a play message when embedded (and posts a ready
  * message once listening), and we send it when the IntersectionObserver fires.
+ * All films in /public/explainer speak the same ready/play protocol, so the
+ * embed takes the asset path and title as props.
  *
  * iPhone Safari does not support the Fullscreen API on iframes (only on
  * <video>), so we fill the viewport with a fixed overlay instead — and attempt
@@ -31,7 +33,13 @@ function subscribeCoarsePointer(onChange: () => void) {
  * iPadOS). Either way the frame grows to a portrait viewport, which trips the
  * animation's own logic to rotate 90° and fill the screen.
  */
-export default function ExplainerFilm() {
+export default function ExplainerFilm({
+  src = SRC,
+  title = "What ImageVault does — a ninety-second explainer film",
+}: {
+  src?: string;
+  title?: string;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -169,8 +177,8 @@ export default function ExplainerFilm() {
     >
       <iframe
         ref={iframeRef}
-        src={SRC}
-        title="What ImageVault does — a ninety-second explainer film"
+        src={src}
+        title={title}
         loading="lazy"
         scrolling="no"
         style={
