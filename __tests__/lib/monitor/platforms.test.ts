@@ -194,6 +194,7 @@ describe("Reddit ingest", () => {
         createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
         upVotes: 340,
         thumbnailUrl: "https://b.thumbs.redditmedia.com/abc.jpg",
+        over18: true,
         dataType: "post",
       },
       SOURCE
@@ -206,8 +207,18 @@ describe("Reddit ingest", () => {
     expect(mapped!.media?.thumbnailUrl).toBe("https://b.thumbs.redditmedia.com/abc.jpg");
     expect(mapped!.signals.postedDaysAgo).toBe(2);
     expect(mapped!.signals.viewCount).toBe(340);
+    // The platform's own adult flag rides along for the UI badge.
+    expect(mapped!.nsfw).toBe(true);
     // Detector signals are unmeasured, never zero.
     expect(mapped!.signals.faceEmbeddingSimilarity).toBeNull();
+  });
+
+  it("defaults nsfw to false when the platform flag is absent", () => {
+    const mapped = mapRedditItem(
+      { url: "https://www.reddit.com/r/a/comments/x/", username: "someone", title: "sfw" },
+      SOURCE
+    );
+    expect(mapped!.nsfw).toBe(false);
   });
 
   it("drops comments, ads and items with no author or url", () => {

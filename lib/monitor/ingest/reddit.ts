@@ -41,6 +41,7 @@ interface RedditItem {
   numberOfComments?: number;
   thumbnailUrl?: string;
   isAd?: boolean;
+  over18?: boolean;
   dataType?: string;
 }
 
@@ -77,6 +78,7 @@ export function mapRedditItem(item: RedditItem, source: DiscoverySource): Candid
       .join("\n\n")
       .slice(0, 2000),
     hashtags: subreddit ? [subreddit] : [],
+    nsfw: item.over18 === true,
     media: { thumbnailUrl: item.thumbnailUrl ?? null, videoUrl: null },
     discoverySource: source,
     authorMeta: {

@@ -77,6 +77,13 @@ export interface CandidateContent {
   /** Set by the synthetic-media check when it produced a reading. */
   syntheticFindings?: SyntheticFindings;
   /**
+   * Platform-declared adult flag (Reddit's over18 today). Carried onto the
+   * hit so the UI can badge it — a talent triaging from a public place
+   * deserves the warning before they tap through. Never a detector signal:
+   * the platform said it, we didn't measure it.
+   */
+  nsfw?: boolean;
+  /**
    * Set when an open vigilance window — not the talent's name — supplied the
    * identity match ("cyclops+xmen", "kitconnorcyclops"). Tells the adjudicator
    * the identity evidence is role vocabulary, and tells us afterwards whether
