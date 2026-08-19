@@ -8,7 +8,7 @@
  * below is a fictional demo persona ("Marlowe Quinn"), never a real talent.
  */
 
-function BrowserFrame({
+export function BrowserFrame({
   url,
   children,
 }: {
@@ -515,12 +515,37 @@ export function MonitorMockup() {
                 </div>
               </div>
               <span className="flex items-center gap-1.5">
-                {p.nsfw && <Chip label="NSFW" solid />}
+                {p.nsfw && (
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[8px] font-semibold tracking-wider uppercase"
+                    style={{ background: "var(--color-ink)", color: "var(--color-bg)" }}
+                  >
+                    NSFW
+                  </span>
+                )}
+                {/* Status pills match the live monitor: green clear, red flagged, blue scanning. */}
                 {p.flag ? (
-                  <Chip label={p.state} accent />
-                ) : (
-                  <span className="text-[9px]" style={{ color: "var(--color-muted)" }}>
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium"
+                    style={{ background: "rgba(239,68,68,0.12)", color: "#dc2626" }}
+                  >
+                    <span className="h-1 w-1 rounded-full" style={{ background: "#dc2626" }} />
                     {p.state}
+                  </span>
+                ) : p.state === "Scanning" ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium"
+                    style={{ background: "rgba(59,130,246,0.12)", color: "#3b82f6" }}
+                  >
+                    <span className="h-1 w-1 rounded-full" style={{ background: "#3b82f6" }} />
+                    {p.state}
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium"
+                    style={{ background: "rgba(34,197,94,0.12)", color: "#16a34a" }}
+                  >
+                    ✓ {p.state}
                   </span>
                 )}
               </span>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { MonitorMockup } from "../mockups";
 import ExplainerFilm from "../explainer-film";
+import { MonitorHitsMockup, MonitorWatchlistMockup } from "../monitor-mockups";
 
 export const metadata: Metadata = {
   title: "Likeness Monitor — ImageVault",
@@ -151,90 +151,6 @@ function CoverageLadder() {
   );
 }
 
-/* ── A flagged-hit evidence card, in the style of the real hit detail ── */
-function EvidenceMock() {
-  return (
-    <div
-      className="overflow-hidden"
-      style={{
-        border: "1px solid var(--color-border)",
-        borderRadius: "var(--radius-md)",
-        background: "var(--color-bg)",
-        boxShadow: "0 24px 48px -24px rgba(0,0,0,0.18)",
-      }}
-    >
-      <div
-        className="flex items-center justify-between border-b px-5 py-3"
-        style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
-      >
-        <span
-          className="text-[10px] font-medium tracking-widest uppercase"
-          style={{ color: "var(--color-muted)" }}
-        >
-          Flagged hit — evidence trail
-        </span>
-        <span
-          className="px-1.5 py-0.5 text-[9px] font-medium tracking-wider uppercase text-white"
-          style={{ background: "var(--color-accent)", borderRadius: "var(--radius)" }}
-        >
-          Needs review
-        </span>
-      </div>
-      <div className="space-y-3 px-5 py-4">
-        <div>
-          <p className="text-xs font-semibold" style={{ color: "var(--color-ink)" }}>
-            @ultimatestudiosofficial · Instagram Reel
-          </p>
-          <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-muted)" }}>
-            &ldquo;Marlowe Quinn returns in TIDEWATER 2 — AI concept trailer&rdquo;
-          </p>
-        </div>
-        {[
-          ["Identity", "Face match vs vault reference gallery", "0.94", true],
-          ["Synthesis", "Vision check — blending seam at jawline, video-model artifacts", "0.82", true],
-          ["Derivation", "Perceptual hash vs vault stills — Hamming distance 11 (≤16 ⇒ derived)", "match", true],
-          ["Geometry fingerprint", "No licensed delivery correlates", "not measured", false],
-        ].map(([label, detail, value, hit]) => (
-          <div
-            key={label as string}
-            className="flex items-start justify-between gap-4 border-t pt-3"
-            style={{ borderColor: "var(--color-border)" }}
-          >
-            <div>
-              <p className="text-[11px] font-semibold" style={{ color: "var(--color-ink)" }}>
-                {label}
-              </p>
-              <p className="text-[10px] leading-relaxed" style={{ color: "var(--color-muted)" }}>
-                {detail}
-              </p>
-            </div>
-            <span
-              className="shrink-0 font-mono text-[10px]"
-              style={{ color: hit ? "var(--color-accent)" : "var(--color-muted)" }}
-            >
-              {value}
-            </span>
-          </div>
-        ))}
-        <div
-          className="flex items-center justify-between border-t pt-3"
-          style={{ borderColor: "var(--color-border)" }}
-        >
-          <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
-            Discovered under vigilance window: Tidewater 2 announcement
-          </span>
-          <span
-            className="px-2 py-1 text-[10px] font-medium text-white"
-            style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
-          >
-            Draft takedown
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function LikenessMonitorPage() {
   return (
     <>
@@ -282,7 +198,7 @@ export default function LikenessMonitorPage() {
         </div>
 
         <div className="mkt-rise mt-16">
-          <MonitorMockup />
+          <MonitorHitsMockup />
         </div>
       </section>
 
@@ -577,7 +493,10 @@ export default function LikenessMonitorPage() {
         </div>
 
         <div className="mkt-rise mt-16 mx-auto max-w-3xl">
-          <EvidenceMock />
+          <MonitorWatchlistMockup />
+          <p className="mt-4 text-center text-xs" style={{ color: "var(--color-muted)" }}>
+            Hits roll up into an account watchlist — reach-ranked operators, not a flat list of posts.
+          </p>
         </div>
       </section>
 
