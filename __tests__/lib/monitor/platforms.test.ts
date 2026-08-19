@@ -15,6 +15,7 @@ import {
 } from "@/lib/monitor/platform-settings";
 import { mapXItem, buildXQueries } from "@/lib/monitor/ingest/x";
 import { mapPinterestItem, buildPinterestQueries } from "@/lib/monitor/ingest/pinterest";
+import { mapRedditItem, buildRedditQueries } from "@/lib/monitor/ingest/reddit";
 import { mapSerpResult, buildSerpQueries } from "@/lib/monitor/ingest/serp";
 import { mapCivitaiModel } from "@/lib/monitor/ingest/ai-platforms";
 import { preFilter } from "@/lib/monitor/ingest/instagram";
@@ -38,7 +39,7 @@ describe("platform registry", () => {
     const on = MONITOR_PLATFORMS.filter((p) => p.defaultEnabled).map((p) => p.id);
     const off = MONITOR_PLATFORMS.filter((p) => !p.defaultEnabled).map((p) => p.id);
     expect(on).toEqual(["instagram", "tiktok", "youtube"]);
-    expect(off).toEqual(["x", "pinterest", "google", "getty", "midjourney"]);
+    expect(off).toEqual(["x", "pinterest", "reddit", "google", "getty", "midjourney"]);
   });
 
   it("validates platform ids", () => {
@@ -165,6 +166,55 @@ describe("Pinterest ingest", () => {
     expect(mapped!.contentUrl).toBe("https://www.pinterest.com/pin/9876543210/");
     expect(mapped!.media?.thumbnailUrl).toBe("https://i.pinimg.com/orig/abc.jpg");
     expect(mapped!.signals.viewCount).toBe(40);
+  });
+});
+
+// ── Reddit mapping ───────────────────────────────────────────────────────────
+
+describe("Reddit ingest", () => {
+  it("builds name-plus-intent free-text queries", () => {
+    expect(buildRedditQueries(HARDY)).toEqual([
+      "Tom Hardy ai",
+      "Tom Hardy deepfake",
+      "Tom Hardy ai generated",
+    ]);
+  });
+
+  it("maps a post, leading the caption with the subreddit", () => {
+    const mapped = mapRedditItem(
+      {
+        id: "t3_abc1234",
+        url: "https://www.reddit.com/r/aivideo/comments/abc1234/tom_hardy_ai_recast/",
+        username: "u/deepcaster",
+        userId: "t2_xyz",
+        title: "Tom Hardy fully AI recast",
+        communityName: "r/aivideo",
+        parsedCommunityName: "aivideo",
+        body: "Made with our new face model",
+        createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        upVotes: 340,
+        thumbnailUrl: "https://b.thumbs.redditmedia.com/abc.jpg",
+        dataType: "post",
+      },
+      SOURCE
+    );
+    expect(mapped).not.toBeNull();
+    expect(mapped!.platform).toBe("reddit");
+    expect(mapped!.authorHandle).toBe("@deepcaster");
+    expect(mapped!.caption.startsWith("[r/aivideo]")).toBe(true);
+    expect(mapped!.hashtags).toEqual(["aivideo"]);
+    expect(mapped!.media?.thumbnailUrl).toBe("https://b.thumbs.redditmedia.com/abc.jpg");
+    expect(mapped!.signals.postedDaysAgo).toBe(2);
+    expect(mapped!.signals.viewCount).toBe(340);
+    // Detector signals are unmeasured, never zero.
+    expect(mapped!.signals.faceEmbeddingSimilarity).toBeNull();
+  });
+
+  it("drops comments, ads and items with no author or url", () => {
+    const base = { url: "https://www.reddit.com/r/a/comments/x/", username: "someone" };
+    expect(mapRedditItem({ ...base, dataType: "comment" }, SOURCE)).toBeNull();
+    expect(mapRedditItem({ ...base, isAd: true }, SOURCE)).toBeNull();
+    expect(mapRedditItem({ title: "orphan" }, SOURCE)).toBeNull();
   });
 });
 

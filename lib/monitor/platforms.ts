@@ -14,6 +14,7 @@ export type MonitorPlatformId =
   | "youtube"
   | "x"
   | "pinterest"
+  | "reddit"
   | "google"
   | "getty"
   | "midjourney";
@@ -41,6 +42,7 @@ export const MONITOR_PLATFORMS: MonitorPlatform[] = [
   { id: "youtube", name: "YouTube Shorts", category: "Video", contentType: "short", source: "youtube_api", defaultEnabled: true },
   { id: "x", name: "X (Twitter)", category: "Social", contentType: "post", source: "apify", defaultEnabled: false },
   { id: "pinterest", name: "Pinterest", category: "Social", contentType: "post", source: "apify", defaultEnabled: false },
+  { id: "reddit", name: "Reddit", category: "Social", contentType: "post", source: "apify", defaultEnabled: false },
   { id: "google", name: "Google Images", category: "Search", contentType: "image", source: "apify", defaultEnabled: false },
   { id: "getty", name: "Getty / Shutterstock", category: "Stock", contentType: "image", source: "apify", defaultEnabled: false },
   { id: "midjourney", name: "AI Platforms", category: "AI Gen", contentType: "image", source: "civitai", defaultEnabled: false },

@@ -54,6 +54,7 @@ import { discoverYouTube, youtubeApiKey } from "./ingest/youtube";
 import { discoverTikTok } from "./ingest/tiktok";
 import { discoverX } from "./ingest/x";
 import { discoverPinterest } from "./ingest/pinterest";
+import { discoverReddit } from "./ingest/reddit";
 import { discoverSerp } from "./ingest/serp";
 import { discoverAiPlatforms } from "./ingest/ai-platforms";
 import { seedHandlesFor } from "./ingest/seeds";
@@ -831,6 +832,23 @@ async function discoverCandidates(
     }
   }
 
+  const reddit: CandidateContent[] = [];
+  if (on("reddit")) {
+    try {
+      const res = await discoverReddit({ token, anchor: opts.anchor, budget });
+      const { kept } = preFilter(res.candidates, filterOpts);
+      reddit.push(...kept);
+      if (res.budgetStopped === CREDITS_STOP) creditsStopSeen = true;
+      if (res.budgetStopped) {
+        console.warn(
+          `[monitor] Reddit sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`
+        );
+      }
+    } catch (err) {
+      console.warn(`[monitor] Reddit discovery failed: ${(err as Error).message}`);
+    }
+  }
+
   // SERP-backed surfaces: Google Images and the stock libraries via site:
   // queries. discoverSerp absorbs its own failures, so no try/catch here.
   const serp: CandidateContent[] = [];
@@ -856,6 +874,7 @@ async function discoverCandidates(
     ...tiktok,
     ...xCandidates,
     ...pinterest,
+    ...reddit,
     ...serp,
     ...aiPlatforms,
   ];
