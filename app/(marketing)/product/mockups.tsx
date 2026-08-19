@@ -409,10 +409,12 @@ export function LicenceMockup() {
 /* ── Likeness Monitor — scanning public platforms for misuse ── */
 export function MonitorMockup() {
   const platforms = [
-    { name: "YouTube", kind: "Video", state: "2 matches", flag: true },
-    { name: "TikTok", kind: "Video", state: "Clear" },
     { name: "Instagram Reels", kind: "Video", state: "Clear" },
+    { name: "TikTok", kind: "Video", state: "Clear" },
+    { name: "YouTube Shorts", kind: "Video", state: "2 matches", flag: true },
     { name: "X (Twitter)", kind: "Social", state: "1 match", flag: true },
+    { name: "Pinterest", kind: "Social", state: "Clear" },
+    { name: "Reddit", kind: "Social", state: "1 match", flag: true, nsfw: true },
     { name: "Google Images", kind: "Search", state: "Clear" },
     { name: "Getty / Shutterstock", kind: "Stock", state: "Clear" },
     { name: "AI Platforms", kind: "AI Gen", state: "Scanning" },
@@ -477,7 +479,7 @@ export function MonitorMockup() {
             Monitored platforms
           </span>
           <span className="text-[9px]" style={{ color: "var(--color-muted)" }}>
-            3 flagged · 7 checked
+            4 flagged · 9 checked
           </span>
         </div>
         <div
@@ -512,13 +514,16 @@ export function MonitorMockup() {
                   </p>
                 </div>
               </div>
-              {p.flag ? (
-                <Chip label={p.state} accent />
-              ) : (
-                <span className="text-[9px]" style={{ color: "var(--color-muted)" }}>
-                  {p.state}
-                </span>
-              )}
+              <span className="flex items-center gap-1.5">
+                {p.nsfw && <Chip label="NSFW" solid />}
+                {p.flag ? (
+                  <Chip label={p.state} accent />
+                ) : (
+                  <span className="text-[9px]" style={{ color: "var(--color-muted)" }}>
+                    {p.state}
+                  </span>
+                )}
+              </span>
             </div>
           ))}
         </div>

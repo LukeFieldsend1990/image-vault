@@ -544,7 +544,7 @@ export default function LikenessMonitorPage() {
             [
               "01",
               "Discover",
-              "Live sweeps crawl public platforms on a per-talent cadence — planned queries, watched accounts, and hashtag vocabulary tuned to each performer.",
+              "Live sweeps crawl nine public platforms — short-form video, social feeds, Reddit, image search, stock libraries, and AI-generation sites — on a per-talent cadence, with queries and watched accounts tuned to each performer.",
             ],
             [
               "02",
@@ -622,6 +622,14 @@ export default function LikenessMonitorPage() {
               [
                 "Auditable spend and evidence",
                 "Sweeps, adjudications, and every hit's signal readings are recorded. Evidence trails say why something was flagged — specific observations, not just a score — ready for enforcement.",
+              ],
+              [
+                "Nine-platform coverage",
+                "Short-form video (Instagram Reels, TikTok, YouTube Shorts), X, Pinterest, Reddit, Google Images, stock libraries, and AI-generation platforms — each toggleable per platform, so coverage expands deliberately rather than by default.",
+              ],
+              [
+                "Adult communities, badged",
+                "Adult communities are exactly where likeness misuse concentrates, so Reddit's are in the sweep — and a platform-declared NSFW flag rides every hit, warning talent before they tap through. It's the platform's own label, never a detector signal.",
               ],
             ].map(([title, body]) => (
               <div key={title} className="p-6" style={{ background: "var(--color-bg)" }}>
