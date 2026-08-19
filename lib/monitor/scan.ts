@@ -96,6 +96,7 @@ export interface LikenessHitRecord {
   contentUrl: string;
   authorHandle: string | null;
   caption: string | null;
+  nsfw: boolean;
   confidence: number;
   aiGeneratedLikelihood: number;
   riskLevel: string;
@@ -1275,6 +1276,7 @@ export async function runLikenessScan(
       contentUrl: candidate.contentUrl,
       authorHandle: candidate.authorHandle,
       caption: candidate.caption,
+      nsfw: candidate.nsfw === true,
       confidence: verdict.confidence,
       aiGeneratedLikelihood: verdict.aiGeneratedLikelihood,
       riskLevel: verdict.riskLevel,
@@ -1293,6 +1295,7 @@ export async function runLikenessScan(
       contentUrl: hit.contentUrl,
       authorHandle: hit.authorHandle,
       caption: hit.caption,
+      nsfw: hit.nsfw,
       confidence: hit.confidence,
       aiGeneratedLikelihood: hit.aiGeneratedLikelihood,
       riskLevel: verdict.riskLevel,
@@ -1500,6 +1503,7 @@ export async function getScanStatus(db: Db, scanId: string, talentId: string) {
       contentUrl: h.contentUrl,
       authorHandle: h.authorHandle,
       caption: h.caption,
+      nsfw: h.nsfw === true,
       confidence: h.confidence,
       aiGeneratedLikelihood: h.aiGeneratedLikelihood,
       riskLevel: h.riskLevel,
@@ -1633,6 +1637,7 @@ export async function getMonitorState(db: Db, talentId: string) {
       contentUrl: h.contentUrl,
       authorHandle: h.authorHandle,
       caption: h.caption,
+      nsfw: h.nsfw === true,
       confidence: h.confidence,
       aiGeneratedLikelihood: h.aiGeneratedLikelihood,
       riskLevel: h.riskLevel,

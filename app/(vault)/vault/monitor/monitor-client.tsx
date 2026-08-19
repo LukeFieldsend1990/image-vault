@@ -18,6 +18,8 @@ interface Platform {
   icon: React.ReactNode;
   status: ScanStatus;
   checkDuration: number;
+  /** Standing coverage note shown as a chip on the sweep row ("NSFW"). */
+  badge?: string;
 }
 
 interface SecondaryActor {
@@ -36,6 +38,7 @@ interface LikenessHit {
   contentUrl: string;
   authorHandle: string | null;
   caption: string | null;
+  nsfw?: boolean;
   confidence: number;
   aiGeneratedLikelihood: number;
   riskLevel: string;
@@ -204,7 +207,10 @@ const INITIAL_PLATFORMS: Omit<Platform, "status">[] = [
   { id: "youtube",    name: "YouTube Shorts",       category: "Video",  icon: <YouTubeIcon />,    checkDuration: 900  },
   { id: "x",          name: "X (Twitter)",          category: "Social", icon: <XIcon />,          checkDuration: 600  },
   { id: "pinterest",  name: "Pinterest",            category: "Social", icon: <PinterestIcon />,  checkDuration: 500  },
-  { id: "reddit",     name: "Reddit",               category: "Social", icon: <RedditIcon />,     checkDuration: 650  },
+  // Reddit sweeps include adult communities — that's where likeness misuse
+  // concentrates, and the badge says so up front rather than surprising the
+  // talent with what the hits contain.
+  { id: "reddit",     name: "Reddit",               category: "Social", icon: <RedditIcon />,     checkDuration: 650, badge: "NSFW" },
   { id: "google",     name: "Google Images",        category: "Search", icon: <GoogleIcon />,     checkDuration: 1100 },
   { id: "getty",      name: "Getty / Shutterstock", category: "Stock",  icon: <GettyIcon />,      checkDuration: 750  },
   { id: "midjourney", name: "AI Platforms",         category: "AI Gen", icon: <MidjourneyIcon />, checkDuration: 1300 },
@@ -238,6 +244,18 @@ function formatDate(unix: number): string {
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
+}
+
+// One chip for both places NSFW appears: the standing coverage note on the
+// Reddit sweep row and the per-hit warning on flagged content. Solid ink so
+// it reads as a label, not another severity level competing with RISK_COLORS.
+function NsfwBadge({ label = "NSFW" }: { label?: string }) {
+  return (
+    <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+      style={{ background: "var(--color-ink)", color: "var(--color-bg)" }}>
+      {label}
+    </span>
+  );
 }
 
 const RISK_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -298,7 +316,10 @@ function PlatformRow({ platform }: { platform: Platform }) {
         {platform.icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{platform.name}</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+          {platform.name}
+          {platform.badge && <NsfwBadge label={platform.badge} />}
+        </p>
         <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{platform.category}</p>
       </div>
       <StatusPill status={platform.status} />
@@ -728,6 +749,7 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
               style={{ background: risk.bg, color: risk.fg }}>
               {hit.riskLevel}
             </span>
+            {hit.nsfw && <NsfwBadge />}
             <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
               style={{ background: "var(--color-border)", color: "var(--color-muted)" }}>
               {HIT_STATUS_LABELS[hit.status] ?? hit.status}

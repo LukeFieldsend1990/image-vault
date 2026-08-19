@@ -1679,6 +1679,9 @@ export const likenessHits = sqliteTable("likeness_hits", {
   contentUrl: text("content_url").notNull(),
   authorHandle: text("author_handle"),
   caption: text("caption"),
+  // Platform-declared adult flag (Reddit's over18). A warning for the talent
+  // before they open the content — never part of the detector verdict.
+  nsfw: integer("nsfw", { mode: "boolean" }).notNull().default(false),
   confidence: integer("confidence").notNull(), // 0-100 likeness match confidence
   aiGeneratedLikelihood: integer("ai_generated_likelihood").notNull(), // 0-100
   riskLevel: text("risk_level", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
