@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import ApifyBudgetClient from "./apify-budget-client";
+import MetersClient from "./meters-client";
 import WatchlistClient from "./watchlist-client";
 import TakedownsClient from "./takedowns-client";
 import FunnelCandidatesClient from "./funnel-candidates-client";
@@ -30,7 +31,7 @@ export default async function AdminMonitorPage() {
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
           Operational controls for the discovery sweeps: schedule, vigilance windows, platform coverage,
-          Apify spend, the takedown backlog, and the shared account watchlist.
+          Apify spend, per-talent meters, the takedown backlog, and the shared account watchlist.
         </p>
       </div>
 
@@ -51,6 +52,10 @@ export default async function AdminMonitorPage() {
       <hr style={{ borderColor: "var(--color-border)" }} />
 
       <ApifyBudgetClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
+
+      <MetersClient />
 
       <hr style={{ borderColor: "var(--color-border)" }} />
 

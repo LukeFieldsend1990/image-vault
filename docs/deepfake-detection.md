@@ -442,17 +442,18 @@ Design decisions worth not rediscovering:
   or the invoice, and lapsing/upgrading a plan needs only the monitor row.
 - **`internal` is the default and means unmetered** — existing monitors
   behave exactly as before the migration (0124).
-- Admin: plan + override per talent at
-  `/api/admin/talent/[talentId]/monitor-plan`; fleet view in the `meters`
-  array of `/api/admin/monitor/apify`. Talent-facing state carries the meter
-  via `getMonitorState`.
+- Admin: the "Per-talent meters" panel on `/admin/monitor` (fed by
+  `GET /api/admin/monitor/meters`) lists every monitored talent's plan,
+  spend and headroom for the current period, with inline plan/override
+  editing via `PUT /api/admin/talent/[talentId]/monitor-plan`. Talent-facing
+  state carries the meter via `getMonitorState`.
 
 Known gaps, deliberate for v1: AI adjudication/synthetic-check spend is not
 attributed per talent (`ai_cost_log` has no `talent_id`; Apify dominates COGS
 by an order of magnitude), periods are calendar months rather than each
 subscriber's billing anchor, and nothing notifies anyone when a meter
-exhausts mid-month — surfacing that on the talent's monitor page and the
-admin panel is UI work still to do.
+exhausts mid-month — the admin panel highlights it, but the talent's own
+monitor page does not surface the meter yet.
 
 ## Roadmap order
 
