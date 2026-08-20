@@ -253,7 +253,7 @@ export default function ProductPage() {
             <div>
               <SectionLabel>Likeness Monitor</SectionLabel>
               <h3 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-                The vault that watches back
+                The vault that watches out for you
               </h3>
               <p className="mt-4 text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
                 The monitor sweeps public platforms for deepfakes and
