@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function ProductionsExplainerPage() {
   return (
     <ExplainerStandalone
-      src="/explainer/imagevault-explainer-productions.html"
+      src="/explainer/imagevault-explainer-productions.html?v=2"
       filmTitle="What ImageVault does — for productions"
     />
   );

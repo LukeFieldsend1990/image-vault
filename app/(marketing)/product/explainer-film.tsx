@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-const SRC = "/explainer/imagevault-explainer.html";
+const SRC = "/explainer/imagevault-explainer.html?v=2";
 
 // Handshake with the embedded film: it announces READY once its script is
 // listening, and holds its opening frame until we post PLAY (which we do when

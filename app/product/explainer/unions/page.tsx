@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function UnionsExplainerPage() {
   return (
     <ExplainerStandalone
-      src="/explainer/imagevault-explainer-unions.html"
+      src="/explainer/imagevault-explainer-unions.html?v=2"
       filmTitle="What ImageVault does — for performers' unions"
     />
   );
