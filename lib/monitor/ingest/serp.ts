@@ -22,18 +22,28 @@ export const SERP_ACTOR = "apify~google-search-scraper";
 
 export type SerpPlatform = "google" | "getty";
 
-export function buildSerpQueries(platform: SerpPlatform, anchor: TalentIdentityAnchor): string[] {
+export function buildSerpQueries(
+  platform: SerpPlatform,
+  anchor: TalentIdentityAnchor,
+  learnedHashtags: string[] = []
+): string[] {
   const name = anchor.fullName.trim();
   if (!name) return [];
+  // Learned hashtags from confirmed hits, as exact-match tokens. A mined tag
+  // is a concatenated phrase ("tomhardyrayleigh") that Google only surfaces
+  // quoted; getty queries keep the site scope that defines the platform.
+  const learned = learnedHashtags.slice(0, 2).map((h) => h.replace(/^#/, ""));
   if (platform === "getty") {
     return [
       `site:gettyimages.com "${name}" ai`,
       `site:shutterstock.com "${name}" ai`,
+      ...learned.map((h) => `site:gettyimages.com "${h}"`),
     ];
   }
   return [
     `"${name}" ai generated images`,
     `"${name}" deepfake`,
+    ...learned.map((h) => `"${h}"`),
   ];
 }
 
@@ -108,10 +118,11 @@ export async function discoverSerp(opts: {
   platform: SerpPlatform;
   anchor: TalentIdentityAnchor;
   resultsPerQuery?: number;
+  learnedHashtags?: string[];
   signal?: AbortSignal;
   budget?: ActorBudget;
 }): Promise<SerpDiscoveryResult> {
-  const queries = buildSerpQueries(opts.platform, opts.anchor);
+  const queries = buildSerpQueries(opts.platform, opts.anchor, opts.learnedHashtags ?? []);
   const mode = `${opts.platform}_serp`;
   const empty: SerpDiscoveryResult = {
     candidates: [],

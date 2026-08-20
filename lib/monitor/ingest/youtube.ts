@@ -35,7 +35,11 @@ export const YOUTUBE_QUERY_SUFFIXES = [
   "ai generated",
 ] as const;
 
-export function buildYouTubeQueries(anchor: TalentIdentityAnchor, max = 5): string[] {
+export function buildYouTubeQueries(
+  anchor: TalentIdentityAnchor,
+  max = 5,
+  learnedHashtags: string[] = []
+): string[] {
   const name = anchor.fullName.trim();
   if (!name) return [];
   const queries = YOUTUBE_QUERY_SUFFIXES.map((s) => `${name} ${s}`);
@@ -48,7 +52,12 @@ export function buildYouTubeQueries(anchor: TalentIdentityAnchor, max = 5): stri
   const vigilance = anchor.vigilance
     ? vigilancePhrases(name, anchor.vigilance, anchor.vigilance.phase === "peak" ? 3 : 2)
     : [];
-  return [...vigilance, ...queries].slice(0, max + vigilance.length);
+  // Learned hashtags from confirmed hits, after the standing set. YouTube
+  // search takes hashtag queries directly, so the mined tag rides as '#tag'.
+  // The base set is capped first so learned tags are additive — the standing
+  // vocabulary overflows `max` on its own and would otherwise slice them off.
+  const learned = learnedHashtags.slice(0, 3).map((h) => `#${h.replace(/^#/, "")}`);
+  return [...vigilance, ...queries.slice(0, max), ...learned];
 }
 
 interface YouTubeSearchItem {
@@ -186,9 +195,10 @@ export async function discoverYouTube(opts: {
   anchor: TalentIdentityAnchor;
   maxQueries?: number;
   resultsPerQuery?: number;
+  learnedHashtags?: string[];
   signal?: AbortSignal;
 }): Promise<YouTubeDiscoveryResult> {
-  const queries = buildYouTubeQueries(opts.anchor, opts.maxQueries ?? 5);
+  const queries = buildYouTubeQueries(opts.anchor, opts.maxQueries ?? 5, opts.learnedHashtags ?? []);
   const candidates: CandidateContent[] = [];
   const seen = new Set<string>();
   let queriesFailed = 0;

@@ -838,12 +838,26 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
           </svg>
           Open on platform
         </a>
+        {hit.status === "new" && (
+          <button
+            onClick={() => onTriage(hit.id, "confirmed")}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60"
+            style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}
+            title="Confirm this is a deepfake of you — sharpens future sweeps without filing a takedown yet"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            Confirm deepfake
+          </button>
+        )}
         {open && hit.status !== "takedown_requested" && (
           <button
             onClick={() => onTriage(hit.id, "takedown_requested")}
             disabled={busy}
             className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-60"
-            style={{ background: "#c0392b" }}
+            style={{ background: "var(--color-accent)" }}
           >
             Request takedown
           </button>

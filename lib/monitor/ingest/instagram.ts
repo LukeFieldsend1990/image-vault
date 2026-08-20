@@ -307,6 +307,7 @@ export async function discoverInstagram(
     watchedHandles: opts.watchedHandles,
     maxQueries: opts.maxQueries,
     resultsPerQuery: opts.resultsPerQuery,
+    learnedHashtags: opts.learnedHashtags,
   });
 
   const raw: CandidateContent[] = [];

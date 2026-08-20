@@ -4,6 +4,7 @@ import { likenessHits } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { createNotification } from "@/lib/notifications/create";
 import { platformName } from "@/lib/monitor/platforms";
+import { isConfirmingHitStatus, mineConfirmedHit } from "@/lib/monitor/query-mining";
 import { and, eq } from "drizzle-orm";
 
 const ALLOWED_TRANSITIONS = new Set(["confirmed", "dismissed", "takedown_requested", "resolved"]);
@@ -88,6 +89,19 @@ export async function PATCH(
       body: `${platformName(hit.platform)} · ${hit.authorHandle ?? "unknown account"} — our enforcement queue will file the platform notice.`,
       href: "/vault/monitor",
     });
+  }
+
+  // A human just vouched for this hit — feed its hashtags into the learned
+  // query vocabulary. Only on the transition INTO a confirming status
+  // (confirm / takedown / resolve all count; requesting a takedown IS a
+  // confirmation), so confirm-then-takedown doesn't double-count the caption.
+  // Non-fatal: mining is a quality lever, not part of the triage contract.
+  if (isConfirmingHitStatus(body.status) && !isConfirmingHitStatus(hit.status)) {
+    try {
+      await mineConfirmedHit(db, hit);
+    } catch (err) {
+      console.warn(`[monitor] hashtag mining on confirmed hit ${id} failed: ${(err as Error).message}`);
+    }
   }
 
   return NextResponse.json({ ok: true, status: body.status });

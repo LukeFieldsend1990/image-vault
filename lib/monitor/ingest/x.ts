@@ -17,10 +17,18 @@ export const X_ACTOR = "apidojo~tweet-scraper";
 
 export const X_QUERY_SUFFIXES = ["ai", "deepfake", "ai video"] as const;
 
-export function buildXQueries(anchor: TalentIdentityAnchor, max = 3): string[] {
+export function buildXQueries(
+  anchor: TalentIdentityAnchor,
+  max = 3,
+  learnedHashtags: string[] = []
+): string[] {
   const name = anchor.fullName.trim();
   if (!name) return [];
-  return X_QUERY_SUFFIXES.map((s) => `${name} ${s}`).slice(0, max);
+  const base = X_QUERY_SUFFIXES.map((s) => `${name} ${s}`).slice(0, max);
+  // Learned hashtags from confirmed hits ride natively — X search treats
+  // '#tag' as first-class. Additive to the cap, same contract as TikTok.
+  const learned = learnedHashtags.slice(0, 3).map((h) => `#${h.replace(/^#/, "")}`);
+  return [...base, ...learned];
 }
 
 /** The subset of the actor's tweet shape we rely on. Everything optional. */
@@ -96,10 +104,11 @@ export async function discoverX(opts: {
   anchor: TalentIdentityAnchor;
   maxQueries?: number;
   resultsPerQuery?: number;
+  learnedHashtags?: string[];
   signal?: AbortSignal;
   budget?: ActorBudget;
 }): Promise<XDiscoveryResult> {
-  const queries = buildXQueries(opts.anchor, opts.maxQueries ?? 3);
+  const queries = buildXQueries(opts.anchor, opts.maxQueries ?? 3, opts.learnedHashtags ?? []);
   const resultsLimit = opts.resultsPerQuery ?? 40;
   const candidates: CandidateContent[] = [];
   const seen = new Set<string>();

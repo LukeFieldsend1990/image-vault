@@ -262,6 +262,12 @@ export interface DiscoveryPlanOptions {
   maxQueries?: number;
   /** Items requested per query. */
   resultsPerQuery?: number;
+  /**
+   * Mined hashtags from this talent's human-confirmed hits (query-mining.ts),
+   * bare tags without '#'. Appended after the standing vocabulary and additive
+   * to the cap, capped at 3 — learning expands coverage, never displaces it.
+   */
+  learnedHashtags?: string[];
 }
 
 /**
@@ -328,10 +334,19 @@ export function buildDiscoveryPlan(
     }
   }
 
+  // Learned vocabulary last: proven tags the base set could not have
+  // predicted (the fake role name #tomhardyrayleigh). Same contract as
+  // TikTok's — appended after the tried vocabulary, lifting the cap.
+  const learned = (opts.learnedHashtags ?? []).slice(0, 3);
+  discovery.push(
+    ...learned.map((value) => ({ mode: "hashtag" as const, value: value.replace(/^#/, ""), resultsLimit }))
+  );
+
   // A window raises the ceiling as well as reordering under it: sweeping the
   // announcement vocabulary by dropping the name tag would be trading coverage
   // for coverage. The lift is bounded by what the window itself contributes.
-  const effectiveMax = maxQueries + vigilance.length;
+  // Learned tags lift it the same way.
+  const effectiveMax = maxQueries + vigilance.length + learned.length;
   const budget = Math.max(0, effectiveMax - watched.length);
   const planned = [...vigilance, ...discovery].filter(
     (q, i, all) => all.findIndex((o) => o.mode === q.mode && o.value === q.value) === i

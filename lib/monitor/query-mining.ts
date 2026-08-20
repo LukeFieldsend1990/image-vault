@@ -1,8 +1,15 @@
 /**
- * Query-mining pass. Runs after a sweep persists new hits: extract the
- * hashtags actually present on confirmed hits and remember the ones we
- * didn't ask for. Next sweep, the query builder pulls the top mined
- * hashtags per talent and adds them to the base vocabulary.
+ * Query-mining pass. Runs when a human confirms a hit: extract the hashtags
+ * actually present on it and remember the ones we didn't ask for. Next sweep,
+ * every query builder pulls the top mined hashtags per talent + platform and
+ * adds them to the base vocabulary.
+ *
+ * Gated on the human verdict, not the adjudicator's. Mining machine-flagged
+ * hits at persist time (the original design) let a false positive's hashtags
+ * enter the vocabulary and compound — bad tag finds more similar content,
+ * which re-mines the bad tag. A hit feeds the vocabulary only once a human
+ * has said it's real: an explicit confirm, or requesting a takedown /
+ * resolving it, which imply confirmation (see CONFIRMING_HIT_STATUSES).
  *
  * Deliberately per-talent — a hashtag that yields Tom Hardy content
  * (e.g. the fake role name #tomhardyrayleigh) isn't necessarily useful
@@ -52,7 +59,31 @@ export function candidateHashtags(hashtags: string[]): string[] {
 }
 
 /**
- * Upsert every candidate hashtag from the new hits into
+ * Hit statuses that carry a human confirmation. "confirmed" is the explicit
+ * button; a takedown request or a resolution implies the same judgement — the
+ * same reading the detection-feedback loop uses (lib/monitor/feedback.ts).
+ */
+export const CONFIRMING_HIT_STATUSES = new Set(["confirmed", "takedown_requested", "resolved"]);
+
+export function isConfirmingHitStatus(status: string | null | undefined): boolean {
+  return typeof status === "string" && CONFIRMING_HIT_STATUSES.has(status);
+}
+
+/**
+ * Mine one hit's caption into the learned vocabulary. Call on the status
+ * transition INTO a confirming status from a non-confirming one — the caller
+ * owns that check, which is what stops a confirm followed by a takedown
+ * request from double-counting the same caption.
+ */
+export async function mineConfirmedHit(
+  db: Db,
+  hit: { talentId: string; platform: string; caption: string | null }
+): Promise<{ recorded: number; skipped: number }> {
+  return recordLearnedHashtags(db, hit.talentId, [hit]);
+}
+
+/**
+ * Upsert every candidate hashtag from the given hits into
  * monitor_learned_queries. Increments hit_count when a hashtag reappears,
  * so the query builder can rank by yield.
  *
@@ -144,4 +175,39 @@ export async function topLearnedQueries(
     .limit(limit)
     .all();
   return rows.map((r) => r.query);
+}
+
+/**
+ * The learned vocabulary for every query surface a sweep will hit, in one D1
+ * round-trip. Same yield ordering as topLearnedQueries, capped per platform;
+ * platforms with nothing learned are simply absent from the map.
+ */
+export async function topLearnedQueriesByPlatform(
+  db: Db,
+  talentId: string,
+  platforms: string[],
+  limitPerPlatform = 3
+): Promise<Map<string, string[]>> {
+  if (!platforms.length) return new Map();
+  const rows = await db
+    .select({ platform: monitorLearnedQueries.platform, query: monitorLearnedQueries.query })
+    .from(monitorLearnedQueries)
+    .where(
+      and(
+        eq(monitorLearnedQueries.talentId, talentId),
+        inArray(monitorLearnedQueries.platform, platforms),
+        eq(monitorLearnedQueries.active, true)
+      )
+    )
+    .orderBy(desc(monitorLearnedQueries.hitCount))
+    .all();
+
+  const byPlatform = new Map<string, string[]>();
+  for (const row of rows) {
+    const list = byPlatform.get(row.platform) ?? [];
+    if (list.length >= limitPerPlatform) continue;
+    list.push(row.query);
+    byPlatform.set(row.platform, list);
+  }
+  return byPlatform;
 }

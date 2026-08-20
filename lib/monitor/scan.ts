@@ -60,7 +60,7 @@ import { discoverAiPlatforms } from "./ingest/ai-platforms";
 import { seedHandlesFor } from "./ingest/seeds";
 import { verifyCandidatesIdentity } from "./identity-check";
 import { assessCandidatesSynthetic } from "./synthetic-check";
-import { recordLearnedHashtags, topLearnedQueries } from "./query-mining";
+import { topLearnedQueriesByPlatform } from "./query-mining";
 import { loadVigilanceForTalent } from "./events";
 import { describeVigilance } from "./vigilance";
 import {
@@ -615,13 +615,34 @@ async function discoverCandidates(
     seenUrls: previousUrls,
   };
 
+  // Mined vocabulary from this talent's human-confirmed hits, one D1 read for
+  // every query surface below. Tags are learned per platform (query-mining.ts)
+  // and each builder appends its own platform's set after the standing
+  // vocabulary — additive to the query caps, never displacing proven terms.
+  let learnedByPlatform = new Map<string, string[]>();
+  try {
+    learnedByPlatform = await topLearnedQueriesByPlatform(
+      db,
+      opts.talentId,
+      ["instagram", "tiktok", "youtube", "x", "pinterest", "google", "getty"],
+      3
+    );
+  } catch (err) {
+    console.warn(`[monitor] learned-query lookup failed: ${(err as Error).message}`);
+  }
+  const learnedFor = (platform: string) => learnedByPlatform.get(platform) ?? [];
+
   // ── YouTube ───────────────────────────────────────────────────────────────
   // Independent of Apify: official API, quota not money, so it runs even when
   // the Apify ceiling is spent. Never fails the sweep on its own.
   const youtube: CandidateContent[] = [];
   if (ytKey && on("youtube")) {
     try {
-      const yt = await discoverYouTube({ apiKey: ytKey, anchor: opts.anchor });
+      const yt = await discoverYouTube({
+        apiKey: ytKey,
+        anchor: opts.anchor,
+        learnedHashtags: learnedFor("youtube"),
+      });
       const { kept } = preFilter(yt.candidates, filterOpts);
       youtube.push(...kept);
       if (yt.quotaExhausted) {
@@ -778,6 +799,7 @@ async function discoverCandidates(
       seenUrls: previousUrls,
       watchedHandles: harvestPlan.handles,
       accountNewerThan: harvestPlan.newerThan,
+      learnedHashtags: learnedFor("instagram"),
       budget,
     });
     instagram = candidates;
@@ -803,8 +825,12 @@ async function discoverCandidates(
     try {
       // Learned hashtags from prior sweeps — mined from confirmed hits'
       // captions. Bare list, no leading '#'. buildTikTokQueries prefixes.
-      const learnedHashtags = await topLearnedQueries(db, opts.talentId, "tiktok", 3);
-      const tt = await discoverTikTok({ token, anchor: opts.anchor, learnedHashtags, budget });
+      const tt = await discoverTikTok({
+        token,
+        anchor: opts.anchor,
+        learnedHashtags: learnedFor("tiktok"),
+        budget,
+      });
       const { kept } = preFilter(tt.candidates, filterOpts);
       tiktok.push(...kept);
       if (tt.budgetStopped === CREDITS_STOP) creditsStopSeen = true;
@@ -824,7 +850,7 @@ async function discoverCandidates(
   const xCandidates: CandidateContent[] = [];
   if (on("x")) {
     try {
-      const res = await discoverX({ token, anchor: opts.anchor, budget });
+      const res = await discoverX({ token, anchor: opts.anchor, learnedHashtags: learnedFor("x"), budget });
       const { kept } = preFilter(res.candidates, filterOpts);
       xCandidates.push(...kept);
       if (res.budgetStopped === CREDITS_STOP) creditsStopSeen = true;
@@ -839,7 +865,12 @@ async function discoverCandidates(
   const pinterest: CandidateContent[] = [];
   if (on("pinterest")) {
     try {
-      const res = await discoverPinterest({ token, anchor: opts.anchor, budget });
+      const res = await discoverPinterest({
+        token,
+        anchor: opts.anchor,
+        learnedHashtags: learnedFor("pinterest"),
+        budget,
+      });
       const { kept } = preFilter(res.candidates, filterOpts);
       pinterest.push(...kept);
       if (res.budgetStopped === CREDITS_STOP) creditsStopSeen = true;
@@ -875,7 +906,13 @@ async function discoverCandidates(
   const serp: CandidateContent[] = [];
   for (const platform of ["google", "getty"] as const) {
     if (!on(platform)) continue;
-    const res = await discoverSerp({ token, platform, anchor: opts.anchor, budget });
+    const res = await discoverSerp({
+      token,
+      platform,
+      anchor: opts.anchor,
+      learnedHashtags: learnedFor(platform),
+      budget,
+    });
     const { kept } = preFilter(res.candidates, filterOpts);
     serp.push(...kept);
     if (res.budgetStopped) {
@@ -1362,20 +1399,10 @@ export async function runLikenessScan(
 
   if (newHits.length) {
     await alertTalent(db, opts.talentId, anchor.fullName, newHits, opts.baseUrl);
-
-    // Mine hashtags from new hits back into the query vocabulary. Cheap
-    // (in-memory + a few upserts) and directly compounds each sweep — the
-    // next sweep expands its query set with whatever the last one taught us.
-    // Non-fatal on failure; this is a nice-to-have quality lever, not
-    // scan-critical.
-    try {
-      const stats = await recordLearnedHashtags(db, opts.talentId, newHits);
-      console.log(
-        `[monitor] mined ${stats.recorded} learned hashtag(s) for ${opts.talentId} (${stats.skipped} skipped)`
-      );
-    } catch (err) {
-      console.warn(`[monitor] hashtag mining failed: ${(err as Error).message}`);
-    }
+    // Hashtag mining deliberately does NOT happen here. New hits are only
+    // machine-flagged; the vocabulary learns from a hit when a human confirms
+    // it (confirm / takedown / resolve — see mineConfirmedHit and the hit
+    // triage route), so a false positive's tags can't compound sweep-over-sweep.
   }
 
   // Look for the same operators on the platforms this sweep did not find them

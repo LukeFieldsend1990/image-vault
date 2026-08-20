@@ -15,10 +15,19 @@ export const PINTEREST_ACTOR = "epctex~pinterest-scraper";
 
 export const PINTEREST_QUERY_SUFFIXES = ["ai", "ai art", "midjourney"] as const;
 
-export function buildPinterestQueries(anchor: TalentIdentityAnchor, max = 3): string[] {
+export function buildPinterestQueries(
+  anchor: TalentIdentityAnchor,
+  max = 3,
+  learnedHashtags: string[] = []
+): string[] {
   const name = anchor.fullName.trim();
   if (!name) return [];
-  return PINTEREST_QUERY_SUFFIXES.map((s) => `${name} ${s}`).slice(0, max);
+  const base = PINTEREST_QUERY_SUFFIXES.map((s) => `${name} ${s}`).slice(0, max);
+  // Learned hashtags from confirmed hits go in as bare keywords — Pinterest
+  // search is free text and a concatenated tag ("tomhardyrayleigh") works as
+  // a search term where '#' would not. Additive to the cap.
+  const learned = learnedHashtags.slice(0, 3).map((h) => h.replace(/^#/, ""));
+  return [...base, ...learned];
 }
 
 /** The subset of the actor's pin shape we rely on. Everything optional. */
@@ -92,10 +101,11 @@ export async function discoverPinterest(opts: {
   anchor: TalentIdentityAnchor;
   maxQueries?: number;
   resultsPerQuery?: number;
+  learnedHashtags?: string[];
   signal?: AbortSignal;
   budget?: ActorBudget;
 }): Promise<PinterestDiscoveryResult> {
-  const queries = buildPinterestQueries(opts.anchor, opts.maxQueries ?? 3);
+  const queries = buildPinterestQueries(opts.anchor, opts.maxQueries ?? 3, opts.learnedHashtags ?? []);
   const resultsLimit = opts.resultsPerQuery ?? 40;
   const candidates: CandidateContent[] = [];
   const seen = new Set<string>();
