@@ -164,7 +164,7 @@ export default function LikenessMonitorPage() {
           >
             The vault
             <br />
-            that watches out for you.
+            that looks out for you.
           </h1>
           <p
             className="mt-6 max-w-xl text-base leading-relaxed md:text-lg"
@@ -237,7 +237,7 @@ export default function LikenessMonitorPage() {
           </p>
         </div>
         <ExplainerFilm
-          src="/explainer/imagevault-likeness-monitor.html?v=4"
+          src="/explainer/imagevault-likeness-monitor.html?v=5"
           title="The Likeness Monitor — a two-minute explainer film"
         />
       </section>
