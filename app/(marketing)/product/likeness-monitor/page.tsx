@@ -206,10 +206,10 @@ export default function LikenessMonitorPage() {
       <section className="border-y" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px px-6 py-10 md:grid-cols-4">
           {[
-            ["Vault-anchored", "Detection compares against the canonical scan — the highest-fidelity record of a performer that exists."],
-            ["Four independent signals", "Identity, synthesis, derivation, and geometry fingerprints — each proves something different."],
+            ["Vault-anchored", "Detection compares against the canonical scan — the most current, highest-fidelity record of a performer that exists."],
+            ["Five independent signals", "Identity, synthesis, derivation, body geometry — and a fifth that stays ours."],
             ["Event-aware", "Sweeps surge around cast announcements and trailer drops, when synthetic waves actually arrive."],
-            ["Evidence-grade", "Every flag carries specific, reviewable rationale — ready for a takedown letter, not just a score."],
+            ["Evidence-grade", "Every flag carries specific, reviewable rationale — ready for a takedown letter."],
           ].map(([title, body]) => (
             <div key={title} className="px-2 py-2 md:px-4">
               <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
@@ -268,7 +268,7 @@ export default function LikenessMonitorPage() {
                 against the same public imagery everyone else can see.
                 ImageVault matches against the performer&apos;s own archived
                 captures: calibrated scan stills, mesh geometry, and the exact
-                files every licence released. When the source of a fake is
+                files every production uses. When the source of a fake is
                 scan-grade data, the party holding the original scans is the
                 only one who can prove it — and as generators improve and
                 visual artifacts disappear, detection built on possession of
@@ -277,14 +277,18 @@ export default function LikenessMonitorPage() {
               <p className="mt-4 text-base leading-relaxed" style={{ color: "var(--color-sidebar-muted)" }}>
                 Every scan a performer archives makes their monitoring
                 measurably stronger. Storage and protection stop being separate
-                products — the vault is the detector.
+                products.
               </p>
             </div>
             <div className="space-y-8">
               {[
                 [
+                  "Months ahead of the public material",
+                  "Deepfakes get built from posted trailers and lagging set leaks. ImageVault sits inside the production workflow, so it holds the most current, detailed record of the artist from the day of capture — months before any of that material is public.",
+                ],
+                [
                   "A reference gallery built from real captures",
-                  "Photographic stills from archived scan packages form the face-match gallery — studio-calibrated imagery of the actual person, not a fan-site crawl. Bytes never leave the vault's storage except under presigned, per-sweep access.",
+                  "Archived scan packages give the matcher the artist's face from every angle — the same multi-angle, studio-calibrated coverage a production needs for reference is exactly what face-matching needs. The real person, not a fan-site crawl.",
                 ],
                 [
                   "Turntable renders unlock mesh-only packages",
@@ -292,11 +296,7 @@ export default function LikenessMonitorPage() {
                 ],
                 [
                   "A derivation index over source imagery",
-                  "Every reference still is perceptually fingerprinted. Reposts, leaks, screenshots, and re-renders of vault imagery match by hash — robust to recompression and resizing, computed entirely inside the platform, at zero marginal cost.",
-                ],
-                [
-                  "Geometry fingerprints in every delivery",
-                  "Licensed scan data is watermarked at release. If content correlates with a fingerprint, it traces to the exact licence that released the files — unforgeable provenance no third-party detector can offer.",
+                  "Every reference still is perceptually fingerprinted. Reposts, leaks, screenshots, and re-renders of vault imagery match by hash — robust to recompression and resizing.",
                 ],
               ].map(([title, body]) => (
                 <div key={title}>
@@ -321,7 +321,7 @@ export default function LikenessMonitorPage() {
             className="text-3xl font-semibold tracking-tight md:text-4xl"
             style={{ color: "var(--color-ink)" }}
           >
-            Four signals, each proving something different
+            Five signals, each proving something different
           </h2>
           <p className="mt-4 text-base leading-relaxed" style={{ color: "var(--color-muted)" }}>
             No single detector survives generator progress, so the monitor
@@ -331,7 +331,7 @@ export default function LikenessMonitorPage() {
           </p>
         </div>
 
-        <div className="grid gap-px sm:grid-cols-2 lg:grid-cols-4" style={{ background: "var(--color-border)" }}>
+        <div className="grid gap-px sm:grid-cols-2 lg:grid-cols-3" style={{ background: "var(--color-border)" }}>
           <LayerCard
             num="01"
             title="Identity"
@@ -353,10 +353,17 @@ export default function LikenessMonitorPage() {
           />
           <LayerCard
             num="04"
-            title="Geometry fingerprint"
-            proves="licensed scan data was the source"
-            body="Watermarks embedded in every licensed delivery correlate misuse back to the exact licence that released the files. Unforgeable, because it rides the data itself."
+            title="Body geometry"
+            proves="the body shown is — or isn't — the artist"
+            body="The scan's mesh carries the artist's true proportions at production grade. Geometric ground truth no public photo holds, anchoring full-body likeness claims."
             moat="Vault-only"
+          />
+          <LayerCard
+            num="05"
+            title="Undisclosed"
+            proves="what we keep to ourselves"
+            body="A fifth, proprietary signal rides the platform's own workflow. Describing how it works publicly would help exactly the people it catches — so we don't."
+            moat="Proprietary"
           />
         </div>
 
@@ -396,9 +403,9 @@ export default function LikenessMonitorPage() {
               Artifact detection is an edge that narrows with every generator
               release — which is why it&apos;s one layer here, not the strategy.
               Identity anchored to ground-truth captures, derivation matched
-              against source imagery, and fingerprints riding licensed
-              deliveries don&apos;t decay as fakes get better. That&apos;s the
-              part only a vault can do.
+              against source imagery, and signals embedded where only the
+              platform can put them don&apos;t decay as fakes get better.
+              That&apos;s the part only a vault can do.
             </p>
           </div>
         </div>
@@ -465,7 +472,7 @@ export default function LikenessMonitorPage() {
             [
               "02",
               "Score",
-              "Every candidate is scored by the four detection layers against the vault's reference set, derivation index, and delivery fingerprints.",
+              "Every candidate is scored by the five detection layers against the vault's reference set and derivation index — plus signals only the platform can carry.",
             ],
             [
               "03",
@@ -539,16 +546,20 @@ export default function LikenessMonitorPage() {
                 "Every confirmation, dismissal, and whitelist decision is read back as a calibration signal — per-detector and per-talent — so the system learns where it was over- or under-confident.",
               ],
               [
-                "Auditable spend and evidence",
-                "Sweeps, adjudications, and every hit's signal readings are recorded. Evidence trails say why something was flagged — specific observations, not just a score — ready for enforcement.",
+                "Audit and evidence",
+                "Sweeps, adjudications, and every hit's signal readings are recorded. Evidence trails say why something was flagged — specific observations, ready for enforcement.",
               ],
               [
                 "Nine-platform coverage",
-                "Short-form video (Instagram Reels, TikTok, YouTube Shorts), X, Pinterest, Reddit, Google Images, stock libraries, and AI-generation platforms — each toggleable per platform, so coverage expands deliberately rather than by default.",
+                "Instagram Reels, TikTok, YouTube Shorts, X (Twitter), Pinterest, Reddit, Google Images, Getty / Shutterstock, and AI-generation platforms — each toggleable per platform, so coverage expands deliberately rather than by default.",
               ],
               [
                 "Adult communities, badged",
-                "Adult communities are exactly where likeness misuse concentrates, so Reddit's are in the sweep — and a platform-declared NSFW flag rides every hit, warning talent before they tap through. It's the platform's own label, never a detector signal.",
+                "Adult communities are exactly where likeness misuse concentrates, so they're inside the sweep — and flagged hits carry an NSFW badge, warning talent before they tap through.",
+              ],
+              [
+                "Managed by your representative",
+                "Talent never have to watch the queue alone — representatives triage hits, send takedowns, and manage watchlists on their clients' behalf, with every action on the record.",
               ],
             ].map(([title, body]) => (
               <div key={title} className="p-6" style={{ background: "var(--color-bg)" }}>
@@ -562,13 +573,6 @@ export default function LikenessMonitorPage() {
             ))}
           </div>
 
-          <p className="mt-10 max-w-2xl text-sm leading-relaxed" style={{ color: "var(--color-muted)" }}>
-            We publish what each layer can and cannot claim — an unmeasured
-            signal is never a verdict, a coverage score is a statement about
-            reference quality rather than a detection guarantee, and no reading
-            is ever presented as proof that content is authentic. Honest limits
-            are part of the design: they are what make the evidence hold up.
-          </p>
         </div>
       </section>
 

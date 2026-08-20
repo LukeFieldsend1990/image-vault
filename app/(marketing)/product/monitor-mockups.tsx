@@ -8,7 +8,7 @@
  * the NSFW badge is the same solid-ink pill. Colour literals are the
  * platforms' own, copied from platform-brand.ts — they must not follow the
  * app theme. Every handle, caption and face is fictional (the "Marlowe Quinn"
- * demo persona and the @ultimatestudiosofficial demo offender) — avatars are
+ * demo persona and the invented "@velmirastudios" demo offender) — avatars are
  * initials, never real photographs.
  */
 
@@ -267,7 +267,7 @@ export function MonitorHitsMockup() {
       brand: BRANDS.instagram,
       icon: <InstagramGlyph size={15} />,
       platform: "Instagram Reels",
-      handle: "@ultimatestudiosofficial",
+      handle: "@velmirastudios",
       risk: { label: "Medium", ...RISK.medium },
       status: "New",
       time: "3d ago",
@@ -372,7 +372,7 @@ export function MonitorWatchlistMockup() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <p className="font-mono text-[11px] font-semibold" style={{ color: "var(--color-ink)" }}>
-                    @ultimatestudiosofficial
+                    @velmirastudios
                   </p>
                   <span
                     className="rounded px-1.5 py-0.5 text-[8px] font-semibold"
@@ -388,7 +388,7 @@ export function MonitorWatchlistMockup() {
                   </span>
                 </div>
                 <p className="mt-0.5 text-[9px]" style={{ color: "var(--color-muted)" }}>
-                  Ultimate Studios · 155k followers
+                  Velmira Studios · 155k followers
                 </p>
               </div>
               <div className="shrink-0 text-right">
@@ -458,7 +458,7 @@ export function MonitorWatchlistMockup() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5">
                 <p className="font-mono text-[11px] font-semibold" style={{ color: "var(--color-ink)" }}>
-                  @ultimatestudiosofficial
+                  @velmirastudios
                 </p>
                 <span
                   className="rounded px-1.5 py-0.5 text-[8px] font-semibold"

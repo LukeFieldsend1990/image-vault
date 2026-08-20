@@ -259,14 +259,14 @@ export default function ProductPage() {
                 The monitor sweeps public platforms for deepfakes and
                 unauthorised use — and scores what it finds against the
                 ground-truth capture data only the vault holds. Identity is
-                matched to the performer&apos;s own scan stills, derivation is
-                caught by perceptual fingerprints of vault imagery, and
-                licensed deliveries carry geometry watermarks that trace misuse
-                back to the exact licence that released the files.
+                matched to the performer&apos;s own scan stills from every
+                angle, derivation is caught by perceptual fingerprints of
+                vault imagery, and the artist&apos;s true body geometry — held
+                at production grade — anchors claims no public photo can.
               </p>
               <ul className="mt-6 space-y-2.5">
                 {[
-                  "Four independent detection layers — a flag needs likeness and synthesis evidence together",
+                  "Five independent detection layers — a flag needs likeness and synthesis evidence together",
                   "Event-aware sweeps that surge around announcements and trailer drops",
                   "Every scan archived measurably strengthens detection coverage",
                 ].map((item) => (
