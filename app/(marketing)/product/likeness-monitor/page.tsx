@@ -237,7 +237,7 @@ export default function LikenessMonitorPage() {
           </p>
         </div>
         <ExplainerFilm
-          src="/explainer/imagevault-likeness-monitor.html?v=2"
+          src="/explainer/imagevault-likeness-monitor.html?v=3"
           title="The Likeness Monitor — a two-minute explainer film"
         />
       </section>
