@@ -28,9 +28,11 @@ type Fit = { w: number; h: number; rotated: boolean };
 export default function ExplainerStandalone({
   src = "/explainer/imagevault-explainer.html?v=2",
   filmTitle = "What ImageVault does — the explainer film",
+  backHref = "/product",
 }: {
   src?: string;
   filmTitle?: string;
+  backHref?: string;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [fit, setFit] = useState<Fit | null>(null);
@@ -88,7 +90,7 @@ export default function ExplainerStandalone({
         />
       </div>
       <Link
-        href="/product"
+        href={backHref}
         aria-label="Back to the product page"
         className="fixed top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full text-lg leading-none transition hover:opacity-90"
         style={{
