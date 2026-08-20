@@ -233,12 +233,12 @@ export default function LikenessMonitorPage() {
             What the monitor does
           </p>
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-            A ninety-second tour
+            A two-minute tour · tap to pause
           </p>
         </div>
         <ExplainerFilm
           src="/explainer/imagevault-likeness-monitor.html"
-          title="The Likeness Monitor — a ninety-second explainer film"
+          title="The Likeness Monitor — a two-minute explainer film"
         />
       </section>
 
