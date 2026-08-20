@@ -39,7 +39,7 @@ export function buildTikTokQueries(
   // the mining pass. TikTok search takes phrases, so we prefix "#" and
   // append them after the base set — TIKTOK_QUERY_SUFFIXES is the tried
   // vocabulary, learned queries expand it.
-  const learned = learnedHashtags.map((h) => `#${h}`);
+  const learned = learnedHashtags.map((h) => `#${h.replace(/^#/, "")}`);
   // The window's phrases are additive to the cap for the same reason they are
   // first: dropping proven vocabulary to make room for them would trade
   // coverage for coverage rather than adding any.

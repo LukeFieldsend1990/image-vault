@@ -306,6 +306,38 @@ extra spend auditable after the fact.
    dismissal reasons on hits carrying a `vigilanceMatchTerm` before widening
    this further.
 
+## Learned query vocabulary (`lib/monitor/query-mining.ts`)
+
+Operators invent vocabulary no hardcoded list can predict — the fake role
+name (`#tomhardyrayleigh`), the compound tag. When a human confirms a hit,
+its caption's hashtags are mined into `monitor_learned_queries` (per talent,
+per platform, ranked by yield), and the next sweep's query builders append
+the top 3 per platform after the standing vocabulary — additive to every
+query cap, never displacing proven terms.
+
+Two invariants:
+
+1. **Only human-confirmed hits feed the vocabulary.** Mining fires on the
+   status transition into `confirmed` / `takedown_requested` / `resolved`
+   (requesting a takedown is an instant confirm), from the hit triage route.
+   It deliberately does NOT run at sweep-persist time any more: mining
+   machine-flagged hits let a false positive's tags compound sweep-over-sweep
+   (bad tag finds more similar content, which re-mines the bad tag). The
+   transition guard also stops confirm-then-takedown double-counting one
+   caption.
+2. **Every query surface consumes it.** Instagram, TikTok, YouTube, X,
+   Pinterest and both SERP platforms take `learnedHashtags`, each formatting
+   for its own search grammar (`#tag` where hashtags are native, bare or
+   quoted tokens where they aren't). Reddit (no ingest module) and Civitai
+   (name-search API, no hashtags) are the documented exceptions. The drift
+   test (`__tests__/lib/monitor/learned-queries.test.ts`) holds the consumer
+   map against `MONITOR_PLATFORMS` — a platform added to the registry without
+   deciding either way fails CI.
+
+Admins retire a tag that pulls noise from the "Learned queries" panel on
+`/admin/monitor`; a retired tag that produces again is auto-reactivated by
+the upsert.
+
 ## Cross-platform siblings (`lib/monitor/cross-platform.ts`)
 
 Operators are building an audience, not a feed. `@ultimatestudiosofficial`
