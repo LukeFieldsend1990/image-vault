@@ -26,7 +26,7 @@ type Fit = { w: number; h: number; rotated: boolean };
  * way up.
  */
 export default function ExplainerStandalone({
-  src = "/explainer/imagevault-explainer.html",
+  src = "/explainer/imagevault-explainer.html?v=2",
   filmTitle = "What ImageVault does — the explainer film",
 }: {
   src?: string;
