@@ -85,7 +85,9 @@ export default function WatchlistClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ platform, ...payload }),
         });
-        const data = (await res.json()) as {
+        // .catch: a 500 body is not JSON; without it the parse throw escaped
+        // the try and the click appeared to do nothing at all.
+        const data = (await res.json().catch(() => ({}))) as {
           added?: number;
           skipped?: number;
           rejected?: string[];
@@ -121,7 +123,7 @@ export default function WatchlistClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ handle: curationHandle }),
       });
-      const data = (await res.json()) as {
+      const data = (await res.json().catch(() => ({}))) as {
         accounts?: ImportedAccount[];
         handle?: string | null;
         error?: string;
@@ -150,7 +152,7 @@ export default function WatchlistClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ platform: "instagram", prune }),
         });
-        const data = (await res.json()) as {
+        const data = (await res.json().catch(() => ({}))) as {
           checked?: number;
           enriched?: number;
           missing?: string[];
@@ -178,7 +180,7 @@ export default function WatchlistClient() {
       setBusy(true);
       try {
         const res = await fetch(`/api/admin/monitor/accounts?id=${id}`, { method: "DELETE" });
-        const data = (await res.json()) as { action?: string; reason?: string };
+        const data = (await res.json().catch(() => ({}))) as { action?: string; reason?: string };
         if (res.ok) {
           setMessage(data.action === "cleared" ? `Marked cleared — ${data.reason}` : "Removed");
           await load();
