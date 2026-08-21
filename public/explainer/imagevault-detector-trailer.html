@@ -232,6 +232,9 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
 .btn.confirm{border:1.5px solid var(--red);color:var(--red-deep);}
 .btn.takedown{background:var(--red);color:#fff;box-shadow:0 12px 26px -14px rgba(188,61,44,.6);}
 .scene.active .btn{animation:stampin .42s var(--ease-mech) var(--d,0s) both;}
+/* The takedown button starts pulsing as the closing line lands (9.4s). */
+.scene.active .btn.takedown{animation:stampin .42s var(--ease-mech) var(--d,0s) both,tdpulse 1.8s var(--ease-cam) 9.7s infinite;}
+@keyframes tdpulse{0%{box-shadow:0 12px 26px -14px rgba(188,61,44,.6),0 0 0 0 rgba(188,61,44,.55);}70%{box-shadow:0 12px 26px -14px rgba(188,61,44,.6),0 0 0 16px rgba(188,61,44,0);}100%{box-shadow:0 12px 26px -14px rgba(188,61,44,.6),0 0 0 0 rgba(188,61,44,0);}}
 
 /* ============ T9 · CLOSE ============ */
 .statusline{font-family:var(--mono);font-size:19px;letter-spacing:.04em;color:var(--ink-700);}
@@ -499,7 +502,7 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
               </div>
             </div>
 
-            <div class="display settle" style="--d:9.4s;font-size:56px;margin:26px auto 0;">Every hit carries <em>its proof.</em></div>
+            <div class="display settle" style="--d:9.4s;font-size:56px;margin:26px auto 0;">It tracks hits across the internet. <em>We handle the takedown.</em></div>
           </div>
         </div>
       </div>
