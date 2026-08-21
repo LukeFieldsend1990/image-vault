@@ -34,3 +34,12 @@ export function isComplianceRole(role: string | null | undefined): boolean {
 export function isIndustryRole(role: string | null | undefined): boolean {
   return role === "industry" || role === "licensee";
 }
+
+/**
+ * Who can run Likeness Scout trials (lib/monitor/trial.ts): reps and
+ * production/industry accounts — the people we want tasting the monitor
+ * before their talent is on the platform. Talent runs the real thing.
+ */
+export function isScoutRole(role: string | null | undefined): boolean {
+  return role === "rep" || role === "admin" || isIndustryRole(role);
+}
