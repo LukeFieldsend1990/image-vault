@@ -1676,6 +1676,38 @@ export const monitorScans = sqliteTable("monitor_scans", {
   completedAt: integer("completed_at"),
 });
 
+/**
+ * Every discovery query a sweep actually issued — the hashtags and search
+ * terms, one row each, across all surfaces (paid and free alike).
+ *
+ * `apify_usage` already records the paid runs, but it exists to police spend:
+ * it never sees the free surfaces (YouTube, Civitai) or the simulated crawler,
+ * and it is summed against a ceiling that gets reset. This table is the
+ * sweep's own record of what it looked for, so an admin reading a run can
+ * answer "which tags did this actually search, and which of them produced
+ * anything" rather than inferring it from the hits that happened to land.
+ */
+export const monitorScanQueries = sqliteTable("monitor_scan_queries", {
+  id: text("id").primaryKey(),
+  scanId: text("scan_id").notNull().references(() => monitorScans.id, { onDelete: "cascade" }),
+  talentId: text("talent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  platform: text("platform").notNull(), // any MonitorPlatformId
+  // hashtag | account | user_search | tiktok_search | x_search | reddit_search
+  // | pinterest_search | google_serp | getty_serp | youtube_search | simulated
+  mode: text("mode").notNull(),
+  /** The term itself — hashtag without '#', search string, or handle. */
+  query: text("query").notNull(),
+  /**
+   * Raw items the surface returned for this term, before the pre-filter. Null
+   * when one actor run covered several terms and the split is not knowable.
+   */
+  resultCount: integer("result_count"),
+  costUsd: real("cost_usd").notNull().default(0),
+  status: text("status", { enum: ["succeeded", "failed"] }).notNull().default("succeeded"),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const likenessHits = sqliteTable("likeness_hits", {
   id: text("id").primaryKey(),
   scanId: text("scan_id").notNull().references(() => monitorScans.id, { onDelete: "cascade" }),
