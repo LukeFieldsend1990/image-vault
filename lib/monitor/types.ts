@@ -52,6 +52,72 @@ export interface CandidateAuthorMeta {
   verified: boolean;
 }
 
+/**
+ * The detector evidence frozen onto a hit at persist time
+ * (likeness_hits.detector_readings_json).
+ *
+ * The four numeric readings used to exist only in memory during the sweep;
+ * the hit kept the adjudicator's prose and nothing else, which made "which
+ * detector was right" and "show me the evidence" unanswerable after the
+ * fact. Null means the detector took no reading — never zero, never
+ * exoneration (same contract as CandidateSignals).
+ */
+export interface DetectorReadings {
+  faceEmbeddingSimilarity: number | null;
+  perceptualHashDistance: number | null;
+  geometryFingerprintCorrelation: number | null;
+  syntheticMediaScore: number | null;
+  /** The synthetic-media analyst's structured findings, when a check ran. */
+  synthetic: SyntheticFindings | null;
+  /** Role-vocabulary term that supplied the identity match, if a vigilance
+   *  window (not the talent's name) surfaced this content. */
+  vigilanceMatchTerm: string | null;
+}
+
+/** Freeze a candidate's detector evidence for persistence on the hit row. */
+export function detectorReadingsFrom(candidate: CandidateContent): DetectorReadings {
+  const s = candidate.signals;
+  return {
+    faceEmbeddingSimilarity: s.faceEmbeddingSimilarity,
+    perceptualHashDistance: s.perceptualHashDistance,
+    geometryFingerprintCorrelation: s.geometryFingerprintCorrelation,
+    syntheticMediaScore: s.syntheticMediaScore,
+    synthetic: candidate.syntheticFindings ?? null,
+    vigilanceMatchTerm: candidate.vigilanceMatchTerm ?? null,
+  };
+}
+
+/** Parse a stored readings blob; null for pre-column hits or malformed data. */
+export function parseDetectorReadings(json: string | null | undefined): DetectorReadings | null {
+  if (!json) return null;
+  try {
+    const p = JSON.parse(json) as Partial<DetectorReadings>;
+    if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+    const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const synthetic =
+      p.synthetic && typeof p.synthetic === "object" && typeof p.synthetic.analyst === "string"
+        ? {
+            analyst: p.synthetic.analyst,
+            generatorFamily:
+              typeof p.synthetic.generatorFamily === "string" ? p.synthetic.generatorFamily : null,
+            evidence: Array.isArray(p.synthetic.evidence)
+              ? p.synthetic.evidence.map(String).slice(0, 8)
+              : [],
+          }
+        : null;
+    return {
+      faceEmbeddingSimilarity: num(p.faceEmbeddingSimilarity),
+      perceptualHashDistance: num(p.perceptualHashDistance),
+      geometryFingerprintCorrelation: num(p.geometryFingerprintCorrelation),
+      syntheticMediaScore: num(p.syntheticMediaScore),
+      synthetic,
+      vigilanceMatchTerm: typeof p.vigilanceMatchTerm === "string" ? p.vigilanceMatchTerm : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Structured output of the synthetic-media check (lib/monitor/synthetic-check.ts). */
 export interface SyntheticFindings {
   /** Which detector produced the reading: embedded metadata, Claude vision, or LLaVA. */

@@ -1666,6 +1666,12 @@ export const monitorScans = sqliteTable("monitor_scans", {
   hitsFound: integer("hits_found").notNull().default(0),
   aiProvider: text("ai_provider"), // ai | heuristic
   error: text("error"),
+  // Live progress snapshot while status is "running" (lib/monitor/progress.ts).
+  progressJson: text("progress_json"),
+  // Detection coverage at the time of this sweep (lib/monitor/reference-set.ts)
+  // — the historical record behind "monitoring got stronger" claims.
+  coverageTier: text("coverage_tier"), // unanchored | baseline | anchored | fortified
+  coverageScore: integer("coverage_score"), // 0-100
   startedAt: integer("started_at").notNull(),
   completedAt: integer("completed_at"),
 });
@@ -1719,6 +1725,10 @@ export const likenessHits = sqliteTable("likeness_hits", {
   riskLevel: text("risk_level", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
   matchSignalsJson: text("match_signals_json").notNull().default("[]"), // JSON string[]
   aiRationale: text("ai_rationale"),
+  // The numeric detector readings behind the verdict, frozen at persist time
+  // (lib/monitor/types.ts DetectorReadings). Null on hits recorded before the
+  // column existed — a null reading inside means "not measured", never zero.
+  detectorReadingsJson: text("detector_readings_json"),
   // Stage 2/3 input, captured at discovery so the detectors need no re-fetch.
   thumbnailUrl: text("thumbnail_url"),
   // R2 key for the preview bytes, captured at discovery. Platform CDN URLs are

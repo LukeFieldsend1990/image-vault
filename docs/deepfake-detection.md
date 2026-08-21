@@ -537,6 +537,59 @@ subscriber's billing anchor, and nothing notifies anyone when a meter
 exhausts mid-month — the admin panel highlights it, but the talent's own
 monitor page does not surface the meter yet.
 
+## Hit statistics for unions, reps and admins (`lib/monitor/hit-stats.ts`)
+
+Everything above produces hits. This is the layer that counts them for the
+people who represent the talent rather than the talent themselves: a union
+watcher looking at its affiliated members, a rep looking at their roster, and
+an admin looking at either (or at the whole platform). One engine, three
+cohorts, identical report — so the three audiences can never be shown
+subtly different arithmetic for the same question.
+
+- **Cohort resolution is separate from counting** (`lib/monitor/stat-cohorts.ts`).
+  `hit-stats.ts` counts whatever set of talent it is handed and can therefore
+  never widen a scope; who is in scope is decided in one readable place —
+  union affiliation (`lib/compliance/affiliation.ts`), `talent_reps`, or every
+  talent profile for admin.
+- **Counts only, never content.** The payload carries totals, month buckets and
+  per-member counts — no content URL, caption, thumbnail, author handle or
+  rationale. That is what keeps the union surface read-only compliance
+  visibility rather than a second route into the data plane: a union sees that
+  a member is carrying eleven hits, never what the eleven hits are. Reps get hit
+  detail through `/api/roster/monitor`, which applies its own sanitisation; a
+  test asserts the stats payload contains none of those field names.
+- **Aggregation happens in SQL**, as conditional sums grouped by talent plus
+  three small cohort-wide rollups. Result sets are bounded by cohort size and
+  13 month buckets, not by hit count, so a union with years of history costs
+  the same as one with a month of it.
+- **Growth is stated three ways because one way lies.** Month-to-date compared
+  against a *full* previous month always reads as a collapse on the 3rd; so the
+  headline reading compares month-to-date against the same elapsed slice of the
+  previous month (capped at the month boundary, or 31 March would reach into
+  March when February is the baseline). Alongside it sit last-complete-month vs
+  the month before, and rolling 30 days vs the preceding 30.
+- **A zero baseline yields no rate at all.** `growth()` returns `pct: null`
+  rather than an infinity or a fake +100%, and the UI says "first activity in
+  this window" instead of printing a number.
+- **Dismissed hits stay in the lifetime total** and are reported separately.
+  Hiding them would flatter the detector; the union is entitled to see both the
+  raw detection volume and how much of it survived review.
+- All month boundaries are UTC — Workers run in UTC and a report whose month
+  moves with the reader's timezone cannot be reconciled against another copy of
+  itself.
+
+Surfaces: `/deepfakes` (union, gated on a union watcher's platform- or
+union-scoped grant), `/roster/deepfakes` (rep), and the "Deepfake statistics"
+panel on `/admin/monitor`, which can switch between platform-wide and any one
+union's slice.
+
+Known gaps, deliberate for v1: the cohort is on-platform talent only, so a
+union's numbers speak only for members who have onboarded (the union view
+prints its roster coverage next to the totals so this is never read as
+platform-wide truth); the admin scope switches between platform and union but
+not to an individual rep's roster; and there is no CSV/PDF export or scheduled
+digest — the report is read in the browser.
+
 ## Roadmap order
 
 1. Vet the reference gallery at sync time (fixes limitation 2, uses `rejected`).

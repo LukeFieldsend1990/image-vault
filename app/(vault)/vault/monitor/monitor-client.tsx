@@ -20,6 +20,28 @@ interface Platform {
   checkDuration: number;
   /** Standing coverage note shown as a chip on the sweep row ("NSFW"). */
   badge?: string;
+  /** Candidates the live sweep collected on this platform, once known. */
+  candidates?: number | null;
+}
+
+/** Mirror of lib/monitor/progress.ts — the live narration of a running sweep. */
+interface ScanProgress {
+  stage: string;
+  stageLabel: string;
+  platforms: Record<string, { status: "pending" | "sweeping" | "done"; candidates: number | null }>;
+  candidatesFound: number;
+  log: { at: number; text: string }[];
+  updatedAt: number;
+}
+
+/** Mirror of lib/monitor/types.ts DetectorReadings — null means "not measured". */
+interface DetectorReadings {
+  faceEmbeddingSimilarity: number | null;
+  perceptualHashDistance: number | null;
+  geometryFingerprintCorrelation: number | null;
+  syntheticMediaScore: number | null;
+  synthetic: { analyst: string; generatorFamily: string | null; evidence: string[] } | null;
+  vigilanceMatchTerm: string | null;
 }
 
 interface SecondaryActor {
@@ -39,11 +61,14 @@ interface LikenessHit {
   authorHandle: string | null;
   caption: string | null;
   nsfw?: boolean;
+  /** A captured evidence still exists for this hit (see /thumbnail route). */
+  hasThumbnail?: boolean;
   confidence: number;
   aiGeneratedLikelihood: number;
   riskLevel: string;
   matchSignals: string[];
   aiRationale: string | null;
+  detectorReadings?: DetectorReadings | null;
   status: string;
   detectedAt: number;
   secondaryActors?: SecondaryActor[];
@@ -52,12 +77,16 @@ interface LikenessHit {
 interface ScanRecord {
   id: string;
   startedAt: number;
+  completedAt?: number | null;
+  trigger?: string;
   status: string;
   error?: string | null;
   platformsChecked: number;
   candidatesAnalysed: number;
   hitsFound: number;
   aiProvider: string | null;
+  coverageTier?: string | null;
+  coverageScore?: number | null;
 }
 
 interface MonitorConfig {
@@ -103,6 +132,7 @@ interface ScanResponse {
   hitsFound?: number;
   newHits: LikenessHit[];
   aiProvider: string;
+  progress?: ScanProgress | null;
 }
 
 // ── Platform icons ──────────────────────────────────────────────────────────
@@ -246,6 +276,13 @@ function formatDate(unix: number): string {
   });
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${mins}m ${rest}s` : `${mins}m`;
+}
+
 // One chip for both places NSFW appears: the standing coverage note on the
 // Reddit sweep row and the per-hit warning on flagged content. Solid ink so
 // it reads as a label, not another severity level competing with RISK_COLORS.
@@ -322,7 +359,104 @@ function PlatformRow({ platform }: { platform: Platform }) {
         </p>
         <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{platform.category}</p>
       </div>
+      {typeof platform.candidates === "number" && (
+        <span className="font-mono text-xs tabular-nums" style={{ color: "var(--color-muted)" }}>
+          {platform.candidates} candidate{platform.candidates === 1 ? "" : "s"}
+        </span>
+      )}
       <StatusPill status={platform.status} />
+    </div>
+  );
+}
+
+// ── Live sweep activity ─────────────────────────────────────────────────────
+
+function formatClock(unix: number): string {
+  return new Date(unix * 1000).toLocaleTimeString("en-GB", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  });
+}
+
+function SweepLogLines({ entries }: { entries: ScanProgress["log"] }) {
+  return (
+    <div className="space-y-1">
+      {entries.map((entry, i) => (
+        <div key={`${entry.at}-${i}`} className="flex items-baseline gap-3">
+          <span className="font-mono text-[10px] tabular-nums shrink-0" style={{ color: "var(--color-muted)", opacity: 0.7 }}>
+            {formatClock(entry.at)}
+          </span>
+          <span className="font-mono text-[11px] leading-relaxed" style={{ color: "var(--color-ink)" }}>
+            {entry.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The live narration of a running sweep: current stage, running candidate
+ * count, and the tail of the activity log the worker writes as it goes.
+ *
+ * This replaces guessing at what a 5-15 minute sweep is doing — every line
+ * shown here is a real event reported by the sweep itself.
+ */
+function SweepActivityFeed({ progress }: { progress: ScanProgress }) {
+  const tail = progress.log.slice(-8);
+  return (
+    <div className="rounded-md border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <div className="flex items-center justify-between gap-3 px-5 py-3"
+        style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+        <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+          Sweep activity
+        </p>
+        <span className="inline-flex items-center gap-2 text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+          {progress.stageLabel}
+          {progress.candidatesFound > 0 && (
+            <span className="font-mono tabular-nums" style={{ color: "var(--color-muted)" }}>
+              · {progress.candidatesFound} candidate{progress.candidatesFound === 1 ? "" : "s"}
+            </span>
+          )}
+        </span>
+      </div>
+      <div className="px-5 py-4" style={{ background: "var(--color-bg)" }}>
+        {tail.length === 0 ? (
+          <p className="font-mono text-[11px]" style={{ color: "var(--color-muted)" }}>
+            Opening sweep…
+          </p>
+        ) : (
+          <SweepLogLines entries={tail} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Collapsed record of what a finished sweep did, kept under the result banner. */
+function SweepLogDisclosure({ progress }: { progress: ScanProgress }) {
+  const [open, setOpen] = useState(false);
+  if (!progress.log.length) return null;
+  return (
+    <div className="rounded-md border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 px-5 py-3 text-left text-xs font-medium"
+        style={{ color: "var(--color-muted)", background: "var(--color-surface)" }}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 120ms" }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+        {open ? "Hide sweep log" : `View sweep log · ${progress.log.length} steps`}
+      </button>
+      {open && (
+        <div className="px-5 py-4" style={{ background: "var(--color-bg)", borderTop: "1px solid var(--color-border)" }}>
+          <SweepLogLines entries={progress.log} />
+        </div>
+      )}
     </div>
   );
 }
@@ -398,9 +532,16 @@ const TIER_LABELS: Record<ReferenceSetState["coverage"]["tier"], { label: string
  * monitor is weakest. It states what they have, the type of scan that would
  * help next, and that adding it makes monitoring more effective.
  */
-function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
+function DetectionCoverageCard({ refSet, scans }: { refSet: ReferenceSetState; scans: ScanRecord[] }) {
   const tier = TIER_LABELS[refSet.coverage.tier];
   const vault = refSet.vaultPackages ?? { total: 0, faceCount: 0, bodyCount: 0 };
+
+  // Coverage-at-scan-time history: each completed sweep records the tier and
+  // score it ran with, so "monitoring got stronger" is a provable trend, not a
+  // claim. Shown only when the score has actually moved.
+  const recorded = scans.filter((s) => s.status === "complete" && s.coverageScore != null);
+  const earliest = recorded.at(-1);
+  const delta = earliest != null ? refSet.coverage.score - (earliest.coverageScore as number) : 0;
   const parts: string[] = [];
   if (vault.faceCount > 0) parts.push("face");
   if (vault.bodyCount > 0) parts.push("full-body");
@@ -436,6 +577,19 @@ function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
         <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
           <div className="h-full rounded-full transition-all" style={{ width: `${refSet.coverage.score}%`, background: tier.color }} />
         </div>
+        {delta > 0 && earliest && (
+          <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium" style={{ color: tier.color }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+            Up {delta} point{delta === 1 ? "" : "s"} since your first recorded sweep
+            {" "}
+            <span className="font-normal" style={{ color: "var(--color-muted)" }}>
+              ({new Date(earliest.startedAt * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})
+            </span>
+          </p>
+        )}
         {(refSet.phashIndexedCount ?? 0) > 0 && (
           <p className="mt-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
             Derivation index: {refSet.phashIndexedCount} still{refSet.phashIndexedCount === 1 ? "" : "s"} fingerprinted —
@@ -706,6 +860,142 @@ function DismissMenu({
   );
 }
 
+/**
+ * One detector's reading: measured values get a mono figure and a qualitative
+ * tag pinned to the documented thresholds; unmeasured detectors say so plainly
+ * — a null reading is "no reading taken", never a low score.
+ */
+function DetectorRow({
+  label,
+  value,
+  tag,
+  tagTone,
+}: {
+  label: string;
+  value: string | null;
+  tag?: string;
+  tagTone?: "strong" | "info";
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1">
+      <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{label}</span>
+      <span className="flex items-baseline gap-2 text-right">
+        {tag && (
+          <span
+            className="text-[10px] font-medium"
+            style={{ color: tagTone === "strong" ? "var(--color-accent)" : "var(--color-muted)" }}
+          >
+            {tag}
+          </span>
+        )}
+        <span
+          className="font-mono text-[11px] tabular-nums"
+          style={{ color: value === null ? "var(--color-muted)" : "var(--color-ink)", opacity: value === null ? 0.6 : 1 }}
+        >
+          {value ?? "not measured"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The numeric evidence behind the verdict, straight from the stored readings.
+ * Thresholds mirror the adjudicator's brief (scan.ts ADJUDICATOR_SYSTEM):
+ * face >=0.8 strong; pHash <=16 derived; fingerprint >=0.7 licensed-data
+ * provenance; synthetic >=0.7 likely AI-generated.
+ */
+function DetectorReadingsPanel({ readings }: { readings: DetectorReadings }) {
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const face = readings.faceEmbeddingSimilarity;
+  const phash = readings.perceptualHashDistance;
+  const fingerprint = readings.geometryFingerprintCorrelation;
+  const synthetic = readings.syntheticMediaScore;
+  return (
+    <div className="rounded px-3 py-2 space-y-0.5"
+      style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+      <p className="text-[10px] uppercase tracking-widest font-semibold pb-1" style={{ color: "var(--color-muted)" }}>
+        Detector readings
+      </p>
+      <DetectorRow
+        label="Face similarity vs vault references"
+        value={face === null ? null : pct(face)}
+        tag={face === null ? undefined : face >= 0.8 ? "strong match" : face < 0.7 ? "weak match" : "probable match"}
+        tagTone={face !== null && face >= 0.8 ? "strong" : "info"}
+      />
+      <DetectorRow
+        label="Derivation distance (perceptual hash)"
+        value={phash === null ? null : `${phash}/64`}
+        tag={phash === null ? undefined : phash <= 16 ? "derived from vault imagery" : "no derivation"}
+        tagTone={phash !== null && phash <= 16 ? "strong" : "info"}
+      />
+      <DetectorRow
+        label="Geometry fingerprint correlation"
+        value={fingerprint === null ? null : pct(fingerprint)}
+        tag={fingerprint === null ? undefined : fingerprint >= 0.7 ? "licensed scan data detected" : undefined}
+        tagTone="strong"
+      />
+      <DetectorRow
+        label="Synthetic-media score"
+        value={synthetic === null ? null : pct(synthetic)}
+        tag={synthetic === null ? undefined : synthetic >= 0.7 ? "likely AI-generated" : undefined}
+        tagTone="strong"
+      />
+      {readings.synthetic && (readings.synthetic.generatorFamily || readings.synthetic.evidence.length > 0) && (
+        <p className="text-[11px] leading-relaxed pt-1" style={{ color: "var(--color-muted)" }}>
+          <span className="font-semibold" style={{ color: "var(--color-ink)" }}>
+            Forensic analysis:{" "}
+          </span>
+          {readings.synthetic.generatorFamily ? `resembles ${readings.synthetic.generatorFamily}` : ""}
+          {readings.synthetic.generatorFamily && readings.synthetic.evidence.length > 0 ? " — " : ""}
+          {readings.synthetic.evidence.join("; ")}
+        </p>
+      )}
+      {readings.vigilanceMatchTerm && (
+        <p className="text-[11px] leading-relaxed pt-1" style={{ color: "var(--color-muted)" }}>
+          Surfaced via role vocabulary: &ldquo;{readings.vigilanceMatchTerm}&rdquo;
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Captured evidence still for a flagged hit, served from the copy the sweep
+ * stored in R2 (see /api/monitor/hits/:id/thumbnail). NSFW content stays
+ * blurred in the card — the talent chooses when to look, via Preview.
+ * A broken or missing image renders nothing: the card layout stands on its
+ * own without it.
+ */
+function EvidenceThumb({ hit, onPreview }: { hit: LikenessHit; onPreview: (h: LikenessHit) => void }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) return null;
+  return (
+    <button
+      onClick={() => onPreview(hit)}
+      title="Preview flagged content"
+      aria-label="Preview flagged content"
+      className="relative h-[76px] w-[57px] shrink-0 overflow-hidden rounded"
+      style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/monitor/hits/${hit.id}/thumbnail`}
+        alt=""
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className="h-full w-full object-cover"
+        style={hit.nsfw ? { filter: "blur(10px)", transform: "scale(1.1)" } : undefined}
+      />
+      {hit.nsfw && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <NsfwBadge />
+        </span>
+      )}
+    </button>
+  );
+}
+
 function HitCard({ hit, onTriage, onPreview, busy }: {
   hit: LikenessHit;
   onTriage: (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => void;
@@ -723,7 +1013,19 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
   // that makes someone look twice, and hiding it wastes the card's best
   // moment.
   const [expanded, setExpanded] = useState(false);
+  const readings = hit.detectorReadings ?? null;
+  const measuredCount = readings
+    ? [
+        readings.faceEmbeddingSimilarity,
+        readings.perceptualHashDistance,
+        readings.geometryFingerprintCorrelation,
+        readings.syntheticMediaScore,
+      ].filter((v) => v !== null).length
+    : 0;
   const detailParts: string[] = [];
+  if (readings) {
+    detailParts.push(`${measuredCount} of 4 detector readings`);
+  }
   if (hit.matchSignals.length) {
     detailParts.push(`${hit.matchSignals.length} match signal${hit.matchSignals.length === 1 ? "" : "s"}`);
   }
@@ -735,6 +1037,7 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
       {/* Platform accent edge — the one brand element each card carries. */}
       <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: brand.edge }} />
       <div className="flex items-start gap-3">
+        {hit.hasThumbnail && <EvidenceThumb hit={hit} onPreview={onPreview} />}
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
           style={{ background: brand.tint, color: brand.color }}>
           {PLATFORM_ICONS[hit.platform] ?? <GettyIcon />}
@@ -797,6 +1100,8 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
         </button>
       )}
 
+      {expanded && readings && <DetectorReadingsPanel readings={readings} />}
+
       {expanded && hit.matchSignals.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {hit.matchSignals.map((s, i) => (
@@ -837,6 +1142,18 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
             <line x1="10" y1="14" x2="21" y2="3" />
           </svg>
           Open on platform
+        </a>
+        <a href={`/api/monitor/hits/${hit.id}/evidence`} target="_blank" rel="noopener noreferrer"
+          title="Print-ready evidence record for this hit"
+          className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition"
+          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="13" y2="17" />
+          </svg>
+          Evidence record
         </a>
         {hit.status === "new" && (
           <button
@@ -1076,6 +1393,11 @@ export default function MonitorClient({ identity }: Props) {
   const [triaging, setTriaging] = useState<string | null>(null);
   const [previewHit, setPreviewHit] = useState<LikenessHit | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
+  // Live narration from the running sweep, straight off the scan row.
+  const [liveProgress, setLiveProgress] = useState<ScanProgress | null>(null);
+  // Flips true on the first real progress snapshot — the cue for the scripted
+  // placeholder animation to stand down in favour of actual telemetry.
+  const sawProgressRef = useRef(false);
   // Scan id currently being polled — by runScan or by the resume effect after
   // a page reload — so the two never double-track the same sweep.
   const trackingScanRef = useRef<string | null>(null);
@@ -1143,6 +1465,30 @@ export default function MonitorClient({ identity }: Props) {
     void refresh();
   }, [refresh]);
 
+  // Fold a live progress snapshot into the page: the platform panel tracks the
+  // sweep's real per-platform state (with candidate counts as they land) and
+  // the activity feed shows the worker's own narration.
+  const applyProgress = useCallback((p: ScanProgress) => {
+    sawProgressRef.current = true;
+    setLiveProgress(p);
+    setPlatforms((prev) =>
+      prev.map((pl) => {
+        const live = p.platforms?.[pl.id];
+        if (!live) return pl;
+        return {
+          ...pl,
+          status:
+            live.status === "sweeping"
+              ? ("checking" as ScanStatus)
+              : live.status === "done"
+                ? ("clear" as ScanStatus)
+                : ("idle" as ScanStatus),
+          candidates: live.candidates,
+        };
+      })
+    );
+  }, []);
+
   // Poll a sweep until it settles. A sweep chains several 1-3 minute Apify
   // runs and the server marks runs dead after 15 minutes, so this outlasts
   // that timeout (~18 minutes) — a scan can no longer "time out" client-side
@@ -1159,11 +1505,12 @@ export default function MonitorClient({ identity }: Props) {
       const poll = await fetch(`/api/monitor/scans/${scanId}`);
       if (!poll.ok) continue;
       const scan = (await poll.json()) as ScanResponse;
+      if (scan.status === "running" && scan.progress) applyProgress(scan.progress);
       if (scan.status === "complete") return scan;
       if (scan.status === "error") throw new Error(scan.error ?? "Scan failed");
     }
     throw new Error("Lost track of the sweep — refresh the page to see where it got to.");
-  }, []);
+  }, [applyProgress]);
 
   const runScan = useCallback(async () => {
     if (scanning) return;
@@ -1172,6 +1519,8 @@ export default function MonitorClient({ identity }: Props) {
     setLastResult(null);
     setScanError(null);
     setScanNote(null);
+    setLiveProgress(null);
+    sawProgressRef.current = false;
     const activePlatforms = enabledIds
       ? INITIAL_PLATFORMS.filter((p) => enabledIds.includes(p.id))
       : INITIAL_PLATFORMS;
@@ -1202,12 +1551,17 @@ export default function MonitorClient({ identity }: Props) {
       return pollScan(scanId);
     })();
 
+    // Placeholder texture only until the sweep's own telemetry arrives — the
+    // moment a real progress snapshot lands, the animation stands down and the
+    // panel reflects what is actually happening on each platform.
     const animation = (async () => {
       for (const platform of activePlatforms) {
+        if (sawProgressRef.current) return;
         setPlatforms((prev) =>
           prev.map((p) => (p.id === platform.id ? { ...p, status: "checking" } : p))
         );
         await new Promise((r) => setTimeout(r, platform.checkDuration));
+        if (sawProgressRef.current) return;
         setPlatforms((prev) =>
           prev.map((p) => (p.id === platform.id ? { ...p, status: "clear" } : p))
         );
@@ -1224,11 +1578,21 @@ export default function MonitorClient({ identity }: Props) {
       setLastResult(result);
       setHits((prev) => [...result.newHits, ...prev]);
       await refresh();
+      // refresh() rebuilds the platform panel from persisted state, which
+      // knows nothing about per-platform candidate counts — restore them from
+      // the sweep's final snapshot so the panel keeps its telemetry.
+      if (result.progress?.platforms) {
+        const finals = result.progress.platforms;
+        setPlatforms((prev) =>
+          prev.map((p) => ({ ...p, candidates: finals[p.id]?.candidates ?? p.candidates }))
+        );
+      }
     } catch (err) {
       setScanError(err instanceof Error ? err.message : "Scan failed");
     } finally {
       setScanning(false);
       setScanNote(null);
+      setLiveProgress(null);
     }
   }, [scanning, refresh, enabledIds, pollScan]);
 
@@ -1253,12 +1617,19 @@ export default function MonitorClient({ identity }: Props) {
         );
         setLastResult(result);
         await refresh();
+        if (result.progress?.platforms) {
+          const finals = result.progress.platforms;
+          setPlatforms((prev) =>
+            prev.map((p) => ({ ...p, candidates: finals[p.id]?.candidates ?? p.candidates }))
+          );
+        }
       } catch (err) {
         setScanError(err instanceof Error ? err.message : "Scan failed");
         await refresh();
       } finally {
         setScanning(false);
         setScanNote(null);
+        setLiveProgress(null);
       }
     })();
   }, [scans, scanning, pollScan, refresh]);
@@ -1353,7 +1724,7 @@ export default function MonitorClient({ identity }: Props) {
       />
 
       {/* ── Detection coverage (vault-anchored reference set) ── */}
-      {refSet && <DetectionCoverageCard refSet={refSet} />}
+      {refSet && <DetectionCoverageCard refSet={refSet} scans={scans} />}
 
       {/* ── Monitor status strip ── */}
       {monitor && (
@@ -1459,6 +1830,12 @@ export default function MonitorClient({ identity }: Props) {
         </div>
       )}
 
+      {/* ── Live sweep activity — real telemetry from the running sweep ── */}
+      {scanning && liveProgress && <SweepActivityFeed progress={liveProgress} />}
+
+      {/* ── The finished sweep's own account of what it did ── */}
+      {!scanning && lastResult?.progress && <SweepLogDisclosure progress={lastResult.progress} />}
+
       {/* ── Detected hits ── */}
       {loaded && openHits.length > 0 && (
         <div>
@@ -1560,7 +1937,12 @@ export default function MonitorClient({ identity }: Props) {
                   ) : (
                     <>
                       {formatDate(record.startedAt)} · {record.platformsChecked} platforms · {record.candidatesAnalysed} candidates
+                      {record.completedAt && record.completedAt > record.startedAt
+                        ? ` · ${formatDuration(record.completedAt - record.startedAt)}`
+                        : ""}
+                      {record.coverageScore != null ? ` · coverage ${record.coverageScore}/100` : ""}
                       {record.aiProvider === "ai" ? " · AI adjudicated" : record.aiProvider === "heuristic" ? " · heuristic thresholds" : ""}
+                      {record.trigger === "scheduled" ? " · scheduled sweep" : ""}
                     </>
                   )}
                 </p>

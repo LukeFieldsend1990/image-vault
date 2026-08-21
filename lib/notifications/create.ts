@@ -48,22 +48,34 @@ export async function notifyAdmins(db: Db, n: Omit<NewNotification, "userId">): 
   }
 }
 
-/** Notify a talent and all of their active reps (the "agent digest" fan-out). */
+/**
+ * Notify a talent and all of their active reps (the "agent digest" fan-out).
+ *
+ * `repHref` swaps the link for rep recipients: talent and rep land on
+ * different routes for the same event (e.g. /vault/monitor is talent-only —
+ * a rep following it gets a 403 instead of their roster view).
+ */
 export async function notifyTalentAndReps(
   db: Db,
   talentId: string,
-  n: Omit<NewNotification, "userId">
+  n: Omit<NewNotification, "userId"> & { repHref?: string | null }
 ): Promise<void> {
-  const recipients = new Set<string>([talentId]);
+  const { repHref, ...base } = n;
+  let repIds: string[] = [];
   try {
     const reps = await db
       .select({ repId: talentReps.repId })
       .from(talentReps)
       .where(eq(talentReps.talentId, talentId))
       .all();
-    reps.forEach((r) => recipients.add(r.repId));
+    repIds = reps.map((r) => r.repId).filter((id) => id !== talentId);
   } catch {
     // fall back to just the talent
   }
-  await Promise.all(Array.from(recipients).map((userId) => createNotification(db, { ...n, userId })));
+  await Promise.all([
+    createNotification(db, { ...base, userId: talentId }),
+    ...repIds.map((userId) =>
+      createNotification(db, { ...base, userId, href: repHref !== undefined ? repHref : base.href })
+    ),
+  ]);
 }

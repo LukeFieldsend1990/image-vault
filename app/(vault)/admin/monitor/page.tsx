@@ -12,6 +12,7 @@ import VigilanceClient from "./vigilance-client";
 import CrossPlatformClient from "./cross-platform-client";
 import LearnedQueriesClient from "./learned-queries-client";
 import FeedbackClient from "./feedback-client";
+import AdminDeepfakeStatsClient from "./deepfake-stats-client";
 
 export default async function AdminMonitorPage() {
   await requireAdmin();
@@ -30,10 +31,15 @@ export default async function AdminMonitorPage() {
           Likeness monitor
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Operational controls for the discovery sweeps: schedule, vigilance windows, platform coverage,
-          Apify spend, per-talent meters, the takedown backlog, and the shared account watchlist.
+          Hit statistics across the platform, and the operational controls for the discovery sweeps:
+          schedule, vigilance windows, platform coverage, Apify spend, per-talent meters, the takedown
+          backlog, and the shared account watchlist.
         </p>
       </div>
+
+      <AdminDeepfakeStatsClient />
+
+      <hr style={{ borderColor: "var(--color-border)" }} />
 
       <CronClient />
 
