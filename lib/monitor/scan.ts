@@ -121,7 +121,9 @@ export interface ScanResult {
 
 // ── AI adjudication ──────────────────────────────────────────────────────────
 
-const ADJUDICATOR_SYSTEM = `You are the likeness-protection adjudicator for ImageVault, a biometric scan archive for actors. You receive candidate social-media content surfaced by automated detectors, each with machine-generated match signals against a protected talent's verified identity anchors (onboarding face embeddings, perceptual hashes from their scan packages, and geometry fingerprint bits embedded in licensed deliveries).
+/** Exported for lib/monitor/trial.ts — trial sweeps adjudicate with the
+ *  identical contract so a demo's verdicts mean the same as a real sweep's. */
+export const ADJUDICATOR_SYSTEM = `You are the likeness-protection adjudicator for ImageVault, a biometric scan archive for actors. You receive candidate social-media content surfaced by automated detectors, each with machine-generated match signals against a protected talent's verified identity anchors (onboarding face embeddings, perceptual hashes from their scan packages, and geometry fingerprint bits embedded in licensed deliveries).
 
 Signal interpretation:
 - faceEmbeddingSimilarity: >0.8 is a strong likeness match; <0.7 is usually a lookalike or unrelated person.
@@ -138,7 +140,7 @@ Risk levels: low (parody/fan experiment), medium (impersonation without clear ha
 Respond with ONLY a JSON array, one object per candidate, no prose:
 [{"index": <number>, "flag": <boolean>, "confidence": <0-100>, "aiGeneratedLikelihood": <0-100>, "riskLevel": "low"|"medium"|"high"|"critical", "matchSignals": ["..."], "rationale": "<one sentence, max 220 chars>"}]`;
 
-function buildAdjudicationPrompt(
+export function buildAdjudicationPrompt(
   anchor: TalentIdentityAnchor,
   sensitivity: string,
   scope: MonitorScope,
@@ -579,12 +581,19 @@ function parseAllowlist(json: string | null | undefined): string[] {
  * /admin/monitor. A disabled platform is skipped entirely, live and simulated
  * alike, so switching one off is a real spend and coverage decision rather
  * than a display preference.
+ *
+ * Exported for lib/monitor/trial.ts: a Image Scout trial sweeps a subject
+ * who has no users.id yet, so it passes `talentId: null` — which skips every
+ * per-talent concern (hit dedupe against likeness_hits, learned vocabulary,
+ * the talent meter, watchlist harvesting) while keeping the global Apify
+ * ceiling and the per-run usage ledger, attributed by scanId alone.
  */
-async function discoverCandidates(
+export async function discoverCandidates(
   env: { APIFY_TOKEN?: string; YOUTUBE_API_KEY?: string },
   db: Db,
   opts: {
-    talentId: string;
+    /** users.id for a vault-anchored sweep; null for a trial sweep. */
+    talentId: string | null;
     anchor: TalentIdentityAnchor;
     scope: MonitorScope;
     allowlist: string[];
@@ -599,6 +608,9 @@ async function discoverCandidates(
     queryLog?: ScanQueryEntry[];
     /** Live progress narration; defaults to silent. */
     progress?: ScanReporter;
+    /** Extra already-recorded URLs to dedupe at source (trial sweeps pass the
+     *  subject's prior trial hits; talent sweeps derive theirs internally). */
+    seenUrls?: Set<string>;
   }
 ): Promise<{ candidates: CandidateContent[]; discoveryError: string | null }> {
   const token = apifyToken(env);
@@ -644,16 +656,16 @@ async function discoverCandidates(
     return { candidates: simulated, discoveryError: null };
   }
 
-  const previousUrls = new Set(
-    (
-      await db
-        .select({ contentUrl: likenessHits.contentUrl })
-        .from(likenessHits)
-        .where(eq(likenessHits.talentId, opts.talentId))
-        .limit(1000)
-        .all()
-    ).map((p) => p.contentUrl)
-  );
+  const previousUrls = new Set(opts.seenUrls ?? []);
+  if (opts.talentId) {
+    const prior = await db
+      .select({ contentUrl: likenessHits.contentUrl })
+      .from(likenessHits)
+      .where(eq(likenessHits.talentId, opts.talentId))
+      .limit(1000)
+      .all();
+    for (const p of prior) previousUrls.add(p.contentUrl);
+  }
 
   const filterOpts = {
     anchor: opts.anchor,
@@ -667,15 +679,17 @@ async function discoverCandidates(
   // and each builder appends its own platform's set after the standing
   // vocabulary — additive to the query caps, never displacing proven terms.
   let learnedByPlatform = new Map<string, string[]>();
-  try {
-    learnedByPlatform = await topLearnedQueriesByPlatform(
-      db,
-      opts.talentId,
-      ["instagram", "tiktok", "youtube", "x", "pinterest", "google", "getty"],
-      3
-    );
-  } catch (err) {
-    console.warn(`[monitor] learned-query lookup failed: ${(err as Error).message}`);
+  if (opts.talentId) {
+    try {
+      learnedByPlatform = await topLearnedQueriesByPlatform(
+        db,
+        opts.talentId,
+        ["instagram", "tiktok", "youtube", "x", "pinterest", "google", "getty"],
+        3
+      );
+    } catch (err) {
+      console.warn(`[monitor] learned-query lookup failed: ${(err as Error).message}`);
+    }
   }
   const learnedFor = (platform: string) => learnedByPlatform.get(platform) ?? [];
 
@@ -756,14 +770,18 @@ async function discoverCandidates(
   // Per-talent gate, same contract. A talent whose monthly allowance is spent
   // keeps the free surfaces above but buys no more actor runs — without this,
   // one subscriber's sweeps drain the shared ceiling for everyone else.
-  const meterGate = await checkTalentBudget(db, opts.talentId);
-  if (!meterGate.ok) {
-    console.warn(`[monitor] talent meter refused paid discovery for ${opts.talentId}: ${meterGate.reason}`);
-    if (freeSurfaces.length) progress.note("Paid discovery skipped this run — monthly allowance reached");
-    return {
-      candidates: freeSurfaces,
-      discoveryError: freeSurfaces.length ? null : meterGate.reason,
-    };
+  // Trial sweeps (null talentId) have no meter: their spend control is the
+  // run quota plus the global ceiling above.
+  if (opts.talentId) {
+    const meterGate = await checkTalentBudget(db, opts.talentId);
+    if (!meterGate.ok) {
+      console.warn(`[monitor] talent meter refused paid discovery for ${opts.talentId}: ${meterGate.reason}`);
+      if (freeSurfaces.length) progress.note("Paid discovery skipped this run — monthly allowance reached");
+      return {
+        candidates: freeSurfaces,
+        discoveryError: freeSurfaces.length ? null : meterGate.reason,
+      };
+    }
   }
 
   // Set when any surface stops because Apify itself refused runs (402) —
@@ -779,6 +797,7 @@ async function discoverCandidates(
     check: async () => {
       const v = await checkApifyBudget(db);
       if (!v.ok) return { ok: false, reason: v.reason };
+      if (!opts.talentId) return { ok: true, reason: null };
       const m = await checkTalentBudget(db, opts.talentId);
       return { ok: m.ok, reason: m.reason };
     },
@@ -851,36 +870,46 @@ async function discoverCandidates(
     // skipped, the rest rotate stalest-first, and previously harvested handles
     // are fetched incrementally (onlyPostsNewerThan) — re-sweeping the full
     // watchlist every scan was re-billing the identical posts each time.
-    const watched = await db
-      .select({ handle: monitorAccounts.handle })
-      .from(monitorAccounts)
-      .where(and(eq(monitorAccounts.platform, "instagram"), eq(monitorAccounts.status, "watchlist")))
-      .limit(100)
-      .all();
-    const reharvestRow = await db
-      .select({ value: aiSettings.value })
-      .from(aiSettings)
-      .where(eq(aiSettings.key, "watchlist_reharvest_hours"))
-      .get();
-    const cooldownHours = Math.max(1, parseInt(reharvestRow?.value ?? "", 10) || 168);
-    const harvestLog = await db
-      .select({ handle: monitorHarvests.handle, lastHarvestedAt: monitorHarvests.lastHarvestedAt })
-      .from(monitorHarvests)
-      .where(eq(monitorHarvests.platform, "instagram"))
-      .all();
-    const lastHarvest = new Map(harvestLog.map((h) => [h.handle, h.lastHarvestedAt]));
-    const harvestPlan = planWatchlistHarvest(
-      [...new Set([...watched.map((w) => w.handle), ...seedHandlesFor("instagram")])].map((h) => ({
-        handle: h,
-        lastHarvestedAt: lastHarvest.get(h.replace(/^@/, "").trim().toLowerCase()) ?? null,
-      })),
-      { nowUnix: Math.floor(Date.now() / 1000), cooldownHours, cap: 20 }
-    );
-    if (harvestPlan.skipped.length) {
-      console.log(
-        `[monitor] instagram watchlist: ${harvestPlan.handles.length} handle(s) due, ` +
-          `${harvestPlan.skipped.length} inside the ${cooldownHours}h re-harvest cooldown`
+    // Watchlist + seed harvesting is a standing, cross-sweep investment in
+    // the shared offender file — a trial sweep (null talentId) skips it and
+    // spends only on queries anchored to its own subject.
+    let harvestPlan: ReturnType<typeof planWatchlistHarvest> = {
+      handles: [],
+      newerThan: {},
+      skipped: [],
+    };
+    if (opts.talentId) {
+      const watched = await db
+        .select({ handle: monitorAccounts.handle })
+        .from(monitorAccounts)
+        .where(and(eq(monitorAccounts.platform, "instagram"), eq(monitorAccounts.status, "watchlist")))
+        .limit(100)
+        .all();
+      const reharvestRow = await db
+        .select({ value: aiSettings.value })
+        .from(aiSettings)
+        .where(eq(aiSettings.key, "watchlist_reharvest_hours"))
+        .get();
+      const cooldownHours = Math.max(1, parseInt(reharvestRow?.value ?? "", 10) || 168);
+      const harvestLog = await db
+        .select({ handle: monitorHarvests.handle, lastHarvestedAt: monitorHarvests.lastHarvestedAt })
+        .from(monitorHarvests)
+        .where(eq(monitorHarvests.platform, "instagram"))
+        .all();
+      const lastHarvest = new Map(harvestLog.map((h) => [h.handle, h.lastHarvestedAt]));
+      harvestPlan = planWatchlistHarvest(
+        [...new Set([...watched.map((w) => w.handle), ...seedHandlesFor("instagram")])].map((h) => ({
+          handle: h,
+          lastHarvestedAt: lastHarvest.get(h.replace(/^@/, "").trim().toLowerCase()) ?? null,
+        })),
+        { nowUnix: Math.floor(Date.now() / 1000), cooldownHours, cap: 20 }
       );
+      if (harvestPlan.skipped.length) {
+        console.log(
+          `[monitor] instagram watchlist: ${harvestPlan.handles.length} handle(s) due, ` +
+            `${harvestPlan.skipped.length} inside the ${cooldownHours}h re-harvest cooldown`
+        );
+      }
     }
 
     const { candidates, diagnostics } = await discoverInstagram({

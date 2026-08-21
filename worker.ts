@@ -25,9 +25,11 @@ import { runWithCloudflareRequestContext } from "./.open-next/cloudflare/init.js
 import { getDb } from "@/lib/db";
 import {
   runQueuedSweep,
+  runQueuedTrialSweep,
+  type MonitorQueueMessage,
   type SweepEnv,
-  type SweepQueueMessage,
 } from "@/lib/monitor/sweep-queue";
+import type { TrialSweepEnv } from "@/lib/monitor/trial";
 
 export default {
   fetch: handler.fetch,
@@ -47,13 +49,16 @@ export default {
       const db = getDb();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://imagevault.ai";
       for (const message of batch.messages) {
-        const body = message.body as SweepQueueMessage | undefined;
+        const body = message.body as MonitorQueueMessage | undefined;
         if (body?.type === "likeness_sweep") {
           // Never throws: failures are recorded on the scan row, and a
           // redelivery after paid discovery must not re-run — so every
           // handled message is acked. Redelivery is reserved for consumers
           // that die outright.
           await runQueuedSweep(env as unknown as SweepEnv, db, body, message.attempts, baseUrl);
+        } else if (body?.type === "trial_sweep") {
+          // Same never-throws contract, recorded on the trial row.
+          await runQueuedTrialSweep(env as unknown as TrialSweepEnv, db, body, message.attempts);
         }
         message.ack();
       }

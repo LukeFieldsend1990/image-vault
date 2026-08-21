@@ -4,7 +4,27 @@ import { talentProfiles, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { mintUserCode } from "@/lib/codes/codes";
 import { findClaimableRoles } from "@/lib/productions/claim";
+import { migrateTrialHitsToTalent } from "@/lib/monitor/trial";
 import { eq } from "drizzle-orm";
+
+// Image Scout follow-through: any completed trial sweeps that scouted this
+// TMDB person now belong in the new talent's real monitor. Fire-and-forget so
+// onboarding never waits on it; the migration is idempotent.
+function transferTrialHits(db: ReturnType<typeof getDb>, userId: string, tmdbId: number | undefined) {
+  if (!tmdbId) return;
+  void (async () => {
+    try {
+      const { trialsConverted, hitsMigrated } = await migrateTrialHitsToTalent(db, userId, tmdbId);
+      if (trialsConverted > 0) {
+        console.log(
+          `[trial] onboarding transfer for ${userId}: ${hitsMigrated} hit(s) from ${trialsConverted} trial(s)`
+        );
+      }
+    } catch (err) {
+      console.warn(`[trial] onboarding transfer failed for ${userId}: ${(err as Error).message}`);
+    }
+  })();
+}
 
 // Strong (tmdbId) matches are safe to surface proactively at the end of
 // onboarding; name-only matches are left for the dashboard card where the talent
@@ -58,6 +78,7 @@ export async function POST(req: NextRequest) {
         knownFor: JSON.stringify(body.knownFor ?? []),
         popularity: body.popularity ?? null,
       }).where(eq(talentProfiles.userId, session.sub));
+      transferTrialHits(db, session.sub, body.tmdbId);
       return NextResponse.json({ ok: true, claimable: await tmdbClaimable(db, session.sub) });
     }
     return NextResponse.json({ ok: true, alreadyOnboarded: true });
@@ -102,5 +123,6 @@ export async function POST(req: NextRequest) {
   });
 
   await mintUserCode(db, session.sub, "talent");
+  transferTrialHits(db, session.sub, body.tmdbId);
   return NextResponse.json({ ok: true, claimable: await tmdbClaimable(db, session.sub) });
 }

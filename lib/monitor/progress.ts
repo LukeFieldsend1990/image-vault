@@ -81,6 +81,24 @@ export function createScanReporter(
   scanId: string,
   enabledPlatforms: Iterable<MonitorPlatformId>
 ): ScanReporter {
+  return createProgressReporter(async (snapshot) => {
+    await db
+      .update(monitorScans)
+      .set({ progressJson: snapshot })
+      .where(eq(monitorScans.id, scanId));
+  }, enabledPlatforms, scanId);
+}
+
+/**
+ * Reporter over any snapshot sink. The monitor sweep persists onto
+ * monitor_scans (above); a Image Scout trial persists the identical shape
+ * onto trial_scans, so both UIs parse one format (parseScanProgress).
+ */
+export function createProgressReporter(
+  persistSnapshot: (snapshotJson: string) => Promise<void>,
+  enabledPlatforms: Iterable<MonitorPlatformId>,
+  label = "scan"
+): ScanReporter {
   const state: ScanProgress = {
     stage: "preparing",
     stageLabel: "Preparing sweep",
@@ -102,12 +120,9 @@ export function createScanReporter(
     const snapshot = JSON.stringify(state);
     chain = chain.then(async () => {
       try {
-        await db
-          .update(monitorScans)
-          .set({ progressJson: snapshot })
-          .where(eq(monitorScans.id, scanId));
+        await persistSnapshot(snapshot);
       } catch (err) {
-        console.warn(`[monitor] progress write failed for ${scanId}: ${(err as Error).message}`);
+        console.warn(`[monitor] progress write failed for ${label}: ${(err as Error).message}`);
       }
     });
   };

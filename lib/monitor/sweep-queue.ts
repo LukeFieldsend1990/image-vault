@@ -27,8 +27,9 @@
 
 import { eq } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
-import { apifyUsage, monitorScans } from "@/lib/db/schema";
+import { apifyUsage, monitorScans, trialScans } from "@/lib/db/schema";
 import { failScan, runLikenessScan } from "./scan";
+import { failTrial, runTrialScan, type TrialSweepEnv } from "./trial";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -42,6 +43,16 @@ export interface SweepQueueMessage {
   talentId: string;
   trigger: "manual" | "scheduled";
 }
+
+/** A Image Scout trial sweep (lib/monitor/trial.ts) — same queue, same
+ *  durability and retry semantics, keyed by the trial row instead of a scan. */
+export interface TrialSweepQueueMessage {
+  type: "trial_sweep";
+  /** trial_scans row already flipped to "running" by the run route. */
+  trialId: string;
+}
+
+export type MonitorQueueMessage = SweepQueueMessage | TrialSweepQueueMessage;
 
 export type SweepDeliveryDecision =
   | { action: "run" }
@@ -140,5 +151,57 @@ export async function runQueuedSweep(
     // budget before throwing, and discovery errors it detects itself are
     // already written to the row before the throw.
     await failScan(db, message.scanId, err instanceof Error ? err.message : "Scan failed");
+  }
+}
+
+/**
+ * Consume one trial-sweep delivery. Identical contract to runQueuedSweep —
+ * never throws, every failure lands on the trial row, redelivery after paid
+ * discovery settles as an error rather than re-spending — with the trial id
+ * standing in for the scan id in the Apify usage ledger.
+ */
+export async function runQueuedTrialSweep(
+  env: TrialSweepEnv,
+  db: Db,
+  message: TrialSweepQueueMessage,
+  attempts: number
+): Promise<void> {
+  const trial = await db
+    .select({ status: trialScans.status })
+    .from(trialScans)
+    .where(eq(trialScans.id, message.trialId))
+    .get();
+
+  let hasApifySpend = false;
+  if (attempts > 1) {
+    const spend = await db
+      .select({ id: apifyUsage.id })
+      .from(apifyUsage)
+      .where(eq(apifyUsage.scanId, message.trialId))
+      .limit(1)
+      .get();
+    hasApifySpend = !!spend;
+  }
+
+  const decision = decideSweepDelivery({
+    scanStatus: trial?.status ?? null,
+    attempts,
+    hasApifySpend,
+  });
+
+  if (decision.action === "skip") {
+    console.log(`[trial] sweep ${message.trialId} delivery skipped: ${decision.reason}`);
+    return;
+  }
+  if (decision.action === "fail") {
+    console.warn(`[trial] sweep ${message.trialId} settled without re-run: ${decision.reason}`);
+    await failTrial(db, message.trialId, decision.reason);
+    return;
+  }
+
+  try {
+    await runTrialScan(env, db, { trialId: message.trialId });
+  } catch (err) {
+    await failTrial(db, message.trialId, err instanceof Error ? err.message : "Trial sweep failed");
   }
 }

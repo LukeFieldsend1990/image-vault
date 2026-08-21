@@ -6,9 +6,9 @@ import SidebarShell from "./sidebar-shell";
 import NotificationBell from "./notification-bell";
 import { CodesProvider } from "@/app/components/code-tag";
 import { getDb } from "@/lib/db";
-import { licences, organisationMembers, organisations, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
+import { aiSettings, licences, organisationMembers, organisations, talentProfiles, talentReps, talentSettings, users } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { isIndustryRole, isComplianceRole } from "@/lib/auth/roles";
+import { isIndustryRole, isComplianceRole, isScoutRole } from "@/lib/auth/roles";
 import type { OrgType } from "@/lib/organisations/orgTypes";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { hasPlatformGrant, hasInsurerGrant, getUnionIdsForUser } from "@/lib/compliance/grants";
@@ -243,6 +243,23 @@ async function getAgencyMember(userId: string, role: Role): Promise<boolean> {
   }
 }
 
+// Image Scout is admin-toggled (ai_settings trial_scans_enabled, absent =
+// on) and only surfaces for the roles that can run trials.
+async function getTrialScansEnabled(userId: string, role: Role): Promise<boolean> {
+  if (!userId || !isScoutRole(role) || role === "admin") return false;
+  try {
+    const db = getDb();
+    const row = await db
+      .select({ value: aiSettings.value })
+      .from(aiSettings)
+      .where(eq(aiSettings.key, "trial_scans_enabled"))
+      .get();
+    return row?.value !== "false";
+  } catch {
+    return false;
+  }
+}
+
 async function getComplianceEnabled(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
@@ -265,7 +282,7 @@ export default async function VaultLayout({
   children: React.ReactNode;
 }) {
   const { sub, email, role, initials } = await getSessionData();
-  const [identity, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher, agencyMember, industryOrgType] = await Promise.all([
+  const [identity, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, showCodes, platformOversight, insurerWatcher, unionWatcher, agencyMember, industryOrgType, trialScansEnabled] = await Promise.all([
     role === "talent" ? getTalentIdentity(sub) : Promise.resolve(null),
     role === "talent" ? getPipelineEnabled(sub) : Promise.resolve(false),
     role === "talent" ? getRoyaltyMeterEnabled(sub) : Promise.resolve(false),
@@ -278,6 +295,7 @@ export default async function VaultLayout({
     getUnionWatcher(sub, email, role),
     getAgencyMember(sub, role),
     getIndustryOrgType(sub, role),
+    getTrialScansEnabled(sub, role),
   ]);
 
   const homeHref = isComplianceRole(role)
@@ -299,7 +317,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} industryOrgType={industryOrgType} pipelineEnabled={pipelineEnabled} royaltyMeterEnabled={royaltyMeterEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} />
+            <NavLinks role={role} email={email} industryOrgType={industryOrgType} pipelineEnabled={pipelineEnabled} royaltyMeterEnabled={royaltyMeterEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} trialScansEnabled={trialScansEnabled} />
           </div>
 
           <div>

@@ -2090,3 +2090,91 @@ export const derivedRenderJobs = sqliteTable("derived_render_jobs", {
   createdAt: integer("created_at").notNull(),
   completedAt: integer("completed_at"),
 });
+
+// ── Image Scout trials ──────────────────────────────────────────────────
+// Rep/production accounts run a limited number of trial likeness sweeps on
+// any TMDB actor — no vault, no talent account, just a name, filmography and
+// whatever reference photos the requester uploads. The subject is keyed by
+// TMDB person id rather than users.id, which is why these rows cannot live in
+// monitor_scans / likeness_hits (both FK a talent). When the actor later
+// onboards, lib/monitor/trial.ts migrates the hits into their real monitor.
+
+export const trialScans = sqliteTable("trial_scans", {
+  id: text("id").primaryKey(),
+  requestedBy: text("requested_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Frozen TMDB snapshot of the subject at draft time — the identity anchor.
+  tmdbId: integer("tmdb_id").notNull(),
+  tmdbName: text("tmdb_name").notNull(),
+  tmdbProfileUrl: text("tmdb_profile_url"),
+  knownForJson: text("known_for_json").notNull().default("[]"), // JSON [{title, year, type}]
+  popularity: real("popularity"),
+  // draft = photos being gathered, quota not yet consumed. Launching flips to
+  // running and spends one of the requester's trial runs.
+  status: text("status", { enum: ["draft", "running", "complete", "error"] }).notNull().default("draft"),
+  platformsChecked: integer("platforms_checked").notNull().default(0),
+  candidatesAnalysed: integer("candidates_analysed").notNull().default(0),
+  hitsFound: integer("hits_found").notNull().default(0),
+  aiProvider: text("ai_provider"), // ai | heuristic
+  error: text("error"),
+  // Live progress snapshot while running (same shape as monitor_scans).
+  progressJson: text("progress_json"),
+  coverageTier: text("coverage_tier"), // unanchored | baseline | anchored | fortified
+  coverageScore: integer("coverage_score"), // 0-100
+  // Set once the subject onboarded and the hits were copied into their
+  // monitor — the auto-populate promise, recorded.
+  convertedTalentId: text("converted_talent_id").references(() => users.id, { onDelete: "set null" }),
+  convertedAt: integer("converted_at"),
+  createdAt: integer("created_at").notNull(),
+  startedAt: integer("started_at"),
+  completedAt: integer("completed_at"),
+});
+
+// Reference material uploaded for one trial: face angles, full-body shots,
+// optionally a 3D scan file. Feeds the identity matcher (presigned, same as
+// vault references) and the trial's coverage meter.
+export const trialReferencePhotos = sqliteTable("trial_reference_photos", {
+  id: text("id").primaryKey(),
+  trialId: text("trial_id").notNull().references(() => trialScans.id, { onDelete: "cascade" }),
+  r2Key: text("r2_key").notNull(),
+  kind: text("kind", { enum: ["face", "full_body", "scan_3d"] }).notNull().default("face"),
+  originalName: text("original_name"),
+  contentType: text("content_type"),
+  sizeBytes: integer("size_bytes").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+});
+
+// Mirror of likeness_hits minus the talent FK. tmdb_id is denormalised so the
+// onboarding migration can find every hit for a subject without joining
+// through trials.
+export const trialHits = sqliteTable("trial_hits", {
+  id: text("id").primaryKey(),
+  trialId: text("trial_id").notNull().references(() => trialScans.id, { onDelete: "cascade" }),
+  tmdbId: integer("tmdb_id").notNull(),
+  platform: text("platform").notNull(),
+  contentType: text("content_type", { enum: ["reel", "short", "video", "post", "image"] }).notNull().default("reel"),
+  contentUrl: text("content_url").notNull(),
+  authorHandle: text("author_handle"),
+  caption: text("caption"),
+  nsfw: integer("nsfw", { mode: "boolean" }).notNull().default(false),
+  confidence: integer("confidence").notNull(), // 0-100
+  aiGeneratedLikelihood: integer("ai_generated_likelihood").notNull(), // 0-100
+  riskLevel: text("risk_level", { enum: ["low", "medium", "high", "critical"] }).notNull().default("medium"),
+  matchSignalsJson: text("match_signals_json").notNull().default("[]"),
+  aiRationale: text("ai_rationale"),
+  detectorReadingsJson: text("detector_readings_json"),
+  thumbnailUrl: text("thumbnail_url"),
+  thumbnailKey: text("thumbnail_key"),
+  discoverySource: text("discovery_source"),
+  // likeness_hits.id once transferred into the onboarded talent's monitor.
+  migratedHitId: text("migrated_hit_id"),
+  detectedAt: integer("detected_at").notNull(),
+});
+
+// Per-user extra trial runs granted from the admin panel, on top of the
+// global default (ai_settings key trial_runs_default).
+export const trialAllowances = sqliteTable("trial_allowances", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  extraRuns: integer("extra_runs").notNull().default(0),
+  grantedBy: text("granted_by").references(() => users.id),
+  updatedAt: integer("updated_at").notNull(),
+});

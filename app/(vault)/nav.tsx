@@ -158,6 +158,25 @@ const TALENT_NAV = [
   },
 ];
 
+// Image Scout — trial sweeps on any TMDB actor, for reps and production
+// accounts. Gated by the trialScansEnabled flag (admin toggle) in NavLinks.
+// The glyph is a scouting reticle: the monitor radar's sibling, aimed
+// outward at talent not yet on the platform.
+const SCOUT_NAV_ITEM = {
+  href: "/scout",
+  label: "Image Scout",
+  icon: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="7" />
+      <circle cx="12" cy="12" r="1" />
+      <line x1="12" y1="2" x2="12" y2="6" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="6" y2="12" />
+      <line x1="18" y1="12" x2="22" y2="12" />
+    </svg>
+  ),
+};
+
 const BRIDGE_NAV_ITEM = {
   href: "/bridge",
   label: "Render Bridge",
@@ -217,6 +236,7 @@ const LICENSEE_NAV = [
       </svg>
     ),
   },
+  SCOUT_NAV_ITEM,
   BRIDGE_NAV_ITEM,
   TRANSFERS_NAV_ITEM,
   {
@@ -301,6 +321,7 @@ const REP_NAV = [
       </svg>
     ),
   },
+  SCOUT_NAV_ITEM,
   TRANSFERS_NAV_ITEM,
   {
     href: "/compliance",
@@ -511,7 +532,7 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember }: { role: Role; email?: string; industryOrgType?: OrgType | null; pipelineEnabled?: boolean; royaltyMeterEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean }) {
+export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember, trialScansEnabled }: { role: Role; email?: string; industryOrgType?: OrgType | null; pipelineEnabled?: boolean; royaltyMeterEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean; trialScansEnabled?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   // Agents (reps belonging to a talent agency) get an Agency surface, placed
@@ -521,6 +542,11 @@ export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterE
   }
   if (!inboundEnabled) {
     base = base.filter((item) => item.href !== "/inbox");
+  }
+  // Image Scout: admin-toggled trial sweeps for reps and production
+  // accounts. Off (or undecided) hides the surface.
+  if (!trialScansEnabled) {
+    base = base.filter((item) => item.href !== "/scout");
   }
   if (complianceEnabled === false) {
     base = base.filter((item) => !item.href.startsWith("/compliance"));
