@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function DetectorTrailerPage() {
   return (
     <ExplainerStandalone
-      src="/explainer/imagevault-detector-trailer.html?v=1"
+      src="/explainer/imagevault-detector-trailer.html?v=2"
       filmTitle="The Likeness Monitor — launch trailer"
       backHref="/product/likeness-monitor"
     />
