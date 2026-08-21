@@ -42,6 +42,7 @@ export default function WatchlistClient() {
   const [platform, setPlatform] = useState("instagram");
   const [pasteText, setPasteText] = useState("");
   const [curationHandle, setCurationHandle] = useState("");
+  const [savedHandle, setSavedHandle] = useState<string | null>(null);
   const [imported, setImported] = useState<ImportedAccount[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -58,6 +59,20 @@ export default function WatchlistClient() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Prefill the curation handle remembered from the last successful import,
+  // so a returning admin just hits "Refresh follows".
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/admin/monitor/accounts/import-follows");
+      if (!res.ok) return;
+      const data = (await res.json()) as { handle?: string | null };
+      if (data.handle) {
+        setSavedHandle(data.handle);
+        setCurationHandle((current) => current || data.handle!);
+      }
+    })();
+  }, []);
 
   const addHandles = useCallback(
     async (payload: { text?: string; handles?: string[] }) => {
@@ -106,13 +121,19 @@ export default function WatchlistClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ handle: curationHandle }),
       });
-      const data = (await res.json()) as { accounts?: ImportedAccount[]; error?: string };
+      const data = (await res.json()) as {
+        accounts?: ImportedAccount[];
+        handle?: string | null;
+        error?: string;
+      };
       if (!res.ok) {
         setError(data.error ?? "Import failed");
         return;
       }
       setImported(data.accounts ?? []);
       setSelected(new Set((data.accounts ?? []).map((a) => a.handle)));
+      // The server remembers a handle that fetched successfully.
+      if (data.handle) setSavedHandle(data.handle);
     } finally {
       setBusy(false);
     }
@@ -258,9 +279,18 @@ export default function WatchlistClient() {
             className="px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50"
             style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
           >
-            Fetch follows
+            {savedHandle &&
+            curationHandle.trim().replace(/^@/, "").toLowerCase() === savedHandle
+              ? "Refresh follows"
+              : "Fetch follows"}
           </button>
         </div>
+        {savedHandle && (
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            Remembered from the last successful import: <span className="font-mono">@{savedHandle}</span>.
+            A handle is saved as the default once it fetches successfully.
+          </p>
+        )}
 
         {imported && imported.length > 0 && (
           <div className="space-y-2 pt-2">

@@ -29,8 +29,18 @@ type Db = ReturnType<typeof getDb>;
 export const FOLLOWS_ACTOR_KEY = "apify_follows_actor";
 export const CURATION_HANDLE_KEY = "monitor_curation_handle";
 
-/** Default follows actor. Overridable from /admin/monitor without a deploy. */
-export const DEFAULT_FOLLOWS_ACTOR = "apify~instagram-followers-scraper";
+/**
+ * Default follows actor. Overridable from /admin/monitor without a deploy.
+ *
+ * The previous default (apify~instagram-followers-scraper) was delisted from
+ * the store — every run-start 404'd. This one is no-login, takes
+ * { usernames, max_count } and returns { username, full_name, is_verified }
+ * items, all of which the mapper below already reads.
+ */
+export const DEFAULT_FOLLOWS_ACTOR = "datadoping~instagram-following-scraper";
+
+/** The default actor rejects max_count below 50. */
+export const FOLLOWS_MIN_LIMIT = 50;
 
 export interface ImportedAccount {
   handle: string;
@@ -51,6 +61,16 @@ interface FollowItem {
 export async function readSetting(db: Db, key: string): Promise<string | null> {
   const row = await db.select({ value: aiSettings.value }).from(aiSettings).where(eq(aiSettings.key, key)).get();
   return row?.value ?? null;
+}
+
+export async function writeSetting(db: Db, key: string, value: string, userId: string): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const existing = await db.select({ key: aiSettings.key }).from(aiSettings).where(eq(aiSettings.key, key)).get();
+  if (existing) {
+    await db.update(aiSettings).set({ value, updatedBy: userId, updatedAt: now }).where(eq(aiSettings.key, key));
+  } else {
+    await db.insert(aiSettings).values({ key, value, updatedBy: userId, updatedAt: now });
+  }
 }
 
 /** Normalise anything a human might paste into a bare handle. */
@@ -125,11 +145,13 @@ export async function fetchFollowing(opts: {
       actorId,
       input: {
         usernames: [handle],
-        // Actor input shapes vary; sending both spellings costs nothing and
+        // Actor input shapes vary; sending every spelling costs nothing and
         // saves a round of trial and error when swapping actors.
         username: [handle],
         resultsLimit: limit,
         maxItems: limit,
+        // The default actor's cap field; it rejects values under 50.
+        max_count: Math.max(FOLLOWS_MIN_LIMIT, limit),
         whatToScrape: "following",
       },
       maxItems: limit,
