@@ -203,15 +203,27 @@ function TalentMonitorCard({ talent }: { talent: RosterTalent }) {
                   </p>
                 )}
               </div>
-              <a
-                href={hit.contentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] underline underline-offset-2 shrink-0"
-                style={{ color: "var(--color-accent)" }}
-              >
-                view
-              </a>
+              <span className="flex items-center gap-2 shrink-0">
+                <a
+                  href={hit.contentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] underline underline-offset-2"
+                  style={{ color: "var(--color-accent)" }}
+                >
+                  view
+                </a>
+                <a
+                  href={`/api/monitor/hits/${hit.id}/evidence`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Print-ready evidence record"
+                  className="text-[11px] underline underline-offset-2"
+                  style={{ color: "var(--color-muted)" }}
+                >
+                  record
+                </a>
+              </span>
             </div>
           ))}
           <p className="text-[10px] pt-1" style={{ color: "var(--color-muted)" }}>

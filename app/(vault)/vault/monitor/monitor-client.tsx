@@ -34,6 +34,16 @@ interface ScanProgress {
   updatedAt: number;
 }
 
+/** Mirror of lib/monitor/types.ts DetectorReadings — null means "not measured". */
+interface DetectorReadings {
+  faceEmbeddingSimilarity: number | null;
+  perceptualHashDistance: number | null;
+  geometryFingerprintCorrelation: number | null;
+  syntheticMediaScore: number | null;
+  synthetic: { analyst: string; generatorFamily: string | null; evidence: string[] } | null;
+  vigilanceMatchTerm: string | null;
+}
+
 interface SecondaryActor {
   talentId: string | null;
   name: string;
@@ -58,6 +68,7 @@ interface LikenessHit {
   riskLevel: string;
   matchSignals: string[];
   aiRationale: string | null;
+  detectorReadings?: DetectorReadings | null;
   status: string;
   detectedAt: number;
   secondaryActors?: SecondaryActor[];
@@ -74,6 +85,8 @@ interface ScanRecord {
   candidatesAnalysed: number;
   hitsFound: number;
   aiProvider: string | null;
+  coverageTier?: string | null;
+  coverageScore?: number | null;
 }
 
 interface MonitorConfig {
@@ -519,9 +532,16 @@ const TIER_LABELS: Record<ReferenceSetState["coverage"]["tier"], { label: string
  * monitor is weakest. It states what they have, the type of scan that would
  * help next, and that adding it makes monitoring more effective.
  */
-function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
+function DetectionCoverageCard({ refSet, scans }: { refSet: ReferenceSetState; scans: ScanRecord[] }) {
   const tier = TIER_LABELS[refSet.coverage.tier];
   const vault = refSet.vaultPackages ?? { total: 0, faceCount: 0, bodyCount: 0 };
+
+  // Coverage-at-scan-time history: each completed sweep records the tier and
+  // score it ran with, so "monitoring got stronger" is a provable trend, not a
+  // claim. Shown only when the score has actually moved.
+  const recorded = scans.filter((s) => s.status === "complete" && s.coverageScore != null);
+  const earliest = recorded.at(-1);
+  const delta = earliest != null ? refSet.coverage.score - (earliest.coverageScore as number) : 0;
   const parts: string[] = [];
   if (vault.faceCount > 0) parts.push("face");
   if (vault.bodyCount > 0) parts.push("full-body");
@@ -557,6 +577,19 @@ function DetectionCoverageCard({ refSet }: { refSet: ReferenceSetState }) {
         <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
           <div className="h-full rounded-full transition-all" style={{ width: `${refSet.coverage.score}%`, background: tier.color }} />
         </div>
+        {delta > 0 && earliest && (
+          <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium" style={{ color: tier.color }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+            Up {delta} point{delta === 1 ? "" : "s"} since your first recorded sweep
+            {" "}
+            <span className="font-normal" style={{ color: "var(--color-muted)" }}>
+              ({new Date(earliest.startedAt * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})
+            </span>
+          </p>
+        )}
         {(refSet.phashIndexedCount ?? 0) > 0 && (
           <p className="mt-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
             Derivation index: {refSet.phashIndexedCount} still{refSet.phashIndexedCount === 1 ? "" : "s"} fingerprinted —
@@ -828,6 +861,106 @@ function DismissMenu({
 }
 
 /**
+ * One detector's reading: measured values get a mono figure and a qualitative
+ * tag pinned to the documented thresholds; unmeasured detectors say so plainly
+ * — a null reading is "no reading taken", never a low score.
+ */
+function DetectorRow({
+  label,
+  value,
+  tag,
+  tagTone,
+}: {
+  label: string;
+  value: string | null;
+  tag?: string;
+  tagTone?: "strong" | "info";
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1">
+      <span className="text-[11px]" style={{ color: "var(--color-muted)" }}>{label}</span>
+      <span className="flex items-baseline gap-2 text-right">
+        {tag && (
+          <span
+            className="text-[10px] font-medium"
+            style={{ color: tagTone === "strong" ? "var(--color-accent)" : "var(--color-muted)" }}
+          >
+            {tag}
+          </span>
+        )}
+        <span
+          className="font-mono text-[11px] tabular-nums"
+          style={{ color: value === null ? "var(--color-muted)" : "var(--color-ink)", opacity: value === null ? 0.6 : 1 }}
+        >
+          {value ?? "not measured"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The numeric evidence behind the verdict, straight from the stored readings.
+ * Thresholds mirror the adjudicator's brief (scan.ts ADJUDICATOR_SYSTEM):
+ * face >=0.8 strong; pHash <=16 derived; fingerprint >=0.7 licensed-data
+ * provenance; synthetic >=0.7 likely AI-generated.
+ */
+function DetectorReadingsPanel({ readings }: { readings: DetectorReadings }) {
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const face = readings.faceEmbeddingSimilarity;
+  const phash = readings.perceptualHashDistance;
+  const fingerprint = readings.geometryFingerprintCorrelation;
+  const synthetic = readings.syntheticMediaScore;
+  return (
+    <div className="rounded px-3 py-2 space-y-0.5"
+      style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
+      <p className="text-[10px] uppercase tracking-widest font-semibold pb-1" style={{ color: "var(--color-muted)" }}>
+        Detector readings
+      </p>
+      <DetectorRow
+        label="Face similarity vs vault references"
+        value={face === null ? null : pct(face)}
+        tag={face === null ? undefined : face >= 0.8 ? "strong match" : face < 0.7 ? "weak match" : "probable match"}
+        tagTone={face !== null && face >= 0.8 ? "strong" : "info"}
+      />
+      <DetectorRow
+        label="Derivation distance (perceptual hash)"
+        value={phash === null ? null : `${phash}/64`}
+        tag={phash === null ? undefined : phash <= 16 ? "derived from vault imagery" : "no derivation"}
+        tagTone={phash !== null && phash <= 16 ? "strong" : "info"}
+      />
+      <DetectorRow
+        label="Geometry fingerprint correlation"
+        value={fingerprint === null ? null : pct(fingerprint)}
+        tag={fingerprint === null ? undefined : fingerprint >= 0.7 ? "licensed scan data detected" : undefined}
+        tagTone="strong"
+      />
+      <DetectorRow
+        label="Synthetic-media score"
+        value={synthetic === null ? null : pct(synthetic)}
+        tag={synthetic === null ? undefined : synthetic >= 0.7 ? "likely AI-generated" : undefined}
+        tagTone="strong"
+      />
+      {readings.synthetic && (readings.synthetic.generatorFamily || readings.synthetic.evidence.length > 0) && (
+        <p className="text-[11px] leading-relaxed pt-1" style={{ color: "var(--color-muted)" }}>
+          <span className="font-semibold" style={{ color: "var(--color-ink)" }}>
+            Forensic analysis:{" "}
+          </span>
+          {readings.synthetic.generatorFamily ? `resembles ${readings.synthetic.generatorFamily}` : ""}
+          {readings.synthetic.generatorFamily && readings.synthetic.evidence.length > 0 ? " — " : ""}
+          {readings.synthetic.evidence.join("; ")}
+        </p>
+      )}
+      {readings.vigilanceMatchTerm && (
+        <p className="text-[11px] leading-relaxed pt-1" style={{ color: "var(--color-muted)" }}>
+          Surfaced via role vocabulary: &ldquo;{readings.vigilanceMatchTerm}&rdquo;
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * Captured evidence still for a flagged hit, served from the copy the sweep
  * stored in R2 (see /api/monitor/hits/:id/thumbnail). NSFW content stays
  * blurred in the card — the talent chooses when to look, via Preview.
@@ -880,7 +1013,19 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
   // that makes someone look twice, and hiding it wastes the card's best
   // moment.
   const [expanded, setExpanded] = useState(false);
+  const readings = hit.detectorReadings ?? null;
+  const measuredCount = readings
+    ? [
+        readings.faceEmbeddingSimilarity,
+        readings.perceptualHashDistance,
+        readings.geometryFingerprintCorrelation,
+        readings.syntheticMediaScore,
+      ].filter((v) => v !== null).length
+    : 0;
   const detailParts: string[] = [];
+  if (readings) {
+    detailParts.push(`${measuredCount} of 4 detector readings`);
+  }
   if (hit.matchSignals.length) {
     detailParts.push(`${hit.matchSignals.length} match signal${hit.matchSignals.length === 1 ? "" : "s"}`);
   }
@@ -955,6 +1100,8 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
         </button>
       )}
 
+      {expanded && readings && <DetectorReadingsPanel readings={readings} />}
+
       {expanded && hit.matchSignals.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {hit.matchSignals.map((s, i) => (
@@ -995,6 +1142,18 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
             <line x1="10" y1="14" x2="21" y2="3" />
           </svg>
           Open on platform
+        </a>
+        <a href={`/api/monitor/hits/${hit.id}/evidence`} target="_blank" rel="noopener noreferrer"
+          title="Print-ready evidence record for this hit"
+          className="inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition"
+          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="13" y2="17" />
+          </svg>
+          Evidence record
         </a>
         {hit.status === "new" && (
           <button
@@ -1565,7 +1724,7 @@ export default function MonitorClient({ identity }: Props) {
       />
 
       {/* ── Detection coverage (vault-anchored reference set) ── */}
-      {refSet && <DetectionCoverageCard refSet={refSet} />}
+      {refSet && <DetectionCoverageCard refSet={refSet} scans={scans} />}
 
       {/* ── Monitor status strip ── */}
       {monitor && (
@@ -1781,6 +1940,7 @@ export default function MonitorClient({ identity }: Props) {
                       {record.completedAt && record.completedAt > record.startedAt
                         ? ` · ${formatDuration(record.completedAt - record.startedAt)}`
                         : ""}
+                      {record.coverageScore != null ? ` · coverage ${record.coverageScore}/100` : ""}
                       {record.aiProvider === "ai" ? " · AI adjudicated" : record.aiProvider === "heuristic" ? " · heuristic thresholds" : ""}
                       {record.trigger === "scheduled" ? " · scheduled sweep" : ""}
                     </>
