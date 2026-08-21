@@ -268,7 +268,7 @@ export default function RosterMonitorClient() {
         </p>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>
-            Likeness Monitor
+            Deep Scan
           </h1>
           <div className="flex items-center gap-3 shrink-0">
             <Link

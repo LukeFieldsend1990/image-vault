@@ -20,7 +20,7 @@ const LABELS = new Set<string>(["confirmed", "dismissed", "whitelisted_account"]
 registerMcpTool({
   name: "get_detection_feedback_summary",
   description:
-    "Aggregated human verdicts on likeness-monitor hits, read back as a scan-model tuning signal: " +
+    "Aggregated human verdicts on Deep Scan hits, read back as a scan-model tuning signal: " +
     "outcome funnel (confirmed / dismissed / whitelisted), dismissal and whitelist reason breakdowns, " +
     "detector calibration by verdict (avg likeness confidence and AI likelihood per label — high confidence " +
     "on dismissed:not_me means the likeness matcher is over-confident, high AI likelihood on dismissed:not_ai " +

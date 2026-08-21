@@ -1674,7 +1674,7 @@ export default function MonitorClient({ identity }: Props) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-            Likeness Monitor
+            Deep Scan
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
             AI-adjudicated scanning of public platforms for unauthorised use of{" "}

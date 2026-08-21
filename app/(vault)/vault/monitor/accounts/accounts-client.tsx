@@ -792,7 +792,7 @@ export default function AccountsClient({ talentName }: { talentName: string }) {
           className="text-xs font-medium underline underline-offset-2"
           style={{ color: "var(--color-muted)" }}
         >
-          ← Likeness Monitor
+          ← Deep Scan
         </Link>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
           Accounts

@@ -248,10 +248,10 @@ export default function ProductPage() {
             </div>
           </div>
 
-          {/* Likeness Monitor */}
+          {/* Deep Scan */}
           <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
             <div>
-              <SectionLabel>Likeness Monitor</SectionLabel>
+              <SectionLabel>Deep Scan</SectionLabel>
               <h3 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
                 The vault that looks out for you
               </h3>
@@ -277,11 +277,11 @@ export default function ProductPage() {
                 ))}
               </ul>
               <Link
-                href="/product/likeness-monitor"
+                href="/product/deep-scan"
                 className="mt-6 inline-block text-sm font-medium transition hover:opacity-60"
                 style={{ color: "var(--color-accent)" }}
               >
-                Explore the Likeness Monitor →
+                Explore Deep Scan →
               </Link>
             </div>
             <MonitorMockup />

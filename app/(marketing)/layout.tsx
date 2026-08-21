@@ -25,7 +25,7 @@ export default function MarketingLayout({
             {[
               ["Platform", "/product#platform"],
               ["Features", "/product#features"],
-              ["Monitor", "/product/likeness-monitor"],
+              ["Deep Scan", "/product/deep-scan"],
               ["Security", "/product#security"],
               ["How it works", "/product#how-it-works"],
               ["Calculator", "/calculator"],

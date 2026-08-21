@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /demo/monitor — auto-advancing tour of the Likeness Monitor.
+ * /demo/monitor — auto-advancing tour of Deep Scan.
  *
  * All talent and account names are fictional. Product copy describes the
  * user-facing outcome (identity match, reach ranking, priority queue) and
@@ -534,7 +534,7 @@ function HitsListView() {
     <div style={{ padding: "1.5rem 2rem", overflowY: "auto", height: "100%", maxWidth: "48rem" }}>
       <div style={{ marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)" }}>
-          Likeness Monitor
+          Deep Scan
         </h1>
         <p style={{ marginTop: "0.25rem", fontSize: "0.875rem", color: "var(--color-muted)" }}>
           AI-adjudicated scanning of public platforms for unauthorised use of{" "}
@@ -652,7 +652,7 @@ function AccountsQueueView({ withWhitelistOpen = false }: { withWhitelistOpen?: 
     <div style={{ padding: "1.5rem 2rem", overflowY: "auto", height: "100%", maxWidth: "48rem" }}>
       <div style={{ marginBottom: "1.5rem" }}>
         <p style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.15em", fontWeight: 600, color: "var(--color-accent)", marginBottom: "0.25rem" }}>
-          ← Likeness Monitor
+          ← Deep Scan
         </p>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 600, letterSpacing: "-0.02em", color: "var(--color-ink)" }}>
           Accounts
@@ -956,7 +956,7 @@ function AdminPanelView() {
           ← Admin
         </p>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 600, color: "var(--color-ink)" }}>
-          Likeness Monitor — Operations
+          Deep Scan — Operations
         </h1>
       </div>
 
@@ -1318,7 +1318,7 @@ function IntroOverlay({ leaving, onDismiss }: { leaving: boolean; onDismiss: () 
           Product Tour
         </p>
         <h1 style={{ fontSize: "2rem", fontWeight: 600, lineHeight: 1.2, maxWidth: "36rem", margin: "0 auto" }}>
-          Likeness Monitor
+          Deep Scan
         </h1>
         <p style={{ marginTop: "1rem", fontSize: "0.95rem", color: "rgba(255,255,255,0.7)", maxWidth: "32rem", margin: "1rem auto 0" }}>
           Continuous, AI-powered monitoring across every major short-form platform — with in-app preview, per-talent whitelisting, one-click takedowns, and a licensing bridge that turns offenders into paying partners.

@@ -624,7 +624,7 @@ export default function DeepfakeStats({ scope, stats }: DeepfakeStatsPayload) {
       </section>
 
       <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-        Counts cover every hit the likeness monitor has recorded for {noun}s in scope, including
+        Counts cover every hit Deep Scan has recorded for {noun}s in scope, including
         those later dismissed on review. Generated {fmtDate(stats.generatedAt)}.
       </p>
     </div>

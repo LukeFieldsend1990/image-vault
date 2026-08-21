@@ -1,5 +1,5 @@
 /**
- * Read-only visibility into the likeness monitor: recorded hits and scan
+ * Read-only visibility into Deep Scan: recorded hits and scan
  * activity across all talent, for admin triage support from Claude.
  */
 
@@ -17,7 +17,7 @@ const HIT_STATUSES = new Set(["new", "confirmed", "dismissed", "takedown_request
 registerMcpTool({
   name: "list_likeness_hits",
   description:
-    "Likeness monitor hits (AI-flagged unauthorised likeness usage on public platforms), newest first. " +
+    "Deep Scan hits (AI-flagged unauthorised likeness usage on public platforms), newest first. " +
     "Filter by status (new | confirmed | dismissed | takedown_requested | resolved) or talent email. " +
     "Includes per-hit confidence, risk level, adjudicator rationale and content URL.",
   inputSchema: {

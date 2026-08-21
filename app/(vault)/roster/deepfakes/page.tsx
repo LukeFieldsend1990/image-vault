@@ -9,9 +9,9 @@ export default function RosterDeepfakeStatsPage() {
         endpoint="/api/roster/deepfake-stats"
         eyebrow="Representative"
         title="Deepfake Statistics"
-        intro="Synthetic-likeness hits recorded against your clients by the likeness monitor — lifetime, this month, and how fast it is moving."
+        intro="Synthetic-likeness hits recorded against your clients by Deep Scan — lifetime, this month, and how fast it is moving."
         backHref="/roster/monitor"
-        backLabel="← Likeness monitor"
+        backLabel="← Deep Scan"
       />
     </div>
   );

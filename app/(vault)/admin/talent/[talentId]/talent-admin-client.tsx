@@ -85,7 +85,7 @@ function MonitorPlatformsCard({ talentId }: { talentId: string }) {
 
   return (
     <div className="rounded border p-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-      <h2 className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>Likeness Monitor Platforms</h2>
+      <h2 className="text-sm font-semibold mb-1" style={{ color: "var(--color-ink)" }}>Deep Scan Platforms</h2>
       <p className="text-xs mb-5" style={{ color: "var(--color-muted)" }}>
         Per-actor override of the global platform toggles on the monitor admin page. &quot;Inherit&quot;
         follows the global setting; &quot;On&quot; / &quot;Off&quot; pins this talent&apos;s sweeps
@@ -397,7 +397,7 @@ function SettingsTab({ talentId, initial }: { talentId: string; initial: TalentS
         )}
       </div>
 
-      {/* Likeness monitor platform overrides */}
+      {/* Deep Scan platform overrides */}
       <MonitorPlatformsCard talentId={talentId} />
     </div>
   );

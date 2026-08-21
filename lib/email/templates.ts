@@ -1293,7 +1293,7 @@ export function consentReceiptEmail(p: ConsentReceiptEmailParams): { subject: st
   };
 }
 
-// ── Likeness monitor hit alert ───────────────────────────────────────────────
+// ── Deep Scan hit alert ───────────────────────────────────────────────
 
 export interface LikenessHitAlertParams {
   talentName: string;
@@ -1334,11 +1334,11 @@ export function likenessHitAlertEmail(p: LikenessHitAlertParams): { subject: str
   return {
     subject: `[Likeness Alert] ${count} new hit${count === 1 ? "" : "s"} detected for ${p.talentName}`,
     html: layout(`
-      <p><strong>Your likeness monitor flagged ${count === 1 ? "a new item" : `${count} new items`}.</strong></p>
+      <p><strong>Deep Scan flagged ${count === 1 ? "a new item" : `${count} new items`}.</strong></p>
       <p>Automated detectors matched content against ${escapeHtml(p.talentName)}'s verified identity anchors, and the AI adjudicator confirmed ${count === 1 ? "it" : "them"} as likely unauthorised synthetic usage. Nothing has been actioned yet — review each hit and choose whether to request a takedown or dismiss it.</p>
       ${hitBlocks}
       <p class="muted">Links above lead to third-party platforms. Detection combines perceptual hashing, face-embedding similarity and geometry-fingerprint correlation from your vaulted scan packages.</p>
-      <a class="btn" href="${p.monitorUrl}">Review in Likeness Monitor</a>
+      <a class="btn" href="${p.monitorUrl}">Review in Deep Scan</a>
     `),
   };
 }

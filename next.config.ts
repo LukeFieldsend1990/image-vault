@@ -1,7 +1,18 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      // The Likeness Monitor relaunched as Deep Scan; old links stay live.
+      {
+        source: "/product/likeness-monitor",
+        destination: "/product/deep-scan",
+        permanent: true,
+      },
+    ];
+  },
+};
 
 export default nextConfig;
 
