@@ -75,36 +75,45 @@ export async function POST(req: NextRequest) {
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
 
-  const existing = await db
-    .select({ handle: monitorAccounts.handle })
-    .from(monitorAccounts)
-    .where(and(eq(monitorAccounts.platform, platform), inArray(monitorAccounts.handle, handles)))
-    .all();
-  const known = new Set(existing.map((e) => e.handle));
+  // D1 caps a statement at 100 bound parameters, so both the dedupe lookup
+  // and the insert run in chunks (same fix as the hit queries in
+  // lib/monitor/accounts.ts). The unchunked insert silently 500'd on any
+  // import of 8+ handles — 13 columns × 8 rows crosses the cap.
+  const known = new Set<string>();
+  for (let i = 0; i < handles.length; i += 80) {
+    const rows = await db
+      .select({ handle: monitorAccounts.handle })
+      .from(monitorAccounts)
+      .where(
+        and(eq(monitorAccounts.platform, platform), inArray(monitorAccounts.handle, handles.slice(i, i + 80)))
+      )
+      .all();
+    for (const r of rows) known.add(r.handle);
+  }
 
   const fresh = handles.filter((h) => !known.has(h));
-  if (fresh.length) {
-    await db.insert(monitorAccounts).values(
-      fresh.map((handle) => ({
-        id: crypto.randomUUID(),
-        platform,
-        handle,
-        platformUserId: null,
-        displayName: null,
-        followerCount: null,
-        firstSeenAt: now,
-        lastSeenAt: now,
-        // Curated entries start with no hits — they are accounts to watch, not
-        // offenders. Talent-facing views only ever show accounts that have
-        // actually hit them, so nothing here leaks into a talent's case files
-        // until a sweep proves it should.
-        hitCount: 0,
-        cumulativeViews: 0,
-        talentAffectedCount: 0,
-        status: "watchlist" as const,
-        notes: body.note?.slice(0, 500) ?? null,
-      }))
-    );
+  const rows = fresh.map((handle) => ({
+    id: crypto.randomUUID(),
+    platform,
+    handle,
+    platformUserId: null,
+    displayName: null,
+    followerCount: null,
+    firstSeenAt: now,
+    lastSeenAt: now,
+    // Curated entries start with no hits — they are accounts to watch, not
+    // offenders. Talent-facing views only ever show accounts that have
+    // actually hit them, so nothing here leaks into a talent's case files
+    // until a sweep proves it should.
+    hitCount: 0,
+    cumulativeViews: 0,
+    talentAffectedCount: 0,
+    status: "watchlist" as const,
+    notes: body.note?.slice(0, 500) ?? null,
+  }));
+  // 13 columns per row → 7 rows keeps a statement at 91 parameters.
+  for (let i = 0; i < rows.length; i += 7) {
+    await db.insert(monitorAccounts).values(rows.slice(i, i + 7));
   }
 
   return NextResponse.json({
