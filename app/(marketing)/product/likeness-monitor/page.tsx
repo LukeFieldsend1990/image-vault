@@ -202,6 +202,25 @@ export default function LikenessMonitorPage() {
         </div>
       </section>
 
+      {/* ─────────────── Launch trailer ─────────────── */}
+      <section className="mx-auto max-w-6xl px-6 pb-16 md:pb-20">
+        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <p
+            className="text-xs font-medium tracking-widest uppercase"
+            style={{ color: "var(--color-accent)" }}
+          >
+            The launch trailer
+          </p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            Ninety seconds · tap to pause
+          </p>
+        </div>
+        <ExplainerFilm
+          src="/explainer/imagevault-detector-trailer.html?v=1"
+          title="The Likeness Monitor — launch trailer"
+        />
+      </section>
+
       {/* ─────────────── Value strip ─────────────── */}
       <section className="border-y" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px px-6 py-10 md:grid-cols-4">
