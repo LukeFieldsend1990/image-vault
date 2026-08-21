@@ -162,8 +162,24 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
 @keyframes rainfall{from{transform:translateY(-38%);}to{transform:translateY(2%);}}
 .rainfadeTop{position:absolute;left:0;right:0;top:0;height:180px;background:linear-gradient(180deg,var(--night),transparent);z-index:2;pointer-events:none;}
 .rainfadeBot{position:absolute;left:0;right:0;bottom:0;height:260px;background:linear-gradient(0deg,var(--night),transparent);z-index:2;pointer-events:none;}
-.announceD{font-family:var(--mono);font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--ember);border:1.5px solid var(--red);border-radius:10px;padding:14px 22px;background:var(--night-2);box-shadow:0 0 34px -8px rgba(188,61,44,.55);position:relative;z-index:3;}
+.announceD{font-family:var(--mono);font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:#fff;border:1.5px solid var(--red);border-radius:10px;padding:14px 22px;background:var(--red);box-shadow:0 0 40px -6px rgba(188,61,44,.75);position:relative;z-index:3;}
 .rainstage{position:relative;z-index:3;}
+/* vigilance window — the cast-announcement panel, as the admin sees it */
+.vigcard{position:relative;z-index:3;width:1000px;border-radius:16px;background:var(--paper);border:1px solid var(--line);box-shadow:0 0 80px -20px rgba(188,61,44,.25),0 40px 80px -40px rgba(0,0,0,.7);padding:24px 32px 16px;text-align:left;opacity:0;margin-top:36px;}
+.scene.active .vigcard{animation:fade .8s var(--ease-cam) 1.2s both;}
+.vighead{padding-bottom:13px;border-bottom:1px solid var(--line);}
+.vighead .vt{font-family:var(--sans);font-size:20px;font-weight:600;color:var(--ink-900);}
+.vighead .vt span{color:var(--ink-500);font-weight:400;}
+.vighead .vsub{font-family:var(--sans);font-size:13.5px;color:var(--ink-500);margin-top:5px;}
+.vigrow{display:flex;align-items:baseline;gap:8px;font-family:var(--sans);font-size:16.5px;color:var(--ink-900);padding:10px 0;border-bottom:1px dashed var(--line);opacity:0;}
+.vigrow:last-of-type{border-bottom:none;}
+.vigrow b{font-weight:600;}
+.vigrow .as{color:var(--ink-500);font-size:14.5px;}
+.vigrow .vst{margin-left:auto;font-family:var(--mono);font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-300);}
+.vigrow .vst.hit{color:var(--red-deep);font-weight:500;opacity:0;}
+.vigrow .vst.live{color:var(--forest);}
+.scene.active .vigrow{animation:tick .4s var(--ease-mech) var(--d,0s) both;}
+.scene.active .vst.hit{animation:stampin .42s var(--ease-mech) 4.4s both;}
 .rainstage::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:1240px;height:720px;background:radial-gradient(closest-side,rgba(29,27,23,.9),rgba(29,27,23,0));z-index:-1;pointer-events:none;}
 
 /* ============ T7 · THE SWEEP (live telemetry, from the real monitor) ============ */
@@ -175,15 +191,15 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
 @keyframes bluepulse{0%,100%{opacity:1;}50%{opacity:.35;}}
 .stagelbls{position:relative;min-width:340px;height:22px;text-align:right;}
 .stagelbls span{position:absolute;right:0;top:0;white-space:nowrap;opacity:0;}
-.scene.active .sl1{animation:slwin 2.4s linear .8s both;}
-.scene.active .sl2{animation:slwin 3s linear 3.2s both;}
-.scene.active .sl3{animation:slwin 2.4s linear 6.2s both;}
-.scene.active .sl4{animation:slwin 2.4s linear 8.6s both;}
-.scene.active .sl5{animation:sllast .6s linear 11s both;}
+.scene.active .sl1{animation:slwin 1.8s linear .7s both;}
+.scene.active .sl2{animation:slwin 2.1s linear 2.5s both;}
+.scene.active .sl3{animation:slwin 1.4s linear 4.6s both;}
+.scene.active .sl4{animation:slwin 1.3s linear 6s both;}
+.scene.active .sl5{animation:sllast .6s linear 7.3s both;}
 @keyframes slwin{0%{opacity:0;}6%{opacity:1;}94%{opacity:1;}100%{opacity:0;}}
 @keyframes sllast{from{opacity:0;}to{opacity:1;}}
 .candcount{font-family:var(--mono);font-size:14px;color:var(--ink-500);font-weight:400;opacity:0;}
-.scene.active .candcount{animation:fade .5s var(--ease-cam) 4.9s both;}
+.scene.active .candcount{animation:fade .5s var(--ease-cam) 3.8s both;}
 .sweeplog{padding:22px 30px 24px;display:flex;flex-direction:column;gap:10px;background:var(--white);}
 .slrow{display:flex;align-items:baseline;gap:22px;font-family:var(--mono);font-size:16.5px;line-height:1.45;color:var(--ink-700);opacity:0;}
 .slrow .ts{color:var(--ink-300);font-size:14px;flex:none;width:86px;}
@@ -288,7 +304,7 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
   .spray-links path,.leak,.raincol{animation:none!important;}
   .leak{opacity:0!important;}
   .raincol{transform:translateY(-26%)!important;}
-  .slrow,.srcchip,.sig,.gateline,.stat,.needsyou,.hitcard,.foldline,.btn,.candcount,.sbrow{opacity:1!important;}
+  .slrow,.srcchip,.sig,.gateline,.stat,.needsyou,.hitcard,.foldline,.btn,.candcount,.sbrow,.vigrow,.vst.hit{opacity:1!important;}
   .sbfill{width:var(--bw,50%)!important;}
   .meter .fill{width:var(--mw,60%)!important;}
   .stagelbls span{opacity:0!important;} .stagelbls .sl5{opacity:1!important;}
@@ -426,30 +442,41 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
       </div>
     </section>
 
-    <!-- ===== T6 · THE VOCABULARY — the query rain ===== -->
-    <section class="scene dark" data-scene="the-vocabulary" style="--beat:11s">
+    <!-- ===== T6 · THE VOCABULARY — the query rain + the vigilance window ===== -->
+    <section class="scene dark" data-scene="the-vocabulary" style="--beat:13s">
       <div class="cam push">
         <div class="rainwrap" aria-hidden="true">
-          <div class="raincol" style="left:70px;--rs:11s;--rd:-3s;--ro:.34;"><span>#tidewater2</span><span>#quinncalloway</span><span class="hot">#callowayai</span><span>#concepttrailer</span><span>#tidewateredit</span><span>#quinnreturns</span><span>#tidewater2</span><span>#quinncalloway</span><span class="hot">#callowayai</span><span>#concepttrailer</span><span>#tidewateredit</span><span>#quinnreturns</span><span>#tidewater2</span><span>#quinncalloway</span><span class="hot">#callowayai</span><span>#concepttrailer</span><span>#tidewateredit</span><span>#quinnreturns</span></div>
-          <div class="raincol" style="left:300px;--rs:8.5s;--rd:-6s;--ro:.5;"><span class="hot">#marlowequinncalloway</span><span>#tidewaterai</span><span>#fanmadetrailer</span><span>#callowayedit</span><span>#tidewater2trailer</span><span>#quinntok</span><span class="hot">#marlowequinncalloway</span><span>#tidewaterai</span><span>#fanmadetrailer</span><span>#callowayedit</span><span>#tidewater2trailer</span><span>#quinntok</span><span class="hot">#marlowequinncalloway</span><span>#tidewaterai</span><span>#fanmadetrailer</span><span>#callowayedit</span><span>#tidewater2trailer</span><span>#quinntok</span></div>
-          <div class="raincol" style="left:640px;--rs:12.5s;--rd:-1.5s;--ro:.3;"><span>#quinnreturns</span><span>#tidewateredit</span><span>#concepttrailer</span><span class="hot">#tidewaterai</span><span>#quinncalloway</span><span>#tidewater2trailer</span><span>#quinnreturns</span><span>#tidewateredit</span><span>#concepttrailer</span><span class="hot">#tidewaterai</span><span>#quinncalloway</span><span>#tidewater2trailer</span><span>#quinnreturns</span><span>#tidewateredit</span><span>#concepttrailer</span><span class="hot">#tidewaterai</span><span>#quinncalloway</span><span>#tidewater2trailer</span></div>
-          <div class="raincol" style="left:940px;--rs:9.5s;--rd:-4.5s;--ro:.44;"><span>#callowayedit</span><span class="hot">#quinncalloway</span><span>#tidewater2</span><span>#fanmadetrailer</span><span class="hot">#callowayai</span><span>#tidewateredit</span><span>#callowayedit</span><span class="hot">#quinncalloway</span><span>#tidewater2</span><span>#fanmadetrailer</span><span class="hot">#callowayai</span><span>#tidewateredit</span><span>#callowayedit</span><span class="hot">#quinncalloway</span><span>#tidewater2</span><span>#fanmadetrailer</span><span class="hot">#callowayai</span><span>#tidewateredit</span></div>
-          <div class="raincol" style="left:1250px;--rs:10.5s;--rd:-7.5s;--ro:.38;"><span>#tidewater2trailer</span><span>#quinntok</span><span class="hot">#marlowequinncalloway</span><span>#concepttrailer</span><span>#quinnreturns</span><span>#tidewaterai</span><span>#tidewater2trailer</span><span>#quinntok</span><span class="hot">#marlowequinncalloway</span><span>#concepttrailer</span><span>#quinnreturns</span><span>#tidewaterai</span><span>#tidewater2trailer</span><span>#quinntok</span><span class="hot">#marlowequinncalloway</span><span>#concepttrailer</span><span>#quinnreturns</span><span>#tidewaterai</span></div>
-          <div class="raincol" style="left:1560px;--rs:8s;--rd:-2.5s;--ro:.3;"><span>#tidewateredit</span><span>#callowayai</span><span>#tidewater2</span><span class="hot">#quinnreturns</span><span>#fanmadetrailer</span><span>#quinncalloway</span><span>#tidewateredit</span><span>#callowayai</span><span>#tidewater2</span><span class="hot">#quinnreturns</span><span>#fanmadetrailer</span><span>#quinncalloway</span><span>#tidewateredit</span><span>#callowayai</span><span>#tidewater2</span><span class="hot">#quinnreturns</span><span>#fanmadetrailer</span><span>#quinncalloway</span></div>
+          <div class="raincol" style="left:70px;--rs:11s;--rd:-3s;--ro:.34;"><span>#tidewater2</span><span>#quinncalloway</span><span class="hot">#callowayai</span><span>#tidewaterteaser</span><span>#ettacalloway</span><span>#quinnreturns</span><span>#tidewater2</span><span>#quinncalloway</span><span class="hot">#callowayai</span><span>#tidewaterteaser</span><span>#ettacalloway</span><span>#quinnreturns</span><span>#tidewater2</span><span>#quinncalloway</span><span class="hot">#callowayai</span><span>#tidewaterteaser</span><span>#ettacalloway</span><span>#quinnreturns</span></div>
+          <div class="raincol" style="left:300px;--rs:8.5s;--rd:-6s;--ro:.5;"><span class="hot">#marlowequinncalloway</span><span>#tidewaterai</span><span>#quinnfancam</span><span>#deaconcoleai</span><span>#tidewater2trailer</span><span>#quinntok</span><span class="hot">#marlowequinncalloway</span><span>#tidewaterai</span><span>#quinnfancam</span><span>#deaconcoleai</span><span>#tidewater2trailer</span><span>#quinntok</span><span class="hot">#marlowequinncalloway</span><span>#tidewaterai</span><span>#quinnfancam</span><span>#deaconcoleai</span><span>#tidewater2trailer</span><span>#quinntok</span></div>
+          <div class="raincol" style="left:640px;--rs:12.5s;--rd:-1.5s;--ro:.3;"><span>#quinnreturns</span><span>#tidewateredit</span><span>#concepttrailer</span><span class="hot">#tidewaterleak</span><span>#marlowquinn</span><span>#finncalloway</span><span>#quinnreturns</span><span>#tidewateredit</span><span>#concepttrailer</span><span class="hot">#tidewaterleak</span><span>#marlowquinn</span><span>#finncalloway</span><span>#quinnreturns</span><span>#tidewateredit</span><span>#concepttrailer</span><span class="hot">#tidewaterleak</span><span>#marlowquinn</span><span>#finncalloway</span></div>
+          <div class="raincol" style="left:940px;--rs:9.5s;--rd:-4.5s;--ro:.44;"><span>#callowayedit</span><span>#quinncalloway</span><span>#tidewatermovie</span><span>#fanmadetrailer</span><span class="hot">#callowayai</span><span>#ettacallowayedit</span><span>#callowayedit</span><span>#quinncalloway</span><span>#tidewatermovie</span><span>#fanmadetrailer</span><span class="hot">#callowayai</span><span>#ettacallowayedit</span><span>#callowayedit</span><span>#quinncalloway</span><span>#tidewatermovie</span><span>#fanmadetrailer</span><span class="hot">#callowayai</span><span>#ettacallowayedit</span></div>
+          <div class="raincol" style="left:1250px;--rs:10.5s;--rd:-7.5s;--ro:.38;"><span>#tidewater2trailer</span><span>#deaconcole</span><span class="hot">#marlowequinncalloway</span><span>#tidewaterconcept</span><span>#quinnfancam</span><span>#tidewaterai</span><span>#tidewater2trailer</span><span>#deaconcole</span><span class="hot">#marlowequinncalloway</span><span>#tidewaterconcept</span><span>#quinnfancam</span><span>#tidewaterai</span><span>#tidewater2trailer</span><span>#deaconcole</span><span class="hot">#marlowequinncalloway</span><span>#tidewaterconcept</span><span>#quinnfancam</span><span>#tidewaterai</span></div>
+          <div class="raincol" style="left:1560px;--rs:8s;--rd:-2.5s;--ro:.3;"><span>#tidewateredit</span><span>#callowayai</span><span>#tidewater2</span><span class="hot">#quinnfancam</span><span>#tidewaterleak</span><span>#ettacalloway</span><span>#tidewateredit</span><span>#callowayai</span><span>#tidewater2</span><span class="hot">#quinnfancam</span><span>#tidewaterleak</span><span>#ettacalloway</span><span>#tidewateredit</span><span>#callowayai</span><span>#tidewater2</span><span class="hot">#quinnfancam</span><span>#tidewaterleak</span><span>#ettacalloway</span></div>
           <div class="rainfadeTop"></div>
           <div class="rainfadeBot"></div>
         </div>
         <div class="frame">
           <div class="rainstage" style="display:flex;flex-direction:column;align-items:center;">
             <div class="announceD stampin" style="--d:.4s;">Cast announced · Friday 9PM</div>
-            <div class="display settle" style="--d:3.8s;margin-top:210px;font-size:64px;">It learns the tags <em>they hide behind.</em></div>
+            <div class="vigcard">
+              <div class="vighead">
+                <div class="vt">Tidewater 2 cast announcement <span>— Tidewater</span></div>
+                <div class="vsub">Announced Friday (2h ago) · Peak — surge sweeps every 12h · window expires in 90 days</div>
+              </div>
+              <div class="vigrow" style="--d:1.8s;"><b>Marlowe Quinn</b> <span class="as">as Etta Calloway</span><span class="vst hit">3 hits in window</span></div>
+              <div class="vigrow" style="--d:2.2s;"><b>Jonas Reyes</b> <span class="as">as Deacon Cole</span><span class="vst live">Sweeping · 12h</span></div>
+              <div class="vigrow" style="--d:2.6s;"><b>Priya Anand</b> <span class="as">as Dr. Imogen Voss</span><span class="vst live">Sweep clean</span></div>
+              <div class="vigrow" style="--d:3.0s;"><b>Dana Okafor</b> <span class="as">as Mayor Bray</span><span class="vst">Not on roster</span></div>
+              <div class="vigrow" style="--d:3.4s;"><b>Teddy Lindqvist</b> <span class="as">as Finn Calloway</span><span class="vst">Not on roster</span></div>
+            </div>
+            <div class="display settle" style="--d:6.2s;margin-top:46px;font-size:56px;">It learns the tags <em>they hide behind.</em></div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- ===== T7 · THE SWEEP — live telemetry ===== -->
-    <section class="scene light" data-scene="the-sweep" style="--beat:14s">
+    <section class="scene light" data-scene="the-sweep" style="--beat:11s">
       <div class="cam hold">
         <div class="frame">
           <div class="sweepcard fade" style="--d:.3s;">
@@ -468,19 +495,19 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
               </span>
             </div>
             <div class="sweeplog">
-              <div class="slrow" style="--d:1.0s;"><span class="ts">21:04:07</span><span>Sweep opened for Marlowe Quinn — 8 platforms in scope</span></div>
-              <div class="slrow" style="--d:1.9s;"><span class="ts">21:04:12</span><span>Vault references anchored — 14 stills, 2 derived renders</span></div>
-              <div class="slrow" style="--d:2.8s;"><span class="ts">21:04:31</span><span>Instagram sweep complete — 18 candidates</span></div>
-              <div class="slrow" style="--d:3.7s;"><span class="ts">21:04:52</span><span>TikTok sweep complete — 22 candidates</span></div>
-              <div class="slrow" style="--d:4.6s;"><span class="ts">21:05:03</span><span>Discovery complete — 61 candidates queued for analysis</span></div>
-              <div class="slrow" style="--d:5.5s;"><span class="ts">21:05:41</span><span>Derivation check: 54 of 61 fingerprint-compared, 2 within match threshold</span></div>
-              <div class="slrow" style="--d:6.4s;"><span class="ts">21:06:18</span><span>Identity check complete — 3 likeness matches confirmed, 58 ruled out</span></div>
-              <div class="slrow" style="--d:7.3s;"><span class="ts">21:07:02</span><span>Adjudicator reviewing 61 candidates with the full signal set</span></div>
-              <div class="slrow" style="--d:8.2s;"><span class="ts">21:07:44</span><span>Capturing evidence stills for 3 hits</span></div>
-              <div class="slrow hit" style="--d:9.1s;"><span class="ts">21:07:51</span><span>3 new hits recorded</span></div>
+              <div class="slrow" style="--d:.9s;"><span class="ts">21:04:07</span><span>Sweep opened for Marlowe Quinn — 8 platforms in scope</span></div>
+              <div class="slrow" style="--d:1.55s;"><span class="ts">21:04:12</span><span>Vault references anchored — 14 stills, 2 derived renders</span></div>
+              <div class="slrow" style="--d:2.2s;"><span class="ts">21:04:31</span><span>Instagram sweep complete — 18 candidates</span></div>
+              <div class="slrow" style="--d:2.85s;"><span class="ts">21:04:52</span><span>TikTok sweep complete — 22 candidates</span></div>
+              <div class="slrow" style="--d:3.5s;"><span class="ts">21:05:03</span><span>Discovery complete — 61 candidates queued for analysis</span></div>
+              <div class="slrow" style="--d:4.15s;"><span class="ts">21:05:41</span><span>Derivation check: 54 of 61 fingerprint-compared, 2 within match threshold</span></div>
+              <div class="slrow" style="--d:4.8s;"><span class="ts">21:06:18</span><span>Identity check complete — 3 likeness matches confirmed, 58 ruled out</span></div>
+              <div class="slrow" style="--d:5.45s;"><span class="ts">21:07:02</span><span>Adjudicator reviewing 61 candidates with the full signal set</span></div>
+              <div class="slrow" style="--d:6.1s;"><span class="ts">21:07:44</span><span>Capturing evidence stills for 3 hits</span></div>
+              <div class="slrow hit" style="--d:6.75s;"><span class="ts">21:07:51</span><span>3 new hits recorded</span></div>
             </div>
           </div>
-          <div class="display settle" style="--d:10.6s;margin-top:48px;font-size:58px;">It shows <em>its work.</em></div>
+          <div class="display settle" style="--d:8.1s;margin-top:48px;font-size:58px;">It shows <em>its work.</em></div>
         </div>
       </div>
     </section>
@@ -617,7 +644,7 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
     <section class="scene light" data-scene="close" style="--beat:13s">
       <div class="cam hold">
         <div class="frame">
-          <div class="display settle" style="--d:.5s;font-size:104px;">Watch <em>what&rsquo;s yours.</em></div>
+          <div class="display settle" style="--d:.5s;font-size:104px;">Looking out <em>for you.</em></div>
           <div class="sub settle" style="--d:3.2s;margin-top:52px;font-size:27px;">Deep Scan — <b>available now.</b></div>
           <div class="fade" style="--d:6.2s;margin-top:64px;display:flex;flex-direction:column;align-items:center;gap:18px;">
             <div style="width:44px;height:2px;background:var(--red);"></div>
@@ -641,8 +668,8 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
 (function(){
   var SCENES=[
     {n:"Another you",d:9500},{n:"It works",d:9000},{n:"The original",d:10500},
-    {n:"Reveal",d:10500},{n:"Four signals",d:11000},{n:"The vocabulary",d:11000},
-    {n:"The sweep",d:14000},{n:"The queue",d:15500},{n:"Close",d:13000}
+    {n:"Reveal",d:10500},{n:"Four signals",d:11000},{n:"The vocabulary",d:13000},
+    {n:"The sweep",d:11000},{n:"The queue",d:15500},{n:"Close",d:13000}
   ];
   var TOTAL=SCENES.reduce(function(a,s){return a+s.d;},0);
   var sceneEls=[].slice.call(document.querySelectorAll('.scene'));
