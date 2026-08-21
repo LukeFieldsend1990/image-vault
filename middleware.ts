@@ -120,10 +120,13 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(dashUrl);
     }
 
-    // Role-based route protection — redirect to role home if accessing a disallowed route
+    // Role-based route protection — redirect to role home if accessing a disallowed route.
+    // Whitelisted admin emails bypass like the admin role does: admin is the email
+    // whitelist, and an admin's underlying account role (often talent) must not
+    // lock them out of surfaces like /scout.
     if (isProtected && status === "ok") {
-      const { role } = getTokenPayload(req);
-      if (role && role !== "admin") {
+      const { role, email } = getTokenPayload(req);
+      if (role && role !== "admin" && !(email && ADMIN_EMAILS.includes(email))) {
         const allowed = ROLE_ALLOWED_PREFIXES[role];
         if (allowed && !allowed.some((prefix) => pathname.startsWith(prefix))) {
           const homeUrl = req.nextUrl.clone();

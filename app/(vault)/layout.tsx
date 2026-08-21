@@ -245,10 +245,13 @@ async function getAgencyMember(userId: string, role: Role): Promise<boolean> {
 
 // Image Scout is admin-toggled (ai_settings trial_scans_enabled, absent =
 // on) and only surfaces for the roles that can run trials. Admins always see
-// it — they bypass the toggle so the owner can test while it's off.
-async function getTrialScansEnabled(userId: string, role: Role): Promise<boolean> {
-  if (!userId || !isScoutRole(role)) return false;
-  if (role === "admin") return true;
+// it — they bypass the toggle so the owner can test while it's off. Admin is
+// the email whitelist, not a role: an admin's underlying account (often
+// talent) still counts.
+async function getTrialScansEnabled(userId: string, role: Role, email: string): Promise<boolean> {
+  if (!userId) return false;
+  if (role === "admin" || isAdmin(email)) return true;
+  if (!isScoutRole(role)) return false;
   try {
     const db = getDb();
     const row = await db
@@ -297,7 +300,7 @@ export default async function VaultLayout({
     getUnionWatcher(sub, email, role),
     getAgencyMember(sub, role),
     getIndustryOrgType(sub, role),
-    getTrialScansEnabled(sub, role),
+    getTrialScansEnabled(sub, role, email),
   ]);
 
   const homeHref = isComplianceRole(role)
@@ -319,7 +322,7 @@ export default async function VaultLayout({
               <div className="mt-1.5 h-px w-6" style={{ background: "var(--color-accent)" }} />
             </a>
 
-            <NavLinks role={role} email={email} industryOrgType={industryOrgType} pipelineEnabled={pipelineEnabled} royaltyMeterEnabled={royaltyMeterEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} trialScansEnabled={trialScansEnabled} />
+            <NavLinks role={role} email={email} industryOrgType={industryOrgType} pipelineEnabled={pipelineEnabled} royaltyMeterEnabled={royaltyMeterEnabled} inboundEnabled={inboundEnabled} licenceAlert={licenceAlert} complianceEnabled={complianceEnabled} platformOversight={platformOversight} insurerWatcher={insurerWatcher} unionWatcher={unionWatcher} agencyMember={agencyMember} trialScansEnabled={trialScansEnabled} adminUser={role === "admin" || isAdmin(email)} />
           </div>
 
           <div>

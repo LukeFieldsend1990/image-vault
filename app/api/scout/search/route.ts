@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { isScoutRole } from "@/lib/auth/roles";
 
 // GET /api/scout/search?q= — TMDB person search for Image Scout trials.
@@ -35,7 +36,7 @@ interface TmdbRawResult {
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
-  if (!isScoutRole(session.role)) {
+  if (!isScoutRole(session.role) && !isAdmin(session.email)) {
     return NextResponse.json({ error: "Trial sweeps are for rep and production accounts" }, { status: 403 });
   }
 

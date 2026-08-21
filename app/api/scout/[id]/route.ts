@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { trialReferencePhotos, trialScans } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { isScoutRole } from "@/lib/auth/roles";
 import { getTrialDetail } from "@/lib/monitor/trial";
 import { and, eq } from "drizzle-orm";
@@ -15,7 +16,7 @@ export async function GET(
 ) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
-  if (!isScoutRole(session.role)) {
+  if (!isScoutRole(session.role) && !isAdmin(session.email)) {
     return NextResponse.json({ error: "Trial sweeps are for rep and production accounts" }, { status: 403 });
   }
 
@@ -34,7 +35,7 @@ export async function DELETE(
 ) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
-  if (!isScoutRole(session.role)) {
+  if (!isScoutRole(session.role) && !isAdmin(session.email)) {
     return NextResponse.json({ error: "Trial sweeps are for rep and production accounts" }, { status: 403 });
   }
 
