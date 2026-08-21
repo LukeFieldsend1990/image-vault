@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npx wrangler d1 migrations list *)",
+      "Bash(npx wrangler d1 migrations apply *)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
