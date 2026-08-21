@@ -10,7 +10,7 @@ const VALID_KEYS = [TRIAL_ENABLED_KEY, TRIAL_RUN_LIMIT_KEY];
 
 /**
  * PATCH /api/admin/scout/settings
- * Body: { key, value } — the Likeness Scout feature toggle and default run
+ * Body: { key, value } — the Image Scout feature toggle and default run
  * limit, stored in ai_settings like every other monitor control.
  */
 export async function PATCH(req: NextRequest) {

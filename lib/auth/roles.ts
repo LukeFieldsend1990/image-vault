@@ -36,7 +36,7 @@ export function isIndustryRole(role: string | null | undefined): boolean {
 }
 
 /**
- * Who can run Likeness Scout trials (lib/monitor/trial.ts): reps and
+ * Who can run Image Scout trials (lib/monitor/trial.ts): reps and
  * production/industry accounts — the people we want tasting the monitor
  * before their talent is on the platform. Talent runs the real thing.
  */

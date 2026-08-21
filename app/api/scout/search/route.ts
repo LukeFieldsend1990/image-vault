@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isScoutRole } from "@/lib/auth/roles";
 
-// GET /api/scout/search?q= — TMDB person search for Likeness Scout trials.
+// GET /api/scout/search?q= — TMDB person search for Image Scout trials.
 // Same normalisation as the onboarding identity search, but gated to the
 // rep/production side: this is how a requester picks any actor as a trial
 // subject, on the platform or not.

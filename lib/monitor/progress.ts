@@ -91,7 +91,7 @@ export function createScanReporter(
 
 /**
  * Reporter over any snapshot sink. The monitor sweep persists onto
- * monitor_scans (above); a Likeness Scout trial persists the identical shape
+ * monitor_scans (above); a Image Scout trial persists the identical shape
  * onto trial_scans, so both UIs parse one format (parseScanProgress).
  */
 export function createProgressReporter(

@@ -44,7 +44,7 @@ export interface SweepQueueMessage {
   trigger: "manual" | "scheduled";
 }
 
-/** A Likeness Scout trial sweep (lib/monitor/trial.ts) — same queue, same
+/** A Image Scout trial sweep (lib/monitor/trial.ts) — same queue, same
  *  durability and retry semantics, keyed by the trial row instead of a scan. */
 export interface TrialSweepQueueMessage {
   type: "trial_sweep";

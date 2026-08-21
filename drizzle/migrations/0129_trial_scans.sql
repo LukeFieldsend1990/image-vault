@@ -1,4 +1,4 @@
--- Likeness Scout trials: rep/production accounts run a limited number of
+-- Image Scout trials: rep/production accounts run a limited number of
 -- trial likeness sweeps on any TMDB actor — no vault, no talent account.
 -- Subjects are keyed by TMDB person id, which is why these rows cannot live
 -- in monitor_scans / likeness_hits (both FK a talent user). When the actor

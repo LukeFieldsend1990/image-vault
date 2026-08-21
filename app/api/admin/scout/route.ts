@@ -12,7 +12,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 /**
- * GET /api/admin/scout — everything the Likeness Scout admin panel shows:
+ * GET /api/admin/scout — everything the Image Scout admin panel shows:
  * the feature toggle and default run limit, the trial ledger with per-trial
  * Apify spend, and the per-user allowance grants.
  */

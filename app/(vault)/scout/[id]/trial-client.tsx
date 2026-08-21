@@ -339,7 +339,7 @@ export default function TrialClient({ trialId }: { trialId: string }) {
       {/* Header */}
       <div>
         <Link href="/scout" className="text-xs" style={{ color: "var(--color-muted)" }}>
-          ← Likeness Scout
+          ← Image Scout
         </Link>
         <div className="mt-3 flex items-center gap-4">
           {trial.tmdbProfileUrl ? (

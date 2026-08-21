@@ -13,7 +13,7 @@ export default async function AdminScoutPage() {
           Admin
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-          Likeness Scout trials
+          Image Scout trials
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
           Trial sweeps let rep and production accounts run the likeness monitor on any TMDB actor —

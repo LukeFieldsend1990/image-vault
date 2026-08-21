@@ -158,13 +158,13 @@ const TALENT_NAV = [
   },
 ];
 
-// Likeness Scout — trial sweeps on any TMDB actor, for reps and production
+// Image Scout — trial sweeps on any TMDB actor, for reps and production
 // accounts. Gated by the trialScansEnabled flag (admin toggle) in NavLinks.
 // The glyph is a scouting reticle: the monitor radar's sibling, aimed
 // outward at talent not yet on the platform.
 const SCOUT_NAV_ITEM = {
   href: "/scout",
-  label: "Scout",
+  label: "Image Scout",
   icon: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="7" />
@@ -543,7 +543,7 @@ export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterE
   if (!inboundEnabled) {
     base = base.filter((item) => item.href !== "/inbox");
   }
-  // Likeness Scout: admin-toggled trial sweeps for reps and production
+  // Image Scout: admin-toggled trial sweeps for reps and production
   // accounts. Off (or undecided) hides the surface.
   if (!trialScansEnabled) {
     base = base.filter((item) => item.href !== "/scout");

@@ -243,7 +243,7 @@ async function getAgencyMember(userId: string, role: Role): Promise<boolean> {
   }
 }
 
-// Likeness Scout is admin-toggled (ai_settings trial_scans_enabled, absent =
+// Image Scout is admin-toggled (ai_settings trial_scans_enabled, absent =
 // on) and only surfaces for the roles that can run trials.
 async function getTrialScansEnabled(userId: string, role: Role): Promise<boolean> {
   if (!userId || !isScoutRole(role) || role === "admin") return false;

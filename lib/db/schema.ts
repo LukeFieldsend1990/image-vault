@@ -2059,7 +2059,7 @@ export const derivedRenderJobs = sqliteTable("derived_render_jobs", {
   completedAt: integer("completed_at"),
 });
 
-// ── Likeness Scout trials ──────────────────────────────────────────────────
+// ── Image Scout trials ──────────────────────────────────────────────────
 // Rep/production accounts run a limited number of trial likeness sweeps on
 // any TMDB actor — no vault, no talent account, just a name, filmography and
 // whatever reference photos the requester uploads. The subject is keyed by

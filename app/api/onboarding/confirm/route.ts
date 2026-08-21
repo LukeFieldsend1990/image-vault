@@ -7,7 +7,7 @@ import { findClaimableRoles } from "@/lib/productions/claim";
 import { migrateTrialHitsToTalent } from "@/lib/monitor/trial";
 import { eq } from "drizzle-orm";
 
-// Likeness Scout follow-through: any completed trial sweeps that scouted this
+// Image Scout follow-through: any completed trial sweeps that scouted this
 // TMDB person now belong in the new talent's real monitor. Fire-and-forget so
 // onboarding never waits on it; the migration is idempotent.
 function transferTrialHits(db: ReturnType<typeof getDb>, userId: string, tmdbId: number | undefined) {

@@ -580,7 +580,7 @@ function parseAllowlist(json: string | null | undefined): string[] {
  * alike, so switching one off is a real spend and coverage decision rather
  * than a display preference.
  *
- * Exported for lib/monitor/trial.ts: a Likeness Scout trial sweeps a subject
+ * Exported for lib/monitor/trial.ts: a Image Scout trial sweeps a subject
  * who has no users.id yet, so it passes `talentId: null` — which skips every
  * per-talent concern (hit dedupe against likeness_hits, learned vocabulary,
  * the talent meter, watchlist harvesting) while keeping the global Apify

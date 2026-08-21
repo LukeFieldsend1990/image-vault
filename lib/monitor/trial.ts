@@ -1,5 +1,5 @@
 /**
- * Likeness Scout: trial sweeps for rep and production accounts.
+ * Image Scout: trial sweeps for rep and production accounts.
  *
  * A rep or production company picks any actor from a TMDB search, optionally
  * uploads reference photos (face angles, full body, even a 3D scan), and runs

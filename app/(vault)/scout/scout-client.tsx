@@ -157,7 +157,7 @@ export default function ScoutClient() {
   if (!data) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-10 text-sm" style={{ color: "var(--color-muted)" }}>
-        Loading Likeness Scout…
+        Loading Image Scout…
       </div>
     );
   }
@@ -166,7 +166,7 @@ export default function ScoutClient() {
     return (
       <div className="max-w-4xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-          Likeness Scout
+          Image Scout
         </h1>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
           Trial sweeps are currently switched off. Check back soon.
@@ -183,7 +183,7 @@ export default function ScoutClient() {
       {/* Hero */}
       <div>
         <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
-          Likeness Scout
+          Image Scout
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
           Run the likeness monitor on any actor
