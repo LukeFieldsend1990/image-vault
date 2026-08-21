@@ -532,7 +532,7 @@ const PIPELINE_NAV_ITEM = {
   ),
 };
 
-export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember, trialScansEnabled }: { role: Role; email?: string; industryOrgType?: OrgType | null; pipelineEnabled?: boolean; royaltyMeterEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean; trialScansEnabled?: boolean }) {
+export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterEnabled, inboundEnabled, licenceAlert, complianceEnabled, platformOversight, insurerWatcher, unionWatcher, agencyMember, trialScansEnabled, adminUser }: { role: Role; email?: string; industryOrgType?: OrgType | null; pipelineEnabled?: boolean; royaltyMeterEnabled?: boolean; inboundEnabled?: boolean; licenceAlert?: boolean; complianceEnabled?: boolean; platformOversight?: boolean; insurerWatcher?: boolean; unionWatcher?: boolean; agencyMember?: boolean; trialScansEnabled?: boolean; adminUser?: boolean }) {
   const pathname = usePathname();
   let base = navItemsForRole(role);
   // Agents (reps belonging to a talent agency) get an Agency surface, placed
@@ -544,12 +544,12 @@ export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterE
     base = base.filter((item) => item.href !== "/inbox");
   }
   // Image Scout: admin-toggled trial sweeps for reps and production
-  // accounts. Off (or undecided) hides the surface. Admins ride the talent
-  // rail, which has no Scout entry — splice one in before Settings so the
-  // owner can run trials from their own account.
+  // accounts. Off (or undecided) hides the surface. Admins — whitelisted
+  // emails, whatever role their account carries — usually ride a rail with
+  // no Scout entry, so splice one in before Settings.
   if (!trialScansEnabled) {
     base = base.filter((item) => item.href !== "/scout");
-  } else if (role === "admin" && !base.some((item) => item.href === "/scout")) {
+  } else if ((role === "admin" || adminUser) && !base.some((item) => item.href === "/scout")) {
     base = [...base.slice(0, -1), SCOUT_NAV_ITEM, base[base.length - 1]];
   }
   if (complianceEnabled === false) {

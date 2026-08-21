@@ -16,7 +16,7 @@ import {
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
-  if (!isScoutRole(session.role)) {
+  if (!isScoutRole(session.role) && !isAdmin(session.email)) {
     return NextResponse.json({ error: "Trial sweeps are for rep and production accounts" }, { status: 403 });
   }
   const admin = session.role === "admin" || isAdmin(session.email);
@@ -48,7 +48,7 @@ interface CreateBody {
 export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
-  if (!isScoutRole(session.role)) {
+  if (!isScoutRole(session.role) && !isAdmin(session.email)) {
     return NextResponse.json({ error: "Trial sweeps are for rep and production accounts" }, { status: 403 });
   }
 

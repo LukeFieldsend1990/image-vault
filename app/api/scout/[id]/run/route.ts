@@ -27,7 +27,7 @@ export async function POST(
 ) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
-  if (!isScoutRole(session.role)) {
+  if (!isScoutRole(session.role) && !isAdmin(session.email)) {
     return NextResponse.json({ error: "Trial sweeps are for rep and production accounts" }, { status: 403 });
   }
 
