@@ -242,25 +242,6 @@ export default function LikenessMonitorPage() {
         </div>
       </section>
 
-      {/* ─────────────── Explainer film ─────────────── */}
-      <section className="mx-auto max-w-6xl px-6 pt-12 pb-2 md:pt-16">
-        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <p
-            className="text-xs font-medium tracking-widest uppercase"
-            style={{ color: "var(--color-accent)" }}
-          >
-            What Deep Scan does
-          </p>
-          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-            A two-minute tour · tap to pause
-          </p>
-        </div>
-        <ExplainerFilm
-          src="/explainer/imagevault-likeness-monitor.html?v=6"
-          title="Deep Scan — a two-minute explainer film"
-        />
-      </section>
-
       {/* ─────────────── Why the vault wins ─────────────── */}
       <section id="ground-truth" className="scroll-mt-20" style={{ background: "var(--color-sidebar)" }}>
         <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
@@ -524,6 +505,25 @@ export default function LikenessMonitorPage() {
             Hits roll up into an account watchlist — reach-ranked operators, not a flat list of posts.
           </p>
         </div>
+      </section>
+
+      {/* ─────────────── Explainer film ─────────────── */}
+      <section className="mx-auto max-w-6xl px-6 pt-12 pb-14 md:pt-16">
+        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <p
+            className="text-xs font-medium tracking-widest uppercase"
+            style={{ color: "var(--color-accent)" }}
+          >
+            What Deep Scan does
+          </p>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            A two-minute tour · tap to pause
+          </p>
+        </div>
+        <ExplainerFilm
+          src="/explainer/imagevault-likeness-monitor.html?v=6"
+          title="Deep Scan — a two-minute explainer film"
+        />
       </section>
 
       {/* ─────────────── Feature grid ─────────────── */}
