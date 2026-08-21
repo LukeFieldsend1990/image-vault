@@ -4,7 +4,7 @@ import ExplainerFilm from "../explainer-film";
 import { MonitorHitsMockup, MonitorWatchlistMockup } from "../monitor-mockups";
 
 export const metadata: Metadata = {
-  title: "Likeness Monitor — ImageVault",
+  title: "Deep Scan — ImageVault",
   description:
     "Vault-anchored deepfake and misuse detection. ImageVault sweeps public platforms for synthetic and unauthorised use of a performer's likeness — matched against the ground-truth scan data only the vault holds.",
 };
@@ -157,7 +157,7 @@ export default function LikenessMonitorPage() {
       {/* ─────────────── Hero ─────────────── */}
       <section className="mx-auto max-w-6xl px-6 pt-14 pb-16 md:pt-20">
         <div className="max-w-3xl">
-          <SectionLabel>Likeness Monitor</SectionLabel>
+          <SectionLabel>Deep Scan</SectionLabel>
           <h1
             className="text-4xl font-semibold leading-tight tracking-tight md:text-6xl"
             style={{ color: "var(--color-ink)" }}
@@ -170,7 +170,7 @@ export default function LikenessMonitorPage() {
             className="mt-6 max-w-xl text-base leading-relaxed md:text-lg"
             style={{ color: "var(--color-text)" }}
           >
-            The Likeness Monitor sweeps public platforms for synthetic and
+            Deep Scan sweeps public platforms for synthetic and
             unauthorised use of a performer&apos;s likeness — deepfakes, AI
             &ldquo;concept trailers&rdquo;, reposted scans — and matches what it
             finds against the one thing no generic detection service holds:
@@ -216,8 +216,8 @@ export default function LikenessMonitorPage() {
           </p>
         </div>
         <ExplainerFilm
-          src="/explainer/imagevault-detector-trailer.html?v=3"
-          title="The Likeness Monitor — launch trailer"
+          src="/explainer/imagevault-detector-trailer.html?v=4"
+          title="Deep Scan — launch trailer"
         />
       </section>
 
@@ -249,15 +249,15 @@ export default function LikenessMonitorPage() {
             className="text-xs font-medium tracking-widest uppercase"
             style={{ color: "var(--color-accent)" }}
           >
-            What the monitor does
+            What Deep Scan does
           </p>
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
             A two-minute tour · tap to pause
           </p>
         </div>
         <ExplainerFilm
-          src="/explainer/imagevault-likeness-monitor.html?v=5"
-          title="The Likeness Monitor — a two-minute explainer film"
+          src="/explainer/imagevault-likeness-monitor.html?v=6"
+          title="Deep Scan — a two-minute explainer film"
         />
       </section>
 

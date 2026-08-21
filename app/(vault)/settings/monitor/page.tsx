@@ -51,7 +51,7 @@ export default async function MonitorSetupPage() {
           ← Settings
         </Link>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-          Likeness Monitor — Enforcement Setup
+          Deep Scan — Enforcement Setup
         </h1>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
           To file takedowns of AI-generated content on your behalf, platforms like Meta need proof

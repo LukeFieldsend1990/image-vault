@@ -28,7 +28,7 @@ export default async function AdminMonitorPage() {
           ← Admin
         </Link>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-          Likeness monitor
+          Deep Scan
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
           Hit statistics across the platform, and the operational controls for the discovery sweeps:

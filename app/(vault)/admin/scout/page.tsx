@@ -17,7 +17,7 @@ export default async function AdminScoutPage() {
           Image Scout trials
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Trial sweeps let rep and production accounts run the likeness monitor on any TMDB actor —
+          Trial sweeps let rep and production accounts run Deep Scan on any TMDB actor —
           a taste of the product before their talent is on the platform. Runs are capped per
           account; discovery spend still counts against the global Apify ceiling.
         </p>

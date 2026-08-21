@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import DemoMonitorClient from "./demo-monitor-client";
 
 export const metadata = {
-  title: "ImageVault — Likeness Monitor Tour",
+  title: "ImageVault — Deep Scan Tour",
 };
 
 export default async function DemoMonitorPage() {

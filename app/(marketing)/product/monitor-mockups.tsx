@@ -1,5 +1,5 @@
 /**
- * Marketing recreations of the live Likeness Monitor screens.
+ * Marketing recreations of the live Deep Scan screens.
  *
  * Faithful to the real review queue (app/(vault)/vault/monitor/monitor-client.tsx)
  * and account watchlist (accounts/accounts-client.tsx): the platform accent

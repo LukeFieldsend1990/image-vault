@@ -137,8 +137,8 @@ export const CONCEPTS: ConceptEntry[] = [
   },
   {
     id: "likeness-monitoring",
-    name: "Likeness Monitoring",
-    summary: "AI-adjudicated detection of unauthorised likeness usage on public short-form platforms, with talent alerting and takedown triage.",
+    name: "Deep Scan (likeness monitoring)",
+    summary: "Deep Scan — AI-adjudicated detection of unauthorised likeness usage on public short-form platforms, with talent alerting and takedown triage. Product name: Deep Scan; internal code keeps the likeness-monitor vocabulary.",
     details:
       "One likenessMonitors row per talent; each scan sweeps the platform registry (Instagram Reels, TikTok, YouTube Shorts, X, plus search/stock/AI-gen surfaces), " +
       "generates detector-scored candidates (face-embedding similarity, perceptual hash distance, geometry-fingerprint correlation, synthetic-media score — simulated crawler stage), " +

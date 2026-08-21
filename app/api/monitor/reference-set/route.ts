@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
   if (session.role !== "talent") {
-    return NextResponse.json({ error: "Only talent accounts have a likeness monitor" }, { status: 403 });
+    return NextResponse.json({ error: "Deep Scan is only available to talent accounts" }, { status: 403 });
   }
 
   const db = getDb();
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
   if (session.role !== "talent") {
-    return NextResponse.json({ error: "Only talent accounts have a likeness monitor" }, { status: 403 });
+    return NextResponse.json({ error: "Deep Scan is only available to talent accounts" }, { status: 403 });
   }
 
   const db = getDb();

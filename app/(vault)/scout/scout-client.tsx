@@ -188,7 +188,7 @@ export default function ScoutClient() {
           Image Scout
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-          Run the likeness monitor on any actor
+          Run Deep Scan on any actor
         </h1>
         <p className="mt-2 text-sm max-w-2xl" style={{ color: "var(--color-muted)" }}>
           Pick an actor, add reference photos if you have them, and watch the same sweep our talent

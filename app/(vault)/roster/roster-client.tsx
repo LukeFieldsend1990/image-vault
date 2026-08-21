@@ -394,7 +394,7 @@ export default function RosterClient() {
               className="text-xs font-medium underline underline-offset-2"
               style={{ color: "var(--color-accent)" }}
             >
-              Likeness monitor →
+              Deep Scan →
             </Link>
           </div>
         </div>

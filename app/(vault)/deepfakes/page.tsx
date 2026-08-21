@@ -10,7 +10,7 @@ export default function UnionDeepfakeStatsPage() {
         endpoint="/api/compliance/union/deepfake-stats"
         eyebrow="Union"
         title="Deepfake Statistics"
-        intro="Synthetic-likeness hits recorded against your members by the likeness monitor — lifetime, this month, and how fast it is moving."
+        intro="Synthetic-likeness hits recorded against your members by Deep Scan — lifetime, this month, and how fast it is moving."
       />
     </div>
   );

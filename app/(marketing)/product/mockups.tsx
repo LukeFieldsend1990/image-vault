@@ -2,7 +2,7 @@
  * Product mockups for the marketing page.
  *
  * These are CSS recreations of the *real* app screens — faithful to the current
- * Vault, Licences, Likeness Monitor, Royalty Hub and Chain-of-Custody layouts —
+ * Vault, Licences, Deep Scan, Royalty Hub and Chain-of-Custody layouts —
  * rather than raster screenshots. That keeps the marketing site crisp at any
  * resolution, theme-aware, and free of real user data: every name, fee and email
  * below is a fictional demo persona ("Marlowe Quinn"), never a real talent.
@@ -406,7 +406,7 @@ export function LicenceMockup() {
   );
 }
 
-/* ── Likeness Monitor — scanning public platforms for misuse ── */
+/* ── Deep Scan — scanning public platforms for misuse ── */
 export function MonitorMockup() {
   const platforms = [
     { name: "Instagram Reels", kind: "Video", state: "Clear" },
@@ -425,7 +425,7 @@ export function MonitorMockup() {
         <div className="mb-3 flex items-start justify-between">
           <div>
             <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-              Likeness Monitor
+              Deep Scan
             </p>
             <p className="text-[10px]" style={{ color: "var(--color-muted)" }}>
               Scanning public platforms for unauthorised use of Marlowe Quinn.

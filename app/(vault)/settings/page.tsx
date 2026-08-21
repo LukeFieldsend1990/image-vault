@@ -32,7 +32,7 @@ const ADMIN_SECTIONS = [
   { href: "/admin/storage", label: "Storage", description: "Per-talent storage usage" },
   { href: "/admin/bridge", label: "Bridge", description: "Active Bridge sessions and tamper event log" },
   { href: "/admin/ai", label: "AI Features", description: "AI settings, cost tracking and batch controls" },
-  { href: "/admin/monitor", label: "Likeness Monitor", description: "Apify discovery spend ceiling and run ledger" },
+  { href: "/admin/monitor", label: "Deep Scan", description: "Apify discovery spend ceiling and run ledger" },
   { href: "/admin/scout", label: "Image Scout", description: "Rep & production trial sweeps, run quotas and grants" },
   { href: "/admin/skills", label: "Triage", description: "Whitelisted email triage skills" },
   { href: "/admin/compliance", label: "Compliance", description: "Art. 39 strikes, transfers and certificates" },
@@ -365,7 +365,7 @@ export default async function SettingsPage({
                 <div>
                   <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Identity not verified</p>
                   <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--color-muted)" }}>
-                    Link your industry profile to enable the Likeness Monitor and talent directory listing.
+                    Link your industry profile to enable Deep Scan and talent directory listing.
                   </p>
                   <Link
                     href="/onboarding"
@@ -402,10 +402,10 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* Likeness monitor enforcement setup (talent only) */}
+      {/* Deep Scan enforcement setup (talent only) */}
       {user?.role === "talent" && (
         <div className="rounded border p-5 mb-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-          <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Likeness Monitor</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--color-muted)" }}>Deep Scan</h2>
           <Link
             href="/settings/monitor"
             className="flex items-center justify-between text-sm"
