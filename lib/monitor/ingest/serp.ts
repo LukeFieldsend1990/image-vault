@@ -177,6 +177,10 @@ export async function discoverSerp(opts: {
       itemCount: resultCount,
       costUsd: run.costUsd,
       status: "succeeded",
+      // One actor run, several terms: the spend ledger books it once, the
+      // sweep's query log lists the terms it actually asked for.
+      platform: opts.platform,
+      queries,
     });
 
     return {
@@ -198,6 +202,8 @@ export async function discoverSerp(opts: {
         costUsd: apifyErr.costUsd,
         status: "failed",
         error: apifyErr.reason,
+        platform: opts.platform,
+        queries,
       });
     }
     return {

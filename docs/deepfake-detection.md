@@ -338,6 +338,56 @@ Admins retire a tag that pulls noise from the "Learned queries" panel on
 `/admin/monitor`; a retired tag that produces again is auto-reactivated by
 the upsert.
 
+## Per-sweep query log (`lib/monitor/scan-queries.ts`)
+
+The query planner mixes three vocabularies — the standing per-platform lists,
+mined tags, and vigilance personas — so what a given sweep actually searched
+for is not derivable from the code alone. `monitor_scan_queries` is the run's
+own record: one row per term issued, across every surface, with the raw item
+count the term returned, its share of the run's Apify spend, and whether the
+run for that term failed.
+
+Why not read this off what already existed:
+
+- `apify_usage` books only the paid runs, and it exists to police spend. It
+  never sees YouTube (quota, not money), Civitai (free API) or the simulated
+  crawler, so reading coverage from it silently under-reports.
+- `likeness_hits.discovery_source` names the term behind a hit that landed,
+  which says nothing about the terms that came back empty — and the empty ones
+  are the vocabulary an operator would retire.
+
+Recording is a collector (`queryLog`) threaded through `discoverCandidates` and
+flushed once per sweep, before the discovery-error branch: a run that found
+nothing is precisely the one whose search terms need explaining. Apify surfaces
+append through the shared `ActorBudget.record` hook; YouTube has an `onQuery`
+callback because it runs outside the budget; Civitai and the simulated crawler
+are logged at their call sites.
+
+`/admin/monitor` → **Sweep runs** shows the terms per run: platform, term,
+lookup kind, raw results, hits, and cost. Hits are attributed by the hit's own
+platform plus a trailing-term match against `discovery_source`, because the
+same tag is routinely swept on several surfaces in one run and prefixing is
+inconsistent (`hashtag:tomhardyai` on Instagram, `hashtag:tiktok:#tomhardyai`
+on TikTok). Sweeps that predate the table fall back to their `apify_usage`
+rows, flagged in the UI as ledger-derived so an admin reads them as
+paid-surfaces-only rather than as the full picture.
+
+### Known limitations
+
+- **Planned-but-unrun terms are not logged.** A sweep stopped by the spend
+  ceiling breaks out of its query loop; the terms it never got to leave no
+  row, so the log reads as "what ran", not "what was intended". The run's
+  budget-stop reason is the signal that coverage was cut short.
+- **Batched runs cannot attribute results per term.** The SERP actor takes
+  several queries in one run and reports one dataset. Those rows carry the
+  terms with a null result count and an even split of the run's cost, so the
+  spend total still reconciles with the ledger while the per-term yield is
+  honestly absent.
+- **Hit attribution is a string match, not a foreign key.** A term that is a
+  suffix of nothing else on its platform matches exactly; a surface that
+  changes how it writes `discovery_source` would silently drop to zero hits
+  against otherwise-correct rows.
+
 ## Cross-platform siblings (`lib/monitor/cross-platform.ts`)
 
 Operators are building an audience, not a feed. `@ultimatestudiosofficial`

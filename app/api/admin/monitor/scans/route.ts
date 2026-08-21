@@ -4,6 +4,7 @@ import { monitorScans, talentProfiles, users } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { timeOutStaleScans } from "@/lib/monitor/scan";
+import { loadScanQueries } from "@/lib/monitor/scan-queries";
 import { desc, eq } from "drizzle-orm";
 
 // GET /api/admin/monitor/scans — recent sweep runs across all talents,
@@ -44,11 +45,17 @@ export async function GET(req: NextRequest) {
     .limit(30)
     .all();
 
+  // The hashtags and search terms each run issued. Read in one pass for the
+  // whole page rather than per-row: a sweep logs a couple of dozen terms, and
+  // thirty of those is still one small D1 read.
+  const queries = await loadScanQueries(db, rows.map((r) => r.id));
+
   return NextResponse.json({
     runs: rows.map((r) => ({
       ...r,
       talentName: r.talentName ?? r.talentEmail ?? "Unknown talent",
       talentEmail: undefined,
+      queries: queries.get(r.id) ?? [],
     })),
   });
 }

@@ -78,6 +78,17 @@ export interface ActorBudget {
     costUsd: number | null;
     status: "succeeded" | "failed";
     error?: string;
+    /**
+     * Surface this run belongs to. Only needed where the mode cannot decide it
+     * — the SERP actor serves both Google and Getty under one actor id.
+     */
+    platform?: string;
+    /**
+     * The individual terms behind a run that batched several into one actor
+     * call, so the sweep's query log can list them separately even though the
+     * spend ledger books them as a single run.
+     */
+    queries?: string[];
   }) => Promise<void>;
 }
 

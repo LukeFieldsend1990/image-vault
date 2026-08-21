@@ -42,11 +42,13 @@ import {
   type TalentIdentityAnchor,
 } from "./types";
 import { hasAiIntent, hashtagsHaveAiIntent, planWatchlistHarvest, queryImpliesAiIntent } from "./ingest/queries";
+import { platformForMode, recordScanQueries, type ScanQueryEntry } from "./scan-queries";
 import { apifyToken, type ActorBudget } from "./ingest/apify";
 import { discoverInstagram, preFilter } from "./ingest/instagram";
 import {
   checkApifyBudget,
   clearApifyCreditsExhausted,
+  effectiveRunCost,
   logApifyUsage,
   noteApifyCreditsExhausted,
 } from "./ingest/budget";
@@ -585,6 +587,13 @@ async function discoverCandidates(
     allowlist: string[];
     enabled: Set<MonitorPlatformId>;
     scanId?: string;
+    /**
+     * Collector for the sweep's query log. Every surface appends the terms it
+     * issued; the caller persists it once discovery returns — including when
+     * discovery failed, since a run that found nothing is exactly the one an
+     * admin needs to see the search terms for.
+     */
+    queryLog?: ScanQueryEntry[];
   }
 ): Promise<{ candidates: CandidateContent[]; discoveryError: string | null }> {
   const token = apifyToken(env);
@@ -594,7 +603,19 @@ async function discoverCandidates(
   // No live credential at all → simulated crawler, exactly as before, covering
   // only the platforms the admin has switched on.
   if (!token && !ytKey) {
-    return { candidates: generateCandidates(opts.anchor, [...opts.enabled]), discoveryError: null };
+    const simulated = generateCandidates(opts.anchor, [...opts.enabled]);
+    // The simulated crawler issues no real queries, but the log still has to
+    // say which surfaces the run covered — otherwise a dev-mode sweep reads as
+    // a sweep that searched nothing at all.
+    for (const platform of opts.enabled) {
+      opts.queryLog?.push({
+        platform,
+        mode: "simulated",
+        query: "simulated crawler",
+        resultCount: simulated.filter((c) => c.platform === platform).length,
+      });
+    }
+    return { candidates: simulated, discoveryError: null };
   }
 
   const previousUrls = new Set(
@@ -642,6 +663,15 @@ async function discoverCandidates(
         apiKey: ytKey,
         anchor: opts.anchor,
         learnedHashtags: learnedFor("youtube"),
+        onQuery: (q) =>
+          opts.queryLog?.push({
+            platform: "youtube",
+            mode: "youtube_search",
+            query: q.query,
+            resultCount: q.itemCount,
+            status: q.status,
+            error: q.error ?? null,
+          }),
       });
       const { kept } = preFilter(yt.candidates, filterOpts);
       youtube.push(...kept);
@@ -661,6 +691,17 @@ async function discoverCandidates(
     const cv = await discoverAiPlatforms({ anchor: opts.anchor });
     const { kept } = preFilter(cv.candidates, filterOpts);
     aiPlatforms.push(...kept);
+    // Civitai takes one query — the talent's name — so the log is built here
+    // rather than through a callback.
+    if (cv.queriesRun) {
+      opts.queryLog?.push({
+        platform: "midjourney",
+        mode: "user_search",
+        query: opts.anchor.fullName.trim(),
+        resultCount: cv.candidates.length,
+        status: cv.queriesFailed ? "failed" : "succeeded",
+      });
+    }
   }
 
   const freeSurfaces = [...youtube, ...aiPlatforms];
@@ -709,6 +750,23 @@ async function discoverCandidates(
       return { ok: m.ok, reason: m.reason };
     },
     record: async (entry) => {
+      // One log row per term the run actually asked for. A run that batches
+      // several terms (the SERP actor) reports them together and its cost is
+      // split evenly across them, so the log's total still matches the ledger.
+      const terms = entry.queries?.length ? entry.queries : [entry.query];
+      const { costUsd: bookedCost } = effectiveRunCost(entry.costUsd, entry.itemCount);
+      for (const term of terms) {
+        opts.queryLog?.push({
+          platform: entry.platform ?? platformForMode(entry.mode),
+          mode: entry.mode,
+          query: term,
+          // A batched run cannot say which term produced which item.
+          resultCount: terms.length > 1 ? null : entry.itemCount,
+          costUsd: bookedCost / terms.length,
+          status: entry.status,
+          error: entry.error ?? null,
+        });
+      }
       await logApifyUsage(db, {
         runId: entry.runId,
         actorId: entry.actorId,
@@ -1136,6 +1194,7 @@ export async function runLikenessScan(
   }
 
   const scope: MonitorScope = (monitor.scope as MonitorScope | undefined) ?? "ai_only";
+  const queryLog: ScanQueryEntry[] = [];
   const { candidates, discoveryError } = await discoverCandidates(env, db, {
     talentId: opts.talentId,
     anchor,
@@ -1143,7 +1202,12 @@ export async function runLikenessScan(
     allowlist: parseAllowlist(monitor.allowlistJson),
     enabled: enabledPlatforms,
     scanId,
+    queryLog,
   });
+
+  // Persist before the error branch below: a sweep that discovered nothing is
+  // precisely the one where "what did it search for?" needs an answer.
+  await recordScanQueries(db, scanId, opts.talentId, queryLog);
 
   // A discovery wipeout is not a clean sweep. Recording "0 hits" here would
   // tell the talent we looked and found nothing, when in fact we never looked.
