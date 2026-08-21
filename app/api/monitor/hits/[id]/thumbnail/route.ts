@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
-import { likenessHits } from "@/lib/db/schema";
+import { likenessHits, talentReps } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
 import { isAdmin } from "@/lib/auth/adminEmails";
 import { fetchThumbnail, storeThumbnail } from "@/lib/monitor/thumbnail-proxy";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // GET /api/monitor/hits/:id/thumbnail — the post preview for a flagged hit.
 //
@@ -55,8 +55,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .get();
 
   // Same 404 for "no such hit" and "not yours" — whether a hit exists is not
-  // something to leak to another account.
-  if (!hit || (hit.talentId !== session.sub && !isAdmin(session.email))) {
+  // something to leak to another account. Reps see previews for their managed
+  // talent only, gated on the same talent_reps link as the roster routes.
+  let authorised = !!hit && (hit.talentId === session.sub || isAdmin(session.email));
+  if (!authorised && hit && session.role === "rep") {
+    const link = await db
+      .select({ id: talentReps.id })
+      .from(talentReps)
+      .where(and(eq(talentReps.repId, session.sub), eq(talentReps.talentId, hit.talentId)))
+      .get();
+    authorised = !!link;
+  }
+  if (!hit || !authorised) {
     return new NextResponse(null, { status: 404 });
   }
 
