@@ -20,6 +20,18 @@ interface Platform {
   checkDuration: number;
   /** Standing coverage note shown as a chip on the sweep row ("NSFW"). */
   badge?: string;
+  /** Candidates the live sweep collected on this platform, once known. */
+  candidates?: number | null;
+}
+
+/** Mirror of lib/monitor/progress.ts — the live narration of a running sweep. */
+interface ScanProgress {
+  stage: string;
+  stageLabel: string;
+  platforms: Record<string, { status: "pending" | "sweeping" | "done"; candidates: number | null }>;
+  candidatesFound: number;
+  log: { at: number; text: string }[];
+  updatedAt: number;
 }
 
 interface SecondaryActor {
@@ -39,6 +51,8 @@ interface LikenessHit {
   authorHandle: string | null;
   caption: string | null;
   nsfw?: boolean;
+  /** A captured evidence still exists for this hit (see /thumbnail route). */
+  hasThumbnail?: boolean;
   confidence: number;
   aiGeneratedLikelihood: number;
   riskLevel: string;
@@ -52,6 +66,8 @@ interface LikenessHit {
 interface ScanRecord {
   id: string;
   startedAt: number;
+  completedAt?: number | null;
+  trigger?: string;
   status: string;
   error?: string | null;
   platformsChecked: number;
@@ -103,6 +119,7 @@ interface ScanResponse {
   hitsFound?: number;
   newHits: LikenessHit[];
   aiProvider: string;
+  progress?: ScanProgress | null;
 }
 
 // ── Platform icons ──────────────────────────────────────────────────────────
@@ -246,6 +263,13 @@ function formatDate(unix: number): string {
   });
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${mins}m ${rest}s` : `${mins}m`;
+}
+
 // One chip for both places NSFW appears: the standing coverage note on the
 // Reddit sweep row and the per-hit warning on flagged content. Solid ink so
 // it reads as a label, not another severity level competing with RISK_COLORS.
@@ -322,7 +346,104 @@ function PlatformRow({ platform }: { platform: Platform }) {
         </p>
         <p className="text-xs mt-0.5" style={{ color: "var(--color-muted)" }}>{platform.category}</p>
       </div>
+      {typeof platform.candidates === "number" && (
+        <span className="font-mono text-xs tabular-nums" style={{ color: "var(--color-muted)" }}>
+          {platform.candidates} candidate{platform.candidates === 1 ? "" : "s"}
+        </span>
+      )}
       <StatusPill status={platform.status} />
+    </div>
+  );
+}
+
+// ── Live sweep activity ─────────────────────────────────────────────────────
+
+function formatClock(unix: number): string {
+  return new Date(unix * 1000).toLocaleTimeString("en-GB", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  });
+}
+
+function SweepLogLines({ entries }: { entries: ScanProgress["log"] }) {
+  return (
+    <div className="space-y-1">
+      {entries.map((entry, i) => (
+        <div key={`${entry.at}-${i}`} className="flex items-baseline gap-3">
+          <span className="font-mono text-[10px] tabular-nums shrink-0" style={{ color: "var(--color-muted)", opacity: 0.7 }}>
+            {formatClock(entry.at)}
+          </span>
+          <span className="font-mono text-[11px] leading-relaxed" style={{ color: "var(--color-ink)" }}>
+            {entry.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The live narration of a running sweep: current stage, running candidate
+ * count, and the tail of the activity log the worker writes as it goes.
+ *
+ * This replaces guessing at what a 5-15 minute sweep is doing — every line
+ * shown here is a real event reported by the sweep itself.
+ */
+function SweepActivityFeed({ progress }: { progress: ScanProgress }) {
+  const tail = progress.log.slice(-8);
+  return (
+    <div className="rounded-md border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <div className="flex items-center justify-between gap-3 px-5 py-3"
+        style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}>
+        <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-muted)" }}>
+          Sweep activity
+        </p>
+        <span className="inline-flex items-center gap-2 text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+          {progress.stageLabel}
+          {progress.candidatesFound > 0 && (
+            <span className="font-mono tabular-nums" style={{ color: "var(--color-muted)" }}>
+              · {progress.candidatesFound} candidate{progress.candidatesFound === 1 ? "" : "s"}
+            </span>
+          )}
+        </span>
+      </div>
+      <div className="px-5 py-4" style={{ background: "var(--color-bg)" }}>
+        {tail.length === 0 ? (
+          <p className="font-mono text-[11px]" style={{ color: "var(--color-muted)" }}>
+            Opening sweep…
+          </p>
+        ) : (
+          <SweepLogLines entries={tail} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Collapsed record of what a finished sweep did, kept under the result banner. */
+function SweepLogDisclosure({ progress }: { progress: ScanProgress }) {
+  const [open, setOpen] = useState(false);
+  if (!progress.log.length) return null;
+  return (
+    <div className="rounded-md border overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 px-5 py-3 text-left text-xs font-medium"
+        style={{ color: "var(--color-muted)", background: "var(--color-surface)" }}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 120ms" }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+        {open ? "Hide sweep log" : `View sweep log · ${progress.log.length} steps`}
+      </button>
+      {open && (
+        <div className="px-5 py-4" style={{ background: "var(--color-bg)", borderTop: "1px solid var(--color-border)" }}>
+          <SweepLogLines entries={progress.log} />
+        </div>
+      )}
     </div>
   );
 }
@@ -706,6 +827,42 @@ function DismissMenu({
   );
 }
 
+/**
+ * Captured evidence still for a flagged hit, served from the copy the sweep
+ * stored in R2 (see /api/monitor/hits/:id/thumbnail). NSFW content stays
+ * blurred in the card — the talent chooses when to look, via Preview.
+ * A broken or missing image renders nothing: the card layout stands on its
+ * own without it.
+ */
+function EvidenceThumb({ hit, onPreview }: { hit: LikenessHit; onPreview: (h: LikenessHit) => void }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) return null;
+  return (
+    <button
+      onClick={() => onPreview(hit)}
+      title="Preview flagged content"
+      aria-label="Preview flagged content"
+      className="relative h-[76px] w-[57px] shrink-0 overflow-hidden rounded"
+      style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/monitor/hits/${hit.id}/thumbnail`}
+        alt=""
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className="h-full w-full object-cover"
+        style={hit.nsfw ? { filter: "blur(10px)", transform: "scale(1.1)" } : undefined}
+      />
+      {hit.nsfw && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <NsfwBadge />
+        </span>
+      )}
+    </button>
+  );
+}
+
 function HitCard({ hit, onTriage, onPreview, busy }: {
   hit: LikenessHit;
   onTriage: (id: string, status: string, extra?: { dismissalReason?: string; dismissalNotes?: string }) => void;
@@ -735,6 +892,7 @@ function HitCard({ hit, onTriage, onPreview, busy }: {
       {/* Platform accent edge — the one brand element each card carries. */}
       <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: brand.edge }} />
       <div className="flex items-start gap-3">
+        {hit.hasThumbnail && <EvidenceThumb hit={hit} onPreview={onPreview} />}
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
           style={{ background: brand.tint, color: brand.color }}>
           {PLATFORM_ICONS[hit.platform] ?? <GettyIcon />}
@@ -1076,6 +1234,11 @@ export default function MonitorClient({ identity }: Props) {
   const [triaging, setTriaging] = useState<string | null>(null);
   const [previewHit, setPreviewHit] = useState<LikenessHit | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
+  // Live narration from the running sweep, straight off the scan row.
+  const [liveProgress, setLiveProgress] = useState<ScanProgress | null>(null);
+  // Flips true on the first real progress snapshot — the cue for the scripted
+  // placeholder animation to stand down in favour of actual telemetry.
+  const sawProgressRef = useRef(false);
   // Scan id currently being polled — by runScan or by the resume effect after
   // a page reload — so the two never double-track the same sweep.
   const trackingScanRef = useRef<string | null>(null);
@@ -1143,6 +1306,30 @@ export default function MonitorClient({ identity }: Props) {
     void refresh();
   }, [refresh]);
 
+  // Fold a live progress snapshot into the page: the platform panel tracks the
+  // sweep's real per-platform state (with candidate counts as they land) and
+  // the activity feed shows the worker's own narration.
+  const applyProgress = useCallback((p: ScanProgress) => {
+    sawProgressRef.current = true;
+    setLiveProgress(p);
+    setPlatforms((prev) =>
+      prev.map((pl) => {
+        const live = p.platforms?.[pl.id];
+        if (!live) return pl;
+        return {
+          ...pl,
+          status:
+            live.status === "sweeping"
+              ? ("checking" as ScanStatus)
+              : live.status === "done"
+                ? ("clear" as ScanStatus)
+                : ("idle" as ScanStatus),
+          candidates: live.candidates,
+        };
+      })
+    );
+  }, []);
+
   // Poll a sweep until it settles. A sweep chains several 1-3 minute Apify
   // runs and the server marks runs dead after 15 minutes, so this outlasts
   // that timeout (~18 minutes) — a scan can no longer "time out" client-side
@@ -1159,11 +1346,12 @@ export default function MonitorClient({ identity }: Props) {
       const poll = await fetch(`/api/monitor/scans/${scanId}`);
       if (!poll.ok) continue;
       const scan = (await poll.json()) as ScanResponse;
+      if (scan.status === "running" && scan.progress) applyProgress(scan.progress);
       if (scan.status === "complete") return scan;
       if (scan.status === "error") throw new Error(scan.error ?? "Scan failed");
     }
     throw new Error("Lost track of the sweep — refresh the page to see where it got to.");
-  }, []);
+  }, [applyProgress]);
 
   const runScan = useCallback(async () => {
     if (scanning) return;
@@ -1172,6 +1360,8 @@ export default function MonitorClient({ identity }: Props) {
     setLastResult(null);
     setScanError(null);
     setScanNote(null);
+    setLiveProgress(null);
+    sawProgressRef.current = false;
     const activePlatforms = enabledIds
       ? INITIAL_PLATFORMS.filter((p) => enabledIds.includes(p.id))
       : INITIAL_PLATFORMS;
@@ -1202,12 +1392,17 @@ export default function MonitorClient({ identity }: Props) {
       return pollScan(scanId);
     })();
 
+    // Placeholder texture only until the sweep's own telemetry arrives — the
+    // moment a real progress snapshot lands, the animation stands down and the
+    // panel reflects what is actually happening on each platform.
     const animation = (async () => {
       for (const platform of activePlatforms) {
+        if (sawProgressRef.current) return;
         setPlatforms((prev) =>
           prev.map((p) => (p.id === platform.id ? { ...p, status: "checking" } : p))
         );
         await new Promise((r) => setTimeout(r, platform.checkDuration));
+        if (sawProgressRef.current) return;
         setPlatforms((prev) =>
           prev.map((p) => (p.id === platform.id ? { ...p, status: "clear" } : p))
         );
@@ -1224,11 +1419,21 @@ export default function MonitorClient({ identity }: Props) {
       setLastResult(result);
       setHits((prev) => [...result.newHits, ...prev]);
       await refresh();
+      // refresh() rebuilds the platform panel from persisted state, which
+      // knows nothing about per-platform candidate counts — restore them from
+      // the sweep's final snapshot so the panel keeps its telemetry.
+      if (result.progress?.platforms) {
+        const finals = result.progress.platforms;
+        setPlatforms((prev) =>
+          prev.map((p) => ({ ...p, candidates: finals[p.id]?.candidates ?? p.candidates }))
+        );
+      }
     } catch (err) {
       setScanError(err instanceof Error ? err.message : "Scan failed");
     } finally {
       setScanning(false);
       setScanNote(null);
+      setLiveProgress(null);
     }
   }, [scanning, refresh, enabledIds, pollScan]);
 
@@ -1253,12 +1458,19 @@ export default function MonitorClient({ identity }: Props) {
         );
         setLastResult(result);
         await refresh();
+        if (result.progress?.platforms) {
+          const finals = result.progress.platforms;
+          setPlatforms((prev) =>
+            prev.map((p) => ({ ...p, candidates: finals[p.id]?.candidates ?? p.candidates }))
+          );
+        }
       } catch (err) {
         setScanError(err instanceof Error ? err.message : "Scan failed");
         await refresh();
       } finally {
         setScanning(false);
         setScanNote(null);
+        setLiveProgress(null);
       }
     })();
   }, [scans, scanning, pollScan, refresh]);
@@ -1459,6 +1671,12 @@ export default function MonitorClient({ identity }: Props) {
         </div>
       )}
 
+      {/* ── Live sweep activity — real telemetry from the running sweep ── */}
+      {scanning && liveProgress && <SweepActivityFeed progress={liveProgress} />}
+
+      {/* ── The finished sweep's own account of what it did ── */}
+      {!scanning && lastResult?.progress && <SweepLogDisclosure progress={lastResult.progress} />}
+
       {/* ── Detected hits ── */}
       {loaded && openHits.length > 0 && (
         <div>
@@ -1560,7 +1778,11 @@ export default function MonitorClient({ identity }: Props) {
                   ) : (
                     <>
                       {formatDate(record.startedAt)} · {record.platformsChecked} platforms · {record.candidatesAnalysed} candidates
+                      {record.completedAt && record.completedAt > record.startedAt
+                        ? ` · ${formatDuration(record.completedAt - record.startedAt)}`
+                        : ""}
                       {record.aiProvider === "ai" ? " · AI adjudicated" : record.aiProvider === "heuristic" ? " · heuristic thresholds" : ""}
+                      {record.trigger === "scheduled" ? " · scheduled sweep" : ""}
                     </>
                   )}
                 </p>

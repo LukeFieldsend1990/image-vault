@@ -27,7 +27,7 @@ import {
 } from "@/lib/db/schema";
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { callAi } from "@/lib/ai/providers";
-import { notifyTalentAndReps } from "@/lib/notifications/create";
+import { createNotification, notifyTalentAndReps } from "@/lib/notifications/create";
 import { sendEmail } from "@/lib/email/send";
 import { likenessHitAlertEmail } from "@/lib/email/templates";
 import { generateCandidates } from "./candidates";
@@ -73,6 +73,7 @@ import {
 } from "./reference-set";
 import { ensurePhashIndex, loadPhashIndex, scoreCandidatesPhash } from "./phash-index";
 import { checkTalentBudget, getTalentMeter } from "./metering";
+import { createScanReporter, parseScanProgress, NOOP_REPORTER, type ScanReporter } from "./progress";
 import { captureThumbnail } from "./thumbnail-proxy";
 import { findCrossPlatformSiblings, isSiblingPlatform, type SiblingPlatform } from "./cross-platform";
 import { buildBodyBuildSummary, parseBodyMetrics } from "./body-profile";
@@ -585,16 +586,41 @@ async function discoverCandidates(
     allowlist: string[];
     enabled: Set<MonitorPlatformId>;
     scanId?: string;
+    /** Live progress narration; defaults to silent. */
+    progress?: ScanReporter;
   }
 ): Promise<{ candidates: CandidateContent[]; discoveryError: string | null }> {
   const token = apifyToken(env);
   const ytKey = youtubeApiKey(env);
   const on = (id: MonitorPlatformId) => opts.enabled.has(id);
+  const progress = opts.progress ?? NOOP_REPORTER;
+
+  // Per-platform settle in one place, so every surface below reports the same
+  // way: status flips to done with the surface's kept-candidate count, and the
+  // activity feed gets one line per platform that produced anything.
+  const settle = (id: MonitorPlatformId, count: number) => {
+    progress.platform(id, "done", count);
+    progress.note(
+      count > 0
+        ? `${platformName(id)}: ${count} candidate${count === 1 ? "" : "s"} collected`
+        : `${platformName(id)}: nothing new`
+    );
+  };
+  // A surface that threw was not fully swept — settling it with a count would
+  // claim coverage we don't have, so it reads as interrupted instead.
+  const interrupted = (id: MonitorPlatformId) => {
+    progress.platform(id, "done");
+    progress.note(`${platformName(id)}: sweep interrupted — partial coverage this run`);
+  };
 
   // No live credential at all → simulated crawler, exactly as before, covering
   // only the platforms the admin has switched on.
   if (!token && !ytKey) {
-    return { candidates: generateCandidates(opts.anchor, [...opts.enabled]), discoveryError: null };
+    const simulated = generateCandidates(opts.anchor, [...opts.enabled]);
+    for (const id of opts.enabled) {
+      settle(id, simulated.filter((c) => c.platform === id).length);
+    }
+    return { candidates: simulated, discoveryError: null };
   }
 
   const previousUrls = new Set(
@@ -637,6 +663,7 @@ async function discoverCandidates(
   // the Apify ceiling is spent. Never fails the sweep on its own.
   const youtube: CandidateContent[] = [];
   if (ytKey && on("youtube")) {
+    progress.platform("youtube", "sweeping");
     try {
       const yt = await discoverYouTube({
         apiKey: ytKey,
@@ -648,8 +675,10 @@ async function discoverCandidates(
       if (yt.quotaExhausted) {
         console.warn(`[monitor] YouTube quota exhausted for ${opts.talentId}; coverage reduced`);
       }
+      settle("youtube", youtube.length);
     } catch (err) {
       console.warn(`[monitor] YouTube discovery failed: ${(err as Error).message}`);
+      interrupted("youtube");
     }
   }
 
@@ -658,9 +687,11 @@ async function discoverCandidates(
   // outside the ceiling. Finds distributable likeness models, not clips.
   const aiPlatforms: CandidateContent[] = [];
   if (on("midjourney")) {
+    progress.platform("midjourney", "sweeping");
     const cv = await discoverAiPlatforms({ anchor: opts.anchor });
     const { kept } = preFilter(cv.candidates, filterOpts);
     aiPlatforms.push(...kept);
+    settle("midjourney", aiPlatforms.length);
   }
 
   const freeSurfaces = [...youtube, ...aiPlatforms];
@@ -674,6 +705,7 @@ async function discoverCandidates(
   // surfaces are kept — the ceiling has no claim on them.
   const upfront = await checkApifyBudget(db);
   if (!upfront.ok) {
+    if (freeSurfaces.length) progress.note("Paid discovery skipped this run — sweep budget reached");
     return {
       candidates: freeSurfaces,
       discoveryError: freeSurfaces.length ? null : upfront.reason,
@@ -686,6 +718,7 @@ async function discoverCandidates(
   const meterGate = await checkTalentBudget(db, opts.talentId);
   if (!meterGate.ok) {
     console.warn(`[monitor] talent meter refused paid discovery for ${opts.talentId}: ${meterGate.reason}`);
+    if (freeSurfaces.length) progress.note("Paid discovery skipped this run — monthly allowance reached");
     return {
       candidates: freeSurfaces,
       discoveryError: freeSurfaces.length ? null : meterGate.reason,
@@ -752,6 +785,7 @@ async function discoverCandidates(
   let instagram: CandidateContent[] = [];
   let instagramFatal: string | null = null;
   if (on("instagram")) {
+    progress.platform("instagram", "sweeping");
     // Known offenders are re-harvested on the admin's re-harvest cadence — the
     // repost-after-takedown pattern is invisible to hashtag discovery. Seeded
     // AI-content accounts join them: content on those accounts routinely
@@ -814,6 +848,8 @@ async function discoverCandidates(
           `(${diagnostics.queriesRun} of ${diagnostics.queriesRun + 1}+ queries ran, $${diagnostics.costUsd.toFixed(4)} spent)`
       );
     }
+    if (diagnostics.fatalError) interrupted("instagram");
+    else settle("instagram", instagram.length);
   }
 
   // TikTok: strongest surface for AI misuse of MCU-scale talent per the discovery
@@ -822,6 +858,7 @@ async function discoverCandidates(
   // is cheaper per query so it gets first refusal.
   const tiktok: CandidateContent[] = [];
   if (on("tiktok")) {
+    progress.platform("tiktok", "sweeping");
     try {
       // Learned hashtags from prior sweeps — mined from confirmed hits'
       // captions. Bare list, no leading '#'. buildTikTokQueries prefixes.
@@ -839,8 +876,10 @@ async function discoverCandidates(
           `[monitor] TikTok sweep for ${opts.talentId} stopped early: ${tt.budgetStopped}`
         );
       }
+      settle("tiktok", tiktok.length);
     } catch (err) {
       console.warn(`[monitor] TikTok discovery failed: ${(err as Error).message}`);
+      interrupted("tiktok");
     }
   }
 
@@ -849,6 +888,7 @@ async function discoverCandidates(
   // first refusal on spend. Each degrades independently.
   const xCandidates: CandidateContent[] = [];
   if (on("x")) {
+    progress.platform("x", "sweeping");
     try {
       const res = await discoverX({ token, anchor: opts.anchor, learnedHashtags: learnedFor("x"), budget });
       const { kept } = preFilter(res.candidates, filterOpts);
@@ -857,13 +897,16 @@ async function discoverCandidates(
       if (res.budgetStopped) {
         console.warn(`[monitor] X sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`);
       }
+      settle("x", xCandidates.length);
     } catch (err) {
       console.warn(`[monitor] X discovery failed: ${(err as Error).message}`);
+      interrupted("x");
     }
   }
 
   const pinterest: CandidateContent[] = [];
   if (on("pinterest")) {
+    progress.platform("pinterest", "sweeping");
     try {
       const res = await discoverPinterest({
         token,
@@ -879,13 +922,16 @@ async function discoverCandidates(
           `[monitor] Pinterest sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`
         );
       }
+      settle("pinterest", pinterest.length);
     } catch (err) {
       console.warn(`[monitor] Pinterest discovery failed: ${(err as Error).message}`);
+      interrupted("pinterest");
     }
   }
 
   const reddit: CandidateContent[] = [];
   if (on("reddit")) {
+    progress.platform("reddit", "sweeping");
     try {
       const res = await discoverReddit({ token, anchor: opts.anchor, budget });
       const { kept } = preFilter(res.candidates, filterOpts);
@@ -896,8 +942,10 @@ async function discoverCandidates(
           `[monitor] Reddit sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`
         );
       }
+      settle("reddit", reddit.length);
     } catch (err) {
       console.warn(`[monitor] Reddit discovery failed: ${(err as Error).message}`);
+      interrupted("reddit");
     }
   }
 
@@ -906,6 +954,7 @@ async function discoverCandidates(
   const serp: CandidateContent[] = [];
   for (const platform of ["google", "getty"] as const) {
     if (!on(platform)) continue;
+    progress.platform(platform, "sweeping");
     const res = await discoverSerp({
       token,
       platform,
@@ -920,6 +969,7 @@ async function discoverCandidates(
         `[monitor] ${platform} sweep for ${opts.talentId} stopped early: ${res.budgetStopped}`
       );
     }
+    settle(platform, kept.length);
   }
 
   // Every surface is independent; a failure on one is not a failure of the
@@ -1058,6 +1108,28 @@ export async function runLikenessScan(
     parsePlatformOverrides(monitor.platformOverridesJson)
   );
 
+  // The scan row is opened (or adopted) before any real work so the whole
+  // sweep — reference sync included — can narrate itself onto the row the
+  // client is already polling.
+  let scanId = opts.scanId;
+  if (!scanId) {
+    scanId = crypto.randomUUID();
+    await db.insert(monitorScans).values({
+      id: scanId,
+      monitorId: monitor.id,
+      talentId: opts.talentId,
+      trigger: opts.trigger ?? "manual",
+      status: "running",
+      platformsChecked: enabledPlatforms.size,
+      startedAt: now,
+    });
+  }
+  const progress = createScanReporter(db, scanId, enabledPlatforms);
+  progress.stage("preparing", "Anchoring identity");
+  progress.note(
+    `Sweep opened for ${anchor.fullName} — ${enabledPlatforms.size} platform${enabledPlatforms.size === 1 ? "" : "s"} in scope`
+  );
+
   // Vault-anchored reference set: reconcile the reference gallery with the
   // vault's current contents so a scan package uploaded since the last sweep
   // strengthens this one. DB-only and idempotent; failure degrades to the
@@ -1065,6 +1137,11 @@ export async function runLikenessScan(
   let references: ReferenceImage[] = [];
   try {
     references = await syncReferenceSet(db, opts.talentId);
+    if (references.length) {
+      progress.note(
+        `Reference set synced — ${references.length} vault still${references.length === 1 ? "" : "s"} anchoring identity checks`
+      );
+    }
   } catch (err) {
     console.warn(`[monitor] reference-set sync failed: ${(err as Error).message}`);
   }
@@ -1076,6 +1153,11 @@ export async function runLikenessScan(
     if (stats.hashed || stats.failed || stats.pending) {
       console.log(
         `[monitor] phash index for ${opts.talentId}: +${stats.hashed} hashed, ${stats.failed} failed, ${stats.pending} pending`
+      );
+    }
+    if (stats.hashed > 0) {
+      progress.note(
+        `Derivation index updated — ${stats.hashed} new still${stats.hashed === 1 ? "" : "s"} fingerprinted`
       );
     }
   } catch (err) {
@@ -1116,26 +1198,16 @@ export async function runLikenessScan(
           `(${anchor.vigilance.phase}, day ${anchor.vigilance.daysSinceAnnouncement}) ` +
           `adding ${anchor.vigilance.extraHashtags.length} quer(ies): ${anchor.vigilance.extraHashtags.join(", ")}`
       );
+      progress.note(
+        `Heightened vigilance: "${anchor.vigilance.eventTitle}" window open — sweep vocabulary widened (${anchor.vigilance.phase})`
+      );
     }
   } catch (err) {
     console.warn(`[monitor] vigilance lookup failed: ${(err as Error).message}`);
   }
 
-  let scanId = opts.scanId;
-  if (!scanId) {
-    scanId = crypto.randomUUID();
-    await db.insert(monitorScans).values({
-      id: scanId,
-      monitorId: monitor.id,
-      talentId: opts.talentId,
-      trigger: opts.trigger ?? "manual",
-      status: "running",
-      platformsChecked: enabledPlatforms.size,
-      startedAt: now,
-    });
-  }
-
   const scope: MonitorScope = (monitor.scope as MonitorScope | undefined) ?? "ai_only";
+  progress.stage("discovering", "Sweeping platforms");
   const { candidates, discoveryError } = await discoverCandidates(env, db, {
     talentId: opts.talentId,
     anchor,
@@ -1143,7 +1215,12 @@ export async function runLikenessScan(
     allowlist: parseAllowlist(monitor.allowlistJson),
     enabled: enabledPlatforms,
     scanId,
+    progress,
   });
+  progress.candidates(candidates.length);
+  progress.note(
+    `Discovery complete — ${candidates.length} candidate${candidates.length === 1 ? "" : "s"} queued for analysis`
+  );
 
   // A discovery wipeout is not a clean sweep. Recording "0 hits" here would
   // tell the talent we looked and found nothing, when in fact we never looked.
@@ -1163,9 +1240,14 @@ export async function runLikenessScan(
     try {
       const index = await loadPhashIndex(db, opts.talentId);
       if (index.length) {
+        progress.stage("matching", "Matching against vault fingerprints");
         const stats = await scoreCandidatesPhash(index, candidates);
         console.log(
           `[monitor] phash scoring for ${opts.talentId}: ${stats.measured} of ${candidates.length} measured, ${stats.matched} within derivation threshold`
+        );
+        progress.note(
+          `Derivation check: ${stats.measured} of ${candidates.length} candidates fingerprint-compared, ` +
+            `${stats.matched} within match threshold`
         );
       }
     } catch (err) {
@@ -1220,12 +1302,20 @@ export async function runLikenessScan(
         }
       }
 
+      progress.stage("verifying", "Verifying identity");
+      progress.note(
+        `Face verification across ${candidates.length} candidate${candidates.length === 1 ? "" : "s"}` +
+          (references.length ? " against vault references" : "")
+      );
       const stats = await verifyCandidatesIdentity(ai, candidates, anchor.fullName, {
         provider,
         referenceImageUrl,
         referenceImageUrls,
         rekognitionCredentials,
       });
+      progress.note(
+        `Identity check complete — ${stats.confirmed} likeness match${stats.confirmed === 1 ? "" : "es"} confirmed, ${stats.denied} ruled out`
+      );
       console.log(
         `[monitor] identity check for ${opts.talentId} via ${stats.provider}` +
           (stats.referenceSources ? ` (${stats.referenceSources} reference source(s))` : "") +
@@ -1251,7 +1341,15 @@ export async function runLikenessScan(
         .where(eq(aiSettings.key, "synthetic_check_enabled"))
         .get();
       if (enabledRow?.value !== "false") {
+        progress.note(
+          `Synthetic-media analysis running on ${candidates.length} candidate${candidates.length === 1 ? "" : "s"}`
+        );
         const stats = await assessCandidatesSynthetic(env, db, candidates);
+        if (stats.synthetic > 0) {
+          progress.note(
+            `${stats.synthetic} candidate${stats.synthetic === 1 ? "" : "s"} showing AI-generation markers`
+          );
+        }
         console.log(
           `[monitor] synthetic check for ${opts.talentId}: ${stats.checked} checked ` +
             `(${stats.declared} declared via metadata, ${stats.claude} via claude, ${stats.llava} via llava; ` +
@@ -1268,6 +1366,10 @@ export async function runLikenessScan(
   let verdicts: AdjudicationVerdict[] | null = null;
   let aiProvider: ScanResult["aiProvider"] = "heuristic";
   if (candidates.length) {
+    progress.stage("adjudicating", "AI adjudication");
+    progress.note(
+      `Adjudicator reviewing ${candidates.length} candidate${candidates.length === 1 ? "" : "s"} with the full signal set`
+    );
     const result = await callAi(env, db, {
       feature: "likeness_monitor",
       requiresReasoning: true,
@@ -1283,6 +1385,7 @@ export async function runLikenessScan(
   verdicts = constrainVerdicts(verdicts, candidates, scope);
 
   const flagged = verdicts.filter((v) => v.flag);
+  progress.stage("finalizing", "Recording results");
 
   // Dedupe against previously recorded hits for this talent (same content URL).
   // D1 caps parameters per statement at ~100, and a real TikTok+Instagram sweep
@@ -1357,7 +1460,16 @@ export async function runLikenessScan(
   // broken image next week if we only keep the link. Bounded concurrency,
   // non-fatal: a preview we cannot capture just falls back to the live URL and
   // then to a placeholder.
+  progress.note(
+    newHits.length > 0
+      ? `${newHits.length} new hit${newHits.length === 1 ? "" : "s"} recorded`
+      : "Sweep clean — no unauthorised use flagged"
+  );
+
   if (env.SCANS_BUCKET && thumbnailCaptures.length) {
+    progress.note(
+      `Capturing evidence stills for ${thumbnailCaptures.length} hit${thumbnailCaptures.length === 1 ? "" : "s"}`
+    );
     const bucket = env.SCANS_BUCKET;
     let captured = 0;
     for (let i = 0; i < thumbnailCaptures.length; i += 4) {
@@ -1378,6 +1490,10 @@ export async function runLikenessScan(
       `[monitor] captured ${captured}/${thumbnailCaptures.length} hit preview(s) for ${opts.talentId}`
     );
   }
+
+  // Progress writes race the status flip without this: a queued snapshot
+  // landing after "complete" would be harmless but confusing in the row.
+  await progress.flush();
 
   await db
     .update(monitorScans)
@@ -1403,6 +1519,18 @@ export async function runLikenessScan(
     // machine-flagged; the vocabulary learns from a hit when a human confirms
     // it (confirm / takedown / resolve — see mineConfirmedHit and the hit
     // triage route), so a false positive's tags can't compound sweep-over-sweep.
+  } else if ((opts.trigger ?? "manual") === "manual") {
+    // A manually-run sweep completes minutes after the talent walked away from
+    // the page; a clean result they never hear about reads as a scan that
+    // never finished. Manual only — a daily scheduled clean sweep would turn
+    // this into noise.
+    await createNotification(db, {
+      userId: opts.talentId,
+      type: "likeness_scan_complete",
+      title: "Sweep complete — all clear",
+      body: `${candidates.length} candidate${candidates.length === 1 ? "" : "s"} analysed across ${enabledPlatforms.size} platform${enabledPlatforms.size === 1 ? "" : "s"}; nothing flagged.`,
+      href: "/vault/monitor",
+    });
   }
 
   // Look for the same operators on the platforms this sweep did not find them
@@ -1478,6 +1606,9 @@ async function alertTalent(
     title: hits.length === 1 ? "Likeness alert: 1 new hit detected" : `Likeness alert: ${hits.length} new hits detected`,
     body: `${platformName(top.platform)} · ${top.authorHandle ?? "unknown account"} · ${top.confidence}% match confidence`,
     href: "/vault/monitor",
+    // /vault/monitor is talent-only; a rep's view of the same alert lives on
+    // their roster monitor.
+    repHref: "/roster/monitor",
   });
 
   const talent = await db.select({ email: users.email }).from(users).where(eq(users.id, talentId)).get();
@@ -1523,6 +1654,8 @@ export async function getScanStatus(db: Db, scanId: string, talentId: string) {
     hitsFound: scan.hitsFound,
     aiProvider: scan.aiProvider,
     platformsChecked: scan.platformsChecked,
+    // Live narration while running; the sweep's story once complete.
+    progress: parseScanProgress(scan.progressJson),
     newHits: hits.map((h) => ({
       id: h.id,
       platform: h.platform,
@@ -1531,6 +1664,7 @@ export async function getScanStatus(db: Db, scanId: string, talentId: string) {
       authorHandle: h.authorHandle,
       caption: h.caption,
       nsfw: h.nsfw === true,
+      hasThumbnail: !!(h.thumbnailKey || h.thumbnailUrl),
       confidence: h.confidence,
       aiGeneratedLikelihood: h.aiGeneratedLikelihood,
       riskLevel: h.riskLevel,
@@ -1665,6 +1799,7 @@ export async function getMonitorState(db: Db, talentId: string) {
       authorHandle: h.authorHandle,
       caption: h.caption,
       nsfw: h.nsfw === true,
+      hasThumbnail: !!(h.thumbnailKey || h.thumbnailUrl),
       confidence: h.confidence,
       aiGeneratedLikelihood: h.aiGeneratedLikelihood,
       riskLevel: h.riskLevel,
@@ -1684,7 +1819,20 @@ export async function getMonitorState(db: Db, talentId: string) {
         onboarded: s.talentId !== null,
       })),
     })),
-    scans,
+    // Trimmed: the raw row now carries the live progress snapshot, which is
+    // poll-endpoint payload — 20 of them on every page load is dead weight.
+    scans: scans.map((s) => ({
+      id: s.id,
+      trigger: s.trigger,
+      status: s.status,
+      error: s.error,
+      platformsChecked: s.platformsChecked,
+      candidatesAnalysed: s.candidatesAnalysed,
+      hitsFound: s.hitsFound,
+      aiProvider: s.aiProvider,
+      startedAt: s.startedAt,
+      completedAt: s.completedAt,
+    })),
   };
 }
 

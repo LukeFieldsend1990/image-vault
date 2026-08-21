@@ -1666,6 +1666,8 @@ export const monitorScans = sqliteTable("monitor_scans", {
   hitsFound: integer("hits_found").notNull().default(0),
   aiProvider: text("ai_provider"), // ai | heuristic
   error: text("error"),
+  // Live progress snapshot while status is "running" (lib/monitor/progress.ts).
+  progressJson: text("progress_json"),
   startedAt: integer("started_at").notNull(),
   completedAt: integer("completed_at"),
 });

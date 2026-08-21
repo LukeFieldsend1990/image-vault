@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FadeImage } from "@/app/(vault)/fade-image";
+import { platformName } from "@/lib/monitor/platforms";
 
 interface RosterTalent {
   talentId: string;
@@ -35,20 +36,24 @@ interface CrossClientOffender {
   otherTalentAffectedCount: number;
 }
 
+interface RepHit {
+  id: string;
+  platform: string;
+  contentType: string;
+  contentUrl: string;
+  authorHandle: string | null;
+  nsfw?: boolean;
+  hasThumbnail?: boolean;
+  confidence: number;
+  aiGeneratedLikelihood: number;
+  riskLevel: string;
+  status: string;
+  aiRationale: string | null;
+  detectedAt: number;
+}
+
 interface TalentDetail {
-  hits: {
-    id: string;
-    platform: string;
-    contentType: string;
-    contentUrl: string;
-    authorHandle: string | null;
-    confidence: number;
-    aiGeneratedLikelihood: number;
-    riskLevel: string;
-    status: string;
-    aiRationale: string | null;
-    detectedAt: number;
-  }[];
+  hits: RepHit[];
 }
 
 const TIER_LABELS: Record<RosterTalent["coverage"]["tier"], { label: string; color: string }> = {
@@ -68,6 +73,33 @@ const RISK_COLORS: Record<string, string> = {
 function fmtDate(ts: number | null): string {
   if (!ts) return "never";
   return new Date(ts * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+/**
+ * Captured evidence still for a hit, via the same authorised proxy the talent
+ * view uses (the route checks the talent_reps link for rep sessions). NSFW
+ * previews stay blurred — a rep triaging over someone's shoulder shouldn't
+ * have explicit content spring onto the screen uninvited.
+ */
+function RepHitThumb({ hit }: { hit: RepHit }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) return null;
+  return (
+    <span
+      className="relative h-12 w-9 shrink-0 overflow-hidden rounded"
+      style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/monitor/hits/${hit.id}/thumbnail`}
+        alt=""
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className="h-full w-full object-cover"
+        style={hit.nsfw ? { filter: "blur(8px)", transform: "scale(1.1)" } : undefined}
+      />
+    </span>
+  );
 }
 
 function TalentMonitorCard({ talent }: { talent: RosterTalent }) {
@@ -150,15 +182,20 @@ function TalentMonitorCard({ talent }: { talent: RosterTalent }) {
           )}
           {detail?.hits.slice(0, 10).map((hit) => (
             <div key={hit.id} className="flex items-start gap-3">
+              {hit.hasThumbnail && <RepHitThumb hit={hit} />}
               <span
                 className="mt-1 h-1.5 w-1.5 rounded-full shrink-0"
                 style={{ background: RISK_COLORS[hit.riskLevel] ?? "#6b7280" }}
               />
               <div className="min-w-0 flex-1">
                 <p className="text-xs truncate" style={{ color: "var(--color-ink)" }}>
-                  <span className="font-medium">{hit.platform}</span>
-                  {hit.authorHandle ? ` · @${hit.authorHandle}` : ""} · {hit.confidence}% match ·{" "}
+                  <span className="font-medium">{platformName(hit.platform)}</span>
+                  {hit.authorHandle ? ` · @${hit.authorHandle.replace(/^@/, "")}` : ""} · {hit.confidence}% match ·{" "}
                   {hit.aiGeneratedLikelihood}% AI · {hit.status.replace(/_/g, " ")}
+                  {hit.nsfw ? " · NSFW" : ""}
+                </p>
+                <p className="text-[10px]" style={{ color: "var(--color-muted)" }}>
+                  detected {fmtDate(hit.detectedAt)}
                 </p>
                 {hit.aiRationale && (
                   <p className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>
