@@ -221,13 +221,22 @@ export default function RosterMonitorClient() {
           <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>
             Likeness Monitor
           </h1>
-          <Link
-            href="/roster"
-            className="text-xs font-medium underline underline-offset-2"
-            style={{ color: "var(--color-muted)" }}
-          >
-            ← My Roster
-          </Link>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link
+              href="/roster/deepfakes"
+              className="text-xs font-medium underline underline-offset-2"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Deepfake statistics →
+            </Link>
+            <Link
+              href="/roster"
+              className="text-xs font-medium underline underline-offset-2"
+              style={{ color: "var(--color-muted)" }}
+            >
+              ← My Roster
+            </Link>
+          </div>
         </div>
         <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>
           Detection coverage and likeness alerts across your roster, read-only.

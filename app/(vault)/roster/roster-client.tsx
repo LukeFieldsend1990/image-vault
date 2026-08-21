@@ -381,13 +381,22 @@ export default function RosterClient() {
         </p>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl font-semibold" style={{ color: "var(--color-ink)" }}>My Roster</h1>
-          <Link
-            href="/roster/monitor"
-            className="text-xs font-medium underline underline-offset-2"
-            style={{ color: "var(--color-accent)" }}
-          >
-            Likeness monitor →
-          </Link>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link
+              href="/roster/deepfakes"
+              className="text-xs font-medium underline underline-offset-2"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Deepfake stats →
+            </Link>
+            <Link
+              href="/roster/monitor"
+              className="text-xs font-medium underline underline-offset-2"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Likeness monitor →
+            </Link>
+          </div>
         </div>
         {!loading && (roster.length > 0 || pendingInvites.length > 0) && (
           <p className="text-sm mt-1" style={{ color: "var(--color-muted)" }}>

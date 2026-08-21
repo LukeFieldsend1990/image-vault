@@ -409,6 +409,21 @@ const COMPLIANCE_NAV = [
     ),
   },
   {
+    // Deepfake statistics for the union's affiliated members — lifetime volume,
+    // month to date, growth and the per-member breakdown. Counts only; the hits
+    // themselves stay with the talent. Same unionWatcher gate as Members.
+    href: "/deepfakes",
+    label: "Deepfakes",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="4" />
+        <line x1="12" y1="20" x2="12" y2="10" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+        <path d="M3 3l18 18" />
+      </svg>
+    ),
+  },
+  {
     // Union team management — invite/remove users who share this union's compliance
     // surfaces. Same unionWatcher gate as Members.
     href: "/union-team",
@@ -520,10 +535,13 @@ export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterE
   if (isComplianceRole(role) && !platformOversight && !unionWatcher) {
     base = base.filter((item) => item.href !== "/watchlist");
   }
-  // The Member roster and Team management are union-owned (one list per union). Only
-  // a union watcher maintains them — a platform-wide regulator has no union.
+  // The Member roster, Team management and Deepfake statistics are union-owned
+  // (one per union). Only a union watcher sees them — a platform-wide regulator
+  // has no union whose members it could report on.
   if (isComplianceRole(role) && !unionWatcher) {
-    base = base.filter((item) => item.href !== "/members" && item.href !== "/union-team");
+    base = base.filter(
+      (item) => item.href !== "/members" && item.href !== "/union-team" && item.href !== "/deepfakes",
+    );
   }
   // Insurer watchers (compliance role with an insurer grant) get the Underwriting
   // surface, placed first as their primary landing.
