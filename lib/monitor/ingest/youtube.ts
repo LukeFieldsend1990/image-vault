@@ -197,6 +197,18 @@ export async function discoverYouTube(opts: {
   resultsPerQuery?: number;
   learnedHashtags?: string[];
   signal?: AbortSignal;
+  /**
+   * Called once per search term issued. YouTube runs outside the Apify budget
+   * — quota, not money — so it has no `record` hook to piggyback on, and
+   * without this the sweep's query log would show every paid surface and
+   * silently omit the free one.
+   */
+  onQuery?: (entry: {
+    query: string;
+    itemCount: number;
+    status: "succeeded" | "failed";
+    error?: string;
+  }) => void;
 }): Promise<YouTubeDiscoveryResult> {
   const queries = buildYouTubeQueries(opts.anchor, opts.maxQueries ?? 5, opts.learnedHashtags ?? []);
   const candidates: CandidateContent[] = [];
@@ -216,8 +228,15 @@ export async function discoverYouTube(opts: {
           candidates.push(mapped);
         }
       }
+      opts.onQuery?.({ query, itemCount: items.length, status: "succeeded" });
     } catch (err) {
       queriesFailed++;
+      opts.onQuery?.({
+        query,
+        itemCount: 0,
+        status: "failed",
+        error: err instanceof YouTubeError ? err.reason : "error",
+      });
       if (err instanceof YouTubeError && err.reason === "quota") quotaExhausted = true;
       if (err instanceof YouTubeError && err.reason === "auth") break;
     }
