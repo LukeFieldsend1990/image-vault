@@ -276,6 +276,9 @@ export type TrialSweepEnv = R2SignEnv & {
   ANTHROPIC_API_KEY?: string;
   APIFY_TOKEN?: string;
   YOUTUBE_API_KEY?: string;
+  REDDIT_CLIENT_ID?: string;
+  REDDIT_CLIENT_SECRET?: string;
+  BRAVE_SEARCH_API_KEY?: string;
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
   AWS_REGION?: string;

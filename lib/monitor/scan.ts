@@ -59,7 +59,10 @@ import { discoverTikTok } from "./ingest/tiktok";
 import { discoverX } from "./ingest/x";
 import { discoverPinterest } from "./ingest/pinterest";
 import { discoverReddit } from "./ingest/reddit";
+import { discoverRedditApi, redditCredentials } from "./ingest/reddit-api";
 import { discoverSerp } from "./ingest/serp";
+import { BRAVE_FREE_TIER_MONTHLY, braveKey, bumpBraveUsage, discoverBraveSerp } from "./ingest/brave-serp";
+import { resolveActorConfig } from "./ingest/actor-settings";
 import { discoverAiPlatforms } from "./ingest/ai-platforms";
 import { seedHandlesFor } from "./ingest/seeds";
 import { verifyCandidatesIdentity } from "./identity-check";
@@ -589,7 +592,13 @@ function parseAllowlist(json: string | null | undefined): string[] {
  * ceiling and the per-run usage ledger, attributed by scanId alone.
  */
 export async function discoverCandidates(
-  env: { APIFY_TOKEN?: string; YOUTUBE_API_KEY?: string },
+  env: {
+    APIFY_TOKEN?: string;
+    YOUTUBE_API_KEY?: string;
+    REDDIT_CLIENT_ID?: string;
+    REDDIT_CLIENT_SECRET?: string;
+    BRAVE_SEARCH_API_KEY?: string;
+  },
   db: Db,
   opts: {
     /** users.id for a vault-anchored sweep; null for a trial sweep. */
@@ -615,6 +624,8 @@ export async function discoverCandidates(
 ): Promise<{ candidates: CandidateContent[]; discoveryError: string | null }> {
   const token = apifyToken(env);
   const ytKey = youtubeApiKey(env);
+  const redditCreds = redditCredentials(env);
+  const braveApiKey = braveKey(env);
   const on = (id: MonitorPlatformId) => opts.enabled.has(id);
   const progress = opts.progress ?? NOOP_REPORTER;
 
@@ -638,7 +649,7 @@ export async function discoverCandidates(
 
   // No live credential at all → simulated crawler, exactly as before, covering
   // only the platforms the admin has switched on.
-  if (!token && !ytKey) {
+  if (!token && !ytKey && !redditCreds && !braveApiKey) {
     const simulated = generateCandidates(opts.anchor, [...opts.enabled]);
     // The simulated crawler issues no real queries, but the log still has to
     // say which surfaces the run covered — otherwise a dev-mode sweep reads as
@@ -749,7 +760,84 @@ export async function discoverCandidates(
     }
   }
 
-  const freeSurfaces = [...youtube, ...aiPlatforms];
+  // ── Reddit (official API) ─────────────────────────────────────────────────
+  // Free with registered app credentials, so like YouTube it runs outside the
+  // Apify ceiling. The paid actor below stays as the fallback when only
+  // APIFY_TOKEN is configured.
+  const redditFree: CandidateContent[] = [];
+  const redditViaApi = !!redditCreds && on("reddit");
+  if (redditCreds && redditViaApi) {
+    progress.platform("reddit", "sweeping");
+    try {
+      const res = await discoverRedditApi({
+        creds: redditCreds,
+        anchor: opts.anchor,
+        onQuery: (q) =>
+          opts.queryLog?.push({
+            platform: "reddit",
+            mode: "reddit_search",
+            query: q.query,
+            resultCount: q.itemCount,
+            status: q.status,
+            error: q.error ?? null,
+          }),
+      });
+      const { kept } = preFilter(res.candidates, filterOpts);
+      redditFree.push(...kept);
+      settle("reddit", redditFree.length);
+    } catch (err) {
+      console.warn(`[monitor] Reddit API discovery failed: ${(err as Error).message}`);
+      interrupted("reddit");
+    }
+  }
+
+  // ── Google / Getty via Brave Search ──────────────────────────────────────
+  // Same platforms serp.ts serves through the Apify actor, moved onto Brave's
+  // free tier when a key is present. Covered platforms are skipped by the
+  // paid loop below.
+  const braveSerpFree: CandidateContent[] = [];
+  const braveCovered = new Set<MonitorPlatformId>();
+  if (braveApiKey) {
+    let braveQueries = 0;
+    for (const platform of ["google", "getty"] as const) {
+      if (!on(platform)) continue;
+      braveCovered.add(platform);
+      progress.platform(platform, "sweeping");
+      const res = await discoverBraveSerp({
+        apiKey: braveApiKey,
+        platform,
+        anchor: opts.anchor,
+        learnedHashtags: learnedFor(platform),
+        onQuery: (q) =>
+          opts.queryLog?.push({
+            platform,
+            mode: `${platform}_serp`,
+            query: q.query,
+            resultCount: q.itemCount,
+            status: q.status,
+            error: q.error ?? null,
+          }),
+      });
+      braveQueries += res.queriesRun;
+      const { kept } = preFilter(res.candidates, filterOpts);
+      braveSerpFree.push(...kept);
+      settle(platform, kept.length);
+    }
+    if (braveQueries > 0) {
+      try {
+        const monthTotal = await bumpBraveUsage(db, braveQueries);
+        if (monthTotal >= BRAVE_FREE_TIER_MONTHLY) {
+          console.warn(
+            `[monitor] Brave Search monthly quota reached (${monthTotal}/${BRAVE_FREE_TIER_MONTHLY}); further queries may 429`
+          );
+        }
+      } catch (err) {
+        console.warn(`[monitor] Brave usage counter update failed: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  const freeSurfaces = [...youtube, ...aiPlatforms, ...redditFree, ...braveSerpFree];
   if (!token) {
     return { candidates: freeSurfaces, discoveryError: null };
   }
@@ -788,6 +876,10 @@ export async function discoverCandidates(
   // distinct from our internal ceiling, which is a choice rather than a wall.
   let creditsStopSeen = false;
   const CREDITS_STOP = "Apify account out of credits";
+
+  // Which actor answers each paid surface, and at what per-query volume —
+  // runtime-swappable from /admin/monitor (ingest/actor-settings.ts).
+  const actorCfg = await resolveActorConfig(db);
 
   // One spend gate + usage ledger shared by every Apify-backed surface below.
   // Both limits are re-checked between runs: global ceiling first (protects
@@ -914,6 +1006,8 @@ export async function discoverCandidates(
 
     const { candidates, diagnostics } = await discoverInstagram({
       token,
+      actors: { hashtag: actorCfg.hashtag, search: actorCfg.search, profile: actorCfg.profile },
+      resultsPerQuery: actorCfg.resultsPerQuery,
       anchor: opts.anchor,
       scope: opts.scope,
       allowlist: opts.allowlist,
@@ -951,6 +1045,7 @@ export async function discoverCandidates(
       // captions. Bare list, no leading '#'. buildTikTokQueries prefixes.
       const tt = await discoverTikTok({
         token,
+        actorId: actorCfg.tiktok,
         anchor: opts.anchor,
         learnedHashtags: learnedFor("tiktok"),
         budget,
@@ -1017,7 +1112,8 @@ export async function discoverCandidates(
   }
 
   const reddit: CandidateContent[] = [];
-  if (on("reddit")) {
+  // Skipped when the official API already swept this surface above.
+  if (on("reddit") && !redditViaApi) {
     progress.platform("reddit", "sweeping");
     try {
       const res = await discoverReddit({ token, anchor: opts.anchor, budget });
@@ -1040,7 +1136,8 @@ export async function discoverCandidates(
   // queries. discoverSerp absorbs its own failures, so no try/catch here.
   const serp: CandidateContent[] = [];
   for (const platform of ["google", "getty"] as const) {
-    if (!on(platform)) continue;
+    // Skipped when Brave already swept this platform above.
+    if (!on(platform) || braveCovered.has(platform)) continue;
     progress.platform(platform, "sweeping");
     const res = await discoverSerp({
       token,
@@ -1069,7 +1166,9 @@ export async function discoverCandidates(
     ...tiktok,
     ...xCandidates,
     ...pinterest,
+    ...redditFree,
     ...reddit,
+    ...braveSerpFree,
     ...serp,
     ...aiPlatforms,
   ];
@@ -1167,6 +1266,9 @@ export async function runLikenessScan(
     ANTHROPIC_API_KEY?: string;
     APIFY_TOKEN?: string;
     YOUTUBE_API_KEY?: string;
+    REDDIT_CLIENT_ID?: string;
+    REDDIT_CLIENT_SECRET?: string;
+    BRAVE_SEARCH_API_KEY?: string;
     AWS_ACCESS_KEY_ID?: string;
     AWS_SECRET_ACCESS_KEY?: string;
     AWS_REGION?: string;

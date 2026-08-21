@@ -16,8 +16,43 @@ import { ApifyError, runActor } from "./apify";
 import { effectiveRunCost } from "./budget";
 import { vigilancePhrases } from "../vigilance";
 
-/** Keyword search actor. Unlike Instagram's, this one takes real phrases. */
+/** Keyword search actor. Unlike Instagram's, this one takes real phrases.
+ *  Default only — overridable at runtime via ai_settings (actor-settings.ts). */
 export const TIKTOK_ACTOR = "clockworks~tiktok-scraper";
+
+/**
+ * Input builders keyed by actor id, same contract as instagram.ts: the
+ * default actor gets its exact documented shape, an override gets a superset
+ * with the common alias keys.
+ */
+export function tiktokSearchInput(actorId: string, query: string, limit: number): Record<string, unknown> {
+  if (actorId === TIKTOK_ACTOR) {
+    return { searchQueries: [query], resultsPerPage: limit, shouldDownloadVideos: false };
+  }
+  return {
+    searchQueries: [query],
+    keywords: [query],
+    search: query,
+    resultsPerPage: limit,
+    maxItems: limit,
+    resultsLimit: limit,
+    shouldDownloadVideos: false,
+  };
+}
+
+export function tiktokProfileInput(actorId: string, handle: string, limit: number): Record<string, unknown> {
+  if (actorId === TIKTOK_ACTOR) {
+    return { profiles: [handle], resultsPerPage: limit, shouldDownloadVideos: false };
+  }
+  return {
+    profiles: [handle],
+    usernames: [handle],
+    resultsPerPage: limit,
+    maxItems: limit,
+    resultsLimit: limit,
+    shouldDownloadVideos: false,
+  };
+}
 
 export const TIKTOK_QUERY_SUFFIXES = ["ai", "deepfake", "ai trailer", "concept trailer"] as const;
 
@@ -121,6 +156,8 @@ export interface TikTokDiscoveryResult {
 
 export async function discoverTikTok(opts: {
   token: string;
+  /** Actor override from ai_settings; defaults to TIKTOK_ACTOR. */
+  actorId?: string;
   anchor: TalentIdentityAnchor;
   maxQueries?: number;
   resultsPerQuery?: number;
@@ -142,6 +179,7 @@ export async function discoverTikTok(opts: {
   };
 }): Promise<TikTokDiscoveryResult> {
   const queries = buildTikTokQueries(opts.anchor, opts.maxQueries ?? 4, opts.learnedHashtags ?? []);
+  const actorId = opts.actorId ?? TIKTOK_ACTOR;
   const resultsLimit = opts.resultsPerQuery ?? 50;
   const candidates: CandidateContent[] = [];
   const seen = new Set<string>();
@@ -163,8 +201,8 @@ export async function discoverTikTok(opts: {
     try {
       const run = await runActor<TikTokItem>({
         token: opts.token,
-        actorId: TIKTOK_ACTOR,
-        input: { searchQueries: [query], resultsPerPage: resultsLimit, shouldDownloadVideos: false },
+        actorId,
+        input: tiktokSearchInput(actorId, query, resultsLimit),
         maxItems: resultsLimit,
         signal: opts.signal,
       });
@@ -178,7 +216,7 @@ export async function discoverTikTok(opts: {
       }
       await opts.budget?.record({
         runId: run.runId,
-        actorId: TIKTOK_ACTOR,
+        actorId,
         mode: "tiktok_search",
         query,
         itemCount: run.items.length,
@@ -192,7 +230,7 @@ export async function discoverTikTok(opts: {
       if (apifyErr?.runId) {
         await opts.budget?.record({
           runId: apifyErr.runId,
-          actorId: TIKTOK_ACTOR,
+          actorId,
           mode: "tiktok_search",
           query,
           itemCount: 0,

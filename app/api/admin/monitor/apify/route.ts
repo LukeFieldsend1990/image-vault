@@ -12,6 +12,17 @@ import {
   getApifyCreditsExhaustedAt,
 } from "@/lib/monitor/ingest/budget";
 import { apifyToken } from "@/lib/monitor/ingest/apify";
+import {
+  ACTOR_DEFAULTS,
+  ACTOR_ID_PATTERN,
+  HASHTAG_ACTOR_KEY,
+  PROFILE_ACTOR_KEY,
+  RESULTS_PER_QUERY_KEY,
+  SEARCH_ACTOR_KEY,
+  TIKTOK_ACTOR_KEY,
+  clampResultsPerQuery,
+  resolveActorConfig,
+} from "@/lib/monitor/ingest/actor-settings";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { desc, eq, sql } from "drizzle-orm";
 
@@ -74,16 +85,37 @@ export async function GET(req: NextRequest) {
       .all(),
   ]);
 
-  return NextResponse.json({ budget, runs, byTalent, account, creditsExhaustedAt });
+  const actors = await resolveActorConfig(db);
+
+  return NextResponse.json({
+    budget,
+    runs,
+    byTalent,
+    account,
+    creditsExhaustedAt,
+    actors,
+    actorDefaults: ACTOR_DEFAULTS,
+  });
 }
 
-// PATCH /api/admin/monitor/apify — { ceilingUsd?: number, enabled?: boolean }
+// PATCH /api/admin/monitor/apify — { ceilingUsd?, enabled?, hashtagActor?,
+// searchActor?, profileActor?, tiktokActor?, resultsPerQuery? }
+// Actor fields take an actor id ("owner~name") or an empty string to clear
+// the override and restore the compiled default.
 export async function PATCH(req: NextRequest) {
   const g = await guard(req);
   if (g.error) return g.error;
   const session = g.session!;
 
-  const body = (await req.json().catch(() => ({}))) as { ceilingUsd?: number; enabled?: boolean };
+  const body = (await req.json().catch(() => ({}))) as {
+    ceilingUsd?: number;
+    enabled?: boolean;
+    hashtagActor?: string;
+    searchActor?: string;
+    profileActor?: string;
+    tiktokActor?: string;
+    resultsPerQuery?: number | string | null;
+  };
   const db = getDb();
 
   if (body.ceilingUsd !== undefined) {
@@ -98,7 +130,44 @@ export async function PATCH(req: NextRequest) {
     await upsert(db, APIFY_ENABLED_KEY, body.enabled ? "true" : "false", session.sub);
   }
 
-  return NextResponse.json({ budget: await getApifyBudget(db) });
+  const actorFields: Array<[string, string | undefined]> = [
+    [HASHTAG_ACTOR_KEY, body.hashtagActor],
+    [SEARCH_ACTOR_KEY, body.searchActor],
+    [PROFILE_ACTOR_KEY, body.profileActor],
+    [TIKTOK_ACTOR_KEY, body.tiktokActor],
+  ];
+  for (const [key, raw] of actorFields) {
+    if (raw === undefined) continue;
+    const value = raw.trim();
+    if (value === "") {
+      await db.delete(aiSettings).where(eq(aiSettings.key, key));
+      continue;
+    }
+    if (!ACTOR_ID_PATTERN.test(value)) {
+      return NextResponse.json(
+        { error: `Actor id must look like "owner~name" (got "${value.slice(0, 60)}")` },
+        { status: 400 }
+      );
+    }
+    await upsert(db, key, value, session.sub);
+  }
+
+  if (body.resultsPerQuery !== undefined) {
+    if (body.resultsPerQuery === null || body.resultsPerQuery === "") {
+      await db.delete(aiSettings).where(eq(aiSettings.key, RESULTS_PER_QUERY_KEY));
+    } else {
+      const n = clampResultsPerQuery(body.resultsPerQuery);
+      if (n === undefined) {
+        return NextResponse.json({ error: "Results per query must be a number (10–200)" }, { status: 400 });
+      }
+      await upsert(db, RESULTS_PER_QUERY_KEY, String(n), session.sub);
+    }
+  }
+
+  return NextResponse.json({
+    budget: await getApifyBudget(db),
+    actors: await resolveActorConfig(db),
+  });
 }
 
 // POST /api/admin/monitor/apify — reset the spend counter to now.

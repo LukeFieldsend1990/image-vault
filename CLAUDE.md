@@ -251,7 +251,9 @@ MCP server at `/api/mcp` (Streamable HTTP, stateless JSON-RPC) gives whitelisted
 
 Key secrets: `JWT_SECRET`, `RESEND_API_KEY`, `ANTHROPIC_API_KEY`, `TMDB_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `BRIDGE_SIGNING_KEY_JWK`, `ENCRYPTION_MASTER_KEY`, `RESEND_WEBHOOK_SECRET`, `APIFY_TOKEN`
 
-`APIFY_TOKEN` is optional and gates the likeness monitor's real discovery: absent, `lib/monitor/scan.ts` falls back to the simulated crawler (`lib/monitor/candidates.ts`) and the monitor behaves exactly as it did before. Present, sweeps hit live Instagram via Apify actors and cost money per run.
+`APIFY_TOKEN` is optional and gates the likeness monitor's paid discovery: absent, `lib/monitor/scan.ts` falls back to the simulated crawler (`lib/monitor/candidates.ts`) and the monitor behaves exactly as it did before. Present, sweeps hit live Instagram via Apify actors and cost money per run. Which actor answers each Instagram/TikTok surface is runtime-swappable from `/admin/monitor` (`lib/monitor/ingest/actor-settings.ts`, keys `apify_hashtag_actor` etc.); compare candidates with `scripts/discovery-bakeoff.mjs --ig-hashtag-actor=<id>` before promoting one.
+
+`REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` (Reddit OAuth app, client-credentials) and `BRAVE_SEARCH_API_KEY` (Brave Search API, free 2k queries/mo) are also optional: present, the reddit and google/getty surfaces run on those free APIs (`lib/monitor/ingest/reddit-api.ts`, `brave-serp.ts`) outside the Apify budget ceiling; absent, those surfaces fall back to their Apify actors when `APIFY_TOKEN` is set.
 
 The deepfake-detection stack (detector signals, vault-anchored reference set, synthetic-media checks) is documented in `docs/deepfake-detection.md` — including its **known limitations and open questions**; read that before extending `lib/monitor/` detection layers, and keep it current.
 
