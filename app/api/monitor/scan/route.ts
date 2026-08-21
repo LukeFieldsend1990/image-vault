@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
     ANTHROPIC_API_KEY?: string;
     APIFY_TOKEN?: string;
     YOUTUBE_API_KEY?: string;
+    REDDIT_CLIENT_ID?: string;
+    REDDIT_CLIENT_SECRET?: string;
+    BRAVE_SEARCH_API_KEY?: string;
     AWS_ACCESS_KEY_ID?: string;
     AWS_SECRET_ACCESS_KEY?: string;
     AWS_REGION?: string;
@@ -72,6 +75,9 @@ export async function POST(req: NextRequest) {
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
       APIFY_TOKEN: process.env.APIFY_TOKEN,
       YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
+      REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID,
+      REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET,
+      BRAVE_SEARCH_API_KEY: process.env.BRAVE_SEARCH_API_KEY,
       AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
       AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
       AWS_REGION: process.env.AWS_REGION,

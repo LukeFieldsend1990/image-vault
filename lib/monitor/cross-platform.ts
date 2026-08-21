@@ -32,7 +32,9 @@ import { getDb } from "@/lib/db";
 import { monitorAccounts, monitorAccountLinks, likenessHits } from "@/lib/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { ACTORS, ApifyError, runActor, type ActorBudget } from "./ingest/apify";
-import { TIKTOK_ACTOR } from "./ingest/tiktok";
+import { resolveActorConfig } from "./ingest/actor-settings";
+import { profileActorInput } from "./ingest/instagram";
+import { TIKTOK_ACTOR, tiktokProfileInput } from "./ingest/tiktok";
 import { X_ACTOR } from "./ingest/x";
 import { normaliseHandle } from "./ingest/follows";
 
@@ -282,7 +284,8 @@ export async function probeHandle(
   env: ProbeEnv,
   platform: SiblingPlatform,
   handle: string,
-  budget?: ActorBudget
+  budget?: ActorBudget,
+  actors?: { profile?: string; tiktok?: string }
 ): Promise<ProbeResult> {
   if (platform === "youtube") return probeYouTube(env, handle);
   if (!env.APIFY_TOKEN) return { ...EMPTY_PROBE, error: "No Apify token" };
@@ -292,20 +295,18 @@ export async function probeHandle(
     if (!verdict.ok) return { ...EMPTY_PROBE, error: verdict.reason ?? "Apify spend limit reached" };
   }
 
+  const profileActor = actors?.profile ?? ACTORS.profile;
+  const tiktokActor = actors?.tiktok ?? TIKTOK_ACTOR;
   const spec =
     platform === "instagram"
       ? {
-          actorId: ACTORS.profile,
-          input: {
-            directUrls: [`https://www.instagram.com/${handle}/`],
-            resultsType: "posts",
-            resultsLimit: PROBE_POSTS,
-          },
+          actorId: profileActor,
+          input: profileActorInput(profileActor, handle, PROBE_POSTS),
         }
       : platform === "tiktok"
         ? {
-            actorId: TIKTOK_ACTOR,
-            input: { profiles: [handle], resultsPerPage: PROBE_POSTS, shouldDownloadVideos: false },
+            actorId: tiktokActor,
+            input: tiktokProfileInput(tiktokActor, handle, PROBE_POSTS),
           }
         : {
             actorId: X_ACTOR,
@@ -564,6 +565,9 @@ export async function findCrossPlatformSiblings(
 
   const maxProbes = opts.maxProbes ?? MAX_PROBES_PER_SWEEP;
   const now = Math.floor(Date.now() / 1000);
+  // Probes use the same runtime-swappable actors as the main sweep, so an
+  // actor promoted from the admin panel covers this path without a deploy.
+  const actorCfg = await resolveActorConfig(db);
 
   for (const target of targets) {
     if (stats.probed >= maxProbes) break;
@@ -586,7 +590,10 @@ export async function findCrossPlatformSiblings(
         continue;
       }
 
-      const probe = await probeHandle(env, target.platform, candidate, opts.budget);
+      const probe = await probeHandle(env, target.platform, candidate, opts.budget, {
+        profile: actorCfg.profile,
+        tiktok: actorCfg.tiktok,
+      });
       if (probe.error && !probe.exists) {
         // A probe we could not run is not a finding — leave it unanswered so a
         // later sweep retries it.

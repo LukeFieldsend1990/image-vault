@@ -231,6 +231,11 @@ export interface DiscoveryDiagnostics {
 export interface DiscoverInstagramOptions extends PreFilterOptions, DiscoveryPlanOptions {
   token: string;
   /**
+   * Actor overrides from ai_settings (ingest/actor-settings.ts). Absent keys
+   * fall back to the compiled defaults in ACTORS.
+   */
+  actors?: { hashtag?: string; search?: string; profile?: string };
+  /**
    * Per-handle ISO date (YYYY-MM-DD) for account harvests: the actor only
    * returns posts newer than this, so a re-harvest bills new posts instead of
    * re-buying the whole profile. Built by planWatchlistHarvest from the
@@ -260,33 +265,68 @@ export interface DiscoverInstagramOptions extends PreFilterOptions, DiscoveryPla
   };
 }
 
+/**
+ * Input builders, keyed by actor id. The compiled defaults get their exact
+ * documented shapes (pinned in tests — a swap back to the default must be a
+ * zero-diff); an overridden actor gets a superset carrying the common alias
+ * keys, the generalisation of the "send both spellings" trick in follows.ts.
+ * A mis-shaped input cannot bill unbounded — runActor's maxItems URL param is
+ * enforced by Apify itself — and unmappable output reads as "N results,
+ * 0 kept" in the query log rather than failing silently.
+ */
+export function hashtagActorInput(actorId: string, tag: string, limit: number): Record<string, unknown> {
+  if (actorId === ACTORS.hashtag) return { hashtags: [tag], resultsLimit: limit };
+  return { hashtags: [tag], hashtag: tag, resultsLimit: limit, maxItems: limit, limit };
+}
+
+export function searchActorInput(actorId: string, term: string, limit: number): Record<string, unknown> {
+  if (actorId === ACTORS.search) return { search: term, searchType: "user", resultsLimit: limit };
+  return { search: term, query: term, searchType: "user", resultsLimit: limit, maxItems: limit };
+}
+
+export function profileActorInput(
+  actorId: string,
+  handle: string,
+  limit: number,
+  newerThan?: string
+): Record<string, unknown> {
+  const url = `https://www.instagram.com/${handle}/`;
+  // Incremental harvest: only posts since the last harvest (with overlap) are
+  // returned and billed. Omitted on first harvest.
+  const since = newerThan ? { onlyPostsNewerThan: newerThan } : {};
+  if (actorId === ACTORS.profile) {
+    return { directUrls: [url], resultsType: "posts", resultsLimit: limit, ...since };
+  }
+  return {
+    directUrls: [url],
+    startUrls: [{ url }],
+    usernames: [handle],
+    username: [handle],
+    resultsType: "posts",
+    resultsLimit: limit,
+    maxItems: limit,
+    ...since,
+  };
+}
+
 function actorInputFor(
   query: DiscoveryQuery,
+  actors: { hashtag?: string; search?: string; profile?: string } | undefined,
   newerThan?: string
 ): { actorId: string; input: Record<string, unknown> } | null {
   switch (query.mode) {
-    case "hashtag":
-      return {
-        actorId: ACTORS.hashtag,
-        input: { hashtags: [query.value], resultsLimit: query.resultsLimit },
-      };
-    case "user_search":
-      return {
-        actorId: ACTORS.search,
-        input: { search: query.value, searchType: "user", resultsLimit: query.resultsLimit },
-      };
-    case "account":
-      return {
-        actorId: ACTORS.profile,
-        input: {
-          directUrls: [`https://www.instagram.com/${query.value}/`],
-          resultsType: "posts",
-          resultsLimit: query.resultsLimit,
-          // Incremental harvest: only posts since the last harvest (with
-          // overlap) are returned and billed. Omitted on first harvest.
-          ...(newerThan ? { onlyPostsNewerThan: newerThan } : {}),
-        },
-      };
+    case "hashtag": {
+      const actorId = actors?.hashtag ?? ACTORS.hashtag;
+      return { actorId, input: hashtagActorInput(actorId, query.value, query.resultsLimit) };
+    }
+    case "user_search": {
+      const actorId = actors?.search ?? ACTORS.search;
+      return { actorId, input: searchActorInput(actorId, query.value, query.resultsLimit) };
+    }
+    case "account": {
+      const actorId = actors?.profile ?? ACTORS.profile;
+      return { actorId, input: profileActorInput(actorId, query.value, query.resultsLimit, newerThan) };
+    }
     default:
       return null;
   }
@@ -320,6 +360,7 @@ export async function discoverInstagram(
   for (const query of plan) {
     const spec = actorInputFor(
       query,
+      opts.actors,
       query.mode === "account" ? opts.accountNewerThan?.[query.value] : undefined
     );
     if (!spec) continue;

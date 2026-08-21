@@ -30,12 +30,22 @@ type AccountUsage =
   | { available: true; monthlyUsageUsd: number; maxMonthlyUsageUsd: number | null }
   | { available: false; reason: string };
 
+interface ActorConfig {
+  hashtag: string;
+  search: string;
+  profile: string;
+  tiktok: string;
+  resultsPerQuery?: number;
+}
+
 interface Payload {
   budget: Budget;
   runs: UsageRun[];
   byTalent: Array<{ talentId: string | null; cost: number; runs: number }>;
   account?: AccountUsage;
   creditsExhaustedAt?: number | null;
+  actors?: ActorConfig;
+  actorDefaults?: Omit<ActorConfig, "resultsPerQuery">;
 }
 
 const usd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
@@ -52,6 +62,13 @@ function when(unix: number): string {
 export default function ApifyBudgetClient() {
   const [data, setData] = useState<Payload | null>(null);
   const [ceilingInput, setCeilingInput] = useState("");
+  const [actorInputs, setActorInputs] = useState({
+    hashtag: "",
+    search: "",
+    profile: "",
+    tiktok: "",
+    resultsPerQuery: "",
+  });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -61,6 +78,18 @@ export default function ApifyBudgetClient() {
     const payload = (await res.json()) as Payload;
     setData(payload);
     setCeilingInput(payload.budget.ceiling.toFixed(2));
+    // Inputs hold only the overrides; a field left empty means "compiled
+    // default", which the placeholder shows.
+    if (payload.actors && payload.actorDefaults) {
+      const overrideOr = (effective: string, fallback: string) => (effective === fallback ? "" : effective);
+      setActorInputs({
+        hashtag: overrideOr(payload.actors.hashtag, payload.actorDefaults.hashtag),
+        search: overrideOr(payload.actors.search, payload.actorDefaults.search),
+        profile: overrideOr(payload.actors.profile, payload.actorDefaults.profile),
+        tiktok: overrideOr(payload.actors.tiktok, payload.actorDefaults.tiktok),
+        resultsPerQuery: payload.actors.resultsPerQuery ? String(payload.actors.resultsPerQuery) : "",
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -274,6 +303,98 @@ export default function ApifyBudgetClient() {
           Reset counter
         </button>
       </div>
+
+      {/* ── Actors ── */}
+      {data.actorDefaults && (
+        <div
+          className="rounded-md border p-5 space-y-4"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+        >
+          <div>
+            <h2 className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--color-muted)" }}>
+              Actors
+            </h2>
+            <p className="text-xs mt-1.5" style={{ color: "var(--color-muted)" }}>
+              Which Apify actor answers each surface. Leave a field empty to use the default shown; paste a
+              cheaper actor&rsquo;s id (owner~name) after a bake-off (<code>scripts/discovery-bakeoff.mjs</code>)
+              to swap without a deploy. Lower results per query to 40&ndash;60 to cut Instagram spend roughly
+              proportionally.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(
+              [
+                ["hashtag", "Instagram hashtag"],
+                ["search", "Instagram search"],
+                ["profile", "Instagram profile"],
+                ["tiktok", "TikTok"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key}>
+                <label
+                  className="block text-xs font-medium tracking-widest uppercase mb-1.5"
+                  style={{ color: "var(--color-muted)" }}
+                >
+                  {label}
+                </label>
+                <input
+                  type="text"
+                  value={actorInputs[key]}
+                  placeholder={data.actorDefaults![key]}
+                  onChange={(e) => setActorInputs((s) => ({ ...s, [key]: e.target.value }))}
+                  className="w-full rounded border px-3 py-2 text-sm font-mono"
+                  style={{
+                    borderColor: "var(--color-border)",
+                    background: "var(--color-surface)",
+                    color: "var(--color-ink)",
+                  }}
+                />
+              </div>
+            ))}
+            <div>
+              <label
+                className="block text-xs font-medium tracking-widest uppercase mb-1.5"
+                style={{ color: "var(--color-muted)" }}
+              >
+                Results per query
+              </label>
+              <input
+                type="number"
+                min="10"
+                max="200"
+                value={actorInputs.resultsPerQuery}
+                placeholder="100"
+                onChange={(e) => setActorInputs((s) => ({ ...s, resultsPerQuery: e.target.value }))}
+                className="w-28 rounded border px-3 py-2 text-sm font-mono"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-surface)",
+                  color: "var(--color-ink)",
+                }}
+              />
+            </div>
+          </div>
+          <button
+            onClick={() =>
+              patch(
+                {
+                  hashtagActor: actorInputs.hashtag,
+                  searchActor: actorInputs.search,
+                  profileActor: actorInputs.profile,
+                  tiktokActor: actorInputs.tiktok,
+                  resultsPerQuery: actorInputs.resultsPerQuery === "" ? null : actorInputs.resultsPerQuery,
+                },
+                "Actor settings saved. The next sweep uses them."
+              )
+            }
+            disabled={busy}
+            className="px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50"
+            style={{ background: "var(--color-ink)", borderRadius: "var(--radius)" }}
+          >
+            Save actors
+          </button>
+        </div>
+      )}
 
       {message && (
         <p className="text-xs" style={{ color: "var(--color-muted)" }}>
