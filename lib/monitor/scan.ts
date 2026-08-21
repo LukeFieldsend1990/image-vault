@@ -37,6 +37,8 @@ import {
   AI_ONLY_LIKELIHOOD_FLOOR,
   IDENTITY_UNVERIFIED_SIGNAL,
   UNVERIFIED_IDENTITY_CONFIDENCE_CAP,
+  detectorReadingsFrom,
+  parseDetectorReadings,
   type CandidateContent,
   type MonitorScope,
   type TalentIdentityAnchor,
@@ -1183,6 +1185,18 @@ export async function runLikenessScan(
     );
     anchor.referenceImageCount = references.length;
     anchor.coverageTier = coverage.tier;
+
+    // Freeze coverage onto the scan row — the historical series behind
+    // "monitoring got stronger since you added a scan". Non-fatal: a sweep is
+    // worth more than its bookkeeping.
+    try {
+      await db
+        .update(monitorScans)
+        .set({ coverageTier: coverage.tier, coverageScore: coverage.score })
+        .where(eq(monitorScans.id, scanId));
+    } catch (err) {
+      console.warn(`[monitor] coverage record failed for ${scanId}: ${(err as Error).message}`);
+    }
   }
 
   // Open announcement window, if this talent is in one. Steers three stages at
@@ -1441,6 +1455,9 @@ export async function runLikenessScan(
       riskLevel: verdict.riskLevel,
       matchSignalsJson: JSON.stringify(verdict.matchSignals),
       aiRationale: hit.aiRationale,
+      // Freeze the numeric evidence behind the verdict — the signals live only
+      // in memory during the sweep, and prose is not evidence.
+      detectorReadingsJson: JSON.stringify(detectorReadingsFrom(candidate)),
       thumbnailUrl: candidate.media?.thumbnailUrl ?? null,
       discoverySource: candidate.discoverySource
         ? `${candidate.discoverySource.mode}:${candidate.discoverySource.query}`
@@ -1670,6 +1687,7 @@ export async function getScanStatus(db: Db, scanId: string, talentId: string) {
       riskLevel: h.riskLevel,
       matchSignals: safeParseArray(h.matchSignalsJson),
       aiRationale: h.aiRationale,
+      detectorReadings: parseDetectorReadings(h.detectorReadingsJson),
       status: h.status,
       detectedAt: h.detectedAt,
     })),
@@ -1805,6 +1823,7 @@ export async function getMonitorState(db: Db, talentId: string) {
       riskLevel: h.riskLevel,
       matchSignals: safeParseArray(h.matchSignalsJson),
       aiRationale: h.aiRationale,
+      detectorReadings: parseDetectorReadings(h.detectorReadingsJson),
       status: h.status,
       detectedAt: h.detectedAt,
       secondaryActors: (secondariesByHit.get(h.id) ?? []).map((s) => ({
@@ -1830,6 +1849,8 @@ export async function getMonitorState(db: Db, talentId: string) {
       candidatesAnalysed: s.candidatesAnalysed,
       hitsFound: s.hitsFound,
       aiProvider: s.aiProvider,
+      coverageTier: s.coverageTier,
+      coverageScore: s.coverageScore,
       startedAt: s.startedAt,
       completedAt: s.completedAt,
     })),
