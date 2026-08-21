@@ -544,9 +544,13 @@ export function NavLinks({ role, industryOrgType, pipelineEnabled, royaltyMeterE
     base = base.filter((item) => item.href !== "/inbox");
   }
   // Image Scout: admin-toggled trial sweeps for reps and production
-  // accounts. Off (or undecided) hides the surface.
+  // accounts. Off (or undecided) hides the surface. Admins ride the talent
+  // rail, which has no Scout entry — splice one in before Settings so the
+  // owner can run trials from their own account.
   if (!trialScansEnabled) {
     base = base.filter((item) => item.href !== "/scout");
+  } else if (role === "admin" && !base.some((item) => item.href === "/scout")) {
+    base = [...base.slice(0, -1), SCOUT_NAV_ITEM, base[base.length - 1]];
   }
   if (complianceEnabled === false) {
     base = base.filter((item) => !item.href.startsWith("/compliance"));

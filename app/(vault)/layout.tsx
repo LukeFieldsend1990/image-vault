@@ -244,9 +244,11 @@ async function getAgencyMember(userId: string, role: Role): Promise<boolean> {
 }
 
 // Image Scout is admin-toggled (ai_settings trial_scans_enabled, absent =
-// on) and only surfaces for the roles that can run trials.
+// on) and only surfaces for the roles that can run trials. Admins always see
+// it — they bypass the toggle so the owner can test while it's off.
 async function getTrialScansEnabled(userId: string, role: Role): Promise<boolean> {
-  if (!userId || !isScoutRole(role) || role === "admin") return false;
+  if (!userId || !isScoutRole(role)) return false;
+  if (role === "admin") return true;
   try {
     const db = getDb();
     const row = await db

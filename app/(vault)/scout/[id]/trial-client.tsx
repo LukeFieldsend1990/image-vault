@@ -184,6 +184,7 @@ export default function TrialClient({ trialId }: { trialId: string }) {
   const router = useRouter();
   const [trial, setTrial] = useState<TrialDetail | null>(null);
   const [quota, setQuota] = useState<TrialQuota | null>(null);
+  const [unlimited, setUnlimited] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -204,8 +205,9 @@ export default function TrialClient({ trialId }: { trialId: string }) {
   const loadQuota = useCallback(async () => {
     const res = await fetch("/api/scout");
     if (!res.ok) return;
-    const payload = (await res.json()) as { quota: TrialQuota };
+    const payload = (await res.json()) as { quota: TrialQuota; unlimited?: boolean };
     setQuota(payload.quota);
+    setUnlimited(payload.unlimited === true);
   }, []);
 
   useEffect(() => {
@@ -514,22 +516,28 @@ export default function TrialClient({ trialId }: { trialId: string }) {
             <div className="text-right shrink-0">
               <button
                 onClick={() => void run()}
-                disabled={busy || (quota !== null && quota.remaining <= 0)}
+                disabled={busy || (!unlimited && quota !== null && quota.remaining <= 0)}
                 className="text-sm px-5 py-2.5 rounded font-medium"
                 style={{
                   background: "var(--color-accent)",
                   color: "white",
-                  opacity: busy || (quota !== null && quota.remaining <= 0) ? 0.5 : 1,
+                  opacity: busy || (!unlimited && quota !== null && quota.remaining <= 0) ? 0.5 : 1,
                 }}
               >
                 {busy ? "Starting…" : "Run trial sweep"}
               </button>
-              {quota && (
+              {unlimited ? (
                 <p className="mt-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
-                  {quota.remaining > 0
-                    ? `Uses 1 of your ${quota.remaining} remaining run${quota.remaining === 1 ? "" : "s"}`
-                    : "No runs remaining — ask us for more"}
+                  Admin account — runs are not capped
                 </p>
+              ) : (
+                quota && (
+                  <p className="mt-1.5 text-xs" style={{ color: "var(--color-muted)" }}>
+                    {quota.remaining > 0
+                      ? `Uses 1 of your ${quota.remaining} remaining run${quota.remaining === 1 ? "" : "s"}`
+                      : "No runs remaining — ask us for more"}
+                  </p>
+                )
               )}
             </div>
           </section>
