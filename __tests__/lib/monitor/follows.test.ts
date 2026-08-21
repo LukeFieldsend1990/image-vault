@@ -6,7 +6,13 @@ vi.mock("@opennextjs/cloudflare", () => ({
   },
 }));
 
-import { normaliseHandle, parseHandleList } from "@/lib/monitor/ingest/follows";
+vi.mock("@/lib/monitor/ingest/apify", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/monitor/ingest/apify")>()),
+  runActor: vi.fn(),
+}));
+
+import { fetchFollowing, normaliseHandle, parseHandleList } from "@/lib/monitor/ingest/follows";
+import { runActor } from "@/lib/monitor/ingest/apify";
 
 describe("handle normalisation", () => {
   it("accepts the forms a person actually pastes", () => {
@@ -54,5 +60,37 @@ describe("bulk paste parsing", () => {
   it("survives an empty paste", () => {
     expect(parseHandleList("")).toEqual({ handles: [], rejected: [] });
     expect(parseHandleList("\n\n  \n")).toEqual({ handles: [], rejected: [] });
+  });
+});
+
+describe("follows fetch", () => {
+  it("sends the default actor's cap field, floored at its minimum of 50", async () => {
+    vi.mocked(runActor).mockResolvedValueOnce({
+      items: [{ username: "app_netmirror", full_name: "NetMirror", is_verified: false }],
+      runId: "run1",
+      costUsd: 0.01,
+    });
+
+    const result = await fetchFollowing({ token: "t", handle: "@luke.lovesmovies", limit: 10 });
+
+    const input = vi.mocked(runActor).mock.calls[0][0].input as Record<string, unknown>;
+    expect(input.usernames).toEqual(["luke.lovesmovies"]);
+    expect(input.max_count).toBe(50);
+    // Snake-case item shape (the default actor's output) maps cleanly.
+    expect(result.error).toBeNull();
+    expect(result.accounts).toEqual([
+      { handle: "app_netmirror", displayName: "NetMirror", followerCount: null, verified: false },
+    ]);
+  });
+
+  it("passes larger limits through untouched", async () => {
+    vi.mocked(runActor).mockResolvedValueOnce({
+      items: [{ username: "someone" }],
+      runId: "run2",
+      costUsd: null,
+    });
+    await fetchFollowing({ token: "t", handle: "curator", limit: 300 });
+    const input = vi.mocked(runActor).mock.calls.at(-1)![0].input as Record<string, unknown>;
+    expect(input.max_count).toBe(300);
   });
 });
