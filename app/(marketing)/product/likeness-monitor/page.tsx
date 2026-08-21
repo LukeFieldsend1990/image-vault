@@ -212,11 +212,11 @@ export default function LikenessMonitorPage() {
             The launch trailer
           </p>
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-            Ninety seconds · tap to pause
+            A hundred seconds · tap to pause
           </p>
         </div>
         <ExplainerFilm
-          src="/explainer/imagevault-detector-trailer.html?v=1"
+          src="/explainer/imagevault-detector-trailer.html?v=2"
           title="The Likeness Monitor — launch trailer"
         />
       </section>
