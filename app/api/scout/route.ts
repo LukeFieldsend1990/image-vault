@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { isScoutRole } from "@/lib/auth/roles";
 import {
   createTrialDraft,
@@ -9,13 +10,16 @@ import {
   listTrials,
 } from "@/lib/monitor/trial";
 
-// GET /api/scout — the requester's trials plus their run quota.
+// GET /api/scout — the requester's trials plus their run quota. Admin
+// accounts see the surface regardless of the feature toggle and run
+// uncapped: the owner testing the product is not a lead to meter.
 export async function GET(req: NextRequest) {
   const session = await requireSession(req);
   if (isErrorResponse(session)) return session;
   if (!isScoutRole(session.role)) {
     return NextResponse.json({ error: "Trial sweeps are for rep and production accounts" }, { status: 403 });
   }
+  const admin = session.role === "admin" || isAdmin(session.email);
 
   const db = getDb();
   const [enabled, quota, trials] = await Promise.all([
@@ -23,7 +27,12 @@ export async function GET(req: NextRequest) {
     getTrialQuota(db, session.sub),
     listTrials(db, session.sub),
   ]);
-  return NextResponse.json({ enabled, quota, trials });
+  return NextResponse.json({
+    enabled: enabled || admin,
+    quota,
+    trials,
+    unlimited: admin,
+  });
 }
 
 interface CreateBody {
@@ -44,7 +53,8 @@ export async function POST(req: NextRequest) {
   }
 
   const db = getDb();
-  if (!(await isTrialFeatureEnabled(db))) {
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (!admin && !(await isTrialFeatureEnabled(db))) {
     return NextResponse.json({ error: "Trial sweeps are currently disabled" }, { status: 403 });
   }
 

@@ -36,6 +36,8 @@ interface ScoutPayload {
   enabled: boolean;
   quota: TrialQuota;
   trials: TrialListItem[];
+  /** Admin accounts run uncapped — the quota meter becomes informational. */
+  unlimited?: boolean;
 }
 
 const STATUS_LABELS: Record<TrialListItem["status"], { label: string; color: string }> = {
@@ -212,7 +214,12 @@ export default function ScoutClient() {
             Trial runs
           </p>
           <p className="mt-1 text-sm" style={{ color: "var(--color-ink)" }}>
-            {quota.remaining > 0 ? (
+            {data.unlimited ? (
+              <>
+                Admin account — runs are not capped. {quota.used} run{quota.used === 1 ? "" : "s"} so
+                far; spend still counts against the Apify ceiling.
+              </>
+            ) : quota.remaining > 0 ? (
               <>
                 <span className="font-semibold">{quota.remaining}</span> of {quota.limit} run
                 {quota.limit === 1 ? "" : "s"} remaining
@@ -222,18 +229,20 @@ export default function ScoutClient() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
-          {quotaDots.map((used, i) => (
-            <span
-              key={i}
-              className="w-3 h-3 rounded-full"
-              style={{
-                background: used ? "var(--color-accent)" : "transparent",
-                border: "1.5px solid " + (used ? "var(--color-accent)" : "var(--color-border)"),
-              }}
-            />
-          ))}
-        </div>
+        {!data.unlimited && (
+          <div className="flex items-center gap-1.5">
+            {quotaDots.map((used, i) => (
+              <span
+                key={i}
+                className="w-3 h-3 rounded-full"
+                style={{
+                  background: used ? "var(--color-accent)" : "transparent",
+                  border: "1.5px solid " + (used ? "var(--color-accent)" : "var(--color-border)"),
+                }}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Search */}

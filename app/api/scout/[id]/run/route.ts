@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { trialScans } from "@/lib/db/schema";
 import { requireSession, isErrorResponse } from "@/lib/auth/requireSession";
+import { isAdmin } from "@/lib/auth/adminEmails";
 import { isScoutRole } from "@/lib/auth/roles";
 import {
   failTrial,
@@ -33,7 +34,11 @@ export async function POST(
   const { id } = await params;
   const db = getDb();
 
-  if (!(await isTrialFeatureEnabled(db))) {
+  // Admin accounts bypass the feature toggle and the run quota — the owner
+  // testing the product (including while it's switched off for everyone
+  // else) is not a lead to meter. Spend still hits the global Apify ceiling.
+  const admin = session.role === "admin" || isAdmin(session.email);
+  if (!admin && !(await isTrialFeatureEnabled(db))) {
     return NextResponse.json({ error: "Trial sweeps are currently disabled" }, { status: 403 });
   }
 
@@ -62,12 +67,14 @@ export async function POST(
     );
   }
 
-  const quota = await getTrialQuota(db, session.sub);
-  if (quota.remaining <= 0) {
-    return NextResponse.json(
-      { error: "No trial runs remaining", quota },
-      { status: 402 }
-    );
+  if (!admin) {
+    const quota = await getTrialQuota(db, session.sub);
+    if (quota.remaining <= 0) {
+      return NextResponse.json(
+        { error: "No trial runs remaining", quota },
+        { status: 402 }
+      );
+    }
   }
 
   type RunEnv = TrialSweepEnv & { MONITOR_SWEEP_QUEUE?: Queue };
