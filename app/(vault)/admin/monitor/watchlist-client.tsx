@@ -37,6 +37,45 @@ function compact(n: number | null): string {
   return String(n);
 }
 
+function profileUrl(platform: string, handle: string): string | null {
+  const h = encodeURIComponent(handle);
+  switch (platform) {
+    case "instagram":
+      return `https://www.instagram.com/${h}/`;
+    case "tiktok":
+      return `https://www.tiktok.com/@${h}`;
+    case "youtube":
+      return `https://www.youtube.com/@${h}`;
+    case "x":
+      return `https://x.com/${h}`;
+    default:
+      return null;
+  }
+}
+
+/** A watchlist handle rendered as a link to the account it names. */
+function HandleLink({ platform, handle }: { platform: string; handle: string }) {
+  const url = profileUrl(platform, handle);
+  if (!url) {
+    return (
+      <span className="font-mono" style={{ color: "var(--color-ink)" }}>
+        @{handle}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-mono underline-offset-2 hover:underline"
+      style={{ color: "var(--color-ink)" }}
+    >
+      @{handle}
+    </a>
+  );
+}
+
 export default function WatchlistClient() {
   const [accounts, setAccounts] = useState<WatchAccount[]>([]);
   const [platform, setPlatform] = useState("instagram");
@@ -332,8 +371,9 @@ export default function WatchlistClient() {
                       setSelected(next);
                     }}
                   />
-                  <span className="font-mono text-xs" style={{ color: "var(--color-ink)" }}>
-                    @{a.handle}
+                  <span className="text-xs">
+                    {/* The import panel is Instagram-only, so the link is too. */}
+                    <HandleLink platform="instagram" handle={a.handle} />
                   </span>
                   {a.displayName && (
                     <span className="text-xs truncate" style={{ color: "var(--color-muted)" }}>
@@ -460,8 +500,8 @@ export default function WatchlistClient() {
               <tbody>
                 {visible.map((a) => (
                   <tr key={a.id} style={{ borderTop: "1px solid var(--color-border)" }}>
-                    <td className="px-4 py-2.5 font-mono" style={{ color: "var(--color-ink)" }}>
-                      @{a.handle}
+                    <td className="px-4 py-2.5">
+                      <HandleLink platform={a.platform} handle={a.handle} />
                     </td>
                     <td className="px-4 py-2.5" style={{ color: "var(--color-muted)" }}>
                       {a.platform}
