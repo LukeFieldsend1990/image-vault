@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function DetectorTrailerPage() {
   return (
     <ExplainerStandalone
-      src="/explainer/imagevault-detector-trailer.html?v=8"
+      src="/explainer/imagevault-detector-trailer.html?v=9"
       filmTitle="Deep Scan — launch trailer"
       backHref="/product/deep-scan"
     />
