@@ -1,6 +1,6 @@
 # LinkedIn — Series J · Deep Scan
 
-Five-post mini-series drafted 2026-08-22, mirrored in the Notion **LinkedIn Posts**
+Six-post mini-series drafted 2026-08-22, mirrored in the Notion **LinkedIn Posts**
 database (series `J · Deep Scan`, status Drafted). Notion is the scheduling
 surface; this file is the copy of record.
 
@@ -167,3 +167,34 @@ Watch it: https://imagevault.ai/product/explainer/detector-trailer
 And the feature behind the film: https://imagevault.ai/product/deep-scan
 
 #ProductLaunch #Deepfakes #Film #DigitalLikeness
+
+---
+
+## J6 · The vault was the moat all along
+
+*Format: Text · Founder voice, Hemingway register — short declaratives. The
+"better than anyone" claim stays structural (ground truth vs scraped photos),
+never a detection-rate boast.*
+
+We didn't set out to build a deepfake detector.
+
+We built a vault. Actors put their scans in it. Terabytes of ground truth.
+Every angle. Every pore. Measured, not scraped.
+
+Then it hit us.
+
+Every detector out there works from public photos. Compressed. Filtered.
+Secondhand. They guess.
+
+We don't have to guess. We hold the source.
+
+A fake is a copy of something. We have the something.
+
+So we built Deep Scan. Not because detection was the plan. Because nobody else
+could build it this way.
+
+The vault was the moat all along.
+
+https://imagevault.ai/product/deep-scan
+
+#Deepfakes #Startups #DigitalLikeness
