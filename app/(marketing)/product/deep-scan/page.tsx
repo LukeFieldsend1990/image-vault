@@ -216,7 +216,7 @@ export default function LikenessMonitorPage() {
           </p>
         </div>
         <ExplainerFilm
-          src="/explainer/imagevault-detector-trailer.html?v=7"
+          src="/explainer/imagevault-detector-trailer.html?v=8"
           title="Deep Scan — launch trailer"
         />
       </section>

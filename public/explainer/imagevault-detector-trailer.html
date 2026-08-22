@@ -110,6 +110,10 @@ body{background:var(--night);font-family:var(--sans);color:var(--ink-900);overfl
 .nodeD .box svg{width:40px;height:40px;}
 .nodeD .lab{font-family:var(--mono);font-size:14px;letter-spacing:.05em;color:var(--night-mut);text-align:center;max-width:180px;line-height:1.35;}
 .corechip{position:absolute;left:50%;top:190px;transform:translate(-50%,-50%);z-index:3;font-family:var(--mono);font-size:15px;letter-spacing:.16em;text-transform:uppercase;color:var(--ember);border:1.5px solid var(--red);border-radius:10px;padding:13px 22px;background:var(--night-2);box-shadow:0 0 34px -6px rgba(188,61,44,.5);}
+/* The chip self-centres via translate, so its stamp-in must carry the
+   translate through every keyframe — the shared stampin drops it. */
+.scene.active .corechip{animation:stampinC .42s var(--ease-mech) var(--d,0s) backwards;}
+@keyframes stampinC{0%{opacity:0;transform:translate(-50%,-50%) scale(1.5);}55%{opacity:1;}74%{transform:translate(-50%,-50%) scale(.95);}100%{opacity:1;transform:translate(-50%,-50%) scale(1);}}
 
 /* ============ T3 · THE ORIGINAL — the scan-breakdown widget ============ */
 .scanbrk{position:relative;width:840px;border-radius:16px;background:var(--paper);border:1px solid var(--line);box-shadow:0 0 90px -18px rgba(251,250,247,.25),0 40px 80px -40px rgba(0,0,0,.7);padding:26px 34px 24px;text-align:left;opacity:0;}
